@@ -18,6 +18,7 @@
 | Mobile | Capacitor |
 | Tests | Vitest, Testcontainers (Postgres), Playwright |
 | Infrastructure | AWS CDK (TypeScript) |
+| CI/CD | CDK Pipelines (CodePipeline + CodeBuild) defined in `infra/`; no GitHub workflows |
 
 ## Repository layout
 
@@ -60,11 +61,12 @@ Rules:
 
 | Port | Responsibility | Self-hosted | AWS (Fargate) | AWS (Lambda) |
 |---|---|---|---|---|
-| `JobQueue` | Enqueue and consume jobs with retries | pg-boss | pg-boss | SQS |
+| `JobQueue` | Enqueue and consume jobs with retries; optional dedupe by key | pg-boss | pg-boss | SQS |
 | `Scheduler` | Periodically dispatch due feeds and purges | In-process timer in worker | In-process timer in worker | EventBridge Scheduler |
 | `BlobStore` | Favicons, cached images | Local volume | S3 | S3 |
-| `Realtime` | Push counter/entry events to clients | SSE | SSE | None (client polling) |
+| `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | Postgres LISTEN/NOTIFY | None (client polling) |
 | `Config` | Settings and secrets | Environment | Environment from Secrets Manager | Environment from Secrets Manager |
+| `Logger` | Structured logs | Pino | Pino | Pino |
 
 ## Ingest pipeline
 
@@ -174,9 +176,9 @@ Login is rate limited per IP and per account.
 |---|---|---|
 | `db` | `postgres:18-alpine` | Named volume |
 | `migrate` | app image, `migrate` | Runs to completion before `server`/`worker` start |
-| `server` | app image, `server` | Serves API and SPA; behind the user's reverse proxy for TLS |
+| `server` | app image, `server` | Serves API and SPA; behind the user's reverse proxy for TLS; `/healthz` checks database and queue |
 | `worker` | app image, `worker` | Jobs and scheduler |
-| `backup` (optional) | `postgres:18-alpine` | Scheduled `pg_dump` to a volume |
+| `backup` (`backup` profile) | `postgres:18-alpine` | Nightly `pg_dump` to a volume |
 
 ### AWS
 

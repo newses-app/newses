@@ -1,0 +1,10 @@
+**/node_modules
+.git
+docs
+**/*.md
+**/*.test.ts
+server/src/test
+server/drizzle.config.ts
+server/vitest.config.ts
+coverage
+docker/.env

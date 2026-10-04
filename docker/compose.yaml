@@ -1,0 +1,92 @@
+name: rss-reader
+
+x-app: &app
+  image: ${RSS_READER_IMAGE:-rss-reader:latest}
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  restart: unless-stopped
+  environment:
+    DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    <<: *app
+    command: migrate
+    restart: 'no'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  server:
+    <<: *app
+    command: server
+    ports:
+      - '${HTTP_PORT:-8080}:8080'
+    volumes:
+      - blobs:/data/blobs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: worker
+    volumes:
+      - blobs:/data/blobs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Nightly pg_dump. Enable with: docker compose --profile backup up -d
+  backup:
+    image: postgres:18-alpine
+    profiles: [backup]
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - backups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          pg_dump -Fc -f "/backups/rss-reader-$$(date +%Y%m%d-%H%M%S).dump" && echo "Backup written"
+          find /backups -name '*.dump' -mtime +"$$RETENTION_DAYS" -delete
+          sleep 86400
+        done
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db:
+  blobs:
+  backups:

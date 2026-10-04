@@ -8,7 +8,7 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 |---|---|
 | `nvm use` | Switch to Node 24 (`.nvmrc`) |
 | `pnpm install` | Install and link workspace packages |
-| `pnpm check` | Lint, typecheck, format check, tests (what CI runs) |
+| `pnpm check` | Lint, typecheck, format check, tests (run before every commit; the AWS pipeline runs the same) |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
 | `pnpm --filter @rss-reader/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`-- --custom --name x` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @rss-reader/server db:migrate` | Apply migrations |
@@ -26,6 +26,7 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 |---|---|
 | `docs/requirements.md` | What the product does: features, phases, non-functional requirements, non-goals |
 | `docs/architecture.md` | How it is built and deployed: stack, layout, components, data model concepts, APIs, deployment |
+| `docs/self-hosting.md` | Operating a Docker deployment: install, configuration, upgrade, proxy, backup, restore |
 | `docs/migration-ttrss.md` | Importing data from an existing TTRSS instance |
 | `docs/adr/` | Decision history |
 

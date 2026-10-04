@@ -1,0 +1,8 @@
+# Example TLS reverse proxy. Caddy obtains certificates automatically.
+# Run Caddy on the same Docker network as the server, or point it at the published HTTP_PORT.
+reader.example.com {
+	reverse_proxy server:8080 {
+		# Stream server-sent events without buffering.
+		flush_interval -1
+	}
+}
