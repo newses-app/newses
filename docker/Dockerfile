@@ -20,6 +20,7 @@ COPY package.json ./
 COPY server/package.json ./server/
 COPY server/src ./server/src
 COPY shared ./shared
+COPY --from=deps /app/shared/node_modules ./shared/node_modules
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/rss-reader
 RUN mkdir -p /data/blobs && chown node:node /data/blobs
 USER node
