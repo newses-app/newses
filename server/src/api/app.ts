@@ -1,16 +1,44 @@
-import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import cookie from '@fastify/cookie';
+import Fastify, { type FastifyBaseLogger } from 'fastify';
+import {
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from 'fastify-type-provider-zod';
+import type { AuthService } from '../core/auth/auth-service.ts';
+import type { SessionService } from '../core/auth/sessions.ts';
+import type { UserService } from '../core/auth/users.ts';
+import { registerAuth } from './auth.ts';
+import { errorHandler } from './errors.ts';
+import { adminUserRoutes } from './routes/admin-users.ts';
+import { authRoutes } from './routes/auth.ts';
 
 export type HealthCheck = () => Promise<void>;
+
+export interface ApiServices {
+  auth: AuthService;
+  sessions: SessionService;
+  users: UserService;
+}
 
 export interface AppDeps {
   logger: FastifyBaseLogger;
   /** Each check throws when its dependency is unavailable. */
   healthChecks: Record<string, HealthCheck>;
+  /** Fastify `trustProxy`: true to trust any proxy, or comma-separated proxy addresses/CIDRs. */
+  trustProxy?: boolean | string;
+  services?: ApiServices;
 }
 
 /** Builds the HTTP app without listening, so it can be mounted by listen() or a Lambda adapter. */
-export function buildApp(deps: AppDeps): FastifyInstance {
-  const app = Fastify({ loggerInstance: deps.logger });
+export function buildApp(deps: AppDeps) {
+  const app = Fastify({
+    loggerInstance: deps.logger,
+    trustProxy: deps.trustProxy ?? false,
+  }).withTypeProvider<ZodTypeProvider>();
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
+  app.setErrorHandler(errorHandler);
 
   app.get('/healthz', async (_request, reply) => {
     const results = await Promise.all(
@@ -29,6 +57,19 @@ export function buildApp(deps: AppDeps): FastifyInstance {
       .code(healthy ? 200 : 503)
       .send({ status: healthy ? 'ok' : 'error', checks: Object.fromEntries(results) });
   });
+
+  const services = deps.services;
+  if (services) {
+    void app.register(cookie);
+    void app.register(
+      async (api) => {
+        registerAuth(api, services.sessions);
+        await api.register(authRoutes, services);
+        await api.register(adminUserRoutes, services);
+      },
+      { prefix: '/api/v1' },
+    );
+  }
 
   return app;
 }

@@ -11,8 +11,14 @@
     "db:migrate": "node src/entrypoints/migrate.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/swagger": "^9.9.1",
+    "@node-rs/argon2": "^2.2.1",
+    "@rss-reader/shared": "workspace:*",
     "drizzle-orm": "0.45.3",
     "fastify": "^5.12.5",
+    "fastify-type-provider-zod": "^7.0.0",
+    "openapi-types": "^12.1.3",
     "pg": "^8.23.1",
     "pg-boss": "^12.36.0",
     "pino": "^10.4.0",

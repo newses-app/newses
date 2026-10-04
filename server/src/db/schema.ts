@@ -52,6 +52,8 @@ export const sessions = pgTable(
     tokenHash: text('token_hash').notNull().unique(),
     kind: sessionKind('kind').notNull(),
     userAgent: text('user_agent'),
+    // Cookie sessions only; sent back by the web app in X-CSRF-Token.
+    csrfToken: text('csrf_token'),
     createdAt: tstz('created_at').notNull().defaultNow(),
     lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
     expiresAt: tstz('expires_at').notNull(),
@@ -61,6 +63,14 @@ export const sessions = pgTable(
     index('sessions_expires_at_idx').on(t.expiresAt),
   ],
 );
+
+// Failed-login counters keyed by `login:<name>` or `ip:<address>`.
+export const loginAttempts = pgTable('login_attempts', {
+  key: text('key').primaryKey(),
+  failures: integer('failures').notNull().default(0),
+  lockedUntil: tstz('locked_until'),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
 
 export const userPrefs = pgTable(
   'user_prefs',
