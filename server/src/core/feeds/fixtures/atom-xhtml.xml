@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://ax.example/blog/">
+<title>XHTML Atom</title><id>urn:ax</id><updated>2026-10-03T10:00:00Z</updated>
+<entry>
+  <title type="html">A &amp;lt;tag&amp;gt; title</title>
+  <id>urn:ax:1</id>
+  <updated>2026-10-03T10:00:00Z</updated>
+  <link rel="alternate" href="posts/1"/>
+  <link rel="enclosure" href="https://ax.example/file.pdf" type="application/pdf" length="999"/>
+  <author><name>Axel</name><email>axel@ax.example</email></author>
+  <summary>Summary text</summary>
+  <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>XHTML <em>body</em> with <a href="rel/link">relative</a></p></div></content>
+</entry>
+</feed>

@@ -8,10 +8,12 @@ import {
 import type { AuthService } from '../core/auth/auth-service.ts';
 import type { SessionService } from '../core/auth/sessions.ts';
 import type { UserService } from '../core/auth/users.ts';
+import type { FeedServices } from '../core/feeds/index.ts';
 import { registerAuth } from './auth.ts';
 import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { authRoutes } from './routes/auth.ts';
+import { feedRoutes } from './routes/feeds.ts';
 
 export type HealthCheck = () => Promise<void>;
 
@@ -19,6 +21,7 @@ export interface ApiServices {
   auth: AuthService;
   sessions: SessionService;
   users: UserService;
+  feeds: FeedServices;
 }
 
 export interface AppDeps {
@@ -66,6 +69,7 @@ export function buildApp(deps: AppDeps) {
         registerAuth(api, services.sessions);
         await api.register(authRoutes, services);
         await api.register(adminUserRoutes, services);
+        await api.register(feedRoutes, services.feeds);
       },
       { prefix: '/api/v1' },
     );

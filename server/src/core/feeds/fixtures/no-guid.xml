@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<rss version="2.0"><channel><title>NoGuid</title><link>https://ng.example/</link><description>d</description>
+<item><title>Only title</title><description>Only description</description></item>
+<item><description>Description only, no title</description></item>
+</channel></rss>

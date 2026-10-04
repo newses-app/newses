@@ -1,6 +1,7 @@
 import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { users } from '../../db/schema.ts';
+import { isUniqueViolation } from '../db-errors.ts';
 import { DomainError } from '../errors.ts';
 import { hashPassword } from './passwords.ts';
 import type { SessionService, UserRow } from './sessions.ts';
@@ -10,13 +11,6 @@ export type UserRole = 'admin' | 'user';
 export interface UserChanges {
   role?: UserRole;
   disabled?: boolean;
-}
-
-const UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  const cause = err instanceof Error && 'cause' in err ? err.cause : err;
-  return (cause as { code?: string } | undefined)?.code === UNIQUE_VIOLATION;
 }
 
 export class UserService {

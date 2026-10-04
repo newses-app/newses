@@ -12,6 +12,17 @@ const schema = z
       .string()
       .default('false')
       .transform((v) => (v === 'true' ? true : v === 'false' ? false : v)),
+    FETCH_ALLOW_PRIVATE_NETWORKS: z
+      .string()
+      .default('')
+      .transform((v) =>
+        v === 'true'
+          ? true
+          : v
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean),
+      ),
     ADMIN_LOGIN: z.string().min(1).optional(),
     ADMIN_PASSWORD: z.string().min(8).optional(),
   })
@@ -42,6 +53,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,
     blobDir: e.BLOB_DIR,
+    fetchAllowPrivateNetworks:
+      e.FETCH_ALLOW_PRIVATE_NETWORKS === true || e.FETCH_ALLOW_PRIVATE_NETWORKS.length > 0
+        ? e.FETCH_ALLOW_PRIVATE_NETWORKS
+        : false,
     bootstrapAdmin:
       e.ADMIN_LOGIN && e.ADMIN_PASSWORD
         ? { login: e.ADMIN_LOGIN, password: e.ADMIN_PASSWORD }

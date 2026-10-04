@@ -1,6 +1,8 @@
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAuthServices } from '../core/auth/index.ts';
+import { HttpFetcher } from '../core/feeds/http.ts';
+import { createFeedServices } from '../core/feeds/index.ts';
 import { createDb } from '../db/client.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { buildApp } from './app.ts';
@@ -10,7 +12,8 @@ let app: ReturnType<typeof buildApp>;
 
 beforeAll(async () => {
   database = await createTestDatabase();
-  const services = createAuthServices(createDb(database.pool));
+  const db = createDb(database.pool);
+  const services = { ...createAuthServices(db), feeds: createFeedServices(db, new HttpFetcher()) };
   await services.users.create('admin', 'admin password', 'admin');
   await services.users.create('alice', 'alice password');
   app = buildApp({ logger: pino({ level: 'silent' }), healthChecks: {}, services });

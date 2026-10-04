@@ -1,5 +1,12 @@
 export type DomainErrorCode =
-  'invalid_credentials' | 'throttled' | 'not_found' | 'conflict' | 'last_admin';
+  | 'invalid_credentials'
+  | 'throttled'
+  | 'not_found'
+  | 'conflict'
+  | 'last_admin'
+  | 'invalid_input'
+  | 'feed_not_found'
+  | 'fetch_failed';
 
 /** Expected failures of a domain operation; the API maps codes to HTTP statuses. */
 export class DomainError extends Error {

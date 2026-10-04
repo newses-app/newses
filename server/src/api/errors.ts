@@ -20,6 +20,9 @@ const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   last_admin: 409,
+  invalid_input: 400,
+  feed_not_found: 422,
+  fetch_failed: 502,
 };
 
 export function errorHandler(err: FastifyError, request: FastifyRequest, reply: FastifyReply) {

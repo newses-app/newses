@@ -4,6 +4,7 @@ docs
 **/*.md
 **/*.test.ts
 server/src/test
+server/src/**/fixtures
 server/drizzle.config.ts
 server/vitest.config.ts
 coverage

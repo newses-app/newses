@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<rss version="0.91"><channel><title>Old</title><link>http://old.example/</link><description>d</description>
+<item><title>Hello 0.91</title><link>http://old.example/1</link><description>Body one</description></item>
+</channel></rss>

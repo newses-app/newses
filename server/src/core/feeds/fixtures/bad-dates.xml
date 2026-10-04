@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Dates</title><link>https://d.example/</link><description>d</description>
+<item><title>iso-ish</title><guid>d1</guid><pubDate>2026-10-03 14:00:00</pubDate></item>
+<item><title>tz-name</title><guid>d2</guid><pubDate>Sat, 3 Oct 2026 14:00:00 EDT</pubDate></item>
+<item><title>garbage</title><guid>d3</guid><pubDate>not a date</pubDate></item>
+<item><title>no-day-name</title><guid>d4</guid><pubDate>03 Oct 2026 14:00 GMT</pubDate></item>
+</channel></rss>

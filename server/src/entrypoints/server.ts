@@ -2,6 +2,8 @@ import { PgBoss } from 'pg-boss';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import { buildApp } from '../api/app.ts';
 import { createAuthServices } from '../core/auth/index.ts';
+import { HttpFetcher } from '../core/feeds/http.ts';
+import { createFeedServices } from '../core/feeds/index.ts';
 import { createDb } from '../db/client.ts';
 import { createRuntime } from './runtime.ts';
 
@@ -24,7 +26,9 @@ const realtime = new PgNotifyRealtime(pool, logger);
 await realtime.start();
 onShutdown(() => realtime.stop());
 
-const services = createAuthServices(db);
+const fetcher = new HttpFetcher({ allowPrivateNetworks: config.fetchAllowPrivateNetworks });
+onShutdown(() => fetcher.close());
+const services = { ...createAuthServices(db), feeds: createFeedServices(db, fetcher) };
 if (config.bootstrapAdmin) {
   const { login, password } = config.bootstrapAdmin;
   if (await services.users.bootstrapAdmin(login, password)) {
