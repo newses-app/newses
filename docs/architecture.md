@@ -9,7 +9,7 @@
 | Database | PostgreSQL 18; Drizzle ORM; drizzle-kit SQL migrations |
 | Jobs | pg-boss |
 | HTTP client | undici |
-| Feed parsing | `feedsmith` or `@rowanmanning/feed-parser` (chosen by spike against fixture corpus) |
+| Feed parsing | `feedsmith` (RSS, Atom, RDF, JSON Feed, OPML) |
 | Content | sanitize-html; `@mozilla/readability` + linkedom |
 | Auth | `@node-rs/argon2`, `otpauth` |
 | Logging | Pino (JSON) |
@@ -71,9 +71,11 @@ Rules:
 ```
 Scheduler ─▶ fetch job per due feed source
   fetch      conditional GET; timeout, size and redirect limits; SSRF guard; per-host concurrency; backoff; Retry-After
-  parse      → normalised entries
+  decode     bytes → text; charset from BOM, then HTTP Content-Type, then XML declaration, else UTF-8
+  parse      feedsmith → per-format mapping to normalised entries; XML that fails to parse is a fetch error
+             dates parsed leniently, zone-less dates are UTC, unparseable dates are null (entry gets fetch time)
   dedupe     by GUID, else hash(link + title); updated entries replace content when hash changes
-  sanitise   allow-list HTML; resolve relative URLs
+  sanitise   allow-list HTML; strip control characters; resolve relative URLs against xml:base, then feed URL
   transform  hook: readability, site rewrites
   store      insert/update entry, enclosures
   fan out    one user_entry per subscriber (unread)
