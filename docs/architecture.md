@@ -87,7 +87,7 @@ Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticl
 
 ## Data model
 
-Shared rows are stored once per instance; per-user rows carry `user_id`. Every mutable table has `updated_at`; deletions of syncable rows are recorded as tombstones for incremental sync.
+Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger; deletions of syncable rows are recorded as tombstones for incremental sync.
 
 | Entity | Scope | Notes |
 |---|---|---|
@@ -113,7 +113,7 @@ Key indexes:
 - `user_entries (subscription_id, …)` for feed views.
 - `entries (feed_source_id, published_at DESC)`.
 
-Headline lists use keyset pagination on (sort key, id).
+Headline lists use keyset pagination on (sort key, id). `user_entries.sort_at` is a denormalised copy of the entry's published time (fetch time when absent), so every headline view is served by one index. Search uses a generated `tsvector` (`simple` configuration, markup stripped) on `entries`.
 
 ## Authentication
 

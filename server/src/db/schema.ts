@@ -1,0 +1,251 @@
+import { sql } from 'drizzle-orm';
+import {
+  type AnyPgColumn,
+  bigint,
+  boolean,
+  customType,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
+
+const tstz = (name: string) => timestamp(name, { withTimezone: true });
+const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
+
+// `updated_at` is maintained by the set_updated_at trigger (see migrations), so raw SQL updates bump it too.
+const timestamps = () => ({
+  createdAt: tstz('created_at').notNull().defaultNow(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+export const userRole = pgEnum('user_role', ['admin', 'user']);
+export const sessionKind = pgEnum('session_kind', ['cookie', 'bearer']);
+
+export const users = pgTable(
+  'users',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    login: text('login').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    role: userRole('role').notNull().default('user'),
+    disabledAt: tstz('disabled_at'),
+    lastLoginAt: tstz('last_login_at'),
+    ...timestamps(),
+  },
+  (t) => [uniqueIndex('users_login_key').on(sql`lower(${t.login})`)],
+);
+
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    kind: sessionKind('kind').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+    lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
+    expiresAt: tstz('expires_at').notNull(),
+  },
+  (t) => [
+    index('sessions_user_id_idx').on(t.userId),
+    index('sessions_expires_at_idx').on(t.expiresAt),
+  ],
+);
+
+export const userPrefs = pgTable(
+  'user_prefs',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: jsonb('value').notNull(),
+    updatedAt: tstz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
+export const categories = pgTable(
+  'categories',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    parentId: integer('parent_id').references((): AnyPgColumn => categories.id, {
+      onDelete: 'set null',
+    }),
+    title: text('title').notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    collapsed: boolean('collapsed').notNull().default(false),
+    ...timestamps(),
+  },
+  (t) => [
+    index('categories_user_parent_idx').on(t.userId, t.parentId),
+    unique('categories_user_parent_title_key').on(t.userId, t.parentId, t.title).nullsNotDistinct(),
+  ],
+);
+
+export const feedSources = pgTable(
+  'feed_sources',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    url: text('url').notNull().unique(),
+    siteUrl: text('site_url'),
+    title: text('title'),
+    etag: text('etag'),
+    lastModified: text('last_modified'),
+    fetchIntervalSeconds: integer('fetch_interval_seconds').notNull().default(1800),
+    nextFetchAt: tstz('next_fetch_at').notNull().defaultNow(),
+    lastFetchedAt: tstz('last_fetched_at'),
+    errorCount: integer('error_count').notNull().default(0),
+    lastError: text('last_error'),
+    lastErrorAt: tstz('last_error_at'),
+    disabledAt: tstz('disabled_at'),
+    faviconKey: text('favicon_key'),
+    faviconCheckedAt: tstz('favicon_checked_at'),
+    ...timestamps(),
+  },
+  (t) => [
+    index('feed_sources_due_idx')
+      .on(t.nextFetchAt)
+      .where(sql`${t.disabledAt} IS NULL`),
+  ],
+);
+
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    feedSourceId: integer('feed_source_id')
+      .notNull()
+      .references(() => feedSources.id, { onDelete: 'cascade' }),
+    categoryId: integer('category_id').references(() => categories.id, { onDelete: 'set null' }),
+    title: text('title'),
+    updateIntervalSeconds: integer('update_interval_seconds'),
+    purgeDays: integer('purge_days'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...timestamps(),
+  },
+  (t) => [
+    unique('subscriptions_user_feed_source_key').on(t.userId, t.feedSourceId),
+    index('subscriptions_user_category_idx').on(t.userId, t.categoryId),
+    index('subscriptions_feed_source_idx').on(t.feedSourceId),
+  ],
+);
+
+export const entries = pgTable(
+  'entries',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    feedSourceId: integer('feed_source_id')
+      .notNull()
+      .references(() => feedSources.id, { onDelete: 'cascade' }),
+    guid: text('guid').notNull(),
+    link: text('link'),
+    title: text('title'),
+    author: text('author'),
+    content: text('content'),
+    contentHash: text('content_hash').notNull(),
+    lang: text('lang'),
+    publishedAt: tstz('published_at'),
+    sourceUpdatedAt: tstz('source_updated_at'),
+    fetchedAt: tstz('fetched_at').notNull().defaultNow(),
+    updatedAt: tstz('updated_at').notNull().defaultNow(),
+    // Tags and entities stripped; content capped so the tsvector stays under Postgres's 1 MB limit.
+    search: tsvector('search').generatedAlwaysAs(
+      sql`setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('simple', regexp_replace(left(coalesce(content, ''), 200000), '<[^>]*>|&[#a-zA-Z0-9]+;', ' ', 'g')), 'B')`,
+    ),
+  },
+  (t) => [
+    unique('entries_feed_source_guid_key').on(t.feedSourceId, t.guid),
+    index('entries_feed_source_published_idx').on(t.feedSourceId, t.publishedAt.desc()),
+    index('entries_search_idx').using('gin', t.search),
+  ],
+);
+
+export const enclosures = pgTable(
+  'enclosures',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    entryId: bigint('entry_id', { mode: 'number' })
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    url: text('url').notNull(),
+    mimeType: text('mime_type'),
+    length: bigint('length', { mode: 'number' }),
+    width: integer('width'),
+    height: integer('height'),
+    durationSeconds: integer('duration_seconds'),
+  },
+  (t) => [unique('enclosures_entry_url_key').on(t.entryId, t.url)],
+);
+
+export const userEntries = pgTable(
+  'user_entries',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    entryId: bigint('entry_id', { mode: 'number' })
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    subscriptionId: integer('subscription_id').references(() => subscriptions.id, {
+      onDelete: 'set null',
+    }),
+    // Denormalised coalesce(published_at, fetched_at) so headline lists paginate on one index.
+    sortAt: tstz('sort_at').notNull(),
+    unread: boolean('unread').notNull().default(true),
+    starred: boolean('starred').notNull().default(false),
+    published: boolean('published').notNull().default(false),
+    readAt: tstz('read_at'),
+    ...timestamps(),
+  },
+  (t) => [
+    unique('user_entries_user_entry_key').on(t.userId, t.entryId),
+    index('user_entries_entry_idx').on(t.entryId),
+    index('user_entries_user_sort_idx').on(t.userId, t.sortAt.desc(), t.id.desc()),
+    index('user_entries_subscription_sort_idx').on(t.subscriptionId, t.sortAt.desc(), t.id.desc()),
+    index('user_entries_unread_sort_idx')
+      .on(t.userId, t.sortAt.desc(), t.id.desc())
+      .where(sql`${t.unread}`),
+    index('user_entries_starred_sort_idx')
+      .on(t.userId, t.sortAt.desc(), t.id.desc())
+      .where(sql`${t.starred}`),
+    index('user_entries_published_sort_idx')
+      .on(t.userId, t.sortAt.desc(), t.id.desc())
+      .where(sql`${t.published}`),
+    index('user_entries_read_at_idx')
+      .on(t.userId, t.readAt.desc())
+      .where(sql`${t.readAt} IS NOT NULL`),
+    index('user_entries_user_updated_idx').on(t.userId, t.updatedAt),
+  ],
+);
+
+export const tombstones = pgTable(
+  'tombstones',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    entity: text('entity').notNull(),
+    entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+    deletedAt: tstz('deleted_at').notNull().defaultNow(),
+  },
+  (t) => [index('tombstones_user_deleted_idx').on(t.userId, t.deletedAt)],
+);
