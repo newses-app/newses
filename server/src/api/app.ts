@@ -22,6 +22,10 @@ import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
 import { prefsRoutes } from './routes/prefs.ts';
+import {
+  registerRequestDiagnostics,
+  type RequestDiagnosticsOptions,
+} from './request-diagnostics.ts';
 import { registerWeb } from './web.ts';
 
 export type HealthCheck = () => Promise<void>;
@@ -47,6 +51,8 @@ export interface AppDeps {
   events?: Omit<EventStreamOptions, 'realtime'>;
   /** Directory of the built web app to serve at `/`; omitted when the SPA is hosted elsewhere. */
   webDir?: string | null;
+  /** Logging of slow and abandoned requests; defaults to 2 s without a state snapshot. */
+  diagnostics?: Partial<RequestDiagnosticsOptions>;
 }
 
 /** Builds the HTTP app without listening, so it can be mounted by listen() or a Lambda adapter. */
@@ -58,6 +64,7 @@ export function buildApp(deps: AppDeps) {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(errorHandler);
+  registerRequestDiagnostics(app, { slowMs: 2000, ...deps.diagnostics });
 
   app.get('/healthz', async (_request, reply) => {
     const results = await Promise.all(

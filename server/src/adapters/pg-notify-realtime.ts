@@ -38,7 +38,12 @@ export class PgNotifyRealtime implements Realtime {
       this.#logger.warn({ err }, 'Realtime listener connection lost');
       this.#reconnect();
     });
-    await client.query(`LISTEN ${CHANNEL}`);
+    try {
+      await client.query(`LISTEN ${CHANNEL}`);
+    } catch (err) {
+      client.release(true);
+      throw err;
+    }
     this.#client = client;
   }
 

@@ -7,7 +7,7 @@ import { createFeedServices } from '../core/feeds/index.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
 import { createFeedDeps } from './feed-deps.ts';
-import { createRuntime } from './runtime.ts';
+import { createRuntime, processSnapshot } from './runtime.ts';
 
 const { config, logger, pool, onShutdown } = createRuntime('server');
 const db = createDb(pool);
@@ -48,6 +48,7 @@ const app = buildApp({
   logger,
   trustProxy: config.http.trustProxy,
   webDir: config.webDir,
+  diagnostics: { snapshot: processSnapshot(pool) },
   services,
   healthChecks: {
     db: async () => {

@@ -45,6 +45,17 @@ Admins manage users through the admin API (`/api/v1/admin/users`). From the host
 - Create: `echo 'the password' | C exec -T server rss-reader cli user create <login> [--admin]`
 - Reset a password and sign the user out everywhere: `echo 'new password' | C exec -T server rss-reader cli user reset-password <login>`
 
+## Logs
+
+`C logs server worker` shows JSON logs. Warnings from the server about slowness:
+
+| Message | Meaning |
+|---|---|
+| `Slow request` | A response took over 2 s |
+| `Client closed the connection before the response was sent` | The browser or proxy gave up waiting |
+
+Both include `pool` (`waiting` > 0: requests queued for a database connection) and `eventLoopDelayMaxMs` (high: the server was blocked). Neither high points at the database or at password hashing.
+
 ## Upgrade
 
 `git pull && C up -d --build`. Migrations apply before the new server and worker start.

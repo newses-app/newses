@@ -53,6 +53,8 @@ Rules:
 - Server is stateless; sessions live in Postgres.
 - No local-disk state outside `BlobStore`.
 - Migrations run as a one-shot `migrate` command, guarded by a Postgres advisory lock.
+- Database connections time out after 10 s and idle transactions after 60 s. The server role also limits statements to 30 s and lock waits to 10 s, so requests fail instead of hanging.
+- The server logs a warning, with pool usage and the longest event-loop delay, for responses slower than 2 s and for requests the client abandons before a response.
 - `buildApp()` constructs the Fastify app without listening, so it can be mounted by `listen()` or a Lambda adapter.
 - The SPA is a standalone static build and talks only to the API.
 - Clients treat realtime as optional and poll counters when no stream is available.
