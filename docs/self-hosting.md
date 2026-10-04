@@ -20,6 +20,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `HTTP_PORT` | `8080` | Host port for the server |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `TRUST_PROXY` | `false` | `true`, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
+| `FETCH_ALLOW_PRIVATE_NETWORKS` | unset | Feeds on private or loopback addresses are blocked; set `true` or comma-separated CIDRs (e.g. `192.168.1.0/24`) to allow LAN feeds |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of nightly dumps kept by the `backup` service |
 | `RSS_READER_IMAGE` | `rss-reader:latest` | Image tag to build or run |

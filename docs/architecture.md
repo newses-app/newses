@@ -9,7 +9,7 @@
 | Database | PostgreSQL 18; Drizzle ORM; drizzle-kit SQL migrations |
 | Jobs | pg-boss |
 | HTTP client | undici |
-| Feed parsing | `feedsmith` (RSS, Atom, RDF, JSON Feed, OPML) |
+| Feed parsing | `feedsmith` (RSS, Atom, RDF, JSON Feed, OPML); `htmlparser2` for feed autodiscovery |
 | Content | sanitize-html; `@mozilla/readability` + linkedom |
 | Auth | `@node-rs/argon2`, `otpauth` |
 | Logging | Pino (JSON) |
@@ -84,6 +84,17 @@ Scheduler ─▶ fetch job per due feed source
   filter     each subscriber's filters, in order, until "stop"
   notify     Realtime counter events per affected user
 ```
+
+Fetching untrusted URLs (`HttpFetcher`):
+- http(s) only, at most 5 redirects, a 20 s timeout, and a 10 MB body limit. Responses are decompressed.
+- Private, loopback, link-local, and multicast addresses are refused unless allowed by `FETCH_ALLOW_PRIVATE_NETWORKS`. The check runs on the resolved address at connect time, which also covers redirects and DNS rebinding.
+
+Subscription lifecycle:
+- Subscribing normalises the URL. An existing feed source is reused without fetching. Otherwise the URL is fetched and must parse as a feed, or be an HTML page whose `<link rel="alternate">` names exactly one feed; several feeds are returned for the user to choose.
+- Subscribing and OPML import create the source and subscription only. Entries arrive with the source's first scheduled fetch.
+- Unsubscribing deletes the user's entries from that feed except starred and published ones, which stay with no subscription. Feed sources without subscriptions are left for purge.
+- Deleting a category moves its feeds and child categories to its parent.
+- OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines.
 
 Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticle`. Readability, image proxy rewriting, and tracking-pixel stripping are implemented as hook modules.
 
