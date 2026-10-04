@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.vite/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+cdk.out/
+playwright-report/
+test-results/

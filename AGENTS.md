@@ -1,0 +1,35 @@
+# AGENTS.md
+
+Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server + worker (PostgreSQL), Vue 3 + Vuetify web app, Electron and Capacitor shells. Deploys via Docker (self-hosted) or AWS.
+
+## Docs map
+
+| Doc | Owns |
+|---|---|
+| `docs/requirements.md` | What the product does: features, phases, non-functional requirements, non-goals |
+| `docs/architecture.md` | How it is built and deployed: stack, layout, components, data model concepts, APIs, deployment |
+| `docs/migration-ttrss.md` | Importing data from an existing TTRSS instance |
+| `docs/adr/` | Decision history |
+
+Put each new fact in the doc that owns it. Never state the same fact in two places.
+
+## Doc rules
+
+- Current state only. When something changes, edit the doc in place.
+- No history, alternatives, rationale narratives, dates, status, or ADR references in docs.
+- Tables and bullets. No preambles, summaries, or filler.
+- Delete stale content; don't annotate it.
+- Code is authoritative once it exists (Drizzle schema, generated OpenAPI). Docs keep only concepts and constraints code doesn't express.
+
+## ADRs
+
+Write an ADR for decisions that change: stack, architecture, data model concepts, API surface, hosting, security model, or a feature's scope/phase. Not for routine implementation choices.
+
+- File: `docs/adr/NNNN-kebab-title.md`, next sequential number.
+- Template: `# NNNN. Title`, then `Status`, `Date`, `Context`, `Decision`, `Consequences`. Keep to ~20 lines.
+- Accepted ADRs are immutable. To change a decision, write a new ADR with `Supersedes NNNN` and set the old one's status to `Superseded by NNNN` (the only permitted edit).
+- Update affected docs in the same change so they reflect the new current state.
+
+## Tracking
+
+Progress, TODOs, and open questions go in GitHub Issues and milestones (`P1`, `P1.5`, `P2`, `P3`, `P4`, `Later`), never in docs.
