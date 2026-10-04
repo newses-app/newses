@@ -4,7 +4,7 @@
 
 | Concern | Choice |
 |---|---|
-| Language/runtime | TypeScript (strict, ESM), Node 24 LTS, pnpm workspaces |
+| Language/runtime | TypeScript 6.0 (strict, ESM, erasable syntax only), Node 24 LTS running `.ts` directly via native type stripping (no build step for Node packages), pnpm workspaces |
 | HTTP server | Fastify 5, Zod type provider, `@fastify/swagger` (OpenAPI) |
 | Database | PostgreSQL 18; Drizzle ORM; drizzle-kit SQL migrations |
 | Jobs | pg-boss |
@@ -21,20 +21,28 @@
 
 ## Repository layout
 
+Workspace packages exist only where runtime or toolchain differs.
+
 | Path | Contents |
 |---|---|
-| `apps/server` | Fastify entrypoint: native API, compatibility APIs, SSE, optional static SPA hosting |
-| `apps/worker` | Job runner entrypoint: fetch, purge, readability, favicon jobs; scheduler |
-| `apps/web` | Vue SPA (PWA) |
-| `apps/desktop` | Electron shell around the web build |
-| `apps/mobile` | Capacitor shell around the web build |
-| `packages/core` | Domain services (feeds, entries, filters, search, auth); depends only on port interfaces |
-| `packages/db` | Drizzle schema, migrations, migrate command |
-| `packages/shared` | Zod schemas, API types, typed API client |
-| `packages/adapters` | Port implementations (pg-boss, local FS, S3, SSE, …) |
-| `packages/importer-ttrss` | TTRSS import CLI |
-| `packages/infra` | CDK app |
+| `server/` | Everything that runs in the server image (Node) |
+| `web/` | Vue SPA (PWA), built by Vite |
+| `desktop/` | Electron shell around the web build |
+| `mobile/` | Capacitor shell around the web build |
+| `shared/` | Zod schemas, API types, typed API client (browser and Node) |
+| `infra/` | CDK app |
 | `docker/` | Dockerfile, `compose.yaml`, `.env.example`, reverse-proxy examples |
+
+`server/src` layers. ESLint enforces the allowed imports.
+
+| Folder | Contents | May import |
+|---|---|---|
+| `core` | Domain services (feeds, entries, filters, search, auth) and port interfaces; no framework or cloud SDK imports | `db`, `shared` |
+| `db` | Drizzle schema and migrations | `shared` |
+| `adapters` | Port implementations (pg-boss, local FS, S3, SSE, …) | `core`, `db`, `shared` |
+| `api` | Native REST, TTRSS-compatible and Google Reader routes, SSE endpoint | `core`, `db`, `shared` |
+| `importer` | TTRSS importer | `core`, `db`, `shared` |
+| `entrypoints` | `server`, `worker`, `migrate`, `cli` — wire adapters into core | anything |
 
 ## Runtime model
 

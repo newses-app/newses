@@ -1,0 +1,6 @@
+packages:
+  - server
+  - shared
+
+allowBuilds:
+  unrs-resolver: false

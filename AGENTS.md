@@ -2,6 +2,21 @@
 
 Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server + worker (PostgreSQL), Vue 3 + Vuetify web app, Electron and Capacitor shells. Deploys via Docker (self-hosted) or AWS.
 
+## Commands
+
+| Command | Does |
+|---|---|
+| `nvm use` | Switch to Node 24 (`.nvmrc`) |
+| `pnpm install` | Install and link workspace packages |
+| `pnpm check` | Lint, typecheck, format check, tests (what CI runs) |
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
+
+## Code conventions
+
+- Node runs `.ts` directly: erasable syntax only (no enums, namespaces, parameter properties); relative imports use the `.ts` extension; workspace packages export `./src/index.ts`.
+- Tests live next to code as `*.test.ts` (Vitest).
+- A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
+
 ## Docs map
 
 | Doc | Owns |

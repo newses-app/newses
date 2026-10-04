@@ -1,6 +1,6 @@
 # 0002. TypeScript pnpm monorepo
 
-- Status: Accepted
+- Status: Superseded by 0017
 - Date: 2026-10-03
 
 ## Context
