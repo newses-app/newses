@@ -2,9 +2,11 @@ import { PgBoss } from 'pg-boss';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import { buildApp } from '../api/app.ts';
 import { createAuthServices } from '../core/auth/index.ts';
-import { HttpFetcher } from '../core/feeds/http.ts';
+import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
+import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
+import { createFeedDeps } from './feed-deps.ts';
 import { createRuntime } from './runtime.ts';
 
 const { config, logger, pool, onShutdown } = createRuntime('server');
@@ -26,9 +28,15 @@ const realtime = new PgNotifyRealtime(pool, logger);
 await realtime.start();
 onShutdown(() => realtime.stop());
 
-const fetcher = new HttpFetcher({ allowPrivateNetworks: config.fetchAllowPrivateNetworks });
-onShutdown(() => fetcher.close());
-const services = { ...createAuthServices(db), feeds: createFeedServices(db, fetcher) };
+const feedDeps = createFeedDeps({ config, db, boss, realtime, logger });
+onShutdown(() => feedDeps.fetcher.close());
+const services = {
+  ...createAuthServices(db),
+  feeds: createFeedServices(feedDeps),
+  entries: createEntryServices(db, realtime),
+  prefs: new PrefsService(db),
+  realtime,
+};
 if (config.bootstrapAdmin) {
   const { login, password } = config.bootstrapAdmin;
   if (await services.users.bootstrapAdmin(login, password)) {

@@ -27,6 +27,8 @@ export interface ParsedFeed {
   format: 'rss' | 'atom' | 'rdf' | 'json';
   title: string | null;
   siteUrl: string | null;
+  /** Publisher's suggested minimum time between fetches (RSS `ttl`, `sy:updatePeriod`). */
+  ttlSeconds: number | null;
   entries: ParsedEntry[];
 }
 
@@ -103,6 +105,26 @@ function enclosure(url: string | null, mimeType?: string, length?: number): Pars
     : [];
 }
 
+const PERIOD_SECONDS: Record<string, number> = {
+  hourly: 3600,
+  daily: 86_400,
+  weekly: 604_800,
+  monthly: 2_592_000,
+  yearly: 31_536_000,
+};
+
+/** Seconds between updates from RSS `ttl` (minutes) or the syndication module. */
+function ttlSeconds(
+  ttl: number | undefined,
+  sy?: { updatePeriod?: string; updateFrequency?: number },
+) {
+  if (ttl !== undefined && Number.isFinite(ttl) && ttl > 0) return Math.round(ttl * 60);
+  const period = PERIOD_SECONDS[sy?.updatePeriod?.trim().toLowerCase() ?? ''];
+  if (period === undefined) return null;
+  const frequency = sy?.updateFrequency && sy.updateFrequency > 0 ? sy.updateFrequency : 1;
+  return Math.round(period / frequency);
+}
+
 /** Parses RSS 0.9x/2.0, RSS 1.0 (RDF), Atom 0.3/1.0, or JSON Feed into the entry model. */
 export function parseFeed(body: string, feedUrl: string): ParsedFeed {
   let parsed: ReturnType<typeof parseAnyFeed>;
@@ -123,6 +145,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
         format: 'rss',
         title: text(feed.title),
         siteUrl,
+        ttlSeconds: ttlSeconds(feed.ttl, feed.sy),
         entries: (feed.items ?? []).map((item) => {
           const permalink = item.guid?.isPermaLink !== false ? item.guid?.value : undefined;
           const duration = item.itunes?.duration ?? null;
@@ -163,6 +186,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
         format: 'atom',
         title: text(feed.title),
         siteUrl: resolve(alternate(feed.links), base),
+        ttlSeconds: ttlSeconds(undefined, feed.sy),
         entries: (feed.entries ?? []).map((entry) => {
           const media = entry.media;
           return {
@@ -196,6 +220,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
         format: 'rdf',
         title: text(feed.title),
         siteUrl,
+        ttlSeconds: ttlSeconds(undefined, feed.sy),
         entries: (feed.items ?? []).map((item) => ({
           guid: item.rdf?.about?.trim() || item.link?.trim() || null,
           link: resolve(item.link, siteUrl ?? feedUrl),
@@ -216,6 +241,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
         format: 'json',
         title: text(feed.title),
         siteUrl,
+        ttlSeconds: null,
         entries: (feed.items ?? []).map((item) => ({
           guid: item.id?.trim() || null,
           link: resolve(item.url ?? item.external_url, siteUrl ?? feedUrl),

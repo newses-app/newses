@@ -23,6 +23,7 @@ const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   invalid_input: 400,
   feed_not_found: 422,
   fetch_failed: 502,
+  resync_required: 410,
 };
 
 export function errorHandler(err: FastifyError, request: FastifyRequest, reply: FastifyReply) {

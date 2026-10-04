@@ -122,6 +122,10 @@ export const feedSources = pgTable(
     lastError: text('last_error'),
     lastErrorAt: tstz('last_error_at'),
     disabledAt: tstz('disabled_at'),
+    // Publisher's update hint from the feed document (RSS ttl, sy:updatePeriod).
+    ttlSeconds: integer('ttl_seconds'),
+    // No fetch, manual or scheduled, before this time (the host's Retry-After).
+    blockedUntil: tstz('blocked_until'),
     faviconKey: text('favicon_key'),
     faviconCheckedAt: tstz('favicon_checked_at'),
     ...timestamps(),
@@ -174,6 +178,9 @@ export const entries = pgTable(
     publishedAt: tstz('published_at'),
     sourceUpdatedAt: tstz('source_updated_at'),
     fetchedAt: tstz('fetched_at').notNull().defaultNow(),
+    // Last fetch whose document still contained the entry; purge keeps unreferenced entries until
+    // they leave the feed, so they are not re-ingested as new.
+    lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
     updatedAt: tstz('updated_at').notNull().defaultNow(),
     // Tags and entities stripped; content capped so the tsvector stays under Postgres's 1 MB limit.
     search: tsvector('search').generatedAlwaysAs(
@@ -184,6 +191,7 @@ export const entries = pgTable(
     unique('entries_feed_source_guid_key').on(t.feedSourceId, t.guid),
     index('entries_feed_source_published_idx').on(t.feedSourceId, t.publishedAt.desc()),
     index('entries_search_idx').using('gin', t.search),
+    index('entries_last_seen_idx').on(t.lastSeenAt),
   ],
 );
 

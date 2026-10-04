@@ -19,7 +19,7 @@ const OPML_TYPES = ['application/xml', 'text/xml', 'text/x-opml', 'application/x
 
 export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
   app,
-  { categories, subscriptions, opml },
+  { categories, subscriptions, opml, updater, favicons },
 ) => {
   app.addHook('preHandler', requireUser);
 
@@ -102,13 +102,47 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
       },
     },
     async (request) => {
-      const { title, categoryId, sortOrder } = request.body;
+      const { title, categoryId, sortOrder, updateIntervalMinutes, purgeDays } = request.body;
       const view = await subscriptions.update(requireAuth(request).user.id, request.params.id, {
         ...(title !== undefined && { title }),
         ...(categoryId !== undefined && { categoryId }),
         ...(sortOrder !== undefined && { sortOrder }),
+        ...(updateIntervalMinutes !== undefined && {
+          updateIntervalSeconds: updateIntervalMinutes === null ? null : updateIntervalMinutes * 60,
+        }),
+        ...(purgeDays !== undefined && { purgeDays }),
       });
       return toSubscription(view);
+    },
+  );
+
+  app.post(
+    '/subscriptions/:id/refresh',
+    { schema: { params: idParams } },
+    async (request, reply) => {
+      await updater.refresh(requireAuth(request).user.id, request.params.id);
+      return reply.code(202).send();
+    },
+  );
+
+  app.get(
+    '/favicons/:id',
+    { schema: { params: z.object({ id: z.coerce.number().int() }) } },
+    async (request, reply) => {
+      const icon = await favicons.get(request.params.id);
+      if (!icon) return reply.code(404).send({ error: 'not_found', message: 'No icon' });
+      return (
+        reply
+          .type(icon.contentType)
+          .header('cache-control', 'private, max-age=86400')
+          .header('x-content-type-options', 'nosniff')
+          // Icons may be SVG; never let one run script on this origin.
+          .header(
+            'content-security-policy',
+            "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+          )
+          .send(Buffer.from(icon.data))
+      );
     },
   );
 

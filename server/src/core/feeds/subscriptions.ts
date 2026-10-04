@@ -5,8 +5,10 @@ import { isUniqueViolation } from '../db-errors.ts';
 import { DomainError } from '../errors.ts';
 import { decodeBody } from './decode.ts';
 import { discoverFeeds, type FeedCandidate, looksLikeHtml } from './discover.ts';
-import { type Fetcher, FetchError } from './http.ts';
+import { type Fetcher, FetchError, type FetchResult } from './http.ts';
+import type { Ingester } from './ingest.ts';
 import { FeedParseError, type ParsedFeed, parseFeed } from './parse.ts';
+import type { FeedUpdater } from './updater.ts';
 import { normalizeFeedUrl } from './url.ts';
 
 export type SubscriptionRow = typeof subscriptions.$inferSelect;
@@ -25,23 +27,34 @@ export interface SubscriptionChanges {
   title?: string | null;
   categoryId?: number | null;
   sortOrder?: number;
+  updateIntervalSeconds?: number | null;
+  purgeDays?: number | null;
 }
 
 type Resolved =
-  { kind: 'feed'; url: string; feed: ParsedFeed } | { kind: 'choose'; candidates: FeedCandidate[] };
+  | { kind: 'feed'; url: string; feed: ParsedFeed; response: FetchResult | null }
+  | { kind: 'choose'; candidates: FeedCandidate[] };
 
 export class SubscriptionService {
   readonly #db: Db;
   readonly #fetcher: Fetcher;
+  readonly #ingester: Ingester | undefined;
+  readonly #updater: FeedUpdater | undefined;
 
-  constructor(db: Db, fetcher: Fetcher) {
+  /**
+   * With an ingester, subscribing to an already-fetched feed delivers its existing entries. With an
+   * updater, a new feed's entries are ingested from the fetch that validated it.
+   */
+  constructor(db: Db, fetcher: Fetcher, ingester?: Ingester, updater?: FeedUpdater) {
     this.#db = db;
     this.#fetcher = fetcher;
+    this.#ingester = ingester;
+    this.#updater = updater;
   }
 
   /**
    * Subscribes to a feed URL, or to the feed a web page advertises. When the page advertises
-   * several, returns them for the user to choose. Entries arrive with the next scheduled fetch.
+   * several, returns them for the user to choose.
    */
   async subscribe(
     userId: number,
@@ -61,7 +74,13 @@ export class SubscriptionService {
       resolved.feed.title,
       resolved.feed.siteUrl,
     );
-    return { status: 'subscribed', subscription: await this.#attach(userId, source, categoryId) };
+    const view = await this.#attach(userId, source, categoryId);
+    if (this.#updater && resolved.response && source.lastFetchedAt === null) {
+      const interval = await this.#updater.intervalSeconds(source.id);
+      await this.#updater.applyFetch(source, interval, resolved.response, resolved.feed);
+      return { status: 'subscribed', subscription: await this.get(userId, view.subscription.id) };
+    }
+    return { status: 'subscribed', subscription: view };
   }
 
   list(userId: number): Promise<SubscriptionView[]> {
@@ -98,6 +117,10 @@ export class SubscriptionService {
         ...(changes.title !== undefined && { title: changes.title }),
         ...(changes.categoryId !== undefined && { categoryId: changes.categoryId }),
         ...(changes.sortOrder !== undefined && { sortOrder: changes.sortOrder }),
+        ...(changes.updateIntervalSeconds !== undefined && {
+          updateIntervalSeconds: changes.updateIntervalSeconds,
+        }),
+        ...(changes.purgeDays !== undefined && { purgeDays: changes.purgeDays }),
       })
       .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
       .returning({ id: subscriptions.id });
@@ -146,7 +169,7 @@ export class SubscriptionService {
     const body = decodeBody(response.body, response.contentType);
     const finalUrl = normalizeFeedUrl(response.url);
     try {
-      return { kind: 'feed', url: finalUrl, feed: parseFeed(body, finalUrl) };
+      return { kind: 'feed', url: finalUrl, feed: parseFeed(body, finalUrl), response };
     } catch (err) {
       if (!(err instanceof FeedParseError)) throw err;
     }
@@ -159,7 +182,14 @@ export class SubscriptionService {
           return {
             kind: 'feed',
             url: known.url,
-            feed: { format: 'rss', title: known.title, siteUrl: known.siteUrl, entries: [] },
+            feed: {
+              format: 'rss',
+              title: known.title,
+              siteUrl: known.siteUrl,
+              ttlSeconds: known.ttlSeconds,
+              entries: [],
+            },
+            response: null,
           };
         return this.#resolve(normalizeFeedUrl(only.url), false);
       }
@@ -204,6 +234,7 @@ export class SubscriptionService {
         .values({ userId, feedSourceId: source.id, categoryId })
         .returning();
       if (!subscription) throw new Error('Subscription insert returned no row');
+      await this.#ingester?.backfill(subscription.id);
       return { subscription, source };
     } catch (err) {
       if (isUniqueViolation(err))

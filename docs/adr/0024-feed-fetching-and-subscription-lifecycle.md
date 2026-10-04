@@ -1,6 +1,6 @@
 # 0024. Feed fetching safety and subscription lifecycle
 
-- Status: Accepted
+- Status: Superseded by 0026
 - Date: 2026-10-04
 
 ## Context

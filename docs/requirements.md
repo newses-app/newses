@@ -107,7 +107,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Native REST API | P1 | Versioned (`/api/v1`), OpenAPI document served; every web app action goes through it |
-| Incremental sync | P1 | List endpoints accept `since`/cursor and return changed rows, including deletions |
+| Incremental sync | P1 | A sync endpoint returns categories, subscriptions, and entries changed since a token, including deletions, without missing rows committed late |
 | Web app | P1 | Vue SPA; installable PWA; works in current Chrome, Firefox, Safari |
 | TTRSS-compatible API | P3 | TTRSS Android app and at least one other TTRSS client can log in, browse, read, star, publish, label, and subscribe |
 | Google Reader API | P3 | Reeder, NetNewsWire, and ReadYou can log in, sync, and mark read/starred |
@@ -140,6 +140,7 @@
 |---|---|
 | Scale | ~1,000 feeds and several million entries per instance; ~10 users |
 | Performance | Headline list p95 < 200 ms; article open p95 < 150 ms; ingest of a 100-entry feed < 2 s |
+| Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
 | Privacy | No telemetry or third-party calls beyond feed, icon, and article fetches |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls |

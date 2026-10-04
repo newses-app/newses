@@ -71,27 +71,45 @@ Rules:
 ## Ingest pipeline
 
 ```
-Scheduler ─▶ fetch job per due feed source
-  fetch      conditional GET; timeout, size and redirect limits; SSRF guard; per-host concurrency; backoff; Retry-After
-  decode     bytes → text; charset from BOM, then HTTP Content-Type, then XML declaration, else UTF-8
+Scheduler (every 60 s) ─▶ claim due sources ─▶ feed.fetch job per source
+  fetch      conditional GET (ETag/Last-Modified); per host at most 2 concurrent requests, starts ≥ 1 s apart
+  decode     bytes → text; charset from BOM, then HTTP Content-Type, then XML declaration/HTML meta, else UTF-8
   parse      feedsmith → per-format mapping to normalised entries; XML that fails to parse is a fetch error
-             dates parsed leniently, zone-less dates are UTC, unparseable dates are null (entry gets fetch time)
-  dedupe     by GUID, else hash(link + title); updated entries replace content when hash changes
-  sanitise   allow-list HTML; strip control characters; resolve relative URLs against xml:base, then feed URL
+             dates parsed leniently, zone-less dates are UTC, unparseable dates are null
+  identify   feed GUID, else sha256(link + title), else sha256(content); duplicates within a document dropped
+  sanitise   allow-list HTML; strip control characters; resolve relative URLs (incl. srcset); titles to plain text
   transform  hook: readability, site rewrites
-  store      insert/update entry, enclosures
-  fan out    one user_entry per subscriber (unread)
+  store      insert new entries; rewrite existing ones only when their content hash changed; replace enclosures
+  fan out    new entries become unread user entries for every subscription, unless older than its purge age
   filter     each subscriber's filters, in order, until "stop"
-  notify     Realtime counter events per affected user
+  notify     Realtime `counters` event per user who received entries
+  schedule   next fetch after the interval, or after backoff on failure; favicon refresh when older than 30 days
 ```
 
+Updater:
+- Dispatch claims due sources with `FOR UPDATE SKIP LOCKED`, pushing their next fetch 15 minutes out, so concurrent dispatchers never double-fetch. A finished fetch sets the real next time.
+- The base interval is the shortest among subscribers, each taking the subscription's override, else the user's `updateIntervalMinutes` preference, else `FEED_UPDATE_INTERVAL_MINUTES`; never below 5 minutes. Users and subscriptions cannot set less than 15 minutes.
+- The next fetch waits the base interval or the publisher's hint (Cache-Control `max-age`/`Expires`, RSS `ttl`, `sy:updatePeriod`), whichever is longer, hints capped at 24 h, plus up to 10 % random jitter.
+- `sort_at` is the published time (fetch time when absent), clamped to now.
+- A failed fetch waits interval × 2^(failures − 1), capped at 24 h and never less than `Retry-After`. HTTP 410, or `FEED_DISABLE_AFTER_FAILURES` consecutive failures, disables the source.
+- `Retry-After` (and HTTP 429 without it: 10 minutes) sets the source's `blocked_until`. A 429, or a 503 with `Retry-After`, also pauses every source on that host in the worker until then, without counting failures.
+- "Update now" clears errors, re-enables the source, and enqueues a fetch. It is a no-op within a minute of the last fetch and refused (`throttled`) while `blocked_until` is in the future.
+- A permanent redirect (301/308 from the first hop on) moves the source to the new URL after a successful fetch, unless another source already has that URL.
+- Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
+
+Purge (every 6 h):
+- Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Starred and published entries are never purged.
+- Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
+- Deletes feed sources with no subscriptions and no kept entries, and their favicons.
+- Deletes tombstones older than 30 days.
+
 Fetching untrusted URLs (`HttpFetcher`):
-- http(s) only, at most 5 redirects, a 20 s timeout, and a 10 MB body limit. Responses are decompressed.
+- http(s) only, at most 5 redirects, a 20 s timeout, and a 10 MB body limit (lower per request where less is needed); downloads stop once the limit is exceeded. Responses are decompressed.
 - Private, loopback, link-local, and multicast addresses are refused unless allowed by `FETCH_ALLOW_PRIVATE_NETWORKS`. The check runs on the resolved address at connect time, which also covers redirects and DNS rebinding.
 
 Subscription lifecycle:
 - Subscribing normalises the URL. An existing feed source is reused without fetching. Otherwise the URL is fetched and must parse as a feed, or be an HTML page whose `<link rel="alternate">` names exactly one feed; several feeds are returned for the user to choose.
-- Subscribing and OPML import create the source and subscription only. Entries arrive with the source's first scheduled fetch.
+- Subscribing to a new source ingests the response that validated it, so the feed is not fetched twice. OPML import creates sources and subscriptions only; their entries arrive with the first scheduled fetch. Subscribing to a source that already has entries delivers those within the purge window immediately.
 - Unsubscribing deletes the user's entries from that feed except starred and published ones, which stay with no subscription. Feed sources without subscriptions are left for purge.
 - Deleting a category moves its feeds and child categories to its parent.
 - OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines.
@@ -100,16 +118,16 @@ Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticl
 
 ## Data model
 
-Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger; deletions of syncable rows are recorded as tombstones for incremental sync.
+Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, and user entries as tombstones for incremental sync.
 
 | Entity | Scope | Notes |
 |---|---|---|
 | `users` | Instance | Login (unique), Argon2id hash, role (`admin`/`user`), TOTP secret, disabled flag |
 | `sessions` | User | Token hash, kind (`cookie`/`bearer`), user agent, last seen, expiry |
 | `app_passwords` | User | Name, hash, last used |
-| `user_prefs` | User | Typed key/value |
+| `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
 | `categories` | User | Self-referencing tree (`parent_id`), order |
-| `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error); site URL; favicon ref. Fetch interval is the shortest among its subscribers; subscriptions with HTTP-auth credentials get a dedicated source |
+| `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error, publisher TTL hint, `blocked_until`); site URL; favicon ref. Fetch interval is the shortest among its subscribers; subscriptions with HTTP-auth credentials get a dedicated source |
 | `subscriptions` | User | → feed source, category; title override, interval and purge overrides, per-feed options, encrypted HTTP-auth credentials. Unique (user, feed source) |
 | `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, published/updated times, language, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
 | `enclosures` | Shared | → entry; URL, MIME type, length, dimensions |
@@ -126,7 +144,12 @@ Key indexes:
 - `user_entries (subscription_id, …)` for feed views.
 - `entries (feed_source_id, published_at DESC)`.
 
-Headline lists use keyset pagination on (sort key, id). `user_entries.sort_at` is a denormalised copy of the entry's published time (fetch time when absent), so every headline view is served by one index. Search uses a generated `tsvector` (`simple` configuration, markup stripped) on `entries`.
+Headline lists use keyset pagination on (sort key, id). `user_entries.sort_at` is a denormalised copy of the entry's published time (fetch time when absent), so every headline view is served by one index. Descending index columns are `NULLS LAST`; queries order the same way so the indexes apply.
+
+Search:
+- A generated `tsvector` (`simple` configuration, markup stripped) on `entries`; queries use `websearch_to_tsquery` (quotes, `OR`, `-`).
+- A query matching at most 20,000 entries instance-wide (counted from the GIN index) is resolved into a materialised set of the user's matches, then sorted. A more common one walks the headline index, where matches are dense.
+- Relevance order ranks (`ts_rank`) the 1,000 most recent matches and pages by offset.
 
 ## Authentication
 
@@ -145,11 +168,23 @@ Headline lists use keyset pagination on (sort key, id). `user_entries.sort_at` i
 
 | Surface | Path | Notes |
 |---|---|---|
-| Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`; incremental sync via `since`/cursor |
-| Events | `/api/v1/events` | SSE: counters, new entries, state changes |
+| Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`; typed client in `shared` |
+| Events | `/api/v1/events` | SSE: `counters` invalidation events |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
 | TTRSS-compatible | `/api/` (POST JSON `op`) | See below |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*` | See below |
+
+### Native REST API
+
+- Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
+- Fresh: unread entries with `sort_at` within the user's `freshMaxAgeHours`. Recently read: entries read within the last 7 days, in reading order.
+- `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
+- State changes and catch-up publish `counters`; rows already in the requested state are not updated.
+- `GET /sync` returns categories, subscriptions, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
+
+Events stream:
+- Events are per-user invalidation signals; clients refetch what they describe. Events of one type within 1 s are sent once.
+- `X-Accel-Buffering: no` disables nginx buffering; a comment line every 25 s keeps proxies from timing out; streams end after 30 minutes and clients reconnect, which re-checks the session.
 
 ### TTRSS-compatible API
 

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import { users } from '../../db/schema.ts';
 import { FakeFetcher } from '../../test/fake-fetcher.ts';
+import { testFeedDeps } from '../../test/fakes.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { createFeedServices, type FeedServices } from './index.ts';
 
@@ -33,7 +34,7 @@ const TTRSS_EXPORT = `<?xml version="1.0" encoding="utf-8"?>
 beforeAll(async () => {
   database = await createTestDatabase();
   db = createDb(database.pool);
-  services = createFeedServices(db, new FakeFetcher());
+  services = createFeedServices(testFeedDeps(db, new FakeFetcher()));
 });
 
 beforeEach(async () => {

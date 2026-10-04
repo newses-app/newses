@@ -46,7 +46,16 @@ export function toSubscription({ subscription, source }: SubscriptionView): Subs
     siteUrl: source.siteUrl,
     categoryId: subscription.categoryId,
     sortOrder: subscription.sortOrder,
+    iconUrl: source.faviconKey ? `/api/v1/favicons/${String(source.id)}` : null,
     lastFetchedAt: source.lastFetchedAt?.toISOString() ?? null,
     lastError: source.lastError,
+    lastErrorAt: source.lastErrorAt?.toISOString() ?? null,
+    errorCount: source.errorCount,
+    disabled: source.disabledAt !== null,
+    updateIntervalMinutes:
+      subscription.updateIntervalSeconds === null
+        ? null
+        : Math.round(subscription.updateIntervalSeconds / 60),
+    purgeDays: subscription.purgeDays,
   };
 }

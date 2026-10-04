@@ -8,6 +8,7 @@ describe('loadConfig', () => {
       http: { host: '0.0.0.0', port: 8080, trustProxy: false },
       logLevel: 'info',
       blobDir: '/data/blobs',
+      feeds: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
       bootstrapAdmin: null,
     });

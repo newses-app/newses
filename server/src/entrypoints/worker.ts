@@ -1,7 +1,11 @@
 import { PgBoss } from 'pg-boss';
 import { IntervalScheduler } from '../adapters/interval-scheduler.ts';
+import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import { createAuthServices } from '../core/auth/index.ts';
+import { SyncService } from '../core/entries/sync.ts';
+import { createFeedServices } from '../core/feeds/index.ts';
 import { createDb } from '../db/client.ts';
+import { createFeedDeps } from './feed-deps.ts';
 import { createRuntime } from './runtime.ts';
 
 const { config, logger, pool, onShutdown } = createRuntime('worker');
@@ -14,9 +18,35 @@ boss.on('error', (err) => {
 await boss.start();
 onShutdown(() => boss.stop({ graceful: true }));
 
+// The worker only publishes realtime events, so the listener is never started.
+const deps = createFeedDeps({
+  config,
+  db,
+  boss,
+  realtime: new PgNotifyRealtime(pool, logger),
+  logger,
+});
+onShutdown(() => deps.fetcher.close());
+const feeds = createFeedServices(deps);
 const { sessions, throttle } = createAuthServices(db);
+const sync = new SyncService(db);
+
+await deps.queue.work('feed.fetch', ({ feedSourceId }) => feeds.updater.update(feedSourceId), {
+  concurrency: 8,
+});
+await deps.queue.work('feed.favicon', ({ feedSourceId }) => feeds.favicons.refresh(feedSourceId), {
+  concurrency: 2,
+});
 
 const scheduler = new IntervalScheduler(logger);
+scheduler.every('feeds.dispatch', 60, async () => {
+  const dispatched = await feeds.updater.dispatchDue();
+  if (dispatched > 0) logger.debug({ dispatched }, 'Dispatched feed fetches');
+});
+scheduler.every('feeds.purge', 6 * 60 * 60, async () => {
+  logger.info(await feeds.purger.purge(), 'Purged old entries');
+  await sync.pruneTombstones();
+});
 scheduler.every('auth.prune', 60 * 60, async () => {
   await sessions.pruneExpired();
   await throttle.prune();

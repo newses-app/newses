@@ -4,7 +4,9 @@ import { entries, feedSources, userEntries, users } from '../../db/schema.ts';
 import { FakeFetcher, htmlPage, rss } from '../../test/fake-fetcher.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { CategoryService } from '../categories.ts';
+import { testFeedDeps } from '../../test/fakes.ts';
 import { FetchError } from './http.ts';
+import { createFeedServices } from './index.ts';
 import { SubscriptionService } from './subscriptions.ts';
 
 let database: TestDatabase;
@@ -169,5 +171,22 @@ describe('SubscriptionService.unsubscribe', () => {
     await expect(service.unsubscribe(userId, subscription.id)).rejects.toMatchObject({
       code: 'not_found',
     });
+  });
+});
+
+describe('subscribing with the updater', () => {
+  it('ingests the validating fetch instead of fetching the new feed again', async () => {
+    const feeds = createFeedServices(testFeedDeps(db, fetcher));
+    fetcher.set('https://fresh.example/rss', {
+      body: rss('Fresh', 'https://fresh.example/', [{ guid: '1', title: 'One' }]),
+      etag: '"e"',
+    });
+    const result = await feeds.subscriptions.subscribe(userId, 'https://fresh.example/rss');
+    expect(result.status === 'subscribed' && result.subscription.source).toMatchObject({
+      etag: '"e"',
+    });
+    expect(await db.select().from(userEntries)).toHaveLength(1);
+    expect(await feeds.updater.dispatchDue()).toBe(0);
+    expect(fetcher.requested).toEqual(['https://fresh.example/rss']);
   });
 });

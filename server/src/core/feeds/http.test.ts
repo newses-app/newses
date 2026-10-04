@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FetchError, HttpFetcher } from './http.ts';
+import { FetchError, HttpFetcher, parseMaxAge } from './http.ts';
 
 let server: Server;
 let base: string;
@@ -24,6 +24,11 @@ beforeAll(async () => {
     if (path.startsWith('/hop/')) {
       const n = Number(path.slice(5));
       return res.writeHead(302, { location: n > 0 ? `/hop/${String(n - 1)}` : '/feed' }).end();
+    }
+    if (path === '/moved') return res.writeHead(301, { location: '/moved-again' }).end();
+    if (path === '/moved-again') return res.writeHead(308, { location: '/hop/0' }).end();
+    if (path === '/cached') {
+      return res.writeHead(200, { 'cache-control': 'public, max-age=3600' }).end('<rss/>');
     }
     if (path === '/to-private') return res.writeHead(301, { location: 'http://10.0.0.1/x' }).end();
     if (path === '/big') return res.writeHead(200).end('x'.repeat(2048));
@@ -71,6 +76,31 @@ describe('HttpFetcher', () => {
     });
   });
 
+  it('reports the URL reached through leading permanent redirects', async () => {
+    expect(await local().fetch(`${base}/moved`)).toMatchObject({
+      url: `${base}/feed`,
+      permanentUrl: `${base}/hop/0`,
+    });
+    expect((await local().fetch(`${base}/hop/1`)).permanentUrl).toBeNull();
+    expect((await local().fetch(`${base}/feed`)).permanentUrl).toBeNull();
+  });
+
+  it('reports declared freshness', async () => {
+    expect((await local().fetch(`${base}/cached`)).maxAgeSeconds).toBe(3600);
+    expect((await local().fetch(`${base}/feed`)).maxAgeSeconds).toBeNull();
+    const headers = (h: Record<string, string>) => ({ get: (n: string) => h[n] ?? null });
+    expect(parseMaxAge('no-cache, max-age=60', headers({}))).toBeNull();
+    expect(
+      parseMaxAge(
+        null,
+        headers({
+          date: 'Sun, 04 Oct 2026 10:00:00 GMT',
+          expires: 'Sun, 04 Oct 2026 11:00:00 GMT',
+        }),
+      ),
+    ).toBe(3600);
+  });
+
   it('blocks private addresses by default, including via DNS and redirects', async () => {
     const fetcher = new HttpFetcher();
     expect(await failure(fetcher.fetch(`${base}/feed`))).toMatchObject({ code: 'blocked_address' });
@@ -88,6 +118,9 @@ describe('HttpFetcher', () => {
 
   it('enforces size limits and timeouts', async () => {
     expect(await failure(local({ maxBytes: 1024 }).fetch(`${base}/big`))).toMatchObject({
+      code: 'too_large',
+    });
+    expect(await failure(local().fetch(`${base}/big`, { maxBytes: 100 }))).toMatchObject({
       code: 'too_large',
     });
     expect(await failure(local({ timeoutMs: 200 }).fetch(`${base}/slow`))).toMatchObject({

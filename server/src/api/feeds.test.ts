@@ -1,9 +1,8 @@
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createAuthServices } from '../core/auth/index.ts';
-import { createFeedServices } from '../core/feeds/index.ts';
 import { createDb } from '../db/client.ts';
 import { FakeFetcher, htmlPage, rss } from '../test/fake-fetcher.ts';
+import { createTestServices } from '../test/services.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { buildApp } from './app.ts';
 
@@ -20,7 +19,7 @@ const fetcher = new FakeFetcher()
 beforeAll(async () => {
   database = await createTestDatabase();
   const db = createDb(database.pool);
-  const services = { ...createAuthServices(db), feeds: createFeedServices(db, fetcher) };
+  const services = createTestServices(db, fetcher);
   await services.users.create('alice', 'alice password');
   app = buildApp({ logger: pino({ level: 'silent' }), healthChecks: {}, services });
   const login = await app.inject({

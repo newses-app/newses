@@ -22,6 +22,27 @@
       "when": 1791088845638,
       "tag": "0002_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791134847650,
+      "tag": "0003_entry_last_seen",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791136761838,
+      "tag": "0004_feed_fetch_hints",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791136992319,
+      "tag": "0005_tombstone_triggers",
+      "breakpoints": true
     }
   ]
 }

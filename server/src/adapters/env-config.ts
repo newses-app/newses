@@ -23,6 +23,9 @@ const schema = z
               .map((s) => s.trim())
               .filter(Boolean),
       ),
+    FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+    FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(60),
+    FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
     ADMIN_LOGIN: z.string().min(1).optional(),
     ADMIN_PASSWORD: z.string().min(8).optional(),
   })
@@ -53,6 +56,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,
     blobDir: e.BLOB_DIR,
+    feeds: {
+      updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
+      purgeDays: e.FEED_PURGE_DAYS,
+      disableAfterFailures: e.FEED_DISABLE_AFTER_FAILURES,
+    },
     fetchAllowPrivateNetworks:
       e.FETCH_ALLOW_PRIVATE_NETWORKS === true || e.FETCH_ALLOW_PRIVATE_NETWORKS.length > 0
         ? e.FETCH_ALLOW_PRIVATE_NETWORKS

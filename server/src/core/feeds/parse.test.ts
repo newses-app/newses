@@ -119,6 +119,23 @@ describe('parseFeed', () => {
     expect(load('empty.xml').entries).toEqual([]);
   });
 
+  it('reads update hints from RSS ttl and the syndication module', () => {
+    const channel = (extra: string, ns = '') =>
+      `<rss version="2.0"${ns}><channel><title>T</title>${extra}</channel></rss>`;
+    const sy = ' xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"';
+    expect(parseFeed(channel('<ttl>90</ttl>'), FEED_URL).ttlSeconds).toBe(5400);
+    expect(
+      parseFeed(
+        channel(
+          '<sy:updatePeriod>daily</sy:updatePeriod><sy:updateFrequency>2</sy:updateFrequency>',
+          sy,
+        ),
+        FEED_URL,
+      ).ttlSeconds,
+    ).toBe(43_200);
+    expect(load('rss091.xml').ttlSeconds).toBeNull();
+  });
+
   it('rejects HTML pages and structurally broken XML', () => {
     expect(() => load('not-a-feed.html')).toThrow(FeedParseError);
     expect(() => load('truncated.xml')).toThrow(FeedParseError);

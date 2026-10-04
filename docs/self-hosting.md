@@ -20,6 +20,9 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `HTTP_PORT` | `8080` | Host port for the server |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `TRUST_PROXY` | `false` | `true`, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
+| `FEED_UPDATE_INTERVAL_MINUTES` | `30` | Default minutes between fetches of a feed (5–1440) |
+| `FEED_PURGE_DAYS` | `60` | Default age in days after which unstarred, unpublished entries are deleted; `0` keeps everything |
+| `FEED_DISABLE_AFTER_FAILURES` | `20` | Consecutive failed fetches after which a feed is disabled until refreshed |
 | `FETCH_ALLOW_PRIVATE_NETWORKS` | unset | Feeds on private or loopback addresses are blocked; set `true` or comma-separated CIDRs (e.g. `192.168.1.0/24`) to allow LAN feeds |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of nightly dumps kept by the `backup` service |
@@ -58,6 +61,8 @@ The server then joins the proxy network and is not published on the host. `TRUST
 ### Other proxies
 
 Forward to the server's port 8080 and pass `X-Forwarded-For` and `X-Forwarded-Proto`. Set `TRUST_PROXY` to `true` only if the server port is reachable solely through the proxy; otherwise set it to the proxy's address.
+
+`/api/v1/events` is a long-lived event stream. nginx and nginx-proxy need no extra configuration. Other proxies must not buffer its responses and must allow at least 30 s between bytes (the server sends a heartbeat every 25 s).
 
 ## Backups
 

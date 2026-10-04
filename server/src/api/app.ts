@@ -1,6 +1,8 @@
 import cookie from '@fastify/cookie';
+import swagger from '@fastify/swagger';
 import Fastify, { type FastifyBaseLogger } from 'fastify';
 import {
+  jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
@@ -8,12 +10,18 @@ import {
 import type { AuthService } from '../core/auth/auth-service.ts';
 import type { SessionService } from '../core/auth/sessions.ts';
 import type { UserService } from '../core/auth/users.ts';
+import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
-import { registerAuth } from './auth.ts';
+import type { Realtime } from '../core/ports.ts';
+import type { PrefsService } from '../core/prefs.ts';
+import { registerAuth, SESSION_COOKIE } from './auth.ts';
 import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { authRoutes } from './routes/auth.ts';
+import { entryRoutes } from './routes/entries.ts';
+import { eventRoutes, type EventStreamOptions } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
+import { prefsRoutes } from './routes/prefs.ts';
 
 export type HealthCheck = () => Promise<void>;
 
@@ -22,6 +30,9 @@ export interface ApiServices {
   sessions: SessionService;
   users: UserService;
   feeds: FeedServices;
+  entries: EntryServices;
+  prefs: PrefsService;
+  realtime: Realtime;
 }
 
 export interface AppDeps {
@@ -31,6 +42,8 @@ export interface AppDeps {
   /** Fastify `trustProxy`: true to trust any proxy, or comma-separated proxy addresses/CIDRs. */
   trustProxy?: boolean | string;
   services?: ApiServices;
+  /** Overrides for tests. */
+  events?: Omit<EventStreamOptions, 'realtime'>;
 }
 
 /** Builds the HTTP app without listening, so it can be mounted by listen() or a Lambda adapter. */
@@ -64,12 +77,29 @@ export function buildApp(deps: AppDeps) {
   const services = deps.services;
   if (services) {
     void app.register(cookie);
+    void app.register(swagger, {
+      openapi: {
+        info: { title: 'rss-reader API', version: '1' },
+        components: {
+          securitySchemes: {
+            cookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE },
+            bearer: { type: 'http', scheme: 'bearer' },
+          },
+        },
+        security: [{ cookie: [] }, { bearer: [] }],
+      },
+      transform: jsonSchemaTransform,
+    });
     void app.register(
       async (api) => {
         registerAuth(api, services.sessions);
+        api.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
         await api.register(authRoutes, services);
         await api.register(adminUserRoutes, services);
         await api.register(feedRoutes, services.feeds);
+        await api.register(entryRoutes, services.entries);
+        await api.register(prefsRoutes, { prefs: services.prefs });
+        await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });
       },
       { prefix: '/api/v1' },
     );

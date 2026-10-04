@@ -34,11 +34,17 @@ export interface FetchRequest {
   etag?: string | null;
   lastModified?: string | null;
   accept?: string;
+  /** Overrides the fetcher's body limit for this request; downloads stop once it is exceeded. */
+  maxBytes?: number;
 }
 
 export interface FetchResult {
   /** URL after redirects. */
   url: string;
+  /** URL reached through permanent redirects (301/308) only, when the first redirect was one. */
+  permanentUrl: string | null;
+  /** Freshness the server declared (Cache-Control max-age, else Expires). */
+  maxAgeSeconds: number | null;
   status: number;
   notModified: boolean;
   contentType: string | null;
@@ -157,6 +163,8 @@ export class HttpFetcher implements Fetcher {
   async fetch(url: string, request: FetchRequest = {}): Promise<FetchResult> {
     const signal = AbortSignal.timeout(this.#timeoutMs);
     let current = this.#checkUrl(url);
+    let permanentUrl: string | null = null;
+    let permanentChain = true;
     for (let redirects = 0; ; redirects++) {
       const response = await this.#request(current, request, signal);
       const location = response.headers.get('location');
@@ -169,9 +177,11 @@ export class HttpFetcher implements Fetcher {
           );
         }
         current = this.#checkUrl(new URL(location, current).href);
+        permanentChain &&= response.status === 301 || response.status === 308;
+        if (permanentChain) permanentUrl = current;
         continue;
       }
-      return this.#result(current, response, signal);
+      return this.#result(current, permanentUrl, response, request, signal);
     }
   }
 
@@ -212,9 +222,18 @@ export class HttpFetcher implements Fetcher {
     }
   }
 
-  async #result(url: string, response: Response, signal: AbortSignal): Promise<FetchResult> {
+  async #result(
+    url: string,
+    permanentUrl: string | null,
+    response: Response,
+    request: FetchRequest,
+    signal: AbortSignal,
+  ): Promise<FetchResult> {
+    const maxBytes = request.maxBytes ?? this.#maxBytes;
     const base = {
       url,
+      permanentUrl,
+      maxAgeSeconds: parseMaxAge(response.headers.get('cache-control'), response.headers),
       status: response.status,
       contentType: response.headers.get('content-type'),
       etag: response.headers.get('etag'),
@@ -232,9 +251,9 @@ export class HttpFetcher implements Fetcher {
       });
     }
     const declared = Number(response.headers.get('content-length'));
-    if (declared > this.#maxBytes) {
+    if (declared > maxBytes) {
       await response.body?.cancel();
-      throw new FetchError('too_large', `Response exceeds ${String(this.#maxBytes)} bytes`);
+      throw new FetchError('too_large', `Response exceeds ${String(maxBytes)} bytes`);
     }
     const chunks: Uint8Array[] = [];
     let size = 0;
@@ -242,8 +261,8 @@ export class HttpFetcher implements Fetcher {
       for await (const chunk of (response.body ?? []) as AsyncIterable<Uint8Array>) {
         size += chunk.byteLength;
         // Leaving the loop by throwing cancels the stream.
-        if (size > this.#maxBytes) {
-          throw new FetchError('too_large', `Response exceeds ${String(this.#maxBytes)} bytes`);
+        if (size > maxBytes) {
+          throw new FetchError('too_large', `Response exceeds ${String(maxBytes)} bytes`);
         }
         chunks.push(chunk);
       }
@@ -270,4 +289,20 @@ function parseRetryAfter(value: string | null): number | null {
   if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds));
   const date = Date.parse(value);
   return Number.isNaN(date) ? null : Math.max(0, Math.round((date - Date.now()) / 1000));
+}
+
+/** Seconds the response stays fresh: Cache-Control max-age, else Expires minus Date. */
+export function parseMaxAge(
+  cacheControl: string | null,
+  headers: { get(name: string): string | null },
+): number | null {
+  if (cacheControl) {
+    if (/(^|,)\s*(no-store|no-cache)\b/i.test(cacheControl)) return null;
+    const maxAge = /(?:^|,)\s*max-age\s*=\s*"?(\d+)/i.exec(cacheControl)?.[1];
+    if (maxAge !== undefined) return Number(maxAge);
+  }
+  const expires = Date.parse(headers.get('expires') ?? '');
+  if (Number.isNaN(expires)) return null;
+  const date = Date.parse(headers.get('date') ?? '');
+  return Math.max(0, Math.round((expires - (Number.isNaN(date) ? Date.now() : date)) / 1000));
 }
