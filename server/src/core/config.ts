@@ -15,6 +15,8 @@ export interface AppConfig {
   http: { host: string; port: number; trustProxy: boolean | string };
   logLevel: LogLevel;
   blobDir: string;
+  /** Built web app to serve, or null when it is hosted elsewhere. */
+  webDir: string | null;
   feeds: FeedSettings;
   /** Private addresses feeds may be fetched from: true for all, or CIDRs. Blocked by default. */
   fetchAllowPrivateNetworks: boolean | string[];

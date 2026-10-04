@@ -8,7 +8,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 2. Set `ADMIN_LOGIN` and `ADMIN_PASSWORD` for the first admin, or create it with the CLI after step 3.
 3. `C up -d --build`
 
-`migrate` runs once and exits. `server` and `worker` start after it succeeds. The app listens on `HTTP_PORT` (default 8080). `GET /healthz` returns `200` with `{"status":"ok"}` when the database and job queue are reachable.
+`migrate` runs once and exits. `server` and `worker` start after it succeeds. The app listens on `HTTP_PORT` (default 8080): open it in a browser and sign in. `GET /healthz` returns `200` with `{"status":"ok"}` when the database and job queue are reachable.
 
 ## Configuration
 

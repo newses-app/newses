@@ -28,17 +28,3 @@ export const updatePrefsRequestSchema = z.object(prefsShape).partial().strict();
 export type Prefs = z.infer<typeof prefsSchema>;
 export type PrefKey = keyof Prefs;
 export type UpdatePrefsRequest = z.infer<typeof updatePrefsRequestSchema>;
-
-export const DEFAULT_PREFS: Prefs = {
-  viewMode: 'adaptive',
-  sortOrder: 'newest',
-  layout: 'threePane',
-  theme: 'system',
-  markReadOnScroll: false,
-  showContentPreview: true,
-  hideReadFeeds: false,
-  confirmCatchUp: true,
-  freshMaxAgeHours: 24,
-  updateIntervalMinutes: null,
-  purgeDays: null,
-};

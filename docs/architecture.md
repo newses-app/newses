@@ -68,6 +68,25 @@ Rules:
 | `Config` | Settings and secrets | Environment | Environment from Secrets Manager | Environment from Secrets Manager |
 | `Logger` | Structured logs | Pino | Pino | Pino |
 
+## Web app
+
+| Folder (`web/src`) | Contents |
+|---|---|
+| `views` | Route pages: login, signed-in layout (feed tree drawer, dialogs), reader, settings |
+| `components` | Reader (tree, headlines, combined list, article), dialogs, settings panels |
+| `composables` | Server state (TanStack Query), live counters, shortcuts, session |
+| `lib` | Pure logic: stream keys, tree building, shortcut matching, reordering, cache patches |
+| `stores` | Pinia store for UI state only (drawer, dialogs, notices) |
+
+- Routes: `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised); search is `?q=`.
+- Server data lives in the TanStack Query cache. State changes patch every cached copy, then save; a failure restores the previous flags. Headline lists are not refetched when entries change state, so read entries stay in place until the list is reloaded.
+- Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
+- Counters refetch on `counters` events. Without a stream they are polled every 60 s, paused while the page is hidden; a closed stream is retried every 5 minutes.
+- Below 900 px one pane shows at a time; below 700 px secondary toolbar actions move into a menu.
+- Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
+- PWA: the service worker precaches the app shell only; API requests always go to the network.
+- In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`.
+
 ## Ingest pipeline
 
 ```

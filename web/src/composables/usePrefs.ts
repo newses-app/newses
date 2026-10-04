@@ -1,0 +1,37 @@
+import type { Prefs, UpdatePrefsRequest } from '@rss-reader/shared';
+import { DEFAULT_PREFS } from '@rss-reader/shared/client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
+import { computed } from 'vue';
+import { api } from '../api.ts';
+
+const PREFS_KEY = ['prefs'] as const;
+
+/** The user's preferences, defaults until loaded; `update` applies changes optimistically. */
+export function usePrefs() {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: PREFS_KEY,
+    queryFn: () => api.prefs.get(),
+    staleTime: Infinity,
+  });
+  const mutation = useMutation({
+    mutationFn: (changes: UpdatePrefsRequest) => api.prefs.update(changes),
+    onMutate: (changes) => {
+      const previous = queryClient.getQueryData<Prefs>(PREFS_KEY);
+      queryClient.setQueryData<Prefs>(PREFS_KEY, {
+        ...(previous ?? DEFAULT_PREFS),
+        ...changes,
+      } as Prefs);
+      return previous;
+    },
+    onSuccess: (prefs) => queryClient.setQueryData(PREFS_KEY, prefs),
+    onError: (_error, _changes, previous) => queryClient.setQueryData(PREFS_KEY, previous),
+  });
+  return {
+    prefs: computed<Prefs>(() => query.data.value ?? DEFAULT_PREFS),
+    loaded: computed(() => query.isSuccess.value),
+    update: (changes: UpdatePrefsRequest) => {
+      mutation.mutate(changes);
+    },
+  };
+}

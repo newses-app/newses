@@ -47,6 +47,7 @@ if (config.bootstrapAdmin) {
 const app = buildApp({
   logger,
   trustProxy: config.http.trustProxy,
+  webDir: config.webDir,
   services,
   healthChecks: {
     db: async () => {

@@ -1,6 +1,7 @@
 packages:
   - server
   - shared
+  - web
 
 allowBuilds:
   cpu-features: false
@@ -8,3 +9,4 @@ allowBuilds:
   protobufjs: false
   ssh2: false
   unrs-resolver: false
+  vue-demi: false

@@ -22,6 +22,7 @@ import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
 import { prefsRoutes } from './routes/prefs.ts';
+import { registerWeb } from './web.ts';
 
 export type HealthCheck = () => Promise<void>;
 
@@ -44,6 +45,8 @@ export interface AppDeps {
   services?: ApiServices;
   /** Overrides for tests. */
   events?: Omit<EventStreamOptions, 'realtime'>;
+  /** Directory of the built web app to serve at `/`; omitted when the SPA is hosted elsewhere. */
+  webDir?: string | null;
 }
 
 /** Builds the HTTP app without listening, so it can be mounted by listen() or a Lambda adapter. */
@@ -104,6 +107,8 @@ export function buildApp(deps: AppDeps) {
       { prefix: '/api/v1' },
     );
   }
+
+  if (deps.webDir) registerWeb(app, deps.webDir);
 
   return app;
 }

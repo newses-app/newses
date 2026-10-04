@@ -12,12 +12,15 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
 | `pnpm --filter @rss-reader/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @rss-reader/server db:migrate` | Apply migrations |
+| `pnpm --filter @rss-reader/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
+| `E2E_BASE_URL=… pnpm --filter @rss-reader/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
 
 ## Code conventions
 
 - Node runs `.ts` directly: erasable syntax only (no enums, namespaces, parameter properties); relative imports use the `.ts` extension; workspace packages export `./src/index.ts`.
 - Tests live next to code as `*.test.ts` (Vitest). Database tests start a Postgres container via Testcontainers, so Docker must be running.
 - Migrations are generated, never edited after they are committed; change the schema and generate a new one.
+- `web` is bundled by Vite; browser code imports runtime values from `@rss-reader/shared/client` (no Zod) and only types from `@rss-reader/shared`. UI strings live in `web/src/locales/en.json`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
 
 ## Docs map

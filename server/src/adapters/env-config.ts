@@ -8,6 +8,7 @@ const schema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
     BLOB_DIR: z.string().min(1).default('/data/blobs'),
+    WEB_DIR: z.string().min(1).optional(),
     TRUST_PROXY: z
       .string()
       .default('false')
@@ -56,6 +57,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,
     blobDir: e.BLOB_DIR,
+    webDir: e.WEB_DIR ?? null,
     feeds: {
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
       purgeDays: e.FEED_PURGE_DAYS,

@@ -132,7 +132,10 @@ export const syncResponseSchema = z.object({
 
 export type SpecialFeed = z.infer<typeof specialFeedSchema>;
 export type Stream = z.infer<typeof streamSchema>;
-export type EntryListQuery = z.input<typeof entryListQuerySchema>;
+/** List query as clients send it (`content` as a boolean; the API reads `true`/`false`). */
+export type EntryListQuery = Omit<z.input<typeof entryListQuerySchema>, 'content'> & {
+  content?: boolean | undefined;
+};
 export type Enclosure = z.infer<typeof enclosureSchema>;
 export type Entry = z.infer<typeof entrySchema>;
 export type EntryListResponse = z.infer<typeof entryListResponseSchema>;

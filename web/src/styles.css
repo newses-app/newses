@@ -1,0 +1,51 @@
+/* Article bodies: sanitised feed HTML rendered with v-html. */
+.article-content {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+.article-content img,
+.article-content video,
+.article-content iframe {
+  max-width: 100%;
+  height: auto;
+}
+.article-content iframe {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border: 0;
+}
+.article-content pre {
+  overflow-x: auto;
+  padding: 0.75rem;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  border-radius: 4px;
+}
+.article-content blockquote {
+  border-left: 3px solid rgba(var(--v-theme-on-surface), 0.25);
+  margin: 0 0 1rem;
+  padding-left: 1rem;
+}
+.article-content p,
+.article-content ul,
+.article-content ol {
+  margin-bottom: 1rem;
+}
+.article-content ul,
+.article-content ol {
+  padding-left: 1.5rem;
+}
+.article-content a {
+  color: rgb(var(--v-theme-primary));
+}
+.article-content table {
+  border-collapse: collapse;
+  max-width: 100%;
+  display: block;
+  overflow-x: auto;
+}
+.article-content td,
+.article-content th {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
+  padding: 0.25rem 0.5rem;
+}
