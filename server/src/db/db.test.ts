@@ -1,12 +1,12 @@
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { eq, sql } from 'drizzle-orm';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { createDb, type Db } from './client.ts';
 import { runMigrations } from './migrate.ts';
 import { categories, entries, feedSources, subscriptions, userEntries, users } from './schema.ts';
 
-let container: StartedPostgreSqlContainer;
+let database: TestDatabase;
 let pool: pg.Pool;
 let db: Db;
 
@@ -14,12 +14,6 @@ function first<T>(rows: T[]): T {
   const row = rows[0];
   if (row === undefined) throw new Error('expected a row');
   return row;
-}
-
-function databaseUrl(name: string): string {
-  const url = new URL(container.getConnectionUri());
-  url.pathname = `/${name}`;
-  return url.href;
 }
 
 async function appliedMigrations(target: pg.Pool): Promise<number> {
@@ -44,15 +38,13 @@ async function createFeedSource() {
 }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer('postgres:18-alpine').start();
-  pool = new pg.Pool({ connectionString: container.getConnectionUri() });
-  await runMigrations(pool);
+  database = await createTestDatabase();
+  pool = database.pool;
   db = createDb(pool);
-}, 120_000);
+});
 
 afterAll(async () => {
-  await pool.end();
-  await container.stop();
+  await database.drop();
 });
 
 describe('migrations', () => {
@@ -63,15 +55,14 @@ describe('migrations', () => {
   });
 
   it('serialise concurrent runs on an empty database', async () => {
-    await pool.query('CREATE DATABASE concurrent_runs');
-    const pools = [1, 2, 3].map(
-      () => new pg.Pool({ connectionString: databaseUrl('concurrent_runs') }),
-    );
+    const empty = await createTestDatabase({ migrate: false });
+    const pools = [1, 2, 3].map(() => new pg.Pool({ connectionString: empty.url }));
     try {
       await Promise.all(pools.map((p) => runMigrations(p)));
       expect(await appliedMigrations(first(pools))).toBe(await appliedMigrations(pool));
     } finally {
       await Promise.all(pools.map((p) => p.end()));
+      await empty.drop();
     }
   }, 30_000);
 });
