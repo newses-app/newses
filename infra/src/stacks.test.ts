@@ -100,6 +100,7 @@ describe('PipelineStack', () => {
     const pipeline = new PipelineStack(root, `Pipeline-${config.name}`, {
       env: { account: ACCOUNT, region: REGION },
       stage: config,
+      webDir,
     });
     const template = Template.fromStack(pipeline);
     template.hasResourceProperties('AWS::CodePipeline::Pipeline', {

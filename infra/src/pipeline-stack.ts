@@ -13,7 +13,14 @@ const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_
  * bundles the Lambdas, deploys the stage, and smoke-tests it.
  */
 export class PipelineStack extends Stack {
-  constructor(scope: Construct, id: string, props: StackProps & { stage: StageConfig }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: StackProps & {
+      stage: StageConfig;
+      /** Built web app; tests pass a fixture. */ webDir?: string;
+    },
+  ) {
     super(scope, id, props);
     const { stage } = props;
 
@@ -50,15 +57,21 @@ export class PipelineStack extends Stack {
       codeBuildDefaults: { buildEnvironment: { buildImage: ARM_BUILD_IMAGE } },
     });
 
-    pipeline.addStage(new RssReaderStage(this, stage.name === 'dev' ? 'Dev' : 'Prod', { stage }), {
-      post: [
-        new pipelines.ShellStep('SmokeTest', {
-          commands: [
-            `curl -fsS -o /dev/null https://${stage.domainName}/`,
-            `test "$(curl -s -o /dev/null -w '%{http_code}' https://${stage.domainName}/api/v1/subscriptions)" = 401`,
-          ],
-        }),
-      ],
-    });
+    pipeline.addStage(
+      new RssReaderStage(this, stage.name === 'dev' ? 'Dev' : 'Prod', {
+        stage,
+        webDir: props.webDir,
+      }),
+      {
+        post: [
+          new pipelines.ShellStep('SmokeTest', {
+            commands: [
+              `curl -fsS -o /dev/null https://${stage.domainName}/`,
+              `test "$(curl -s -o /dev/null -w '%{http_code}' https://${stage.domainName}/api/v1/subscriptions)" = 401`,
+            ],
+          }),
+        ],
+      },
+    );
   }
 }
