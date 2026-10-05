@@ -5,7 +5,7 @@
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | P1 | MVP reader, self-hosted | Family members read daily feeds in the web app on a Docker deployment; OPML from TTRSS imported |
-| P1.5 | AWS deployment | P1 build runs on AWS `dev` stage, deployed by the CDK pipeline from `main` |
+| P1.5 | AWS deployment | P1 build runs serverless on the AWS `dev` stage, deployed by the CDK pipeline from the `dev` branch |
 | P2 | Power features | Filters, labels, tags, notes, scoring, publishing, readability, image proxy, 2FA in daily use |
 | P3 | TTRSS cut-over | All TTRSS users imported; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Electron builds for Windows/macOS/Linux; Capacitor Android build installed on a device |
@@ -129,9 +129,8 @@
 | Backups | P1 | Documented `pg_dump` sidecar and restore procedure |
 | Health endpoint | P1 | `/healthz` reports DB and queue status |
 | Runtime portability | P1 | Queue, scheduler, blob storage, and realtime are swappable adapters; no local-disk state outside blob storage |
-| AWS deployment | P1.5 | CDK deploys `dev` and `prod` stages; a CDK pipeline (CodePipeline + CodeBuild) runs `pnpm check`, builds the image to ECR and the SPA to S3, and deploys on push to `main` |
+| AWS deployment | P1.5 | Serverless, with no running instances: Lambda, SQS, EventBridge Scheduler, Aurora Serverless v2 scaling to zero, SPA on S3 + CloudFront. One CDK pipeline (CodePipeline + CodeBuild) per stage runs `pnpm check`, builds the SPA, bundles the Lambdas, and deploys: branch `dev` → `dev`, `main` → `prod` |
 | Admin log and metrics | Later | System log view; fetch statistics; Prometheus endpoint |
-| AWS Lambda variant | Later | API and jobs run on Lambda without core changes |
 | Plugin API | Later | Third-party modules register content and lifecycle hooks |
 
 ## Non-functional requirements
@@ -146,7 +145,7 @@
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls |
 | Internationalisation | All UI strings externalised; English shipped |
 | Reliability | Worker restarts resume pending jobs; no entry loss on crash mid-ingest |
-| Portability | Same image runs under Docker Compose and ECS Fargate |
+| Portability | One core runs under Docker Compose and AWS Lambda; only adapters and entrypoints differ |
 
 ## Non-goals
 

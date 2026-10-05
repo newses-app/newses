@@ -1,6 +1,6 @@
 # 0026. Polite fetching
 
-- Status: Accepted
+- Status: Superseded by 0030
 - Date: 2026-10-04
 - Supersedes 0024
 

@@ -19,7 +19,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | — | Database credentials; also used to build `DATABASE_URL` |
 | `HTTP_PORT` | `8080` | Host port for the server |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
-| `TRUST_PROXY` | `false` | `true`, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
+| `TRUST_PROXY` | `false` | `true`, the number of proxy hops, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
 | `FEED_UPDATE_INTERVAL_MINUTES` | `30` | Default minutes between fetches of a feed (5–1440) |
 | `FEED_PURGE_DAYS` | `60` | Default age in days after which unstarred, unpublished entries are deleted; `0` keeps everything |
 | `FEED_DISABLE_AFTER_FAILURES` | `20` | Consecutive failed fetches after which a feed is disabled until refreshed |

@@ -1,6 +1,6 @@
 # 0022. CI/CD in AWS via CDK Pipelines
 
-- Status: Accepted
+- Status: Superseded by 0031
 - Date: 2026-10-04
 
 ## Context

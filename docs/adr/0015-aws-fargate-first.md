@@ -1,6 +1,6 @@
 # 0015. AWS: Fargate first, Lambda later
 
-- Status: Accepted
+- Status: Superseded by 0031
 - Date: 2026-10-03
 
 ## Context

@@ -7,7 +7,7 @@
 | Language/runtime | TypeScript 6.0 (strict, ESM, erasable syntax only), Node 24 LTS running `.ts` directly via native type stripping (no build step for Node packages), pnpm workspaces |
 | HTTP server | Fastify 5, Zod type provider, `@fastify/swagger` (OpenAPI) |
 | Database | PostgreSQL 18; Drizzle ORM; drizzle-kit SQL migrations |
-| Jobs | pg-boss |
+| Jobs | pg-boss (Docker), SQS (AWS) |
 | HTTP client | undici |
 | Feed parsing | `feedsmith` (RSS, Atom, RDF, JSON Feed, OPML); `htmlparser2` for feed autodiscovery |
 | Content | sanitize-html; `@mozilla/readability` + linkedom |
@@ -26,12 +26,12 @@ Workspace packages exist only where runtime or toolchain differs.
 
 | Path | Contents |
 |---|---|
-| `server/` | Everything that runs in the server image (Node) |
+| `server/` | Server code: Docker image roles and Lambda handlers (Node) |
 | `web/` | Vue SPA (PWA), built by Vite |
 | `desktop/` | Electron shell around the web build |
 | `mobile/` | Capacitor shell around the web build |
 | `shared/` | Zod schemas, API types, typed API client (browser and Node) |
-| `infra/` | CDK app |
+| `infra/` | CDK app: stage stacks and per-stage pipelines |
 | `docker/` | Dockerfile, `compose.yaml`, `.env.example`, reverse-proxy examples |
 
 `server/src` layers. ESLint enforces the allowed imports.
@@ -43,16 +43,17 @@ Workspace packages exist only where runtime or toolchain differs.
 | `adapters` | Port implementations (pg-boss, local FS, S3, SSE, …) | `core`, `db`, `shared` |
 | `api` | Native REST, TTRSS-compatible and Google Reader routes, SSE endpoint | `core`, `db`, `shared` |
 | `importer` | TTRSS importer | `core`, `db`, `shared` |
-| `entrypoints` | `server`, `worker`, `migrate`, `cli` — wire adapters into core | anything |
+| `entrypoints` | `server`, `worker`, `migrate`, `cli`, and `lambda/` handlers — wire adapters into core | anything |
 
 ## Runtime model
 
-One container image, role selected by command: `server`, `worker`, `migrate`, `cli`.
+- Docker: one container image, role selected by command: `server`, `worker`, `migrate`, `cli`.
+- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune), `fetch`, `favicon`, `migrate`, bundled by esbuild; each reads the database secret once per cold start.
 
 Rules:
 - Server is stateless; sessions live in Postgres.
 - No local-disk state outside `BlobStore`.
-- Migrations run as a one-shot `migrate` command, guarded by a Postgres advisory lock.
+- Migrations run as a one-shot `migrate` command (on AWS, a function invoked before each deployment's functions update), guarded by a Postgres advisory lock.
 - Database connections time out after 10 s and idle transactions after 60 s. The server role also limits statements to 30 s and lock waits to 10 s, so requests fail instead of hanging.
 - The server logs a warning, with pool usage and the longest event-loop delay, for responses slower than 2 s and for requests the client abandons before a response.
 - `buildApp()` constructs the Fastify app without listening, so it can be mounted by `listen()` or a Lambda adapter.
@@ -61,14 +62,14 @@ Rules:
 
 ### Ports
 
-| Port | Responsibility | Self-hosted | AWS (Fargate) | AWS (Lambda) |
-|---|---|---|---|---|
-| `JobQueue` | Enqueue and consume jobs with retries; optional dedupe by key | pg-boss | pg-boss | SQS |
-| `Scheduler` | Periodically dispatch due feeds and purges | In-process timer in worker | In-process timer in worker | EventBridge Scheduler |
-| `BlobStore` | Favicons, cached images | Local volume | S3 | S3 |
-| `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | Postgres LISTEN/NOTIFY | None (client polling) |
-| `Config` | Settings and secrets | Environment | Environment from Secrets Manager | Environment from Secrets Manager |
-| `Logger` | Structured logs | Pino | Pino | Pino |
+| Port | Responsibility | Self-hosted | AWS |
+|---|---|---|---|
+| `JobQueue` | Enqueue and consume jobs with retries; optional dedupe by key | pg-boss | SQS (no dedupe), consumed by Lambda |
+| `Scheduler` | Periodically dispatch due feeds and purges | In-process timer in worker | EventBridge Scheduler |
+| `BlobStore` | Favicons, cached images | Local volume | S3 |
+| `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
+| `Config` | Settings and secrets | Environment | Environment and Secrets Manager |
+| `Logger` | Structured logs | Pino | Pino |
 
 ## Web app
 
@@ -87,12 +88,12 @@ Rules:
 - Below 900 px one pane shows at a time; below 700 px secondary toolbar actions move into a menu.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
-- In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`.
+- In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`. On AWS, CloudFront serves the build from S3 with the same headers, and a viewer-request function maps extensionless paths to `index.html`.
 
 ## Ingest pipeline
 
 ```
-Scheduler (every 60 s) ─▶ claim due sources ─▶ feed.fetch job per source
+Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 sources, fetched one after another)
   fetch      conditional GET (ETag/Last-Modified); per host at most 2 concurrent requests, starts ≥ 1 s apart
   decode     bytes → text; charset from BOM, then HTTP Content-Type, then XML declaration/HTML meta, else UTF-8
   parse      feedsmith → per-format mapping to normalised entries; XML that fails to parse is a fetch error
@@ -108,12 +109,13 @@ Scheduler (every 60 s) ─▶ claim due sources ─▶ feed.fetch job per source
 ```
 
 Updater:
-- Dispatch claims due sources with `FOR UPDATE SKIP LOCKED`, pushing their next fetch 15 minutes out, so concurrent dispatchers never double-fetch. A finished fetch sets the real next time.
+- Dispatch claims due sources with `FOR UPDATE SKIP LOCKED`, at most 20 per host, pushing their next fetch 15 minutes out, so concurrent dispatchers never double-fetch. A finished fetch sets the real next time.
+- One `feed.fetch` job per host may wait in the queue; sources that cannot join it stay due for the next dispatch.
 - The base interval is the shortest among subscribers, each taking the subscription's override, else the user's `updateIntervalMinutes` preference, else `FEED_UPDATE_INTERVAL_MINUTES`; never below 5 minutes. Users and subscriptions cannot set less than 15 minutes.
 - The next fetch waits the base interval or the publisher's hint (Cache-Control `max-age`/`Expires`, RSS `ttl`, `sy:updatePeriod`), whichever is longer, hints capped at 24 h, plus up to 10 % random jitter.
 - `sort_at` is the published time (fetch time when absent), clamped to now.
 - A failed fetch waits interval × 2^(failures − 1), capped at 24 h and never less than `Retry-After`. HTTP 410, or `FEED_DISABLE_AFTER_FAILURES` consecutive failures, disables the source.
-- `Retry-After` (and HTTP 429 without it: 10 minutes) sets the source's `blocked_until`. A 429, or a 503 with `Retry-After`, also pauses every source on that host in the worker until then, without counting failures.
+- `Retry-After` (and HTTP 429 without it: 10 minutes) sets the source's `blocked_until`. A 429, or a 503 with `Retry-After`, also pauses every source on that host until then (`fetch_hosts`, shared by all processes), without counting failures.
 - "Update now" clears errors, re-enables the source, and enqueues a fetch. It is a no-op within a minute of the last fetch and refused (`throttled`) while `blocked_until` is in the future.
 - A permanent redirect (301/308 from the first hop on) moves the source to the new URL after a successful fetch, unless another source already has that URL.
 - Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
@@ -122,7 +124,7 @@ Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Starred and published entries are never purged.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
 - Deletes feed sources with no subscriptions and no kept entries, and their favicons.
-- Deletes tombstones older than 30 days.
+- Deletes tombstones older than 30 days, and expired host pauses.
 
 Fetching untrusted URLs (`HttpFetcher`):
 - http(s) only, at most 5 redirects, a 20 s timeout, and a 10 MB body limit (lower per request where less is needed); downloads stop once the limit is exceeded. Responses are decompressed.
@@ -256,34 +258,29 @@ Events stream:
 flowchart LR
   U[Browser / apps] --> CF[CloudFront]
   CF -- default --> S3W[(S3: SPA)]
-  CF -- "/api/*, /reader/*, /accounts/*, /public/*" --> ALB[ALB]
-  ALB --> SRV[ECS Fargate: server]
-  WRK[ECS Fargate: worker] --> RDS
-  SRV --> RDS[(RDS PostgreSQL)]
-  SRV --> S3B[(S3: blobs)]
-  WRK --> S3B
-  WRK --> NET((Internet feeds))
-  SM[Secrets Manager] -.-> SRV
-  SM -.-> WRK
+  CF -- "/api/*, /reader/*, /accounts/*, /public/*" --> API[HTTP API] --> FA[λ api]
+  EB[EventBridge Scheduler] --> FT[λ tick]
+  FT --> QF[[SQS fetch]] --> FF[λ fetch]
+  FF --> QI[[SQS favicon]] --> FI[λ favicon]
+  FA & FT & FF & FI --> DB[(Aurora Serverless v2)]
+  FA & FF & FI --> S3B[(S3: blobs)]
+  FF & FI --> NET((Internet feeds))
 ```
 
-- CDK stacks:
-  - `Network`: VPC, public subnets
-  - `Data`: RDS, blob bucket
-  - `App`: ECR, ECS cluster, services, ALB
-  - `Edge`: CloudFront, SPA bucket, certificate
-- Stages: `dev`, `prod`.
-- Fargate tasks run ARM64 in public subnets with public IPs (no NAT gateway). Security groups:
-  - RDS accepts traffic only from tasks.
-  - ALB accepts traffic only from the CloudFront prefix list.
-- The SPA bucket is private, accessed via Origin Access Control. Image-proxy responses are cached at CloudFront.
-- Migrations run as a one-off ECS task before the service update.
-- Logs go to CloudWatch.
+- Stacks per stage: `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, secrets, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), `Cert` (CloudFront certificate, us-east-1). Pipelines: `RssReaderPipeline-dev` and `RssReaderPipeline-prod`.
+- Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
+- Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
+- CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it. `TRUST_PROXY` is one hop (CloudFront).
+- The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
+- Logs go to CloudWatch, kept a month.
 - Web traffic is same-origin through CloudFront. CORS allows Capacitor origins only.
 
-### Lambda variant constraints
+Constraints:
+- The first request after the database pauses waits about 15 s for it to resume.
+- Responses are capped at 6 MB; list pages with content end early past 2 M content characters.
+- No SSE; clients poll counters every 60 s.
 
-- SSE is not supported through API Gateway; clients poll.
-- Lambda responses are capped at 6 MB; the image proxy must sit behind CloudFront caching.
-- Lambdas in a VPC need NAT (or a NAT instance) to fetch feeds.
-- Connection pooling requires RDS Proxy or the Aurora Data API.
+Operator setup, once per account:
+- `pnpm --filter @rss-reader/infra cdk bootstrap aws://123456789012/us-east-2 aws://123456789012/us-east-1`
+- `pnpm --filter @rss-reader/infra cdk deploy RssReaderPipeline-dev` (and `-prod`); later changes deploy through the pipelines.
+- The first admin is `admin`, with the password in the stage's `AdminSecret` in Secrets Manager.

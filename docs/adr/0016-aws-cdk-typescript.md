@@ -1,6 +1,6 @@
 # 0016. AWS CDK in TypeScript
 
-- Status: Accepted
+- Status: Superseded by 0031
 - Date: 2026-10-03
 
 ## Context
