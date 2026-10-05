@@ -101,6 +101,21 @@ describe('PipelineStack', () => {
         }),
       ]),
     });
+    const buildSpecs = Object.values(template.findResources('AWS::CodeBuild::Project')).map(
+      (project) =>
+        JSON.parse(
+          (project as { Properties: { Source: { BuildSpec: string } } }).Properties.Source
+            .BuildSpec,
+        ) as {
+          phases: {
+            install?: { 'runtime-versions'?: Record<string, unknown>; commands?: string[] };
+          };
+        },
+    );
+    const synth = buildSpecs.find((spec) =>
+      spec.phases.install?.commands?.includes('corepack enable'),
+    );
+    expect(synth?.phases.install?.['runtime-versions']).toEqual({ nodejs: 24 });
     const stages = root.node
       .findAll()
       .filter((c): c is Stack => Stack.isStack(c) && c.stackName.includes('-Data'));

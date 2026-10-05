@@ -35,7 +35,11 @@ export class PipelineStack extends Stack {
             TESTCONTAINERS_RYUK_DISABLED: { value: 'true' },
           },
         },
-        installCommands: ['n 24', 'corepack enable', 'pnpm install --frozen-lockfile'],
+        // Node 24 is preinstalled on the image, so this only selects it.
+        partialBuildSpec: codebuild.BuildSpec.fromObject({
+          phases: { install: { 'runtime-versions': { nodejs: 24 } } },
+        }),
+        installCommands: ['node --version', 'corepack enable', 'pnpm install --frozen-lockfile'],
         commands: [
           'pnpm check',
           'pnpm --filter @rss-reader/web build',
