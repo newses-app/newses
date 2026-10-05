@@ -37,12 +37,19 @@ async function resolveDatabaseUrl(): Promise<void> {
   process.env.DATABASE_URL = `postgres://${auth}@${address}?sslmode=verify-full`;
 }
 
+/** Sets ADMIN_PASSWORD from the parameter named by ADMIN_PASSWORD_PARAMETER, when that is set. */
+async function resolveAdminPassword(): Promise<void> {
+  if (!process.env.ADMIN_PASSWORD_PARAMETER || process.env.ADMIN_PASSWORD) return;
+  process.env.ADMIN_PASSWORD = await readParameter('ADMIN_PASSWORD_PARAMETER');
+}
+
 /**
  * Config, logger, pool, and the AWS feed adapters, created once per Lambda cold start.
  * Connecting may wait for a paused Aurora Serverless database to resume (about 15 s).
  */
 export async function createLambdaRuntime(role: string) {
   await resolveDatabaseUrl();
+  await resolveAdminPassword();
   const config = loadConfig();
   const logger = pino({ level: config.logLevel, base: { role } });
   const pool = createPool(config, logger, {
