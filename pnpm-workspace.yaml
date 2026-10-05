@@ -11,3 +11,6 @@ allowBuilds:
   ssh2: false
   unrs-resolver: false
   vue-demi: false
+
+# Type-aware linting needs more than the default heap on 2 GB-limited build hosts.
+nodeOptions: --max-old-space-size=4096
