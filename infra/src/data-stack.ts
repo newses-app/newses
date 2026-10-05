@@ -4,7 +4,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { resourceName, type StageConfig } from './config.ts';
-import { GeneratedParameter } from './generated-parameter.ts';
+import type { GeneratedParameter } from './generated-parameter.ts';
 
 /**
  * Aurora Serverless v2 PostgreSQL that pauses at 0 ACU when idle, and the blob bucket.
@@ -13,14 +13,17 @@ import { GeneratedParameter } from './generated-parameter.ts';
 export class DataStack extends Stack {
   readonly cluster: rds.DatabaseCluster;
   readonly blobs: s3.Bucket;
-  readonly dbPassword: GeneratedParameter;
 
   // Named rather than looked up, so synthesis needs no AWS credentials.
   override get availabilityZones(): string[] {
     return [`${this.region}a`, `${this.region}b`];
   }
 
-  constructor(scope: Construct, id: string, props: StackProps & { stage: StageConfig }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: StackProps & { stage: StageConfig; dbPassword: GeneratedParameter },
+  ) {
     super(scope, id, props);
     const { stage } = props;
     const removalPolicy = stage.retainData ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
@@ -36,12 +39,6 @@ export class DataStack extends Stack {
       description: 'PostgreSQL over TLS from Lambdas, which run outside the VPC',
     });
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(5432));
-
-    this.dbPassword = new GeneratedParameter(this, 'DbPassword', {
-      parameterName: `/rss-reader/${stage.name}/db-password`,
-      type: 'SecureString',
-      length: 32,
-    });
 
     const engine = rds.DatabaseClusterEngine.auroraPostgres({
       version: rds.AuroraPostgresEngineVersion.VER_18_4,
@@ -67,7 +64,7 @@ export class DataStack extends Stack {
       securityGroups: [securityGroup],
       credentials: rds.Credentials.fromPassword(
         'rss_reader',
-        SecretValue.ssmSecure(this.dbPassword.parameterName),
+        SecretValue.ssmSecure(props.dbPassword.parameterName),
       ),
       defaultDatabaseName: 'rss_reader',
       parameterGroup: new rds.ParameterGroup(this, 'DbParameters', {
@@ -81,8 +78,6 @@ export class DataStack extends Stack {
       deletionProtection: stage.retainData,
       removalPolicy: stage.retainData ? RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY,
     });
-    // The cluster resolves its password from the parameter, so it must exist first.
-    this.cluster.node.addDependency(this.dbPassword);
 
     this.blobs = new s3.Bucket(this, 'Blobs', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

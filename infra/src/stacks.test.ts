@@ -17,24 +17,29 @@ writeFileSync(join(webDir, 'index.html'), '<!doctype html>');
 const [dev, prod] = STAGES;
 if (!dev || !prod) throw new Error('dev and prod stages are configured');
 const stage = new RssReaderStage(newApp(), 'Test', { stage: dev, webDir });
+const params = Template.fromStack(stage.params);
 const data = Template.fromStack(stage.data);
 const app = Template.fromStack(stage.app);
 const edge = Template.fromStack(stage.edge);
 
 describe('RssReaderStage', () => {
   it('keeps generated credentials in SSM parameters rather than Secrets Manager', () => {
-    for (const template of [data, app, edge]) {
+    for (const template of [params, data, app, edge]) {
       template.resourceCountIs('AWS::SecretsManager::Secret', 0);
     }
-    data.resourceCountIs('Custom::GeneratedParameter', 1);
-    app.resourceCountIs('Custom::GeneratedParameter', 2);
+    params.resourceCountIs('Custom::GeneratedParameter', 3);
+    for (const template of [data, app, edge]) {
+      template.resourceCountIs('Custom::GeneratedParameter', 0);
+    }
+    expect(stage.data.dependencies).toContain(stage.params);
     data.hasResourceProperties('AWS::RDS::DBCluster', {
       MasterUserPassword: '{{resolve:ssm-secure:/rss-reader/dev/db-password}}',
     });
   });
 
   it('names and tags resources with the project and stage', () => {
-    expect([stage.data, stage.app, stage.edge].map((s) => s.stackName)).toEqual([
+    expect([stage.params, stage.data, stage.app, stage.edge].map((s) => s.stackName)).toEqual([
+      'rss-reader-dev-params',
       'rss-reader-dev-data',
       'rss-reader-dev-app',
       'rss-reader-dev-edge',
@@ -177,7 +182,9 @@ describe('PipelineStack', () => {
       .filter((c): c is Stack => Stack.isStack(c))
       .map((s) => s.stackName);
     expect(stackNames.sort()).toEqual(
-      ['app', 'data', 'edge', 'pipeline'].map((part) => `rss-reader-${config.name}-${part}`),
+      ['app', 'data', 'edge', 'params', 'pipeline'].map(
+        (part) => `rss-reader-${config.name}-${part}`,
+      ),
     );
   });
 });

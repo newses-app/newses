@@ -267,12 +267,12 @@ flowchart LR
   FF & FI --> NET((Internet feeds))
 ```
 
-- Stacks per stage: `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, generated parameters, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
-- Names: stacks are `rss-reader-<stage>-{data,app,edge,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
+- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
+- Names: stacks are `rss-reader-<stage>-{params,data,app,edge,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
 - Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
 - CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
-- Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource and deleted with it: `db-password` and `admin-password` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is one hop (CloudFront).
+- Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `Data` because change sets resolve `ssm-secure` references: `db-password` and `admin-password` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is one hop (CloudFront).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - Logs go to CloudWatch, kept a month.
 - Web traffic is same-origin through CloudFront. CORS allows Capacitor origins only.

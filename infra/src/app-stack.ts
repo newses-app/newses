@@ -15,7 +15,7 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
 import { REPO_ROOT, resourceName, type StageConfig } from './config.ts';
-import { GeneratedParameter } from './generated-parameter.ts';
+import type { ParamsStack } from './params-stack.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
 const ARGON2_VERSION = (
@@ -30,30 +30,18 @@ const DISPATCH_MINUTES = 30;
 export interface AppStackProps extends StackProps {
   stage: StageConfig;
   cluster: rds.DatabaseCluster;
-  dbPassword: GeneratedParameter;
+  params: ParamsStack;
   blobs: s3.Bucket;
 }
 
 /** Lambdas behind an HTTP API, SQS job queues, and the schedules that dispatch feeds. */
 export class AppStack extends Stack {
   readonly api: apigw.HttpApi;
-  readonly originHeader: GeneratedParameter;
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
-    const { stage, cluster, dbPassword, blobs } = props;
-
-    // A String parameter, because CloudFront headers cannot resolve SecureString parameters.
-    this.originHeader = new GeneratedParameter(this, 'OriginHeader', {
-      parameterName: `/rss-reader/${stage.name}/origin-header`,
-      type: 'String',
-      length: 40,
-    });
-    const adminPassword = new GeneratedParameter(this, 'AdminPassword', {
-      parameterName: `/rss-reader/${stage.name}/admin-password`,
-      type: 'SecureString',
-      length: 24,
-    });
+    const { stage, cluster, params, blobs } = props;
+    const { dbPassword, adminPassword, originHeader } = params;
 
     const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', {
       queueName: resourceName(stage, 'feed-fetch-dlq'),
@@ -132,10 +120,10 @@ export class AppStack extends Stack {
     };
 
     const api = fn('api', { timeout: Duration.seconds(29), memorySize: 1024 });
-    api.addEnvironment('ORIGIN_HEADER_PARAMETER', this.originHeader.parameterName);
+    api.addEnvironment('ORIGIN_HEADER_PARAMETER', originHeader.parameterName);
     // The request's source is CloudFront, which appends the client's address to X-Forwarded-For.
     api.addEnvironment('TRUST_PROXY', '1');
-    this.originHeader.grantRead(api);
+    originHeader.grantRead(api);
     this.api = new apigw.HttpApi(this, 'HttpApi', {
       apiName: resourceName(stage),
       defaultIntegration: new HttpLambdaIntegration('Api', api),
