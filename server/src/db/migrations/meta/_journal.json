@@ -43,6 +43,13 @@
       "when": 1791136992319,
       "tag": "0005_tombstone_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791220521073,
+      "tag": "0006_fetch_hosts",
+      "breakpoints": true
     }
   ]
 }

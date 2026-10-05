@@ -28,3 +28,16 @@ describe('GET /healthz', () => {
     expect(response.json()).toEqual({ status: 'error', checks: { db: 'error', queue: 'ok' } });
   });
 });
+
+describe('trustProxy', () => {
+  it('takes the client address from the given number of proxy hops', async () => {
+    const app = buildApp({ logger, healthChecks: {}, trustProxy: 2 });
+    app.get('/ip', (request) => ({ ip: request.ip }));
+    const response = await app.inject({
+      url: '/ip',
+      remoteAddress: '10.0.0.2',
+      headers: { 'x-forwarded-for': '198.51.100.7, 203.0.113.9, 10.0.0.1' },
+    });
+    expect(response.json()).toEqual({ ip: '203.0.113.9' });
+  });
+});

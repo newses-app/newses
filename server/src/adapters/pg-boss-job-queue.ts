@@ -46,14 +46,17 @@ export class PgBossJobQueue<J extends JobMap> implements JobQueue<J> {
     let ready = this.#queues.get(name);
     if (!ready) {
       const definition = this.#definitions[name];
-      ready = this.#boss.createQueue(name, {
-        // `short` allows one queued job per singletonKey, plus any number active.
-        policy: definition.dedupeByKey ? 'short' : 'standard',
+      const settings = {
         retryLimit: definition.retryLimit ?? 3,
         retryDelay: definition.retryDelaySeconds ?? 30,
         retryBackoff: true,
         expireInSeconds: definition.timeoutSeconds ?? 300,
-      });
+      };
+      ready = this.#boss
+        // `short` allows one queued job per singletonKey, plus any number active.
+        .createQueue(name, { policy: definition.dedupeByKey ? 'short' : 'standard', ...settings })
+        // createQueue leaves an existing queue as it was, so changed definitions apply here.
+        .then(() => this.#boss.updateQueue(name, settings));
       this.#queues.set(name, ready);
     }
     return ready;

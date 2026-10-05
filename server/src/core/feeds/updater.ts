@@ -1,6 +1,6 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { feedSources, subscriptions } from '../../db/schema.ts';
+import { feedSources, fetchHosts, subscriptions } from '../../db/schema.ts';
 import type { FeedSettings } from '../config.ts';
 import { DomainError, ThrottledError } from '../errors.ts';
 import type { Jobs } from '../jobs.ts';
@@ -26,6 +26,8 @@ const REFRESH_MIN_AGE_SECONDS = 60;
 /** Dispatch marks claimed sources as not due for this long; a finished fetch sets the real time. */
 const CLAIM_SECONDS = 15 * 60;
 const DISPATCH_BATCH = 500;
+/** Sources of one host per fetch job, so a job fits the queue's 15-minute timeout. */
+const HOST_BATCH = 20;
 const FAVICON_REFRESH_DAYS = 30;
 
 export type FeedSourceRow = typeof feedSources.$inferSelect;
@@ -62,8 +64,6 @@ export class FeedUpdater {
   readonly #settings: FeedSettings;
   readonly #logger: Logger;
   readonly #hosts: HostLimiter;
-  /** Hosts that asked this process to back off (429/503), until the given epoch milliseconds. */
-  readonly #hostCooldowns = new Map<string, number>();
 
   constructor(deps: {
     db: Db;
@@ -83,23 +83,44 @@ export class FeedUpdater {
     this.#hosts = deps.hosts;
   }
 
-  /** Claims due, enabled, subscribed sources and enqueues a fetch for each. Returns the count. */
+  /**
+   * Claims due, enabled, subscribed sources, at most HOST_BATCH per host, and enqueues one fetch
+   * job per host, so a host's feeds are fetched one after another whichever process runs them.
+   * Returns the number of sources claimed.
+   */
   async dispatchDue(): Promise<number> {
-    const claimed = await this.#db.execute<{ id: number }>(sql`
-      UPDATE feed_sources SET next_fetch_at = now() + make_interval(secs => ${CLAIM_SECONDS})
-      WHERE id IN (
-        SELECT fs.id FROM feed_sources fs
+    const claimed = await this.#db.execute<{ id: number; url: string }>(sql`
+      WITH due AS (
+        SELECT fs.id, fs.url, fs.next_fetch_at FROM feed_sources fs
         WHERE fs.next_fetch_at <= now() AND fs.disabled_at IS NULL
           AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id)
         ORDER BY fs.next_fetch_at
         LIMIT ${DISPATCH_BATCH}
         FOR UPDATE SKIP LOCKED
+      ), ranked AS (
+        SELECT id, row_number() OVER (
+          PARTITION BY substring(url FROM '^[^:]+://([^/?#]+)') ORDER BY next_fetch_at) AS n
+        FROM due
       )
-      RETURNING id`);
-    for (const { id } of claimed.rows) {
-      await this.#queue.enqueue('feed.fetch', { feedSourceId: id }, { key: String(id) });
+      UPDATE feed_sources fs SET next_fetch_at = now() + make_interval(secs => ${CLAIM_SECONDS})
+      FROM ranked WHERE fs.id = ranked.id AND ranked.n <= ${HOST_BATCH}
+      RETURNING fs.id, fs.url`);
+    const byHost = new Map<string, number[]>();
+    for (const { id, url } of claimed.rows) {
+      const host = new URL(url).host;
+      byHost.set(host, [...(byHost.get(host) ?? []), id]);
     }
+    for (const [host, ids] of byHost) await this.#enqueueFetch(host, ids);
     return claimed.rows.length;
+  }
+
+  /** One fetch job per host may wait in the queue; sources that could not join it stay due. */
+  async #enqueueFetch(host: string, feedSourceIds: number[]): Promise<void> {
+    if (await this.#queue.enqueue('feed.fetch', { feedSourceIds }, { key: host })) return;
+    await this.#db
+      .update(feedSources)
+      .set({ nextFetchAt: sql`now()` })
+      .where(inArray(feedSources.id, feedSourceIds));
   }
 
   /**
@@ -134,11 +155,12 @@ export class FeedUpdater {
         nextFetchAt: sql`now() + make_interval(secs => ${CLAIM_SECONDS})`,
       })
       .where(eq(feedSources.id, source.id));
-    await this.#queue.enqueue(
-      'feed.fetch',
-      { feedSourceId: source.id },
-      { key: String(source.id) },
-    );
+    await this.#enqueueFetch(new URL(source.url).host, [source.id]);
+  }
+
+  /** Updates sources one after another. */
+  async updateMany(feedSourceIds: number[]): Promise<void> {
+    for (const id of feedSourceIds) await this.update(id);
   }
 
   /** Fetches one source, ingests its entries, and schedules the next fetch. */
@@ -151,12 +173,11 @@ export class FeedUpdater {
     const interval = await this.intervalSeconds(source.id);
     const host = new URL(source.url).host;
     await this.#hosts.run(host, async () => {
-      const cooldownUntil = this.#hostCooldowns.get(host) ?? 0;
-      if (cooldownUntil > Date.now()) {
-        await this.#postpone(source.id, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      const cooldown = await this.#hostCooldownSeconds(host);
+      if (cooldown > 0) {
+        await this.#postpone(source.id, cooldown);
         return;
       }
-      this.#hostCooldowns.delete(host);
       try {
         const response = await this.#fetcher.fetch(source.url, {
           etag: source.etag,
@@ -256,6 +277,17 @@ export class FeedUpdater {
       this.#logger.info({ feedSourceId: source.id, from: source.url, to: url }, 'Feed moved');
   }
 
+  /** Seconds until `host` may be fetched again; 0 when it has not asked to wait. */
+  async #hostCooldownSeconds(host: string): Promise<number> {
+    const [row] = await this.#db
+      .select({
+        seconds: sql<number>`ceil(extract(epoch FROM ${fetchHosts.blockedUntil} - now()))::int`,
+      })
+      .from(fetchHosts)
+      .where(and(eq(fetchHosts.host, host), sql`${fetchHosts.blockedUntil} > now()`));
+    return row?.seconds ?? 0;
+  }
+
   /** Reschedules without counting a failure. */
   async #postpone(feedSourceId: number, seconds: number): Promise<void> {
     const delay = nextFetchSeconds(seconds, []);
@@ -278,7 +310,14 @@ export class FeedUpdater {
     let retryAfter = err instanceof FetchError ? err.retryAfterSeconds : null;
     if (err instanceof FetchError && isHostThrottle(err)) {
       retryAfter ??= DEFAULT_HOST_COOLDOWN_SECONDS;
-      this.#hostCooldowns.set(host, Date.now() + retryAfter * 1000);
+      const until = sql`now() + make_interval(secs => ${retryAfter})`;
+      await this.#db
+        .insert(fetchHosts)
+        .values({ host, blockedUntil: until })
+        .onConflictDoUpdate({
+          target: fetchHosts.host,
+          set: { blockedUntil: sql`greatest(${fetchHosts.blockedUntil}, excluded.blocked_until)` },
+        });
     }
     const message =
       err instanceof FeedParseError ? `Not a valid feed: ${err.message}` : err.message;

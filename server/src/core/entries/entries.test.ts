@@ -238,6 +238,16 @@ describe('EntryService.list', () => {
     expect(page[1]?.enclosures).toEqual([]);
   });
 
+  it('ends pages with content early once they reach the size budget', async () => {
+    const small = new EntryService(db, realtime, { pageContentChars: 1 });
+    const options = { stream: {}, view: 'all', limit: 50, content: true } as const;
+    const first = await small.list(alice, options);
+    expect(first.entries).toHaveLength(1);
+    const second = await small.list(alice, { ...options, cursor: first.cursor ?? '' });
+    expect(second.entries[0]?.id).not.toBe(first.entries[0]?.id);
+    expect((await small.list(alice, { ...options, content: false })).entries).toHaveLength(4);
+  });
+
   it.each([
     ['selective', 20_000],
     ['common', 0],

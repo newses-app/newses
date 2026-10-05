@@ -4,7 +4,8 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./web-csp": "./src/api/web-csp.ts"
   },
   "scripts": {
     "typecheck": "tsc",
@@ -12,6 +13,10 @@
     "db:migrate": "node src/entrypoints/migrate.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/client-secrets-manager": "^3.1146.0",
+    "@aws-sdk/client-sqs": "^3.1146.0",
+    "@fastify/aws-lambda": "^6.4.1",
     "@fastify/cookie": "^11.1.2",
     "@fastify/static": "^10.1.5",
     "@fastify/swagger": "^9.9.1",
@@ -32,8 +37,10 @@
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.2.0",
+    "@types/aws-lambda": "^8.10.164",
     "@types/pg": "^8.23.1",
     "@types/sanitize-html": "^2.16.2",
-    "drizzle-kit": "0.31.11"
+    "drizzle-kit": "0.31.11",
+    "testcontainers": "^12.2.0"
   }
 }

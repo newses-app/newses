@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server + worker (PostgreSQL), Vue 3 + Vuetify web app, Electron and Capacitor shells. Deploys via Docker (self-hosted) or AWS.
+Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server + worker (PostgreSQL), Vue 3 + Vuetify web app, Electron and Capacitor shells. Deploys via Docker (self-hosted) or serverless AWS.
 
 ## Commands
 
@@ -14,6 +14,7 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 | `DATABASE_URL=… pnpm --filter @rss-reader/server db:migrate` | Apply migrations |
 | `pnpm --filter @rss-reader/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
 | `E2E_BASE_URL=… pnpm --filter @rss-reader/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
+| `pnpm --filter @rss-reader/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first); deployments run through the pipelines |
 
 ## Code conventions
 

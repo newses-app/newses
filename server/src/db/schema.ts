@@ -137,6 +137,12 @@ export const feedSources = pgTable(
   ],
 );
 
+// Hosts that asked for no requests before `blocked_until` (429, or 503 with Retry-After).
+export const fetchHosts = pgTable('fetch_hosts', {
+  host: text('host').primaryKey(),
+  blockedUntil: tstz('blocked_until').notNull(),
+});
+
 export const subscriptions = pgTable(
   'subscriptions',
   {

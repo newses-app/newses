@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    projects: ['server', 'shared', 'web'],
+    projects: ['infra', 'server', 'shared', 'web'],
     passWithNoTests: true,
   },
 });

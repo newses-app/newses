@@ -1,8 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { Blob, BlobStore } from '../core/ports.ts';
-
-const KEY_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$/;
+import { assertBlobKey } from './blob-key.ts';
 
 /** BlobStore on a local directory. Content types live in a parallel `.meta` tree. */
 export class LocalBlobStore implements BlobStore {
@@ -36,7 +35,7 @@ export class LocalBlobStore implements BlobStore {
   }
 
   #paths(key: string) {
-    if (!KEY_PATTERN.test(key)) throw new Error(`Invalid blob key: ${key}`);
+    assertBlobKey(key);
     return { dataPath: join(this.#root, key), metaPath: join(this.#root, '.meta', `${key}.json`) };
   }
 }

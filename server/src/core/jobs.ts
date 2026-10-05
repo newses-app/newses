@@ -1,12 +1,13 @@
 import type { JobDefinitions } from './ports.ts';
 
 export type Jobs = {
-  'feed.fetch': { feedSourceId: number };
+  /** Sources of one host, fetched one after another. */
+  'feed.fetch': { feedSourceIds: number[] };
   'feed.favicon': { feedSourceId: number };
 };
 
 export const JOB_DEFINITIONS: JobDefinitions<Jobs> = {
-  // The updater schedules its own backoff, so failed fetches are not retried by the queue.
-  'feed.fetch': { dedupeByKey: true, retryLimit: 0, timeoutSeconds: 120 },
+  // Keyed by host. The updater schedules its own backoff, so failed fetches are not retried.
+  'feed.fetch': { dedupeByKey: true, retryLimit: 0, timeoutSeconds: 900 },
   'feed.favicon': { dedupeByKey: true, retryLimit: 1, timeoutSeconds: 60 },
 };

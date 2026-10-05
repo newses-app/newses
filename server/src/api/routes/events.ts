@@ -54,3 +54,9 @@ export const eventRoutes: FastifyPluginAsync<EventStreamOptions> = (app, options
 
   return Promise.resolve();
 };
+
+/** Where streams cannot be held open: 204 tells EventSource not to reconnect, so clients poll. */
+export const noEventRoutes: FastifyPluginAsync = (app) => {
+  app.get('/events', { schema: { hide: true } }, (_request, reply) => reply.code(204).send());
+  return Promise.resolve();
+};

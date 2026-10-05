@@ -8,11 +8,14 @@ const schema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
     BLOB_DIR: z.string().min(1).default('/data/blobs'),
+    BLOB_BUCKET: z.string().min(1).optional(),
     WEB_DIR: z.string().min(1).optional(),
     TRUST_PROXY: z
       .string()
       .default('false')
-      .transform((v) => (v === 'true' ? true : v === 'false' ? false : v)),
+      .transform((v) =>
+        v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? Number(v) : v,
+      ),
     FETCH_ALLOW_PRIVATE_NETWORKS: z
       .string()
       .default('')
@@ -57,6 +60,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,
     blobDir: e.BLOB_DIR,
+    blobBucket: e.BLOB_BUCKET ?? null,
     webDir: e.WEB_DIR ?? null,
     feeds: {
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,

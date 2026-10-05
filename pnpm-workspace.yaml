@@ -1,4 +1,5 @@
 packages:
+  - infra
   - server
   - shared
   - web

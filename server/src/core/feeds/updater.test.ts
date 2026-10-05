@@ -1,7 +1,14 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
-import { feedSources, subscriptions, userEntries, userPrefs, users } from '../../db/schema.ts';
+import {
+  feedSources,
+  fetchHosts,
+  subscriptions,
+  userEntries,
+  userPrefs,
+  users,
+} from '../../db/schema.ts';
 import { FakeFetcher, rss } from '../../test/fake-fetcher.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { RecordingQueue, testFeedDeps } from '../../test/fakes.ts';
@@ -41,6 +48,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.delete(users);
   await db.delete(feedSources);
+  await db.delete(fetchHosts);
   fetcher = new FakeFetcher();
   queue = new RecordingQueue();
   feeds = createFeedServices(testFeedDeps(db, fetcher, { queue }));
@@ -87,9 +95,35 @@ describe('FeedUpdater.dispatchDue', () => {
 
     expect(await feeds.updater.dispatchDue()).toBe(1);
     expect(queue.jobs).toEqual([
-      { name: 'feed.fetch', data: { feedSourceId: due.id }, key: String(due.id) },
+      { name: 'feed.fetch', data: { feedSourceIds: [due.id] }, key: 'a.example' },
     ]);
     expect(await feeds.updater.dispatchDue()).toBe(0);
+  });
+
+  it('batches sources by host, at most 20 per job', async () => {
+    const many = [];
+    for (let i = 0; i < 22; i++) many.push(await addSource(`https://big.example/${String(i)}`));
+    const other = await addSource('https://other.example:8443/rss');
+
+    expect(await feeds.updater.dispatchDue()).toBe(21);
+    expect(queue.jobs).toEqual([
+      {
+        name: 'feed.fetch',
+        data: { feedSourceIds: many.slice(0, 20).map((s) => s.id) },
+        key: 'big.example',
+      },
+      { name: 'feed.fetch', data: { feedSourceIds: [other.id] }, key: 'other.example:8443' },
+    ]);
+  });
+
+  it("leaves sources due when their host's job is already queued", async () => {
+    const first = await addSource(URL_A);
+    await feeds.updater.dispatchDue();
+    const second = await addSource('https://a.example/other');
+    expect(await feeds.updater.dispatchDue()).toBe(1);
+    expect(queue.jobs).toHaveLength(1);
+    expect(secondsUntil((await source(second.id)).nextFetchAt)).toBeLessThanOrEqual(0);
+    expect(secondsUntil((await source(first.id)).nextFetchAt)).toBeGreaterThan(800);
   });
 });
 
@@ -171,7 +205,9 @@ describe('FeedUpdater.update', () => {
     );
     fetcher.set('https://busy.example/b', { body: rss('B') });
     await feeds.updater.update(first.id);
-    await feeds.updater.update(second.id);
+    // Another process sees the host's cooldown too.
+    const other = createFeedServices(testFeedDeps(db, fetcher, { queue }));
+    await other.updater.updateMany([second.id]);
     expect(fetcher.requested).toEqual(['https://busy.example/a']);
     const postponed = await source(second.id);
     expect(postponed.errorCount).toBe(0);
@@ -223,7 +259,7 @@ describe('FeedUpdater.update', () => {
     await feeds.updater.refresh(userId, sub?.id ?? 0);
     expect(await source(created.id)).toMatchObject({ disabledAt: null, errorCount: 0 });
     expect(queue.jobs).toEqual([
-      { name: 'feed.fetch', data: { feedSourceId: created.id }, key: String(created.id) },
+      { name: 'feed.fetch', data: { feedSourceIds: [created.id] }, key: 'a.example' },
     ]);
     await expect(feeds.updater.refresh(userId + 999, sub?.id ?? 0)).rejects.toMatchObject({
       code: 'not_found',

@@ -31,9 +31,13 @@ const feeds = createFeedServices(deps);
 const { sessions, throttle } = createAuthServices(db);
 const sync = new SyncService(db);
 
-await deps.queue.work('feed.fetch', ({ feedSourceId }) => feeds.updater.update(feedSourceId), {
-  concurrency: 8,
-});
+// Jobs queued before host batching carry `feedSourceId` instead; their claims lapse and a later
+// dispatch picks the sources up again.
+await deps.queue.work(
+  'feed.fetch',
+  (data) => feeds.updater.updateMany((data as Partial<typeof data>).feedSourceIds ?? []),
+  { concurrency: 8 },
+);
 await deps.queue.work('feed.favicon', ({ feedSourceId }) => feeds.favicons.refresh(feedSourceId), {
   concurrency: 2,
 });

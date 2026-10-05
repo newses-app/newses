@@ -11,10 +11,12 @@ export interface FeedSettings {
 
 export interface AppConfig {
   databaseUrl: string;
-  /** `trustProxy` is true, false, or comma-separated proxy addresses/CIDRs. */
-  http: { host: string; port: number; trustProxy: boolean | string };
+  /** `trustProxy` is true, false, a hop count, or comma-separated proxy addresses/CIDRs. */
+  http: { host: string; port: number; trustProxy: boolean | number | string };
   logLevel: LogLevel;
   blobDir: string;
+  /** S3 bucket for blobs; when set, `blobDir` is unused. */
+  blobBucket: string | null;
   /** Built web app to serve, or null when it is hosted elsewhere. */
   webDir: string | null;
   feeds: FeedSettings;

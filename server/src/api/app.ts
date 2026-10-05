@@ -19,7 +19,7 @@ import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { authRoutes } from './routes/auth.ts';
 import { entryRoutes } from './routes/entries.ts';
-import { eventRoutes, type EventStreamOptions } from './routes/events.ts';
+import { eventRoutes, type EventStreamOptions, noEventRoutes } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
 import { prefsRoutes } from './routes/prefs.ts';
 import {
@@ -44,22 +44,26 @@ export interface AppDeps {
   logger: FastifyBaseLogger;
   /** Each check throws when its dependency is unavailable. */
   healthChecks: Record<string, HealthCheck>;
-  /** Fastify `trustProxy`: true to trust any proxy, or comma-separated proxy addresses/CIDRs. */
-  trustProxy?: boolean | string;
+  /** Fastify `trustProxy`: true for any proxy, a hop count, or comma-separated addresses/CIDRs. */
+  trustProxy?: boolean | number | string;
   services?: ApiServices;
-  /** Overrides for tests. */
-  events?: Omit<EventStreamOptions, 'realtime'>;
+  /** Event stream settings (tests override timings); false where streams cannot be held open. */
+  events?: Omit<EventStreamOptions, 'realtime'> | false;
   /** Directory of the built web app to serve at `/`; omitted when the SPA is hosted elsewhere. */
   webDir?: string | null;
   /** Logging of slow and abandoned requests; defaults to 2 s without a state snapshot. */
   diagnostics?: Partial<RequestDiagnosticsOptions>;
 }
 
+/** A hop count trusts that many proxies in front of the server, nearest first. */
+const trustProxy = (trust: boolean | number | string) =>
+  typeof trust === 'number' ? (_address: string, hop: number) => hop < trust : trust;
+
 /** Builds the HTTP app without listening, so it can be mounted by listen() or a Lambda adapter. */
 export function buildApp(deps: AppDeps) {
   const app = Fastify({
     loggerInstance: deps.logger,
-    trustProxy: deps.trustProxy ?? false,
+    trustProxy: trustProxy(deps.trustProxy ?? false),
   }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -109,7 +113,8 @@ export function buildApp(deps: AppDeps) {
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, services.entries);
         await api.register(prefsRoutes, { prefs: services.prefs });
-        await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });
+        if (deps.events === false) await api.register(noEventRoutes);
+        else await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });
       },
       { prefix: '/api/v1' },
     );

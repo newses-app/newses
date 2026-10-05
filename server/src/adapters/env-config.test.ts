@@ -8,6 +8,7 @@ describe('loadConfig', () => {
       http: { host: '0.0.0.0', port: 8080, trustProxy: false },
       logLevel: 'info',
       blobDir: '/data/blobs',
+      blobBucket: null,
       webDir: null,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
@@ -32,6 +33,8 @@ describe('loadConfig', () => {
     const base = { DATABASE_URL: 'postgres://db/app' };
     expect(loadConfig({ ...base, TRUST_PROXY: 'true' }).http.trustProxy).toBe(true);
     expect(loadConfig({ ...base, TRUST_PROXY: '10.0.0.0/8' }).http.trustProxy).toBe('10.0.0.0/8');
+    expect(loadConfig({ ...base, TRUST_PROXY: '2' }).http.trustProxy).toBe(2);
+    expect(loadConfig({ ...base, BLOB_BUCKET: 'blobs' }).blobBucket).toBe('blobs');
     expect(
       loadConfig({ ...base, ADMIN_LOGIN: 'admin', ADMIN_PASSWORD: 'long enough' }).bootstrapAdmin,
     ).toEqual({ login: 'admin', password: 'long enough' });

@@ -233,6 +233,17 @@ describe('events stream', () => {
     expect(text).toContain(':\n\n');
   });
 
+  it('answers 204 without auth where streams are disabled', async () => {
+    const noStreams = buildApp({
+      logger: pino({ level: 'silent' }),
+      healthChecks: {},
+      services: createTestServices(createDb(database.pool), fetcher),
+      events: false,
+    });
+    expect((await noStreams.inject({ url: '/api/v1/events' })).statusCode).toBe(204);
+    await noStreams.close();
+  });
+
   it('works with the typed client over HTTP', async () => {
     const port = (app.server.address() as AddressInfo).port;
     const api = createApiClient({ baseUrl: `http://127.0.0.1:${String(port)}`, token });

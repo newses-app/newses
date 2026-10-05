@@ -2,23 +2,14 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import pg from 'pg';
 import pino from 'pino';
 import { loadConfig } from '../adapters/env-config.ts';
+import type { AppConfig } from '../core/config.ts';
+import type { Logger } from '../core/ports.ts';
 
 /** Config, logger, and pool shared by every entrypoint, plus ordered graceful shutdown. */
 export function createRuntime(role: string) {
   const config = loadConfig();
   const logger = pino({ level: config.logLevel, base: { role } });
-  const pool = new pg.Pool({
-    connectionString: config.databaseUrl,
-    // Waiting for a connection fails after this instead of hanging the caller.
-    connectionTimeoutMillis: 10_000,
-    // A transaction left open must not hold locks indefinitely.
-    idle_in_transaction_session_timeout: 60_000,
-    // API requests never need long statements or lock waits; jobs and migrations may.
-    ...(role === 'server' && { statement_timeout: 30_000, lock_timeout: 10_000 }),
-  });
-  pool.on('error', (err) => {
-    logger.error({ err }, 'Idle database connection failed');
-  });
+  const pool = createPool(config, logger, { api: role === 'server' });
 
   const shutdownSteps: (() => Promise<void>)[] = [];
   let shuttingDown = false;
@@ -51,6 +42,28 @@ export function createRuntime(role: string) {
       shutdownSteps.push(step);
     },
   };
+}
+
+/** The database pool every role uses; `api` adds request-sized statement and lock limits. */
+export function createPool(
+  config: AppConfig,
+  logger: Logger,
+  options: { api: boolean; max?: number; connectionTimeoutMillis?: number },
+): pg.Pool {
+  const pool = new pg.Pool({
+    connectionString: config.databaseUrl,
+    ...(options.max !== undefined && { max: options.max }),
+    // Waiting for a connection fails after this instead of hanging the caller.
+    connectionTimeoutMillis: options.connectionTimeoutMillis ?? 10_000,
+    // A transaction left open must not hold locks indefinitely.
+    idle_in_transaction_session_timeout: 60_000,
+    // API requests never need long statements or lock waits; jobs and migrations may.
+    ...(options.api && { statement_timeout: 30_000, lock_timeout: 10_000 }),
+  });
+  pool.on('error', (err) => {
+    logger.error({ err }, 'Idle database connection failed');
+  });
+  return pool;
 }
 
 /**

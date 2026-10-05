@@ -1,0 +1,19 @@
+{
+  "name": "@rss-reader/infra",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc",
+    "cdk": "cdk"
+  },
+  "dependencies": {
+    "@rss-reader/server": "workspace:*",
+    "aws-cdk-lib": "^2.272.0",
+    "constructs": "^10.8.1"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.1144.0",
+    "vitest": "^5.0.3"
+  }
+}

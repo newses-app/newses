@@ -1,0 +1,7 @@
+{
+  "app": "node src/main.ts",
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

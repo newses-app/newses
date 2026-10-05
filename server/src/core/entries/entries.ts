@@ -13,6 +13,8 @@ import { excerpt } from './text.ts';
 export const SEARCH_CANDIDATES = 1000;
 /** Searches matching at most this many entries instance-wide are resolved from the GIN index. */
 const SELECTIVE_MATCHES = 20_000;
+/** Pages with content end early past this many content characters, keeping responses small. */
+const PAGE_CONTENT_CHARS = 2_000_000;
 
 export type ListOrder = 'newest' | 'oldest' | 'title' | 'relevance';
 
@@ -120,11 +122,17 @@ export class EntryService {
   readonly #db: Db;
   readonly #realtime: Realtime;
   readonly #selectiveMatches: number;
+  readonly #pageContentChars: number;
 
-  constructor(db: Db, realtime: Realtime, options: { selectiveMatches?: number } = {}) {
+  constructor(
+    db: Db,
+    realtime: Realtime,
+    options: { selectiveMatches?: number; pageContentChars?: number } = {},
+  ) {
     this.#db = db;
     this.#realtime = realtime;
     this.#selectiveMatches = options.selectiveMatches ?? SELECTIVE_MATCHES;
+    this.#pageContentChars = options.pageContentChars ?? PAGE_CONTENT_CHARS;
   }
 
   /**
@@ -157,9 +165,8 @@ export class EntryService {
         : null;
 
     let rows: HeadlineRow[];
-    let next: Cursor | null = null;
+    const offset = cursor && 'o' in cursor ? cursor.o : 0;
     if (order === 'relevance' && query) {
-      const offset = cursor && 'o' in cursor ? cursor.o : 0;
       const candidates = hits
         ? sql`${hits}, candidates AS (SELECT id FROM hits ORDER BY t DESC LIMIT ${SEARCH_CANDIDATES})`
         : sql`WITH candidates AS (
@@ -173,7 +180,6 @@ export class EntryService {
         ORDER BY ts_rank(e.search, ${query}) DESC, ue.id DESC
         OFFSET ${offset} LIMIT ${options.limit + 1}`);
       rows = result.rows;
-      if (rows.length > options.limit) next = { v: view, o: offset + options.limit };
     } else {
       const key = hits ? sql`h.k` : spec.key;
       const id = hits ? sql`h.id` : sql`ue.id`;
@@ -193,15 +199,29 @@ export class EntryService {
         ORDER BY ${key} ${direction}, ${id} ${direction}
         LIMIT ${options.limit + 1}`);
       rows = result.rows;
-      const last = rows[options.limit - 1];
-      if (rows.length > options.limit && last?.k != null)
-        next = { v: view, k: last.k, i: Number(last.id) };
     }
 
-    const page = rows.slice(0, options.limit);
+    const size = options.content ? this.#fitContent(rows, options.limit) : options.limit;
+    const page = rows.slice(0, size);
+    const last = page.at(-1);
+    let next: Cursor | null = null;
+    if (rows.length > size && last) {
+      if (order === 'relevance') next = { v: view, o: offset + size };
+      else if (last.k != null) next = { v: view, k: last.k, i: Number(last.id) };
+    }
     const entries = page.map(toEntry);
     if (options.content) await this.#attachEnclosures(page, entries);
     return { entries, cursor: next && encodeCursor(next), view };
+  }
+
+  /** How many of `rows` (at most `limit`, at least one) fit the page's content budget. */
+  #fitContent(rows: HeadlineRow[], limit: number): number {
+    let chars = 0;
+    for (const [i, row] of rows.slice(0, limit).entries()) {
+      chars += row.content?.length ?? 0;
+      if (chars > this.#pageContentChars && i > 0) return i;
+    }
+    return limit;
   }
 
   /** Whether `query` matches few enough entries instance-wide to resolve from the GIN index. */

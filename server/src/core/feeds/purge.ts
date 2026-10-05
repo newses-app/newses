@@ -28,7 +28,7 @@ export class Purger {
   /**
    * Deletes user entries older than their subscription's purge age (never starred or published
    * ones), then entries nobody references that have left their feed, then feed sources with no
-   * subscribers and no kept entries.
+   * subscribers and no kept entries. Also forgets expired host cooldowns.
    */
   async purge(): Promise<PurgeResult> {
     const userEntries = await this.#db.execute(sql`
@@ -52,6 +52,7 @@ export class Purger {
         )
       RETURNING fs.id`);
     await Promise.all(sources.rows.map(({ id }) => this.#blobs.delete(faviconKey(id))));
+    await this.#db.execute(sql`DELETE FROM fetch_hosts WHERE blocked_until < now()`);
 
     return {
       userEntries: userEntries.rowCount ?? 0,
