@@ -9,9 +9,10 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
-import type * as secrets from 'aws-cdk-lib/aws-secretsmanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 import { CERTIFICATE_ARN, HOSTED_ZONE, REPO_ROOT, type StageConfig } from './config.ts';
+import type { GeneratedParameter } from './generated-parameter.ts';
 
 /** Paths served by the API; everything else is the static SPA. */
 export const API_PATHS = ['/api/*', '/reader/*', '/accounts/*', '/public/*'];
@@ -26,7 +27,8 @@ const SPA_ROUTES = `function handler(event) {
 export interface EdgeStackProps extends StackProps {
   stage: StageConfig;
   api: apigw.HttpApi;
-  originSecret: secrets.Secret;
+  /** Created by the App stack, which deploys first. */
+  originHeader: GeneratedParameter;
   /** Built web app (`web/dist`). */
   webDir?: string;
 }
@@ -69,7 +71,12 @@ export class EdgeStack extends Stack {
       `${props.api.apiId}.execute-api.${this.region}.amazonaws.com`,
       {
         protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-        customHeaders: { 'x-origin-verify': props.originSecret.secretValue.unsafeUnwrap() },
+        customHeaders: {
+          'x-origin-verify': ssm.StringParameter.valueForStringParameter(
+            this,
+            props.originHeader.parameterName,
+          ),
+        },
       },
     );
     const apiBehavior: cloudfront.BehaviorOptions = {

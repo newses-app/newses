@@ -6,7 +6,7 @@ import { createAuthServices } from '../../core/auth/index.ts';
 import { createEntryServices } from '../../core/entries/index.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
-import { createLambdaRuntime, readSecretString } from './runtime.ts';
+import { createLambdaRuntime, readParameter } from './runtime.ts';
 
 const { config, logger, pool, db, feedDeps } = await createLambdaRuntime('api');
 
@@ -38,7 +38,7 @@ const proxy = awsLambdaFastify(app, {
 await app.ready();
 
 // CloudFront adds the origin secret, so requests to the API endpoint that bypass it are refused.
-const originSecret = Buffer.from(await readSecretString(process.env.ORIGIN_SECRET_ARN ?? ''));
+const originSecret = Buffer.from(await readParameter('ORIGIN_HEADER_PARAMETER'));
 
 function fromCloudFront(event: APIGatewayProxyEventV2): boolean {
   const given = Buffer.from(event.headers['x-origin-verify'] ?? '');

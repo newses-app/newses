@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Duration, Stack, type StackProps } from 'aws-cdk-lib';
+import { Duration, Stack, type StackProps, Token } from 'aws-cdk-lib';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -11,11 +11,11 @@ import type * as rds from 'aws-cdk-lib/aws-rds';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
-import * as secrets from 'aws-cdk-lib/aws-secretsmanager';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
 import { REPO_ROOT, type StageConfig } from './config.ts';
+import { GeneratedParameter } from './generated-parameter.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
 const ARGON2_VERSION = (
@@ -30,32 +30,29 @@ const DISPATCH_MINUTES = 30;
 export interface AppStackProps extends StackProps {
   stage: StageConfig;
   cluster: rds.DatabaseCluster;
+  dbPassword: GeneratedParameter;
   blobs: s3.Bucket;
 }
 
 /** Lambdas behind an HTTP API, SQS job queues, and the schedules that dispatch feeds. */
 export class AppStack extends Stack {
   readonly api: apigw.HttpApi;
-  readonly originSecret: secrets.Secret;
+  readonly originHeader: GeneratedParameter;
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
-    const { cluster, blobs } = props;
-    const dbSecret = cluster.secret;
-    if (!dbSecret) throw new Error('The cluster has no generated secret');
+    const { stage, cluster, dbPassword, blobs } = props;
 
-    this.originSecret = new secrets.Secret(this, 'OriginSecret', {
-      description: 'Header CloudFront adds to API requests; the API refuses requests without it',
-      generateSecretString: { excludePunctuation: true, passwordLength: 40 },
+    // A String parameter, because CloudFront headers cannot resolve SecureString parameters.
+    this.originHeader = new GeneratedParameter(this, 'OriginHeader', {
+      parameterName: `/rss-reader/${stage.name}/origin-header`,
+      type: 'String',
+      length: 40,
     });
-    const adminSecret = new secrets.Secret(this, 'AdminSecret', {
-      description: 'First admin, created while the database has no users',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ login: 'admin' }),
-        generateStringKey: 'password',
-        excludePunctuation: true,
-        passwordLength: 24,
-      },
+    const adminPassword = new GeneratedParameter(this, 'AdminPassword', {
+      parameterName: `/rss-reader/${stage.name}/admin-password`,
+      type: 'SecureString',
+      length: 24,
     });
 
     const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', { retentionPeriod: Duration.days(14) });
@@ -84,7 +81,11 @@ export class AppStack extends Stack {
           retention: logs.RetentionDays.ONE_MONTH,
         }),
         environment: {
-          DB_SECRET_ARN: dbSecret.secretArn,
+          DB_HOST: cluster.clusterEndpoint.hostname,
+          DB_PORT: Token.asString(cluster.clusterEndpoint.port),
+          DB_NAME: 'rss_reader',
+          DB_USER: 'rss_reader',
+          DB_PASSWORD_PARAMETER: dbPassword.parameterName,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
@@ -113,7 +114,7 @@ export class AppStack extends Stack {
           },
         },
       });
-      dbSecret.grantRead(handler);
+      dbPassword.grantRead(handler);
       blobs.grantReadWrite(handler);
       fetchQueue.grantSendMessages(handler);
       faviconQueue.grantSendMessages(handler);
@@ -121,10 +122,10 @@ export class AppStack extends Stack {
     };
 
     const api = fn('api', { timeout: Duration.seconds(29), memorySize: 1024 });
-    api.addEnvironment('ORIGIN_SECRET_ARN', this.originSecret.secretArn);
+    api.addEnvironment('ORIGIN_HEADER_PARAMETER', this.originHeader.parameterName);
     // The request's source is CloudFront, which appends the client's address to X-Forwarded-For.
     api.addEnvironment('TRUST_PROXY', '1');
-    this.originSecret.grantRead(api);
+    this.originHeader.grantRead(api);
     this.api = new apigw.HttpApi(this, 'HttpApi', {
       defaultIntegration: new HttpLambdaIntegration('Api', api),
     });
@@ -161,8 +162,9 @@ export class AppStack extends Stack {
     );
 
     const migrate = fn('migrate', { timeout: Duration.minutes(10) });
-    migrate.addEnvironment('ADMIN_SECRET_ARN', adminSecret.secretArn);
-    adminSecret.grantRead(migrate);
+    migrate.addEnvironment('ADMIN_LOGIN', 'admin');
+    migrate.addEnvironment('ADMIN_PASSWORD_PARAMETER', adminPassword.parameterName);
+    adminPassword.grantRead(migrate);
     // Runs on every deployment that changes the migrate bundle, before the other functions update.
     new triggers.Trigger(this, 'Migrate', {
       handler: migrate,

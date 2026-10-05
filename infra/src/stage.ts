@@ -27,13 +27,14 @@ export class RssReaderStage extends Stage {
       env,
       stage,
       cluster: this.data.cluster,
+      dbPassword: this.data.dbPassword,
       blobs: this.data.blobs,
     });
     this.edge = new EdgeStack(this, 'Edge', {
       env,
       stage,
       api: this.app.api,
-      originSecret: this.app.originSecret,
+      originHeader: this.app.originHeader,
       ...(props.webDir !== undefined && { webDir: props.webDir }),
     });
   }

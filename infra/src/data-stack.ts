@@ -1,9 +1,10 @@
-import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, SecretValue, Stack, type StackProps } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import type { StageConfig } from './config.ts';
+import { GeneratedParameter } from './generated-parameter.ts';
 
 /**
  * Aurora Serverless v2 PostgreSQL that pauses at 0 ACU when idle, and the blob bucket.
@@ -12,6 +13,7 @@ import type { StageConfig } from './config.ts';
 export class DataStack extends Stack {
   readonly cluster: rds.DatabaseCluster;
   readonly blobs: s3.Bucket;
+  readonly dbPassword: GeneratedParameter;
 
   // Named rather than looked up, so synthesis needs no AWS credentials.
   override get availabilityZones(): string[] {
@@ -33,6 +35,12 @@ export class DataStack extends Stack {
     });
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(5432));
 
+    this.dbPassword = new GeneratedParameter(this, 'DbPassword', {
+      parameterName: `/rss-reader/${stage.name}/db-password`,
+      type: 'SecureString',
+      length: 32,
+    });
+
     const engine = rds.DatabaseClusterEngine.auroraPostgres({
       version: rds.AuroraPostgresEngineVersion.VER_18_4,
     });
@@ -45,7 +53,10 @@ export class DataStack extends Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroups: [securityGroup],
-      credentials: rds.Credentials.fromGeneratedSecret('rss_reader'),
+      credentials: rds.Credentials.fromPassword(
+        'rss_reader',
+        SecretValue.ssmSecure(this.dbPassword.parameterName),
+      ),
       defaultDatabaseName: 'rss_reader',
       parameterGroup: new rds.ParameterGroup(this, 'DbParameters', {
         engine,
@@ -56,6 +67,8 @@ export class DataStack extends Stack {
       deletionProtection: stage.retainData,
       removalPolicy: stage.retainData ? RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY,
     });
+    // The cluster resolves its password from the parameter, so it must exist first.
+    this.cluster.node.addDependency(this.dbPassword);
 
     this.blobs = new s3.Bucket(this, 'Blobs', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

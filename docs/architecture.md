@@ -48,7 +48,7 @@ Workspace packages exist only where runtime or toolchain differs.
 ## Runtime model
 
 - Docker: one container image, role selected by command: `server`, `worker`, `migrate`, `cli`.
-- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune), `fetch`, `favicon`, `migrate`, bundled by esbuild; each reads the database secret once per cold start.
+- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune), `fetch`, `favicon`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
 
 Rules:
 - Server is stateless; sessions live in Postgres.
@@ -68,7 +68,7 @@ Rules:
 | `Scheduler` | Periodically dispatch due feeds and purges | In-process timer in worker | EventBridge Scheduler |
 | `BlobStore` | Favicons, cached images | Local volume | S3 |
 | `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
-| `Config` | Settings and secrets | Environment | Environment and Secrets Manager |
+| `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
 
 ## Web app
@@ -267,10 +267,11 @@ flowchart LR
   FF & FI --> NET((Internet feeds))
 ```
 
-- Stacks per stage: `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, secrets, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN. Pipelines: `RssReaderPipeline-dev` and `RssReaderPipeline-prod`.
+- Stacks per stage: `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, generated parameters, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN. Pipelines: `RssReaderPipeline-dev` and `RssReaderPipeline-prod`.
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
 - Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
-- CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it. `TRUST_PROXY` is one hop (CloudFront).
+- CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
+- Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource and deleted with it: `db-password` and `admin-password` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is one hop (CloudFront).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - Logs go to CloudWatch, kept a month.
 - Web traffic is same-origin through CloudFront. CORS allows Capacitor origins only.
@@ -283,4 +284,4 @@ Constraints:
 Operator setup, once per account:
 - `pnpm --filter @rss-reader/infra cdk bootstrap aws://123456789012/us-east-2`
 - `pnpm --filter @rss-reader/infra cdk deploy RssReaderPipeline-dev` (and `-prod`); later changes deploy through the pipelines.
-- The first admin is `admin`, with the password in the stage's `AdminSecret` in Secrets Manager.
+- The first admin is `admin`, with the password in the SSM SecureString `/rss-reader/<stage>/admin-password`.

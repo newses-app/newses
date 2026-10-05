@@ -1,5 +1,5 @@
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SQSClient } from '@aws-sdk/client-sqs';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import pino from 'pino';
 import { loadConfig } from '../../adapters/env-config.ts';
@@ -12,7 +12,7 @@ import { createDb } from '../../db/client.ts';
 import { createBlobStore } from '../feed-deps.ts';
 import { createPool } from '../runtime.ts';
 
-const secrets = new SecretsManagerClient({});
+const ssm = new SSMClient({});
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -20,35 +20,21 @@ function requireEnv(name: string): string {
   return value;
 }
 
-export async function readSecretString(secretId: string): Promise<string> {
-  const secret = await secrets.send(
-    new GetSecretValueCommand({ SecretId: requireValue(secretId) }),
+/** The decrypted value of the SSM parameter named by the environment variable `envName`. */
+export async function readParameter(envName: string): Promise<string> {
+  const { Parameter } = await ssm.send(
+    new GetParameterCommand({ Name: requireEnv(envName), WithDecryption: true }),
   );
-  return secret.SecretString ?? '';
+  return Parameter?.Value ?? '';
 }
 
-/** A Secrets Manager secret holding a JSON object. */
-export async function readSecretJson<T>(secretId: string): Promise<T> {
-  return JSON.parse(await readSecretString(secretId)) as T;
-}
-
-function requireValue(secretId: string): string {
-  if (!secretId) throw new Error('Secret ARN is not set');
-  return secretId;
-}
-
-/** Builds DATABASE_URL from the RDS-generated secret named by DB_SECRET_ARN, unless it is set. */
+/** Builds DATABASE_URL from the DB_* variables and password parameter, unless it is set. */
 async function resolveDatabaseUrl(): Promise<void> {
   if (process.env.DATABASE_URL) return;
-  const { username, password, host, port, dbname } = await readSecretJson<{
-    username: string;
-    password: string;
-    host: string;
-    port: number;
-    dbname?: string;
-  }>(requireEnv('DB_SECRET_ARN'));
-  const auth = `${encodeURIComponent(username)}:${encodeURIComponent(password)}`;
-  process.env.DATABASE_URL = `postgres://${auth}@${host}:${String(port)}/${dbname ?? 'postgres'}?sslmode=verify-full`;
+  const password = await readParameter('DB_PASSWORD_PARAMETER');
+  const auth = `${encodeURIComponent(requireEnv('DB_USER'))}:${encodeURIComponent(password)}`;
+  const address = `${requireEnv('DB_HOST')}:${requireEnv('DB_PORT')}/${requireEnv('DB_NAME')}`;
+  process.env.DATABASE_URL = `postgres://${auth}@${address}?sslmode=verify-full`;
 }
 
 /**

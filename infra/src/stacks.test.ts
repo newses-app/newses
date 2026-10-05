@@ -22,6 +22,17 @@ const app = Template.fromStack(stage.app);
 const edge = Template.fromStack(stage.edge);
 
 describe('RssReaderStage', () => {
+  it('keeps generated credentials in SSM parameters rather than Secrets Manager', () => {
+    for (const template of [data, app, edge]) {
+      template.resourceCountIs('AWS::SecretsManager::Secret', 0);
+    }
+    data.resourceCountIs('Custom::GeneratedParameter', 1);
+    app.resourceCountIs('Custom::GeneratedParameter', 2);
+    data.hasResourceProperties('AWS::RDS::DBCluster', {
+      MasterUserPassword: '{{resolve:ssm-secure:/rss-reader/dev/db-password}}',
+    });
+  });
+
   it('keeps every stack in one region, so pipelines need no cross-region support stacks', () => {
     const regions = stage.node
       .findAll()
@@ -53,7 +64,7 @@ describe('App', () => {
     const functions = Object.values(
       app.findResources('AWS::Lambda::Function', {
         Properties: {
-          Environment: { Variables: Match.objectLike({ DB_SECRET_ARN: Match.anyValue() }) },
+          Environment: { Variables: Match.objectLike({ DB_PASSWORD_PARAMETER: Match.anyValue() }) },
         },
       }),
     ) as { Properties: Record<string, unknown> }[];
