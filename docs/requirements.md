@@ -6,7 +6,8 @@
 |---|---|---|
 | P1 | MVP reader, self-hosted | Family members read daily feeds in the web app on a Docker deployment; OPML from TTRSS imported |
 | P1.5 | AWS deployment | P1 build runs serverless on the AWS `dev` stage, deployed by the CDK pipeline from the `dev` branch |
-| P2 | Power features | Filters, labels, tags, notes, scoring, publishing, readability, image proxy, 2FA in daily use |
+| P1.6 | Security and accessibility | Image proxy, HTTP-auth feeds, 2FA, and app passwords in daily use; Accessibility and Security non-functional requirements verified on the AWS `dev` stage |
+| P2 | Power features | Labels, tags, notes, published feed, share links, and reading preferences in daily use |
 | P3 | TTRSS cut-over | All TTRSS users imported; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Electron builds for Windows/macOS/Linux; Capacitor Android build installed on a device |
 | Later | Backlog | Not scheduled |
@@ -25,8 +26,8 @@
 | Feed errors | P1 | Last error and time shown per feed; "feeds with errors" view; feed auto-disables after a configurable number of consecutive failures |
 | Favicons | P1 | Fetched per site, cached, shown in tree and headlines; fallback icon |
 | Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, or labelled entries |
-| HTTP-auth feeds | P2 | Basic auth credentials per subscription, encrypted at rest |
-| Per-feed options | P2 | Hide from "All articles", pause updates, always show images, auto-fetch full text |
+| HTTP-auth feeds | P1.6 | Basic auth credentials per subscription, encrypted at rest |
+| Per-feed options | Later | Hide from "All articles", pause updates, always show images, auto-fetch full text |
 | Feed debugger | Later | Dry-run fetch shows raw response, parsed entries, and filter matches |
 | Generated feeds | Later | Secret-key RSS feed for any feed, category, or label |
 | WebSub | Later | Push subscriptions for hubs advertised by feeds |
@@ -36,18 +37,18 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Special feeds | P1 | All articles, Fresh (configurable age), Starred, Published, Recently read, each with unread counts |
-| Archived feed | P2 | Starred/published/noted entries of unsubscribed feeds remain readable under "Archived" |
+| Archived feed | Later | Starred/published/noted entries of unsubscribed feeds remain readable under "Archived" |
 | Layouts | P1 | Three-pane (tree / headlines / article) and combined (expanded articles in list) modes; single-pane responsive layout below tablet width |
 | View modes | P1 | All, unread only, adaptive (unread if any, else all) |
 | Sorting | P1 | Newest first, oldest first, title |
-| Score sorting | P2 | Sort by score, then date |
+| Score sorting | Later | Sort by score, then date |
 | Read state | P1 | Mark read on open; optional mark read on scroll in combined mode; toggle unread |
 | Catch-up | P1 | Mark feed/category/special feed read: all, or older than 1 day / 1 week / 2 weeks |
 | Live counters | P1 | Unread counts update without reload within 5 s of ingest (SSE), falling back to polling when the stream is unavailable |
 | Keyboard shortcuts | P1 | TTRSS default bindings (`j`/`k`, `n`/`p`, `s`, `u`, `o`, `/`, `f a`, `g a`, …); `?` shows a help overlay |
 | Themes | P1 | Light, dark, follow system |
 | Reading preferences | P2 | Font family, size, line width per user |
-| Enclosures | P2 | Inline audio/video players and image galleries for enclosures |
+| Enclosures | Later | Inline audio/video players and image galleries for enclosures |
 | Open original | P1 | Opens article link in a new tab/browser without marking unrelated items |
 
 ### Organisation
@@ -55,19 +56,19 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Star | P1 | Toggle from list or article; Starred special feed |
-| Publish | P2 | Toggle published; Published special feed |
+| Publish | P1 | Toggle published; Published special feed |
 | Labels | P2 | User-defined labels with foreground/background colour; assign many per entry; each label appears as a virtual feed with counts |
 | Tags | P2 | Free-text tags per entry (feed-provided categories imported as tags); browse entries by tag |
 | Notes | P2 | Plain-text note per entry, shown in list and article; searchable |
-| Filters | P2 | Rules match title, content, title-or-content, author, link, or tags by regex, optionally inverted; match any/all rules; scoped to all feeds or selected feeds/categories; actions: delete, mark read, star, publish, assign label, add tag, adjust score, stop processing; run on ingest; "test" previews matches; "apply" runs against existing entries |
-| Scoring | P2 | Integer score per entry; entries above/below configurable thresholds are highlighted/hidden |
+| Filters | Later | Rules match title, content, title-or-content, author, link, or tags by regex, optionally inverted; match any/all rules; scoped to all feeds or selected feeds/categories; actions: delete, mark read, star, publish, assign label, add tag, adjust score, stop processing; run on ingest; "test" previews matches; "apply" runs against existing entries |
+| Scoring | Later | Integer score per entry; entries above/below configurable thresholds are highlighted/hidden |
 
 ### Search
 
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Full-text search | P1 | Searches title and content within current feed, category, or all; ranked results; results in < 1 s on 1M entries |
-| Query syntax | P2 | `title:`, `author:`, `note:`, `tag:`, `label:`, `unread:true/false`, `star:true/false`, `pub:true/false`, `@YYYY-MM-DD` and relative dates; negation with `-` |
+| Query syntax | Later | `title:`, `author:`, `note:`, `tag:`, `label:`, `unread:true/false`, `star:true/false`, `pub:true/false`, `@YYYY-MM-DD` and relative dates; negation with `-` |
 
 ### Sharing
 
@@ -83,9 +84,9 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Sanitisation | P1 | All entry HTML sanitised on ingest against an allow-list; scripts, event handlers, and unsafe URLs removed |
-| Full text | P2 | Readability extraction on demand per article and automatically per opted-in feed; original content kept |
-| Image proxy | P2 | Optional per user; entry images served through the server (privacy, mixed content); responses cached; tracking pixels (1×1 images, known trackers) stripped |
-| Lazy images | P2 | Article images load lazily |
+| Full text | Later | Readability extraction on demand per article and automatically per opted-in feed; original content kept |
+| Image proxy | P1.6 | Optional per user; entry images served through the server (privacy, mixed content); responses cached; tracking pixels (1×1 images, known trackers) stripped |
+| Lazy images | Later | Article images load lazily |
 | Starred image cache | Later | Images of starred entries stored permanently |
 | Site rewrites | Later | Per-site content transforms (comics, Reddit/Imgur embeds) |
 
@@ -99,8 +100,8 @@
 | Sessions | P1 | Cookie sessions for web with CSRF protection; list and revoke own sessions; bearer tokens for apps |
 | Login rate limiting | P1 | Per-IP and per-account throttling with exponential delay |
 | Preferences | P1 | Per-user preferences for all reading/updating options |
-| TOTP 2FA | P2 | Enrol via QR code, recovery codes, required at web login once enabled |
-| App passwords | P2 | Named, revocable passwords for TTRSS/Google Reader API clients; bypass TOTP; last-used time shown |
+| TOTP 2FA | P1.6 | Enrol via QR code, recovery codes, required at web login once enabled |
+| App passwords | P1.6 | Named, revocable passwords for TTRSS/Google Reader API clients; bypass TOTP; last-used time shown |
 
 ### APIs and clients
 

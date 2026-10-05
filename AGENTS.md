@@ -55,4 +55,4 @@ Write an ADR for decisions that change: stack, architecture, data model concepts
 
 ## Tracking
 
-Progress, TODOs, and open questions go in GitHub Issues and milestones (`P1`, `P1.5`, `P2`, `P3`, `P4`, `Later`), never in docs.
+Progress, TODOs, and open questions go in GitHub Issues and milestones (`P1`, `P1.5`, `P1.6`, `P2`, `P3`, `P4`, `Later`), never in docs.
