@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT, REGION, STAGES } from './config.ts';
+import { ACCOUNT, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
 import { API_PATHS } from './edge-stack.ts';
 import { PipelineStack } from './pipeline-stack.ts';
 import { RssReaderStage } from './stage.ts';
@@ -20,6 +20,16 @@ const stage = new RssReaderStage(newApp(), 'Test', { stage: dev, webDir });
 const data = Template.fromStack(stage.data);
 const app = Template.fromStack(stage.app);
 const edge = Template.fromStack(stage.edge);
+
+describe('RssReaderStage', () => {
+  it('keeps every stack in one region, so pipelines need no cross-region support stacks', () => {
+    const regions = stage.node
+      .findAll()
+      .filter((c): c is Stack => Stack.isStack(c))
+      .map((s) => s.region);
+    expect(new Set(regions)).toEqual(new Set([REGION]));
+  });
+});
 
 describe('Data', () => {
   it('runs Aurora Serverless v2 that pauses at 0 ACU and requires TLS, without NAT', () => {
@@ -73,6 +83,7 @@ describe('Edge', () => {
     edge.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: Match.objectLike({
         Aliases: [dev.domainName],
+        ViewerCertificate: Match.objectLike({ AcmCertificateArn: CERTIFICATE_ARN }),
         CacheBehaviors: API_PATHS.map((path) => Match.objectLike({ PathPattern: path })),
       }),
     });

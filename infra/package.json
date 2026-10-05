@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "deploy:build:dev": "cdk deploy RssReaderPipeline-dev"
   },
   "dependencies": {
     "@rss-reader/server": "workspace:*",

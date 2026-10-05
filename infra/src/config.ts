@@ -7,6 +7,9 @@ export const REGION = 'us-east-2';
 export const GITHUB_REPO = 'himynameschris/rss-reader';
 export const GITHUB_CONNECTION_ARN =
   'arn:aws:codeconnections:us-east-2:123456789012:connection/00000000-0000-0000-0000-000000000000';
+/** Covers example.com and *.example.com; CloudFront requires certificates from us-east-1. */
+export const CERTIFICATE_ARN =
+  'arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000';
 export const HOSTED_ZONE = { zoneName: 'example.com', hostedZoneId: 'Z0000000000EXAMPLE' };
 
 export interface StageConfig {

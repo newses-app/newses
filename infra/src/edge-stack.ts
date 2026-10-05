@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { WEB_CSP } from '@rss-reader/server/web-csp';
 import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
-import type * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -11,7 +11,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import type * as secrets from 'aws-cdk-lib/aws-secretsmanager';
 import type { Construct } from 'constructs';
-import { HOSTED_ZONE, REPO_ROOT, type StageConfig } from './config.ts';
+import { CERTIFICATE_ARN, HOSTED_ZONE, REPO_ROOT, type StageConfig } from './config.ts';
 
 /** Paths served by the API; everything else is the static SPA. */
 export const API_PATHS = ['/api/*', '/reader/*', '/accounts/*', '/public/*'];
@@ -25,7 +25,6 @@ const SPA_ROUTES = `function handler(event) {
 
 export interface EdgeStackProps extends StackProps {
   stage: StageConfig;
-  certificate: acm.ICertificate;
   api: apigw.HttpApi;
   originSecret: secrets.Secret;
   /** Built web app (`web/dist`). */
@@ -83,7 +82,7 @@ export class EdgeStack extends Stack {
 
     this.distribution = new cloudfront.Distribution(this, 'Cdn', {
       domainNames: [stage.domainName],
-      certificate: props.certificate,
+      certificate: acm.Certificate.fromCertificateArn(this, 'Certificate', CERTIFICATE_ARN),
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       defaultRootObject: 'index.html',
