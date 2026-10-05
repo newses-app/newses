@@ -11,7 +11,13 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
-import { CERTIFICATE_ARN, HOSTED_ZONE, REPO_ROOT, type StageConfig } from './config.ts';
+import {
+  CERTIFICATE_ARN,
+  HOSTED_ZONE,
+  REPO_ROOT,
+  resourceName,
+  type StageConfig,
+} from './config.ts';
 import type { GeneratedParameter } from './generated-parameter.ts';
 
 /** Paths served by the API; everything else is the static SPA. */
@@ -50,6 +56,7 @@ export class EdgeStack extends Stack {
     });
 
     const headers = new cloudfront.ResponseHeadersPolicy(this, 'SiteHeaders', {
+      responseHeadersPolicyName: resourceName(stage, 'headers'),
       securityHeadersBehavior: {
         contentSecurityPolicy: { contentSecurityPolicy: WEB_CSP, override: true },
         contentTypeOptions: { override: true },
@@ -88,13 +95,18 @@ export class EdgeStack extends Stack {
     };
 
     this.distribution = new cloudfront.Distribution(this, 'Cdn', {
+      comment: `${resourceName(stage)} (${stage.domainName})`,
       domainNames: [stage.domainName],
       certificate: acm.Certificate.fromCertificateArn(this, 'Certificate', CERTIFICATE_ARN),
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       defaultRootObject: 'index.html',
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(site),
+        origin: origins.S3BucketOrigin.withOriginAccessControl(site, {
+          originAccessControl: new cloudfront.S3OriginAccessControl(this, 'SiteAccess', {
+            originAccessControlName: resourceName(stage, 'site'),
+          }),
+        }),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         responseHeadersPolicy: headers,
@@ -102,6 +114,7 @@ export class EdgeStack extends Stack {
           {
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
             function: new cloudfront.Function(this, 'SpaRoutes', {
+              functionName: resourceName(stage, 'spa-routes'),
               runtime: cloudfront.FunctionRuntime.JS_2_0,
               code: cloudfront.FunctionCode.fromInline(SPA_ROUTES),
             }),

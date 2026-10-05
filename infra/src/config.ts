@@ -12,6 +12,8 @@ export const CERTIFICATE_ARN =
   'arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000';
 export const HOSTED_ZONE = { zoneName: 'example.com', hostedZoneId: 'Z0000000000EXAMPLE' };
 
+export const PROJECT = 'rss-reader';
+
 export interface StageConfig {
   name: 'dev' | 'prod';
   /** Branch whose pushes deploy this stage. */
@@ -38,3 +40,10 @@ export const STAGES: StageConfig[] = [
     backupDays: 14,
   },
 ];
+
+/**
+ * Physical name for a stage's resource, `rss-reader-<stage>-<parts>`, so resources are
+ * recognisable in a shared account.
+ */
+export const resourceName = (stage: StageConfig, ...parts: string[]) =>
+  [PROJECT, stage.name, ...parts].join('-');

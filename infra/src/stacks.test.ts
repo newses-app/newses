@@ -33,6 +33,39 @@ describe('RssReaderStage', () => {
     });
   });
 
+  it('names and tags resources with the project and stage', () => {
+    expect([stage.data, stage.app, stage.edge].map((s) => s.stackName)).toEqual([
+      'rss-reader-dev-data',
+      'rss-reader-dev-app',
+      'rss-reader-dev-edge',
+    ]);
+    const functions = Object.values(
+      app.findResources('AWS::Lambda::Function', {
+        Properties: {
+          Environment: { Variables: Match.objectLike({ DB_HOST: Match.anyValue() }) },
+        },
+      }),
+    ) as { Properties: { FunctionName: string; Tags: { Key: string; Value: string }[] } }[];
+    expect(functions.map((f) => f.Properties.FunctionName).sort()).toEqual(
+      ['api', 'favicon', 'fetch', 'migrate', 'tick'].map((name) => `rss-reader-dev-${name}`),
+    );
+    for (const { Properties } of functions) {
+      expect(Properties.Tags).toEqual(
+        expect.arrayContaining([
+          { Key: 'project', Value: 'rss-reader' },
+          { Key: 'stage', Value: 'dev' },
+        ]),
+      );
+    }
+    data.hasResourceProperties('AWS::RDS::DBCluster', { DBClusterIdentifier: 'rss-reader-dev' });
+    data.hasResourceProperties('AWS::RDS::DBInstance', {
+      DBInstanceIdentifier: 'rss-reader-dev-writer',
+    });
+    app.hasResourceProperties('AWS::SQS::Queue', { QueueName: 'rss-reader-dev-feed-fetch' });
+    app.hasResourceProperties('AWS::Scheduler::Schedule', { Name: 'rss-reader-dev-auth-prune' });
+    edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'rss-reader-dev-spa-routes' });
+  });
+
   it('keeps every stack in one region, so pipelines need no cross-region support stacks', () => {
     const regions = stage.node
       .findAll()
@@ -108,7 +141,7 @@ describe('Edge', () => {
 describe('PipelineStack', () => {
   it.each(STAGES)('deploys $name from the $branch branch', (config) => {
     const root = newApp();
-    const pipeline = new PipelineStack(root, `Pipeline-${config.name}`, {
+    const pipeline = new PipelineStack(root, `rss-reader-${config.name}-pipeline`, {
       env: { account: ACCOUNT, region: REGION },
       stage: config,
       webDir,
@@ -139,11 +172,12 @@ describe('PipelineStack', () => {
       spec.phases.install?.commands?.includes('corepack enable'),
     );
     expect(synth?.phases.install?.['runtime-versions']).toEqual({ nodejs: 24 });
-    const stages = root.node
+    const stackNames = root.node
       .findAll()
-      .filter((c): c is Stack => Stack.isStack(c) && c.stackName.includes('-Data'));
-    expect(stages.map((s) => s.stackName)).toEqual([
-      `${config.name === 'dev' ? 'Dev' : 'Prod'}-Data`,
-    ]);
+      .filter((c): c is Stack => Stack.isStack(c))
+      .map((s) => s.stackName);
+    expect(stackNames.sort()).toEqual(
+      ['app', 'data', 'edge', 'pipeline'].map((part) => `rss-reader-${config.name}-${part}`),
+    );
   });
 });

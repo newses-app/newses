@@ -1,7 +1,7 @@
-import { Stage, type StageProps } from 'aws-cdk-lib';
+import { Stage, type StageProps, Tags } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import { AppStack } from './app-stack.ts';
-import { ACCOUNT, REGION, type StageConfig } from './config.ts';
+import { ACCOUNT, PROJECT, REGION, resourceName, type StageConfig } from './config.ts';
 import { DataStack } from './data-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 
@@ -21,10 +21,17 @@ export class RssReaderStage extends Stage {
     super(scope, id, props);
     const { stage } = props;
     const env = { account: ACCOUNT, region: REGION };
+    Tags.of(this).add('project', PROJECT);
+    Tags.of(this).add('stage', stage.name);
 
-    this.data = new DataStack(this, 'Data', { env, stage });
+    this.data = new DataStack(this, 'Data', {
+      env,
+      stackName: resourceName(stage, 'data'),
+      stage,
+    });
     this.app = new AppStack(this, 'App', {
       env,
+      stackName: resourceName(stage, 'app'),
       stage,
       cluster: this.data.cluster,
       dbPassword: this.data.dbPassword,
@@ -32,6 +39,7 @@ export class RssReaderStage extends Stage {
     });
     this.edge = new EdgeStack(this, 'Edge', {
       env,
+      stackName: resourceName(stage, 'edge'),
       stage,
       api: this.app.api,
       originHeader: this.app.originHeader,

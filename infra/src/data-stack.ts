@@ -3,7 +3,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
-import type { StageConfig } from './config.ts';
+import { resourceName, type StageConfig } from './config.ts';
 import { GeneratedParameter } from './generated-parameter.ts';
 
 /**
@@ -26,11 +26,13 @@ export class DataStack extends Stack {
     const removalPolicy = stage.retainData ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY;
 
     const vpc = new ec2.Vpc(this, 'Vpc', {
+      vpcName: resourceName(stage),
       natGateways: 0,
       subnetConfiguration: [{ name: 'public', subnetType: ec2.SubnetType.PUBLIC }],
     });
     const securityGroup = new ec2.SecurityGroup(this, 'DbSecurityGroup', {
       vpc,
+      securityGroupName: resourceName(stage, 'db'),
       description: 'PostgreSQL over TLS from Lambdas, which run outside the VPC',
     });
     securityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(5432));
@@ -46,12 +48,22 @@ export class DataStack extends Stack {
     });
     this.cluster = new rds.DatabaseCluster(this, 'Db', {
       engine,
-      writer: rds.ClusterInstance.serverlessV2('writer', { publiclyAccessible: true }),
+      clusterIdentifier: resourceName(stage),
+      writer: rds.ClusterInstance.serverlessV2('writer', {
+        instanceIdentifier: resourceName(stage, 'writer'),
+        publiclyAccessible: true,
+      }),
       serverlessV2MinCapacity: 0,
       serverlessV2MaxCapacity: 2,
       serverlessV2AutoPauseDuration: Duration.minutes(5),
       vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      subnetGroup: new rds.SubnetGroup(this, 'DbSubnets', {
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+        subnetGroupName: resourceName(stage, 'db'),
+        description: `${resourceName(stage)} database`,
+        removalPolicy,
+      }),
       securityGroups: [securityGroup],
       credentials: rds.Credentials.fromPassword(
         'rss_reader',
@@ -60,6 +72,8 @@ export class DataStack extends Stack {
       defaultDatabaseName: 'rss_reader',
       parameterGroup: new rds.ParameterGroup(this, 'DbParameters', {
         engine,
+        name: resourceName(stage, 'db'),
+        description: `${resourceName(stage)} database: TLS required`,
         parameters: { 'rds.force_ssl': '1' },
       }),
       storageEncrypted: true,

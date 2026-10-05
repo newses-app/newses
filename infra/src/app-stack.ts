@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Duration, Stack, type StackProps, Token } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, type StackProps, Token } from 'aws-cdk-lib';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -14,7 +14,7 @@ import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
-import { REPO_ROOT, type StageConfig } from './config.ts';
+import { REPO_ROOT, resourceName, type StageConfig } from './config.ts';
 import { GeneratedParameter } from './generated-parameter.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
@@ -55,21 +55,29 @@ export class AppStack extends Stack {
       length: 24,
     });
 
-    const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', { retentionPeriod: Duration.days(14) });
+    const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', {
+      queueName: resourceName(stage, 'feed-fetch-dlq'),
+      retentionPeriod: Duration.days(14),
+    });
     const fetchQueue = new sqs.Queue(this, 'FeedFetchQueue', {
+      queueName: resourceName(stage, 'feed-fetch'),
       visibilityTimeout: Duration.minutes(30),
       deadLetterQueue: { queue: fetchDlq, maxReceiveCount: 2 },
     });
     const faviconDlq = new sqs.Queue(this, 'FeedFaviconDlq', {
+      queueName: resourceName(stage, 'feed-favicon-dlq'),
       retentionPeriod: Duration.days(14),
     });
     const faviconQueue = new sqs.Queue(this, 'FeedFaviconQueue', {
+      queueName: resourceName(stage, 'feed-favicon'),
       visibilityTimeout: Duration.minutes(10),
       deadLetterQueue: { queue: faviconDlq, maxReceiveCount: 2 },
     });
 
     const fn = (name: string, options: { timeout: Duration; memorySize?: number }) => {
+      const functionName = resourceName(stage, name);
       const handler = new nodejs.NodejsFunction(this, `${name}Function`, {
+        functionName,
         entry: join(LAMBDA_DIR, `${name}.ts`),
         projectRoot: REPO_ROOT,
         depsLockFilePath: join(REPO_ROOT, 'pnpm-lock.yaml'),
@@ -78,7 +86,9 @@ export class AppStack extends Stack {
         memorySize: options.memorySize ?? 512,
         timeout: options.timeout,
         logGroup: new logs.LogGroup(this, `${name}Logs`, {
+          logGroupName: `/aws/lambda/${functionName}`,
           retention: logs.RetentionDays.ONE_MONTH,
+          removalPolicy: stage.retainData ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
         }),
         environment: {
           DB_HOST: cluster.clusterEndpoint.hostname,
@@ -127,12 +137,14 @@ export class AppStack extends Stack {
     api.addEnvironment('TRUST_PROXY', '1');
     this.originHeader.grantRead(api);
     this.api = new apigw.HttpApi(this, 'HttpApi', {
+      apiName: resourceName(stage),
       defaultIntegration: new HttpLambdaIntegration('Api', api),
     });
 
     const tick = fn('tick', { timeout: Duration.minutes(5) });
     const tickSchedule = (name: string, expression: string, task: string) =>
       new scheduler.Schedule(this, `${name}Schedule`, {
+        scheduleName: resourceName(stage, task.replace('.', '-')),
         schedule: scheduler.ScheduleExpression.expression(expression),
         target: new targets.LambdaInvoke(tick, {
           input: scheduler.ScheduleTargetInput.fromObject({ task }),

@@ -1,9 +1,15 @@
-import { Stack, type StackProps } from 'aws-cdk-lib';
+import { Stack, type StackProps, Tags } from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import { PipelineType } from 'aws-cdk-lib/aws-codepipeline';
 import * as pipelines from 'aws-cdk-lib/pipelines';
 import type { Construct } from 'constructs';
-import { GITHUB_CONNECTION_ARN, GITHUB_REPO, type StageConfig } from './config.ts';
+import {
+  GITHUB_CONNECTION_ARN,
+  GITHUB_REPO,
+  PROJECT,
+  resourceName,
+  type StageConfig,
+} from './config.ts';
 import { RssReaderStage } from './stage.ts';
 
 const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0;
@@ -24,8 +30,11 @@ export class PipelineStack extends Stack {
     super(scope, id, props);
     const { stage } = props;
 
+    Tags.of(this).add('project', PROJECT);
+    Tags.of(this).add('stage', stage.name);
+
     const pipeline = new pipelines.CodePipeline(this, 'Pipeline', {
-      pipelineName: `rss-reader-${stage.name}`,
+      pipelineName: resourceName(stage),
       pipelineType: PipelineType.V2,
       crossAccountKeys: false,
       synth: new pipelines.CodeBuildStep('Synth', {
@@ -58,7 +67,7 @@ export class PipelineStack extends Stack {
     });
 
     pipeline.addStage(
-      new RssReaderStage(this, stage.name === 'dev' ? 'Dev' : 'Prod', {
+      new RssReaderStage(this, resourceName(stage), {
         stage,
         webDir: props.webDir,
       }),
