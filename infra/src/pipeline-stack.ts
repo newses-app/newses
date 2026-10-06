@@ -1,6 +1,7 @@
-import { Stack, type StackProps, Tags } from 'aws-cdk-lib';
+import { RemovalPolicy, Stack, type StackProps, Tags } from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import { PipelineType } from 'aws-cdk-lib/aws-codepipeline';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as pipelines from 'aws-cdk-lib/pipelines';
 import type { Construct } from 'constructs';
 import {
@@ -33,8 +34,18 @@ export class PipelineStack extends Stack {
     Tags.of(this).add('project', PROJECT);
     Tags.of(this).add('stage', stage.name);
 
+    // Every build project logs here; otherwise CodeBuild creates a never-expiring group per
+    // project, and asset projects are recreated with new names.
+    const buildLogs = new logs.LogGroup(this, 'BuildLogs', {
+      logGroupName: `/aws/codebuild/${resourceName(stage, 'pipeline')}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+
     const pipeline = new pipelines.CodePipeline(this, 'Pipeline', {
       pipelineName: resourceName(stage),
+      // One project publishes every file asset, instead of one project per asset.
+      publishAssetsInParallel: false,
       pipelineType: PipelineType.V2,
       crossAccountKeys: false,
       synth: new pipelines.CodeBuildStep('Synth', {
@@ -63,7 +74,10 @@ export class PipelineStack extends Stack {
         ],
         primaryOutputDirectory: 'infra/cdk.out',
       }),
-      codeBuildDefaults: { buildEnvironment: { buildImage: ARM_BUILD_IMAGE } },
+      codeBuildDefaults: {
+        buildEnvironment: { buildImage: ARM_BUILD_IMAGE },
+        logging: { cloudWatch: { logGroup: buildLogs } },
+      },
     });
 
     pipeline.addStage(

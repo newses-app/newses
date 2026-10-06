@@ -1,9 +1,10 @@
-import { Stage, type StageProps, Tags } from 'aws-cdk-lib';
+import { Aspects, Stage, type StageProps, Tags } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import { AppStack } from './app-stack.ts';
 import { ACCOUNT, PROJECT, REGION, resourceName, type StageConfig } from './config.ts';
 import { DataStack } from './data-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
+import { ManagedLogGroups } from './managed-log-groups.ts';
 import { ParamsStack } from './params-stack.ts';
 
 export interface RssReaderStageProps extends StageProps {
@@ -25,6 +26,7 @@ export class RssReaderStage extends Stage {
     const env = { account: ACCOUNT, region: REGION };
     Tags.of(this).add('project', PROJECT);
     Tags.of(this).add('stage', stage.name);
+    Aspects.of(this).add(new ManagedLogGroups());
 
     this.params = new ParamsStack(this, 'Params', {
       env,

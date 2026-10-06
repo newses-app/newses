@@ -71,6 +71,16 @@ describe('RssReaderStage', () => {
     edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'rss-reader-dev-spa-routes' });
   });
 
+  it('gives every Lambda function a log group the stack owns', () => {
+    for (const template of [data, app, edge]) {
+      for (const fn of Object.values(template.findResources('AWS::Lambda::Function'))) {
+        expect(fn).toMatchObject({
+          Properties: { LoggingConfig: { LogGroup: expect.anything() as unknown } },
+        });
+      }
+    }
+  });
+
   it('keeps every stack in one region, so pipelines need no cross-region support stacks', () => {
     const regions = stage.node
       .findAll()
@@ -166,21 +176,39 @@ describe('PipelineStack', () => {
         }),
       ]),
     });
-    const buildSpecs = Object.values(template.findResources('AWS::CodeBuild::Project')).map(
-      (project) =>
-        JSON.parse(
+    // Inline buildspecs are JSON; the asset publishing project names a buildspec file instead.
+    const buildSpecs = Object.values(template.findResources('AWS::CodeBuild::Project'))
+      .map(
+        (project) =>
           (project as { Properties: { Source: { BuildSpec: string } } }).Properties.Source
             .BuildSpec,
-        ) as {
-          phases: {
-            install?: { 'runtime-versions'?: Record<string, unknown>; commands?: string[] };
-          };
-        },
-    );
+      )
+      .filter((spec) => spec.startsWith('{'))
+      .map(
+        (spec) =>
+          JSON.parse(spec) as {
+            phases: {
+              install?: { 'runtime-versions'?: Record<string, unknown>; commands?: string[] };
+            };
+          },
+      );
     const synth = buildSpecs.find((spec) =>
       spec.phases.install?.commands?.includes('corepack enable'),
     );
     expect(synth?.phases.install?.['runtime-versions']).toEqual({ nodejs: 24 });
+    // All build projects log to the pipeline's own expiring group.
+    for (const project of Object.values(template.findResources('AWS::CodeBuild::Project'))) {
+      expect(project).toMatchObject({
+        Properties: {
+          LogsConfig: { CloudWatchLogs: { GroupName: expect.anything() as unknown } },
+        },
+      });
+    }
+    template.resourcePropertiesCountIs(
+      'AWS::CodeBuild::Project',
+      { Description: Match.stringLikeRegexp('FileAsset') },
+      1,
+    );
     const stackNames = root.node
       .findAll()
       .filter((c): c is Stack => Stack.isStack(c))
