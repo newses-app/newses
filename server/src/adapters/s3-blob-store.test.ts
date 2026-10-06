@@ -8,15 +8,17 @@ let container: StartedTestContainer;
 let store: S3BlobStore;
 
 beforeAll(async () => {
-  container = await new GenericContainer('adobe/s3mock:5.2')
-    .withExposedPorts(9090)
-    .withWaitStrategy(Wait.forHttp('/', 9090))
+  // Not from Docker Hub, whose anonymous pull limit shared CI hosts exhaust.
+  container = await new GenericContainer('ghcr.io/versity/versitygw:v1.8.0')
+    .withCommand(['--access', 'test', '--secret', 'test-secret', 'posix', '/tmp'])
+    .withExposedPorts(7070)
+    .withWaitStrategy(Wait.forListeningPorts())
     .start();
   const client = new S3Client({
-    endpoint: `http://${container.getHost()}:${String(container.getMappedPort(9090))}`,
+    endpoint: `http://${container.getHost()}:${String(container.getMappedPort(7070))}`,
     region: 'us-east-1',
     forcePathStyle: true,
-    credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+    credentials: { accessKeyId: 'test', secretAccessKey: 'test-secret' },
   });
   await client.send(new CreateBucketCommand({ Bucket: 'blobs' }));
   store = new S3BlobStore('blobs', client);
