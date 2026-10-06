@@ -14,6 +14,8 @@ const prefsShape = {
   showContentPreview: z.boolean(),
   hideReadFeeds: z.boolean(),
   confirmCatchUp: z.boolean(),
+  /** Single-key shortcuts; off for users whose assistive technology sends key presses. */
+  keyboardShortcuts: z.boolean(),
   /** Unread entries published within this many hours are Fresh. */
   freshMaxAgeHours: z.number().int().min(1).max(720),
   /** Default for this user's subscriptions; null uses the server default. */

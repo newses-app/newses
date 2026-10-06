@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { SHORTCUT_GROUPS } from '../../lib/shortcuts.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -21,11 +22,12 @@ watch(
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown);
 });
+const restoreFocus = useReturnFocus(() => ui.helpOpen);
 const keys = (sequence: string) => sequence.split(' ').map((key) => KEY_NAMES[key] ?? key);
 </script>
 
 <template>
-  <v-dialog v-model="ui.helpOpen" max-width="760" scrollable>
+  <v-dialog v-model="ui.helpOpen" max-width="760" scrollable @after-leave="restoreFocus">
     <v-card :title="t('shortcuts.title')">
       <v-card-text>
         <v-row>

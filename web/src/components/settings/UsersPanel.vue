@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
+import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
@@ -33,6 +34,7 @@ function update(user: User, changes: { role?: 'admin' | 'user'; disabled?: boole
 }
 
 const creating = ref<{ login: string; password: string; admin: boolean } | null>(null);
+const restoreCreateFocus = useReturnFocus(() => creating.value !== null);
 async function create() {
   const value = creating.value;
   if (!value) return;
@@ -49,6 +51,7 @@ async function create() {
 }
 
 const resetting = ref<{ user: User; password: string } | null>(null);
+const restoreResetFocus = useReturnFocus(() => resetting.value !== null);
 async function resetPassword() {
   const value = resetting.value;
   if (!value) return;
@@ -105,7 +108,7 @@ async function remove(user: User) {
           <td>
             <v-checkbox-btn
               :model-value="user.role === 'admin'"
-              :aria-label="t('users.admin')"
+              :aria-label="t('users.adminFor', { login: user.login })"
               @update:model-value="(v) => update(user, { role: v ? 'admin' : 'user' })"
             />
           </td>
@@ -113,7 +116,7 @@ async function remove(user: User) {
             <v-checkbox-btn
               :model-value="!user.disabled"
               :disabled="user.id === session?.user.id"
-              :aria-label="t('users.enabled')"
+              :aria-label="t('users.enabledFor', { login: user.login })"
               @update:model-value="(v) => update(user, { disabled: !v })"
             />
           </td>
@@ -124,14 +127,14 @@ async function remove(user: User) {
             <v-btn
               :icon="mdiLockReset"
               size="small"
-              :aria-label="t('users.resetPassword')"
+              :aria-label="t('users.resetPasswordFor', { login: user.login })"
               @click="resetting = { user, password: '' }"
             />
             <v-btn
               :icon="mdiDelete"
               size="small"
               :disabled="user.id === session?.user.id"
-              :aria-label="t('users.delete')"
+              :aria-label="t('users.deleteNamed', { login: user.login })"
               @click="remove(user)"
             />
           </td>
@@ -143,6 +146,7 @@ async function remove(user: User) {
       :model-value="creating !== null"
       max-width="420"
       @update:model-value="(v) => !v && (creating = null)"
+      @after-leave="restoreCreateFocus"
     >
       <v-card v-if="creating" :title="t('users.create')">
         <v-form @submit.prevent="create">
@@ -182,6 +186,7 @@ async function remove(user: User) {
       :model-value="resetting !== null"
       max-width="420"
       @update:model-value="(v) => !v && (resetting = null)"
+      @after-leave="restoreResetFocus"
     >
       <v-card
         v-if="resetting"

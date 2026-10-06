@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { watchEffect } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
@@ -13,6 +14,7 @@ import { useShortcutListener } from '../composables/useShortcuts.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { useUiStore } from '../stores/ui.ts';
 
+const { t } = useI18n();
 const ui = useUiStore();
 const router = useRouter();
 const theme = useTheme();
@@ -23,6 +25,10 @@ watchEffect(() => {
 });
 
 useLiveCounters();
+
+function skipToMain() {
+  document.getElementById('main')?.focus();
+}
 
 const GOTO: Partial<Record<ShortcutAction, string>> = {
   gotoAll: '/all',
@@ -56,6 +62,7 @@ useShortcutListener((action) => {
 </script>
 
 <template>
+  <a href="#main" class="skip-link" @click.prevent="skipToMain">{{ t('nav.skipToContent') }}</a>
   <v-navigation-drawer v-model="ui.drawer" width="300">
     <FeedTree />
   </v-navigation-drawer>

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '../../api.ts';
 import { useCategories, useFeedsRefresh } from '../../composables/useFeeds.ts';
+import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { subscriptionKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -20,6 +21,7 @@ const candidates = ref<FeedCandidate[]>([]);
 const chosen = ref<string | null>(null);
 const busy = ref(false);
 const error = ref<string | null>(null);
+const restoreFocus = useReturnFocus(() => ui.subscribeOpen);
 
 watch(
   () => ui.subscribeOpen,
@@ -57,7 +59,7 @@ async function submit() {
 </script>
 
 <template>
-  <v-dialog v-model="ui.subscribeOpen" max-width="520">
+  <v-dialog v-model="ui.subscribeOpen" max-width="520" @after-leave="restoreFocus">
     <v-card :title="t('subscribe.title')">
       <v-form @submit.prevent="submit">
         <v-card-text>
@@ -81,8 +83,7 @@ async function submit() {
             ]"
           />
           <template v-if="candidates.length > 0">
-            <p class="text-body-medium mb-2">{{ t('subscribe.choose') }}</p>
-            <v-radio-group v-model="chosen" hide-details>
+            <v-radio-group v-model="chosen" :label="t('subscribe.choose')" hide-details>
               <v-radio
                 v-for="candidate in candidates"
                 :key="candidate.url"

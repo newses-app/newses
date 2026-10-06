@@ -3,12 +3,14 @@ import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api.ts';
+import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSession } from '../composables/useSession.ts';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { login } = useSession();
+useDocumentTitle(() => t('login.submit'));
 
 const name = ref('');
 const password = ref('');
@@ -47,7 +49,7 @@ async function submit() {
         <v-card-item>
           <div class="d-flex align-center ga-3">
             <img src="/favicon.svg" alt="" width="40" height="40" />
-            <v-card-title class="pa-0">{{ t('app.name') }}</v-card-title>
+            <v-card-title tag="h1" class="pa-0">{{ t('app.name') }}</v-card-title>
           </div>
         </v-card-item>
         <v-form @submit.prevent="submit">

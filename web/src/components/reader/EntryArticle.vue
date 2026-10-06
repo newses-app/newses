@@ -14,7 +14,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatDateTime } from '../../lib/format.ts';
 
-const props = defineProps<{ entry: Entry; heading?: 'h1' | 'h2' }>();
+const props = defineProps<{ entry: Entry }>();
 const emit = defineEmits<{ change: [state: EntryState]; select: [] }>();
 const { t, locale } = useI18n();
 
@@ -27,7 +27,7 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
 <template>
   <article class="entry-article">
     <header class="mb-4">
-      <component :is="heading ?? 'h1'" class="text-headline-small mb-1">
+      <h2 class="entry-heading text-headline-small mb-1" tabindex="-1">
         <a
           v-if="entry.link"
           :href="entry.link"
@@ -38,7 +38,7 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
           >{{ title }}</a
         >
         <span v-else>{{ title }}</span>
-      </component>
+      </h2>
       <div class="text-body-medium text-medium-emphasis">
         <span v-if="entry.feedTitle">{{ entry.feedTitle }}</span>
         <span v-if="entry.author"> · {{ entry.author }}</span>
@@ -50,7 +50,7 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
         <v-btn
           size="small"
           :prepend-icon="entry.starred ? mdiStar : mdiStarOutline"
-          :color="entry.starred ? 'amber-darken-2' : undefined"
+          :color="entry.starred ? 'star' : undefined"
           :aria-pressed="entry.starred"
           @click="emit('change', { starred: !entry.starred })"
         >
@@ -109,7 +109,11 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
   color: inherit;
   text-decoration: none;
 }
-.entry-title:hover {
+.entry-title:hover,
+.entry-title:focus-visible {
   text-decoration: underline;
+}
+.entry-heading:focus {
+  outline: none;
 }
 </style>

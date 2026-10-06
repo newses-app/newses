@@ -82,17 +82,22 @@ onBeforeUnmount(() => {
       :key="entry.id"
       :data-entry="entry.id"
       :variant="entry.id === selectedId ? 'outlined' : 'flat'"
-      :class="{ 'opacity-70': !entry.unread && entry.id !== selectedId }"
+      :class="{ read: !entry.unread && entry.id !== selectedId }"
       class="combined-card mb-4 pa-4 mx-auto"
       @click="emit('select', entry)"
     >
-      <EntryArticle :entry="entry" heading="h2" @change="(state) => emit('change', entry, state)" />
+      <EntryArticle :entry="entry" @change="(state) => emit('change', entry, state)" />
     </v-card>
     <p v-if="entries.length === 0 && !loading" class="pa-6 text-medium-emphasis">
       {{ t('entries.empty') }}
     </p>
     <div ref="sentinel" class="pa-2 d-flex justify-center">
-      <v-progress-circular v-if="loading" indeterminate size="24" />
+      <v-progress-circular
+        v-if="loading"
+        indeterminate
+        size="24"
+        :aria-label="t('common.loading')"
+      />
     </div>
   </div>
 </template>
@@ -100,5 +105,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .combined-card {
   max-width: 50rem;
+}
+/* Read entries dim their heading only, which keeps every text above AA contrast. */
+.combined-card.read :deep(.entry-heading) {
+  opacity: 0.75;
 }
 </style>

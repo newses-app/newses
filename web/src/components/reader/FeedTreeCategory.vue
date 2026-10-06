@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import type { CategoryNode } from '../../lib/tree.ts';
 import FeedTreeFeed from './FeedTreeFeed.vue';
 import { TREE_CONTEXT } from './tree-context.ts';
+import UnreadCount from './UnreadCount.vue';
 
 const props = defineProps<{ node: CategoryNode; depth: number }>();
 const { t } = useI18n();
@@ -46,36 +47,42 @@ function onDrop() {
 </script>
 
 <template>
-  <v-list-item
-    :to="`/${node.key}`"
-    :active="current === node.key"
-    draggable="true"
-    :class="{ 'drop-before': drop === 'before', 'drop-into': drop === 'into' }"
-    :style="{ paddingInlineStart: `${4 + depth * 16}px` }"
-    @dragstart="onDragStart"
-    @dragend="dragged = null"
-    @dragover="onDragOver"
-    @dragleave="drop = null"
-    @drop.prevent="onDrop"
-  >
-    <template #prepend>
-      <v-btn
-        :icon="collapsed ? mdiChevronRight : mdiChevronDown"
-        size="x-small"
-        density="comfortable"
-        :aria-label="collapsed ? t('tree.expand') : t('tree.collapse')"
-        :aria-expanded="!collapsed"
-        @click.prevent.stop="editing.setCollapsed(node.category.id, !collapsed)"
-      />
-      <v-icon :icon="collapsed ? mdiFolder : mdiFolderOpen" size="small" class="me-2" />
-    </template>
-    <v-list-item-title>{{ node.category.title }}</v-list-item-title>
-    <template v-if="node.unread > 0" #append>
-      <span class="text-label-medium" :aria-label="t('tree.unread', { n: node.unread })">
-        {{ node.unread }}
-      </span>
-    </template>
-  </v-list-item>
+  <!-- The collapse button sits beside the link, not inside it. -->
+  <div role="listitem" class="category-row">
+    <v-list-item
+      :to="`/${node.key}`"
+      :active="current === node.key"
+      draggable="true"
+      :class="{ 'drop-before': drop === 'before', 'drop-into': drop === 'into' }"
+      :style="{ paddingInlineStart: `${4 + depth * 16}px` }"
+      @dragstart="onDragStart"
+      @dragend="dragged = null"
+      @dragover="onDragOver"
+      @dragleave="drop = null"
+      @drop.prevent="onDrop"
+    >
+      <template #prepend>
+        <span class="toggle-space" />
+        <v-icon :icon="collapsed ? mdiFolder : mdiFolderOpen" size="small" class="me-2" />
+      </template>
+      <v-list-item-title>{{ node.category.title }}</v-list-item-title>
+      <template v-if="node.unread > 0" #append>
+        <UnreadCount :n="node.unread" />
+      </template>
+    </v-list-item>
+    <v-btn
+      :icon="collapsed ? mdiChevronRight : mdiChevronDown"
+      size="x-small"
+      density="comfortable"
+      class="toggle"
+      :style="{ insetInlineStart: `${4 + depth * 16}px` }"
+      :aria-label="
+        t(collapsed ? 'tree.expandNamed' : 'tree.collapseNamed', { category: node.category.title })
+      "
+      :aria-expanded="!collapsed"
+      @click="editing.setCollapsed(node.category.id, !collapsed)"
+    />
+  </div>
   <template v-if="!collapsed">
     <FeedTreeCategory
       v-for="child in node.children"
@@ -88,6 +95,18 @@ function onDrop() {
 </template>
 
 <style scoped>
+.category-row {
+  position: relative;
+}
+.toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.toggle-space {
+  display: inline-block;
+  width: 32px;
+}
 .drop-before {
   box-shadow: inset 0 2px 0 rgb(var(--v-theme-primary));
 }

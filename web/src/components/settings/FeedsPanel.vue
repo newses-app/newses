@@ -15,7 +15,10 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
+import { useReturnFocus } from '../../composables/useReturnFocus.ts';
+import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatRelative } from '../../lib/format.ts';
+import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
@@ -23,6 +26,7 @@ const ui = useUiStore();
 const subscriptions = useSubscriptions();
 const categories = useCategories();
 const refreshFeeds = useFeedsRefresh();
+const tree = useTreeEditing();
 
 const errorsOnly = ref(false);
 const categoryName = (id: number | null) =>
@@ -53,10 +57,38 @@ function refreshFeed(id: number) {
   void run(() => api.subscriptions.refresh(id), t('feeds.refreshRequested'));
 }
 
-// Category create/rename dialog.
-const editing = ref<{ category: Category | null; title: string; parentId: number | null } | null>(
-  null,
+// Category create/edit dialog; `after` is the sibling it follows, or null for first.
+const editing = ref<{
+  category: Category | null;
+  title: string;
+  parentId: number | null;
+  after: number | null;
+} | null>(null);
+const restoreFocus = useReturnFocus(() => editing.value !== null);
+const childrenOf = (parentId: number | null) =>
+  (categories.data.value ?? []).filter((c) => c.parentId === parentId).sort(byDisplayOrder);
+const siblings = computed(() =>
+  editing.value
+    ? childrenOf(editing.value.parentId).filter((c) => c.id !== editing.value?.category?.id)
+    : [],
 );
+const positionItems = computed(() => [
+  { title: t('common.first'), value: null },
+  ...siblings.value.map((c) => ({ title: t('common.after', { name: c.title }), value: c.id })),
+]);
+function newCategory() {
+  editing.value = { category: null, title: '', parentId: null, after: null };
+}
+function editCategory(category: Category) {
+  const after = precedingId(childrenOf(category.parentId), category.id);
+  editing.value = { category, title: category.title, parentId: category.parentId, after };
+}
+/** A category moved under another parent goes last unless a position is chosen. */
+function changeParent(parentId: number | null) {
+  if (!editing.value) return;
+  editing.value.parentId = parentId;
+  editing.value.after = siblings.value.at(-1)?.id ?? null;
+}
 const parentItems = computed(() => [
   { title: t('settings.topLevel'), value: null },
   ...(categories.data.value ?? [])
@@ -66,15 +98,20 @@ const parentItems = computed(() => [
 function saveCategory() {
   const value = editing.value;
   if (!value?.title.trim()) return;
+  const { category } = value;
+  const beforeId = beforeIdAfter(siblings.value, value.after);
   editing.value = null;
-  void run(() =>
-    value.category
-      ? api.categories.update(value.category.id, {
-          title: value.title.trim(),
-          parentId: value.parentId,
-        })
-      : api.categories.create({ title: value.title.trim(), parentId: value.parentId }),
-  );
+  if (!category) {
+    void run(() => api.categories.create({ title: value.title.trim(), parentId: value.parentId }));
+    return;
+  }
+  const moved =
+    value.parentId !== category.parentId ||
+    value.after !== precedingId(childrenOf(category.parentId), category.id);
+  void run(async () => {
+    await api.categories.update(category.id, { title: value.title.trim() });
+    if (moved) await tree.moveCategory(category.id, value.parentId, beforeId);
+  });
 }
 async function deleteCategory(category: Category) {
   if (
@@ -124,11 +161,7 @@ async function importOpml(event: Event) {
       >
         {{ t('feeds.subscribe') }}
       </v-btn>
-      <v-btn
-        variant="tonal"
-        :prepend-icon="mdiFolderPlusOutline"
-        @click="editing = { category: null, title: '', parentId: null }"
-      >
+      <v-btn variant="tonal" :prepend-icon="mdiFolderPlusOutline" @click="newCategory">
         {{ t('settings.newCategory') }}
       </v-btn>
       <v-btn
@@ -178,13 +211,13 @@ async function importOpml(event: Event) {
           <v-btn
             :icon="mdiPencil"
             size="small"
-            :aria-label="t('settings.renameCategory')"
-            @click="editing = { category, title: category.title, parentId: category.parentId }"
+            :aria-label="t('settings.renameCategoryNamed', { category: category.title })"
+            @click="editCategory(category)"
           />
           <v-btn
             :icon="mdiDelete"
             size="small"
-            :aria-label="t('settings.deleteCategory')"
+            :aria-label="t('settings.deleteCategoryNamed', { category: category.title })"
             @click="deleteCategory(category)"
           />
         </template>
@@ -244,13 +277,13 @@ async function importOpml(event: Event) {
             <v-btn
               :icon="mdiRefresh"
               size="small"
-              :aria-label="t('feeds.refresh')"
+              :aria-label="t('feeds.refreshNamed', { feed: s.title })"
               @click="refreshFeed(s.id)"
             />
             <v-btn
               :icon="mdiPencil"
               size="small"
-              :aria-label="t('feeds.edit')"
+              :aria-label="t('feeds.editNamed', { feed: s.title })"
               @click="ui.editSubscriptionId = s.id"
             />
           </td>
@@ -267,6 +300,7 @@ async function importOpml(event: Event) {
       :model-value="editing !== null"
       max-width="440"
       @update:model-value="(v) => !v && (editing = null)"
+      @after-leave="restoreFocus"
     >
       <v-card
         v-if="editing"
@@ -276,9 +310,16 @@ async function importOpml(event: Event) {
           <v-card-text>
             <v-text-field v-model="editing.title" :label="t('settings.categoryName')" autofocus />
             <v-select
-              v-model="editing.parentId"
+              :model-value="editing.parentId"
               :items="parentItems"
               :label="t('settings.parentCategory')"
+              @update:model-value="changeParent"
+            />
+            <v-select
+              v-if="editing.category"
+              v-model="editing.after"
+              :items="positionItems"
+              :label="t('feeds.position')"
             />
           </v-card-text>
           <v-card-actions>

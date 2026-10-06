@@ -23,6 +23,7 @@ import { useUiStore } from '../../stores/ui.ts';
 import FeedTreeCategory from './FeedTreeCategory.vue';
 import FeedTreeFeed from './FeedTreeFeed.vue';
 import { TREE_CONTEXT } from './tree-context.ts';
+import UnreadCount from './UnreadCount.vue';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -87,25 +88,25 @@ function dropOnRoot() {
       class="tree flex-grow-1 overflow-y-auto"
       :aria-label="t('tree.label')"
     >
-      <v-list-item
-        v-for="item in special"
-        :key="item.key"
-        :to="`/${item.key}`"
-        :active="current === item.key"
-        :prepend-icon="item.icon"
-        :title="t(`special.${item.key}`)"
-      >
-        <template v-if="item.unread > 0" #append>
-          <span class="text-label-medium" :aria-label="t('tree.unread', { n: item.unread })">
-            {{ item.unread }}
-          </span>
-        </template>
-      </v-list-item>
-      <v-divider class="my-2" />
+      <!-- Vuetify gives link items role=link, so each sits in its own listitem. -->
+      <div v-for="item in special" :key="item.key" role="listitem">
+        <v-list-item
+          :to="`/${item.key}`"
+          :active="current === item.key"
+          :prepend-icon="item.icon"
+          :title="t(`special.${item.key}`)"
+        >
+          <template v-if="item.unread > 0" #append>
+            <UnreadCount :n="item.unread" />
+          </template>
+        </v-list-item>
+      </div>
+      <v-divider class="my-2" role="presentation" />
       <FeedTreeCategory v-for="node in tree.categories" :key="node.key" :node="node" :depth="0" />
       <FeedTreeFeed v-for="node in tree.feeds" :key="node.key" :node="node" :depth="0" />
       <div
         v-if="dragged"
+        role="listitem"
         class="drop-root text-body-small pa-2 ma-1"
         :class="{ over: rootOver }"
         @dragover.prevent="rootOver = true"
@@ -116,6 +117,7 @@ function dropOnRoot() {
       </div>
       <p
         v-if="subscriptions.isSuccess.value && subscriptions.data.value?.length === 0"
+        role="listitem"
         class="text-body-small pa-4 text-medium-emphasis"
       >
         {{ t('tree.empty') }}
@@ -123,8 +125,17 @@ function dropOnRoot() {
     </v-list>
     <v-divider />
     <v-list density="compact" nav>
-      <v-list-item :to="{ name: 'settings' }" :prepend-icon="mdiCog" :title="t('nav.settings')" />
-      <v-list-item :prepend-icon="mdiLogout" :title="t('nav.logout')" @click="logout" />
+      <div role="listitem">
+        <v-list-item :to="{ name: 'settings' }" :prepend-icon="mdiCog" :title="t('nav.settings')" />
+      </div>
+      <div role="listitem">
+        <v-list-item
+          role="button"
+          :prepend-icon="mdiLogout"
+          :title="t('nav.logout')"
+          @click="logout"
+        />
+      </div>
     </v-list>
   </div>
 </template>

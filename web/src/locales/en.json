@@ -1,13 +1,22 @@
 {
   "app": { "name": "rss-reader" },
-  "common": { "cancel": "Cancel", "close": "Close", "delete": "Delete", "save": "Save" },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "delete": "Delete",
+    "save": "Save",
+    "loading": "Loading",
+    "first": "First",
+    "after": "After {name}"
+  },
   "errors": { "generic": "Something went wrong. Please try again." },
   "nav": {
     "more": "More actions",
     "back": "Back to list",
     "logout": "Sign out",
     "menu": "Feeds",
-    "settings": "Settings"
+    "settings": "Settings",
+    "skipToContent": "Skip to content"
   },
   "login": {
     "name": "User name",
@@ -26,8 +35,8 @@
   "tree": {
     "label": "Feeds",
     "unread": "{n} unread",
-    "expand": "Expand category",
-    "collapse": "Collapse category",
+    "expandNamed": "Expand {category}",
+    "collapseNamed": "Collapse {category}",
     "uncategorised": "Uncategorised",
     "dropTopLevel": "Drop here to move to the top level",
     "empty": "No subscriptions yet."
@@ -46,7 +55,8 @@
     "unpublish": "Unpublish",
     "markRead": "Mark read",
     "markUnread": "Mark unread",
-    "openOriginal": "Open original"
+    "openOriginal": "Open original",
+    "unreadLabel": "Unread"
   },
   "search": { "label": "Search articles", "placeholder": "Search" },
   "view": {
@@ -93,7 +103,10 @@
     "unsubscribeConfirm": "Unsubscribe from “{feed}”? Starred and published articles are kept.",
     "lastFetched": "Last checked {when}.",
     "neverFetched": "Not checked yet.",
-    "disabled": "Updates stopped after repeated errors: {error}"
+    "disabled": "Updates stopped after repeated errors: {error}",
+    "editNamed": "Edit {feed}",
+    "refreshNamed": "Update {feed} now",
+    "position": "Position"
   },
   "time": {
     "minutes": "one minute | {n} minutes",
@@ -134,7 +147,7 @@
     "parentCategory": "Inside",
     "topLevel": "Top level",
     "inCategory": "In {category}",
-    "dragHint": "Drag feeds and categories in the sidebar to move or reorder them.",
+    "dragHint": "Drag feeds and categories in the sidebar, or set their category and position when editing them.",
     "subscriptions": "Subscriptions",
     "errorsOnly": "Only feeds with errors ({n})",
     "noErrors": "No feeds with errors.",
@@ -144,7 +157,10 @@
     "failing": "Failed once | Failed {n} times in a row",
     "importOpml": "Import OPML",
     "exportOpml": "Export OPML",
-    "opmlImported": "Imported: {subscribed} new, {existing} already subscribed, {invalid} invalid."
+    "opmlImported": "Imported: {subscribed} new, {existing} already subscribed, {invalid} invalid.",
+    "renameCategoryNamed": "Edit {category}",
+    "deleteCategoryNamed": "Delete {category}",
+    "keyboardShortcuts": "Single-key keyboard shortcuts"
   },
   "account": {
     "roles": { "admin": "Administrator", "user": "User" },
@@ -174,7 +190,10 @@
     "resetHint": "The user is signed out everywhere.",
     "passwordReset": "Password reset.",
     "delete": "Delete user",
-    "deleteConfirm": "Delete {login} and all their data?"
+    "deleteConfirm": "Delete {login} and all their data?",
+    "adminFor": "Administrator: {login}",
+    "enabledFor": "Enabled: {login}",
+    "deleteNamed": "Delete {login}"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

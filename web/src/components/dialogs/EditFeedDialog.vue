@@ -5,7 +5,10 @@ import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError } from '../../api.ts';
 import { useDurations } from '../../composables/useDurations.ts';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
+import { useReturnFocus } from '../../composables/useReturnFocus.ts';
+import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatDateTime } from '../../lib/format.ts';
+import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { subscriptionKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -16,6 +19,7 @@ const { t, locale } = useI18n();
 const subscriptions = useSubscriptions();
 const categories = useCategories();
 const refreshFeeds = useFeedsRefresh();
+const editing = useTreeEditing();
 
 const subscription = computed(() =>
   subscriptions.data.value?.find((s) => s.id === ui.editSubscriptionId),
@@ -26,12 +30,25 @@ const open = computed({
     if (!value) ui.editSubscriptionId = null;
   },
 });
+const restoreFocus = useReturnFocus(() => open.value);
 
 const title = ref('');
 const categoryId = ref<number | null>(null);
 const interval = ref<number | null>(null);
 const purgeDays = ref<number | null>(null);
 const busy = ref(false);
+/** The feed this one follows in its category, or null for first: the non-drag way to reorder. */
+const after = ref<number | null>(null);
+
+const inCategory = (id: number | null) =>
+  (subscriptions.data.value ?? []).filter((s) => s.categoryId === id).sort(byDisplayOrder);
+const siblings = computed(() =>
+  inCategory(categoryId.value).filter((s) => s.id !== subscription.value?.id),
+);
+const positionItems = computed(() => [
+  { title: t('common.first'), value: null },
+  ...siblings.value.map((s) => ({ title: t('common.after', { name: s.title }), value: s.id })),
+]);
 
 watch(subscription, (s) => {
   if (!s) return;
@@ -39,7 +56,14 @@ watch(subscription, (s) => {
   categoryId.value = s.categoryId;
   interval.value = s.updateIntervalMinutes;
   purgeDays.value = s.purgeDays;
+  after.value = precedingId(inCategory(s.categoryId), s.id);
 });
+
+/** A feed moved to another category goes last unless a position is chosen. */
+function changeCategory(id: number | null) {
+  categoryId.value = id;
+  after.value = siblings.value.at(-1)?.id ?? null;
+}
 
 const { intervalItems, purgeItems } = useDurations();
 
@@ -59,13 +83,17 @@ async function run(work: () => Promise<unknown>, done?: string) {
 function save() {
   const s = subscription.value;
   if (!s) return;
+  const moved =
+    categoryId.value !== s.categoryId ||
+    after.value !== precedingId(inCategory(s.categoryId), s.id);
   void run(async () => {
     await api.subscriptions.update(s.id, {
       title: title.value.trim() || null,
-      categoryId: categoryId.value,
       updateIntervalMinutes: interval.value,
       purgeDays: purgeDays.value,
     });
+    if (moved)
+      await editing.moveFeed(s.id, categoryId.value, beforeIdAfter(siblings.value, after.value));
     open.value = false;
   });
 }
@@ -93,7 +121,7 @@ async function unsubscribe() {
 </script>
 
 <template>
-  <v-dialog v-model="open" max-width="560">
+  <v-dialog v-model="open" max-width="560" @after-leave="restoreFocus">
     <v-card v-if="subscription" :title="t('feeds.edit')" :subtitle="subscription.url">
       <v-form @submit.prevent="save">
         <v-card-text>
@@ -103,13 +131,15 @@ async function unsubscribe() {
             :placeholder="subscription.title"
           />
           <v-select
-            v-model="categoryId"
+            :model-value="categoryId"
             :label="t('feeds.category')"
             :items="[
               { title: t('tree.uncategorised'), value: null },
               ...(categories.data.value ?? []).map((c) => ({ title: c.title, value: c.id })),
             ]"
+            @update:model-value="changeCategory"
           />
+          <v-select v-model="after" :label="t('feeds.position')" :items="positionItems" />
           <v-select v-model="interval" :label="t('feeds.interval')" :items="intervalItems" />
           <v-select v-model="purgeDays" :label="t('feeds.purge')" :items="purgeItems" />
           <p class="text-body-small text-medium-emphasis">

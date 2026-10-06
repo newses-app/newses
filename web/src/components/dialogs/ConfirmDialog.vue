@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
@@ -11,10 +12,11 @@ const open = computed({
     if (!value) ui.confirmRequest?.resolve(false);
   },
 });
+const restoreFocus = useReturnFocus(() => open.value);
 </script>
 
 <template>
-  <v-dialog v-model="open" max-width="420">
+  <v-dialog v-model="open" max-width="420" @after-leave="restoreFocus">
     <v-card
       v-if="ui.confirmRequest"
       :title="ui.confirmRequest.title"

@@ -2,14 +2,11 @@ import type { Category, Subscription } from '@rss-reader/shared';
 import { useQueryClient } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api.ts';
-import { reorder } from '../lib/reorder.ts';
+import { byDisplayOrder, reorder } from '../lib/reorder.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY, useFeedsRefresh } from './useFeeds.ts';
 
 export type Dragged = { kind: 'feed' | 'category'; id: number };
-
-const byDisplayOrder = <T extends { sortOrder: number; title: string }>(a: T, b: T) =>
-  a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
 
 /** Moves and reorders feeds and categories, and persists collapsed state. */
 export function useTreeEditing() {

@@ -143,7 +143,7 @@
 | Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
 | Privacy | No telemetry or third-party calls beyond feed, icon, and article fetches |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
-| Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls |
+| Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls; single-key shortcuts can be turned off; every drag action has a non-drag alternative |
 | Internationalisation | All UI strings externalised; English shipped |
 | Reliability | Worker restarts resume pending jobs; no entry loss on crash mid-ingest |
 | Portability | One core runs under Docker Compose and AWS Lambda; only adapters and entrypoints differ |

@@ -6,6 +6,7 @@ import AccountPanel from '../components/settings/AccountPanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
 import PrefsPanel from '../components/settings/PrefsPanel.vue';
 import UsersPanel from '../components/settings/UsersPanel.vue';
+import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSession } from '../composables/useSession.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -24,6 +25,7 @@ const tabs = computed(() => [
 const tab = computed(
   () => (typeof route.params.tab === 'string' && route.params.tab) || 'preferences',
 );
+useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings')}`);
 </script>
 
 <template>
@@ -31,7 +33,7 @@ const tab = computed(
     <template #prepend>
       <v-app-bar-nav-icon :aria-label="t('nav.menu')" @click="ui.drawer = !ui.drawer" />
     </template>
-    <v-app-bar-title>{{ t('nav.settings') }}</v-app-bar-title>
+    <v-app-bar-title tag="h1">{{ t('nav.settings') }}</v-app-bar-title>
     <template #extension>
       <v-tabs :model-value="tab" color="primary">
         <v-tab
@@ -45,7 +47,7 @@ const tab = computed(
       </v-tabs>
     </template>
   </v-app-bar>
-  <v-main>
+  <v-main id="main" tabindex="-1">
     <v-container class="settings-container">
       <PrefsPanel v-if="tab === 'preferences'" />
       <FeedsPanel v-else-if="tab === 'feeds'" />

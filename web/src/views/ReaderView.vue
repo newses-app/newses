@@ -22,6 +22,7 @@ import ArticlePane from '../components/reader/ArticlePane.vue';
 import CombinedList from '../components/reader/CombinedList.vue';
 import HeadlineList from '../components/reader/HeadlineList.vue';
 import { useCounters } from '../composables/useCounters.ts';
+import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { ENTRIES_KEY, useEntry, useEntryActions, useEntryList } from '../composables/useEntries.ts';
 import { useCategories, useSubscriptions } from '../composables/useFeeds.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
@@ -107,6 +108,12 @@ const unread = computed(() => {
   return 0;
 });
 
+useDocumentTitle(() =>
+  entryId.value !== null && current.value?.title
+    ? `${current.value.title} – ${title.value}`
+    : title.value,
+);
+
 function notifyError(error: unknown) {
   ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
 }
@@ -138,8 +145,37 @@ function open(entry: Entry | undefined, replace = false) {
   void (replace ? router.replace(to) : router.push(to));
 }
 
-function closeArticle() {
-  void router.push({ name: 'reader', params: { stream: streamKey.value }, query: route.query });
+// Opening an article from the list moves focus to its heading, so keyboard and screen-reader users
+// land on it; shortcuts leave focus where it is.
+let focusOnOpen: number | null = null;
+function focusHeading() {
+  void nextTick(() =>
+    document
+      .querySelector<HTMLElement>('.article-pane .entry-heading')
+      ?.focus({ preventScroll: true }),
+  );
+}
+function openedFromList(entry: Entry) {
+  if (entry.id === entryId.value) focusHeading();
+  else focusOnOpen = entry.id;
+}
+watch(
+  () => current.value?.id,
+  (id) => {
+    if (id === undefined || id !== focusOnOpen) return;
+    focusOnOpen = null;
+    focusHeading();
+  },
+);
+
+async function closeArticle() {
+  const id = entryId.value;
+  await router.push({ name: 'reader', params: { stream: streamKey.value }, query: route.query });
+  // On phones the list comes back: focus returns to the article's headline.
+  if (singlePane.value && id !== null) {
+    await nextTick();
+    document.querySelector<HTMLElement>(`[data-entry="${String(id)}"] a`)?.focus();
+  }
 }
 
 async function step(delta: 1 | -1) {
@@ -274,7 +310,7 @@ useShortcutHandler((action: ShortcutAction) => {
       if (entry?.link) window.open(entry.link, '_blank', 'noopener,noreferrer');
       return true;
     case 'closeArticle':
-      if (entryId.value !== null) closeArticle();
+      if (entryId.value !== null) void closeArticle();
       return true;
     case 'search':
       void openSearch();
@@ -322,7 +358,7 @@ const showArticle = computed(
       />
       <v-app-bar-nav-icon v-else :aria-label="t('nav.menu')" @click="ui.drawer = !ui.drawer" />
     </template>
-    <v-app-bar-title v-if="!compact || !searchOpen">
+    <v-app-bar-title v-if="!compact || !searchOpen" tag="h1">
       {{ title }}
       <span v-if="unread > 0" class="text-body-medium text-medium-emphasis ms-1"
         >({{ unread }})</span
@@ -413,11 +449,12 @@ const showArticle = computed(
           :title="t('catchUp.title')"
         />
       </template>
-      <v-list density="compact">
-        <v-list-item :title="t('catchUp.all')" @click="catchUp()" />
+      <v-list density="compact" role="menu">
+        <v-list-item role="menuitem" :title="t('catchUp.all')" @click="catchUp()" />
         <v-list-item
           v-for="days in [1, 7, 14]"
           :key="days"
+          role="menuitem"
           :title="t('catchUp.olderThan', { n: days }, days)"
           @click="catchUp(days)"
         />
@@ -442,33 +479,41 @@ const showArticle = computed(
       <template #activator="{ props: menu }">
         <v-btn v-bind="menu" :icon="mdiDotsVertical" :aria-label="t('nav.more')" />
       </template>
-      <v-list density="compact">
-        <v-list-subheader>{{ t('view.label') }}</v-list-subheader>
-        <v-list-item
-          v-for="mode in VIEW_MODES"
-          :key="mode"
-          :title="t(`view.${mode}`)"
-          :active="prefs.viewMode === mode"
-          @click="update({ viewMode: mode })"
-        />
-        <template v-if="q === null">
-          <v-list-subheader>{{ t('order.label') }}</v-list-subheader>
+      <v-list density="compact" role="menu">
+        <div role="group" :aria-label="t('view.label')">
+          <v-list-subheader aria-hidden="true">{{ t('view.label') }}</v-list-subheader>
+          <v-list-item
+            v-for="mode in VIEW_MODES"
+            :key="mode"
+            role="menuitemradio"
+            :aria-checked="prefs.viewMode === mode"
+            :title="t(`view.${mode}`)"
+            :active="prefs.viewMode === mode"
+            @click="update({ viewMode: mode })"
+          />
+        </div>
+        <div v-if="q === null" role="group" :aria-label="t('order.label')">
+          <v-list-subheader aria-hidden="true">{{ t('order.label') }}</v-list-subheader>
           <v-list-item
             v-for="order in ORDERS"
             :key="order"
+            role="menuitemradio"
+            :aria-checked="prefs.sortOrder === order"
             :title="t(`order.${order}`)"
             :active="prefs.sortOrder === order"
             @click="update({ sortOrder: order })"
           />
-        </template>
+        </div>
         <v-divider class="my-1" />
         <v-list-item
+          role="menuitem"
           :title="layoutLabel"
           @click="update({ layout: combined ? 'threePane' : 'combined' })"
         />
-        <v-list-item :title="t('feeds.refresh')" @click="refresh" />
+        <v-list-item role="menuitem" :title="t('feeds.refresh')" @click="refresh" />
         <v-list-item
           v-if="subscription"
+          role="menuitem"
           :title="t('feeds.edit')"
           @click="ui.editSubscriptionId = subscription.id"
         />
@@ -476,7 +521,7 @@ const showArticle = computed(
     </v-menu>
   </v-app-bar>
 
-  <v-main class="reader-main">
+  <v-main id="main" tabindex="-1" class="reader-main">
     <div class="d-flex fill-height">
       <div
         v-if="showList"
@@ -504,6 +549,7 @@ const showArticle = computed(
           :has-more="list.hasNextPage.value"
           :loading="loading"
           @load-more="list.fetchNextPage()"
+          @open="openedFromList"
           @toggle-star="(entry) => change([entry], { starred: !entry.starred })"
         />
       </div>

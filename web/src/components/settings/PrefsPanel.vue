@@ -29,6 +29,7 @@ const switches = [
   'markReadOnScroll',
   'hideReadFeeds',
   'confirmCatchUp',
+  'keyboardShortcuts',
 ] as const;
 </script>
 

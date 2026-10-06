@@ -49,3 +49,28 @@
   border: 1px solid rgba(var(--v-theme-on-surface), 0.2);
   padding: 0.25rem 0.5rem;
 }
+
+/* A clear keyboard focus ring; Vuetify's own is a faint overlay. Text fields keep their outline. */
+:focus-visible:not(.v-field__input) {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+#main:focus {
+  outline: none;
+}
+
+/* Hidden until focused: the first stop when tabbing into the signed-in app. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 3000;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-primary));
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}

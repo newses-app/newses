@@ -4,6 +4,7 @@ import { inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { FeedNode } from '../../lib/tree.ts';
 import { TREE_CONTEXT } from './tree-context.ts';
+import UnreadCount from './UnreadCount.vue';
 
 const props = defineProps<{ node: FeedNode; depth: number }>();
 const { t } = useI18n();
@@ -35,60 +36,62 @@ function onDrop() {
 </script>
 
 <template>
-  <v-list-item
-    :to="`/${node.key}`"
-    :active="current === node.key"
-    draggable="true"
-    :class="{ 'drop-before': over, 'text-disabled': node.subscription.disabled }"
-    :style="{ paddingInlineStart: `${12 + depth * 16}px` }"
-    @dragstart="onDragStart"
-    @dragend="dragged = null"
-    @dragover="onDragOver"
-    @dragleave="over = false"
-    @drop.prevent="onDrop"
-  >
-    <template #prepend>
-      <img
-        v-if="node.subscription.iconUrl && !iconFailed"
-        :src="node.subscription.iconUrl"
-        alt=""
-        width="16"
-        height="16"
-        class="me-3"
-        loading="lazy"
-        @error="iconFailed = true"
-      />
-      <v-icon v-else :icon="mdiRss" size="16" class="me-3" />
-    </template>
-    <v-list-item-title :class="{ 'font-weight-bold': node.unread > 0 }">
-      {{ node.subscription.title }}
-    </v-list-item-title>
-    <template #append>
-      <v-icon
-        v-if="node.subscription.disabled"
-        :icon="mdiCancel"
-        size="small"
-        color="error"
-        :title="t('feeds.disabled', { error: node.subscription.lastError ?? '' })"
-        class="ms-1"
-      />
-      <v-icon
-        v-else-if="node.subscription.errorCount > 0"
-        :icon="mdiAlertCircleOutline"
-        size="small"
-        color="warning"
-        :title="node.subscription.lastError ?? ''"
-        class="ms-1"
-      />
-      <span
-        v-if="node.unread > 0"
-        class="text-label-medium ms-1"
-        :aria-label="t('tree.unread', { n: node.unread })"
-      >
-        {{ node.unread }}
-      </span>
-    </template>
-  </v-list-item>
+  <div role="listitem">
+    <v-list-item
+      :to="`/${node.key}`"
+      :active="current === node.key"
+      draggable="true"
+      :class="{ 'drop-before': over, 'text-medium-emphasis': node.subscription.disabled }"
+      :style="{ paddingInlineStart: `${12 + depth * 16}px` }"
+      @dragstart="onDragStart"
+      @dragend="dragged = null"
+      @dragover="onDragOver"
+      @dragleave="over = false"
+      @drop.prevent="onDrop"
+    >
+      <template #prepend>
+        <img
+          v-if="node.subscription.iconUrl && !iconFailed"
+          :src="node.subscription.iconUrl"
+          alt=""
+          width="16"
+          height="16"
+          class="me-3"
+          loading="lazy"
+          @error="iconFailed = true"
+        />
+        <v-icon v-else :icon="mdiRss" size="16" class="me-3" />
+      </template>
+      <v-list-item-title :class="{ 'font-weight-bold': node.unread > 0 }">
+        {{ node.subscription.title }}
+      </v-list-item-title>
+      <template #append>
+        <template v-if="node.subscription.disabled">
+          <v-icon
+            :icon="mdiCancel"
+            size="small"
+            color="error"
+            :title="t('feeds.disabled', { error: node.subscription.lastError ?? '' })"
+            class="ms-1"
+          />
+          <span class="d-sr-only">{{ t('settings.disabledStatus') }}</span>
+        </template>
+        <template v-else-if="node.subscription.errorCount > 0">
+          <v-icon
+            :icon="mdiAlertCircleOutline"
+            size="small"
+            color="warning"
+            :title="node.subscription.lastError ?? ''"
+            class="ms-1"
+          />
+          <span class="d-sr-only">{{
+            t('settings.failing', { n: node.subscription.errorCount }, node.subscription.errorCount)
+          }}</span>
+        </template>
+        <UnreadCount v-if="node.unread > 0" :n="node.unread" class="ms-1" />
+      </template>
+    </v-list-item>
+  </div>
 </template>
 
 <style scoped>

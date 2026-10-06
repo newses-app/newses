@@ -1,5 +1,6 @@
 import { inject, type InjectionKey, onBeforeUnmount, onMounted, provide, shallowRef } from 'vue';
-import { isTyping, type ShortcutAction, ShortcutMatcher } from '../lib/shortcuts.ts';
+import { isTyping, type ShortcutAction, ShortcutMatcher, usesArrowKeys } from '../lib/shortcuts.ts';
+import { usePrefs } from './usePrefs.ts';
 
 type Handler = (action: ShortcutAction) => boolean;
 const HANDLERS: InjectionKey<{ value: Handler | null }> = Symbol('shortcut-handlers');
@@ -12,11 +13,14 @@ export function useShortcutListener(global: Handler): void {
   const page = shallowRef<Handler | null>(null);
   provide(HANDLERS, page);
   const matcher = new ShortcutMatcher();
+  const { prefs } = usePrefs();
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (!prefs.value.keyboardShortcuts) return;
     if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
     if (isTyping(event.target) && event.key !== 'Escape') return;
-    if (document.querySelector('.v-overlay--active.v-dialog')) return;
+    if (event.key.startsWith('Arrow') && usesArrowKeys(event.target)) return;
+    if (document.querySelector('.v-overlay--active:is(.v-dialog, .v-menu)')) return;
     const action = matcher.press(event.key);
     if (!action) return;
     if (page.value?.(action) || global(action)) event.preventDefault();

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CHORD_TIMEOUT_MS, isTyping, SHORTCUT_GROUPS, ShortcutMatcher } from './shortcuts.ts';
+import {
+  CHORD_TIMEOUT_MS,
+  isTyping,
+  SHORTCUT_GROUPS,
+  ShortcutMatcher,
+  usesArrowKeys,
+} from './shortcuts.ts';
 
 describe('ShortcutMatcher', () => {
   it('maps single keys and two-key chords', () => {
@@ -33,5 +39,22 @@ describe('isTyping', () => {
     expect(isTyping(document.createElement('textarea'))).toBe(true);
     expect(isTyping(document.createElement('div'))).toBe(false);
     expect(isTyping(null)).toBe(false);
+  });
+});
+
+describe('usesArrowKeys', () => {
+  it('detects widgets that move focus with the arrow keys', () => {
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    const item = document.createElement('div');
+    menu.append(item);
+    const list = document.createElement('div');
+    list.className = 'v-list';
+    const link = document.createElement('a');
+    list.append(link);
+    expect(usesArrowKeys(item)).toBe(true);
+    expect(usesArrowKeys(link)).toBe(true);
+    expect(usesArrowKeys(document.body)).toBe(false);
+    expect(usesArrowKeys(null)).toBe(false);
   });
 });

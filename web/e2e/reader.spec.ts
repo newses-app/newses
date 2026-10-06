@@ -65,7 +65,7 @@ test.describe('reader', () => {
     const all = page
       .getByRole('list', { name: 'Feeds' })
       .getByRole('link', { name: /All articles/ });
-    const count = async () => Number((await all.innerText()).match(/\d+/)?.[0] ?? 0);
+    const count = async () => Number((await all.innerText()).match(/(\d+) unread/)?.[1] ?? 0);
     await expect(
       page.getByRole('list', { name: 'Articles' }).getByRole('link').first(),
     ).toBeVisible();
