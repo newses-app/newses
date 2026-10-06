@@ -107,6 +107,10 @@ describe('App', () => {
       }),
     ) as { Properties: Record<string, unknown> }[];
     expect(functions).toHaveLength(5);
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-api',
+      Environment: { Variables: Match.objectLike({ TRUST_PROXY: '2' }) },
+    });
     for (const { Properties } of functions) {
       expect(Properties.Runtime).toBe('nodejs24.x');
       expect(Properties.Architectures).toEqual(['arm64']);

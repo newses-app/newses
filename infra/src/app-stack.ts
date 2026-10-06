@@ -121,8 +121,9 @@ export class AppStack extends Stack {
 
     const api = fn('api', { timeout: Duration.seconds(29), memorySize: 1024 });
     api.addEnvironment('ORIGIN_HEADER_PARAMETER', originHeader.parameterName);
-    // The request's source is CloudFront, which appends the client's address to X-Forwarded-For.
-    api.addEnvironment('TRUST_PROXY', '1');
+    // X-Forwarded-For arrives as `<client>, <CloudFront>`: CloudFront appends the viewer, then API
+    // Gateway appends CloudFront, which is also the request's source. Two hops reach the viewer.
+    api.addEnvironment('TRUST_PROXY', '2');
     originHeader.grantRead(api);
     this.api = new apigw.HttpApi(this, 'HttpApi', {
       apiName: resourceName(stage),
