@@ -23,6 +23,39 @@ test.describe('organisation', () => {
     await expect(article.getByRole('button', { name: 'Add note' })).toBeVisible();
   });
 
+  test('scores an article, highlighting it, then hiding it from the feed lists', async ({
+    page,
+  }) => {
+    await page.goto('/all');
+    const list = page.getByRole('list', { name: 'Articles' });
+    await list.getByRole('link').first().click();
+    const url = page.url();
+    const article = page.locator('article');
+    // Titles repeat in some feeds, so the row is found by entry id.
+    const row = list.locator(`[data-entry="${url.split('/').pop() ?? ''}"]`);
+    const dialog = page.getByRole('dialog');
+
+    await article.getByRole('button', { name: 'Set score' }).click();
+    await dialog.getByLabel('Score').fill('120');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(article.getByRole('button', { name: 'Score 120' })).toBeVisible();
+    await expect(row).toContainText('High score');
+
+    await article.getByRole('button', { name: 'Score 120' }).click();
+    await dialog.getByLabel('Score').fill('-600');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await page.goto(url);
+    await expect(article.getByRole('button', { name: /^Score / })).toBeVisible();
+    await expect(list.getByRole('link').first()).toBeVisible();
+    await expect(row).toHaveCount(0);
+
+    await article.getByRole('button', { name: /^Score / }).click();
+    await dialog.getByRole('button', { name: 'Reset to 0' }).click();
+    await expect(article.getByRole('button', { name: 'Set score' })).toBeVisible();
+    await page.reload();
+    await expect(row).toBeVisible();
+  });
+
   test('creates a label, assigns it, and opens its stream', async ({ page }) => {
     const caption = `e2e-${String(Date.now())}`;
     await page.goto('/all');

@@ -6,7 +6,7 @@ import type { Db } from '../../db/client.ts';
 import { enclosures, userEntries } from '../../db/schema.ts';
 import { DomainError } from '../errors.ts';
 import type { Realtime } from '../ports.ts';
-import { streamCondition } from './streams.ts';
+import { shownCondition, streamCondition } from './streams.ts';
 import { excerpt } from './text.ts';
 
 /** Search ranks the most recent matches only, so common terms stay fast on large instances. */
@@ -67,6 +67,7 @@ export interface HeadlineRow extends Record<string, unknown> {
   unread: boolean;
   starred: boolean;
   published: boolean;
+  score: number;
   note: string | null;
   labels: number[];
   tags: string[];
@@ -81,7 +82,8 @@ export interface HeadlineRow extends Record<string, unknown> {
 export const headlineColumns = (withContent: boolean) => sql`
   ue.id, ue.entry_id, ue.subscription_id, coalesce(s.title, fs.title, fs.url) AS feed_title,
   e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
-  ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.note, ue.share_id,
+  ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.score, ue.note,
+  ue.share_id,
   array(SELECT el.label_id FROM entry_labels el WHERE el.user_entry_id = ue.id ORDER BY 1) AS labels,
   array(SELECT et.tag FROM entry_tags et WHERE et.user_entry_id = ue.id ORDER BY 1) AS tags,
   left(e.content, 4000) AS head${withContent ? sql`, e.content` : sql``}`;
@@ -104,6 +106,7 @@ export function toEntry(row: HeadlineRow): Entry {
     unread: row.unread,
     starred: row.starred,
     published: row.published,
+    score: row.score,
     note: row.note,
     labels: row.labels,
     tags: row.tags,
@@ -166,7 +169,7 @@ export class EntryService {
     const order = options.order ?? (options.q ? 'relevance' : 'newest');
     if (order === 'relevance' && !options.q)
       throw new DomainError('invalid_input', 'Relevance order requires a search query');
-    const stream = streamCondition(userId, options.stream);
+    const stream = shownCondition(userId, options.stream);
     const view = cursor?.v ?? (await this.#resolveView(stream, options.view));
     const where = sql`${stream}${view === 'unread' ? sql` AND ue.unread` : sql``}`;
     const query = options.q ? sql`websearch_to_tsquery('simple', ${options.q})` : null;
@@ -269,7 +272,7 @@ export class EntryService {
     return entry;
   }
 
-  /** Sets flags on the user's entries; rows already in that state are left untouched. */
+  /** Sets flags and scores on the user's entries; rows already in that state are left untouched. */
   async setState(userId: number, ids: number[], state: EntryState): Promise<number> {
     const set: PgUpdateSetSource<typeof userEntries> = {};
     const differs: SQL[] = [];
@@ -285,6 +288,10 @@ export class EntryService {
     if (state.published !== undefined) {
       set.published = state.published;
       differs.push(ne(userEntries.published, state.published));
+    }
+    if (state.score !== undefined) {
+      set.score = state.score;
+      differs.push(ne(userEntries.score, state.score));
     }
     if (differs.length === 0 || ids.length === 0) return 0;
     const updated = await this.#db

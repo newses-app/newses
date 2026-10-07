@@ -2,7 +2,7 @@ import type { Counters } from '@rss-reader/shared';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { categories, subscriptions } from '../../db/schema.ts';
-import { freshSince } from './streams.ts';
+import { freshSince, scoreShown } from './streams.ts';
 
 interface LabelCountRow extends Record<string, unknown> {
   id: number;
@@ -26,13 +26,14 @@ export class CounterService {
 
   /**
    * Unread counts per subscription, per category (including subcategories), per label, and per
-   * special feed.
+   * special feed. Entries hidden by their score count only where they are listed: in Starred,
+   * Published, and labels.
    */
   async get(userId: number): Promise<Counters> {
     const [counts, subs, cats, labelCounts] = await Promise.all([
       this.#db.execute<CountRow>(sql`
-        SELECT ue.subscription_id, count(*) AS unread,
-          count(*) FILTER (WHERE ue.sort_at > ${freshSince(userId)}) AS fresh,
+        SELECT ue.subscription_id, count(*) FILTER (WHERE ${scoreShown(userId)}) AS unread,
+          count(*) FILTER (WHERE ${scoreShown(userId)} AND ue.sort_at > ${freshSince(userId)}) AS fresh,
           count(*) FILTER (WHERE ue.starred) AS starred,
           count(*) FILTER (WHERE ue.published) AS published
         FROM user_entries ue

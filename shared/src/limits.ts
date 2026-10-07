@@ -2,6 +2,9 @@
 
 export const MAX_NOTE_LENGTH = 10_000;
 
+/** Scores and score thresholds lie within ±this. */
+export const MAX_SCORE = 1_000_000;
+
 export const MAX_TAG_LENGTH = 64;
 export const MAX_TAGS_PER_ENTRY = 50;
 

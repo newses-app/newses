@@ -2,7 +2,9 @@
 import type { Entry, EntryState } from '@rss-reader/shared';
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { usePrefs } from '../../composables/usePrefs.ts';
 import { useSentinel } from '../../composables/useSentinel.ts';
+import { isHighScore } from '../../lib/score.ts';
 import EntryArticle from './EntryArticle.vue';
 
 const props = defineProps<{
@@ -19,6 +21,7 @@ const emit = defineEmits<{
   scrolledPast: [entries: Entry[]];
 }>();
 const { t } = useI18n();
+const { prefs } = usePrefs();
 
 const scroller = ref<HTMLElement | null>(null);
 const sentinel = ref<HTMLElement | null>(null);
@@ -82,7 +85,10 @@ onBeforeUnmount(() => {
       :key="entry.id"
       :data-entry="entry.id"
       :variant="entry.id === selectedId ? 'outlined' : 'flat'"
-      :class="{ read: !entry.unread && entry.id !== selectedId }"
+      :class="{
+        read: !entry.unread && entry.id !== selectedId,
+        'high-score': isHighScore(entry.score, prefs.scoreHighlightAbove),
+      }"
       class="combined-card mb-4 pa-4 mx-auto"
       @click="emit('select', entry)"
     >
@@ -105,6 +111,9 @@ onBeforeUnmount(() => {
 <style scoped>
 .combined-card {
   max-width: var(--article-width, 50rem);
+}
+.combined-card.high-score {
+  box-shadow: inset 3px 0 rgb(var(--v-theme-primary));
 }
 /* Read entries dim their heading only, which keeps every text above AA contrast. */
 .combined-card.read :deep(.entry-heading) {

@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
 import NoteDialog from '../components/dialogs/NoteDialog.vue';
+import ScoreDialog from '../components/dialogs/ScoreDialog.vue';
 import ShareDialog from '../components/dialogs/ShareDialog.vue';
 import ShortcutHelp from '../components/dialogs/ShortcutHelp.vue';
 import TagPickerDialog from '../components/dialogs/TagPickerDialog.vue';
@@ -83,6 +84,7 @@ useShortcutListener((action) => {
   <SubscribeDialog />
   <EditFeedDialog />
   <NoteDialog />
+  <ScoreDialog />
   <EntryLabelsDialog />
   <TagsDialog />
   <TagPickerDialog />

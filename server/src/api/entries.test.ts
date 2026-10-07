@@ -134,6 +134,25 @@ describe('entries API', () => {
     expect(caughtUp.json()).toEqual({ updated: 2 });
   });
 
+  it('scores entries within bounds', async () => {
+    const list = await app.inject({ method: 'GET', url: '/api/v1/entries', headers });
+    const id = list.json<EntryList>().entries[0]?.id ?? 0;
+    const url = `/api/v1/entries/${String(id)}`;
+    const scored = await app.inject({ method: 'PATCH', url, headers, payload: { score: 120 } });
+    expect(scored.json()).toMatchObject({ id, score: 120 });
+    const bulk = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/entries',
+      headers,
+      payload: { ids: [id], score: -40 },
+    });
+    expect(bulk.json()).toEqual({ updated: 1 });
+    for (const score of [1_000_001, 1.5])
+      expect(
+        (await app.inject({ method: 'PATCH', url, headers, payload: { score } })).statusCode,
+      ).toBe(400);
+  });
+
   it('sets, finds, and clears notes', async () => {
     const list = await app.inject({ method: 'GET', url: '/api/v1/entries', headers });
     const id = list.json<EntryList>().entries[0]?.id ?? 0;

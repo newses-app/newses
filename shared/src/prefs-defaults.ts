@@ -15,6 +15,8 @@ export const DEFAULT_PREFS: Prefs = {
   proxyImages: false,
   keyboardShortcuts: true,
   shortcutBindings: {},
+  scoreHighlightAbove: 0,
+  scoreHideBelow: -500,
   freshMaxAgeHours: 24,
   updateIntervalMinutes: null,
   purgeDays: null,

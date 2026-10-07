@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import type { Prefs } from '@rss-reader/shared';
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { MAX_SCORE } from '@rss-reader/shared/client';
+import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDurations } from '../../composables/useDurations.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
+import { parseScore } from '../../lib/score.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
-const { t } = useI18n();
+const { t, n } = useI18n();
 const ui = useUiStore();
 const { prefs, update } = usePrefs();
 const { intervalItems, purgeItems } = useDurations();
@@ -39,6 +41,21 @@ const freshItems = computed(() =>
     value: hours,
   })),
 );
+
+/** Score thresholds are typed, then saved on Enter or when the field loses focus. */
+const thresholds = ['scoreHighlightAbove', 'scoreHideBelow'] as const;
+type Threshold = (typeof thresholds)[number];
+const thresholdText = reactive<Record<Threshold, string | null>>({
+  scoreHighlightAbove: null,
+  scoreHideBelow: null,
+});
+const invalidScore = computed(() => t('entries.scoreInvalid', { max: n(MAX_SCORE) }));
+function saveThreshold(key: Threshold) {
+  const text = thresholdText[key];
+  thresholdText[key] = null;
+  const value = text === null ? null : parseScore(text);
+  if (value !== null && value !== prefs.value[key]) update({ [key]: value });
+}
 
 const switches = [
   'showContentPreview',
@@ -84,6 +101,19 @@ const switches = [
           :items="freshItems"
           :label="t('settings.freshAge')"
           @update:model-value="(v) => update({ freshMaxAgeHours: v })"
+        />
+      </v-col>
+      <v-col v-for="key in thresholds" :key="key" cols="12" sm="6">
+        <v-text-field
+          :model-value="thresholdText[key] ?? String(prefs[key])"
+          :label="t(`settings.${key}`)"
+          :hint="key === 'scoreHideBelow' ? t('settings.scoreHideHint') : undefined"
+          :persistent-hint="key === 'scoreHideBelow'"
+          inputmode="numeric"
+          :rules="[(v: string) => parseScore(v) !== null || invalidScore]"
+          @update:model-value="(v) => (thresholdText[key] = v)"
+          @blur="saveThreshold(key)"
+          @keydown.enter="saveThreshold(key)"
         />
       </v-col>
     </v-row>

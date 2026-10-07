@@ -71,6 +71,14 @@
     "noteLabel": "Note:",
     "noteSaved": "Note saved",
     "noteCleared": "Note removed",
+    "score": "Score",
+    "highScore": "High score",
+    "scoreValue": "Score {n}",
+    "setScore": "Set score",
+    "resetScore": "Reset to 0",
+    "scoreHint": "Lists highlight or hide articles by score; see Settings.",
+    "scoreInvalid": "Enter a whole number from −{max} to {max}",
+    "scoreSaved": "Score saved",
     "unreadLabel": "Unread"
   },
   "labels": {
@@ -254,7 +262,10 @@
     "opmlImported": "Imported: {subscribed} new, {existing} already subscribed, {invalid} invalid.",
     "renameCategoryNamed": "Edit {category}",
     "deleteCategoryNamed": "Delete {category}",
-    "keyboardShortcuts": "Single-key keyboard shortcuts"
+    "keyboardShortcuts": "Single-key keyboard shortcuts",
+    "scoreHighlightAbove": "Highlight articles scored above",
+    "scoreHideBelow": "Hide articles scored below",
+    "scoreHideHint": "Hidden articles stay in Starred, Published, labels, and tags."
   },
   "account": {
     "roles": { "admin": "Administrator", "user": "User" },

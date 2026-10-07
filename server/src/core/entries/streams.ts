@@ -42,6 +42,24 @@ export function streamCondition(userId: number, stream: Stream): SQL {
   }
 }
 
+/**
+ * `streamCondition` without entries scored below the user's `scoreHideBelow`, for the streams
+ * that hide them: subscriptions, categories, All, and Fresh. Starred, Published, labels, tags,
+ * and Recently read hold entries the user picked out, so they show every score.
+ */
+export function shownCondition(userId: number, stream: Stream): SQL {
+  const condition = streamCondition(userId, stream);
+  const hides =
+    stream.labelId === undefined &&
+    stream.tag === undefined &&
+    (stream.special === undefined || stream.special === 'all' || stream.special === 'fresh');
+  return hides ? sql`${condition} AND ${scoreShown(userId)}` : condition;
+}
+
+/** `ue` is scored at or above the user's `scoreHideBelow`. */
+export const scoreShown = (userId: number): SQL =>
+  sql`ue.score >= coalesce(${userPrefInt(sql`${userId}`, 'scoreHideBelow')}, ${DEFAULT_PREFS.scoreHideBelow})`;
+
 /** Start of the user's Fresh window. */
 export const freshSince = (userId: number): SQL =>
   sql`now() - make_interval(hours => coalesce(${userPrefInt(sql`${userId}`, 'freshMaxAgeHours')}, ${DEFAULT_PREFS.freshMaxAgeHours}))`;

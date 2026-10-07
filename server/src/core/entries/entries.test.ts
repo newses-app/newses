@@ -291,6 +291,34 @@ describe('EntryService.list', () => {
     ]);
   });
 
+  it('hides entries scored below the user’s threshold, except where the user picked them out', async () => {
+    await services.entries.setState(alice, [ids.apple ?? 0], { score: -501, starred: true });
+    await services.entries.setState(alice, [ids.banana ?? 0], { score: -500 });
+    expect(titles((await list({ stream: { subscriptionId: subs.one } })).entries)).toEqual([
+      'Banana bread',
+    ]);
+    expect(titles((await list()).entries)).not.toContain('Apple pie recipe');
+    expect(titles((await list({ stream: { categoryId: cats.tech } })).entries)).not.toContain(
+      'Apple pie recipe',
+    );
+    expect(titles((await list({ stream: { special: 'fresh' } })).entries)).toEqual(['Cherry tart']);
+    expect(titles((await list({ q: 'apple' })).entries)).toEqual(['Cherry tart']);
+    expect(titles((await list({ stream: { special: 'starred' } })).entries)).toEqual([
+      'Apple pie recipe',
+    ]);
+
+    // Adaptive view falls back to all when only hidden entries are unread.
+    await services.entries.setState(alice, [ids.banana ?? 0], { unread: false });
+    const adaptive = await list({ stream: { subscriptionId: subs.one }, view: 'adaptive' });
+    expect({ view: adaptive.view, titles: titles(adaptive.entries) }).toEqual({
+      view: 'all',
+      titles: ['Banana bread'],
+    });
+
+    await db.insert(userPrefs).values({ userId: alice, key: 'scoreHideBelow', value: -1000 });
+    expect((await list({ stream: { subscriptionId: subs.one } })).entries).toHaveLength(2);
+  });
+
   it('rejects malformed cursors', async () => {
     await expect(list({ cursor: 'nonsense' })).rejects.toMatchObject({ code: 'invalid_input' });
   });
@@ -329,6 +357,15 @@ describe('EntryService state', () => {
         ).entries,
       ),
     ).toEqual(['Apple pie recipe']);
+  });
+
+  it('sets scores, skipping entries that already have them', async () => {
+    const id = ids.apple ?? 0;
+    expect((await services.entries.get(alice, id)).score).toBe(0);
+    expect(await services.entries.setState(alice, [id, ids.banana ?? 0], { score: 250 })).toBe(2);
+    expect((await services.entries.get(alice, id)).score).toBe(250);
+    expect(await services.entries.setState(alice, [id], { score: 250 })).toBe(0);
+    expect(realtime.published).toHaveLength(1);
   });
 
   it('sets and clears notes, only on the user’s own entries', async () => {
@@ -380,6 +417,14 @@ describe('CounterService', () => {
       ]),
     );
     expect((await services.counters.get(bob)).special.all).toBe(1);
+  });
+
+  it('leaves entries hidden by their score out of feed, category, All, and Fresh counts', async () => {
+    await services.entries.setState(alice, [ids.apple ?? 0], { score: -600, starred: true });
+    const counters = await services.counters.get(alice);
+    expect(counters.special).toEqual({ all: 3, fresh: 1, starred: 1, published: 0 });
+    expect(counters.subscriptions).toContainEqual({ id: subs.one, unread: 1 });
+    expect(counters.categories).toContainEqual({ id: cats.tech, unread: 2 });
   });
 });
 

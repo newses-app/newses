@@ -5,9 +5,12 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { useLabels } from '../../composables/useLabels.ts';
+import { usePrefs } from '../../composables/usePrefs.ts';
 import { useSentinel } from '../../composables/useSentinel.ts';
 import { formatRelative } from '../../lib/format.ts';
+import { isHighScore } from '../../lib/score.ts';
 import LabelChip from '../labels/LabelChip.vue';
+import ScoreBadge from './ScoreBadge.vue';
 
 const props = defineProps<{
   entries: Entry[];
@@ -23,6 +26,8 @@ const route = useRoute();
 const labels = useLabels();
 const labelsById = computed(() => new Map((labels.data.value ?? []).map((l) => [l.id, l])));
 const entryLabels = (entry: Entry) => entry.labels.flatMap((id) => labelsById.value.get(id) ?? []);
+const { prefs } = usePrefs();
+const high = (entry: Entry) => isHighScore(entry.score, prefs.value.scoreHighlightAbove);
 
 const sentinel = ref<HTMLElement | null>(null);
 useSentinel(sentinel, () => {
@@ -61,6 +66,7 @@ const link = (entry: Entry) => ({
         role="listitem"
         :data-entry="entry.id"
         class="headline-row"
+        :class="{ 'high-score': high(entry) }"
       >
         <v-list-item
           :to="link(entry)"
@@ -87,6 +93,9 @@ const link = (entry: Entry) => ({
           </v-list-item-title>
           <v-list-item-subtitle>
             <span v-if="entry.unread" class="d-sr-only">{{ t('entries.unreadLabel') }} · </span>
+            <template v-if="entry.score !== 0">
+              <ScoreBadge :score="entry.score" :high="high(entry)" /> ·
+            </template>
             <span>{{ entry.feedTitle }}</span> ·
             <time :datetime="entry.sortAt">{{ formatRelative(entry.sortAt, locale) }}</time>
             <span v-if="entry.note" class="note">
@@ -129,6 +138,9 @@ const link = (entry: Entry) => ({
 }
 .headline {
   padding-inline-end: 48px;
+}
+.high-score {
+  box-shadow: inset 3px 0 rgb(var(--v-theme-primary));
 }
 .star {
   position: absolute;

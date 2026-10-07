@@ -3,6 +3,7 @@ import { DEFAULT_PREFS } from '@rss-reader/shared/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { api } from '../api.ts';
+import { COUNTERS_KEY } from './useCounters.ts';
 import { ENTRIES_KEY } from './useEntries.ts';
 
 const PREFS_KEY = ['prefs'] as const;
@@ -31,6 +32,11 @@ export function usePrefs() {
       if (changes.proxyImages !== undefined) {
         await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
         await queryClient.invalidateQueries({ queryKey: ['entry'] });
+      }
+      // Lists and counters leave out entries scored below the threshold.
+      if (changes.scoreHideBelow !== undefined) {
+        await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
+        await queryClient.invalidateQueries({ queryKey: COUNTERS_KEY });
       }
     },
     onError: (_error, _changes, previous) => queryClient.setQueryData(PREFS_KEY, previous),

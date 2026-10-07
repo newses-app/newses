@@ -18,6 +18,8 @@ export const useUiStore = defineStore('ui', () => {
   const editSubscriptionId = ref<number | null>(null);
   /** The entry whose note is being edited. */
   const noteEntry = ref<Entry | null>(null);
+  /** The entry whose score is being set. */
+  const scoreEntry = ref<Entry | null>(null);
   /** The entry whose labels are being chosen. */
   const labelsEntry = ref<Entry | null>(null);
   /** The entry whose tags are being edited. */
@@ -53,6 +55,7 @@ export const useUiStore = defineStore('ui', () => {
     subscribeOpen,
     editSubscriptionId,
     noteEntry,
+    scoreEntry,
     labelsEntry,
     tagsEntry,
     tagPickerOpen,

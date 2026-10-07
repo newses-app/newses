@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { categorySchema, subscriptionSchema } from './feeds.ts';
 import { labelSchema } from './labels.ts';
-import { MAX_NOTE_LENGTH, MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY } from './limits.ts';
+import { MAX_NOTE_LENGTH, MAX_SCORE, MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY } from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
@@ -63,6 +63,8 @@ export const entrySchema = z.object({
   unread: z.boolean(),
   starred: z.boolean(),
   published: z.boolean(),
+  /** The user's score; lists highlight entries above and hide entries below the user's thresholds. */
+  score: z.number().int(),
   /** The user's plain-text note; null when there is none. */
   note: z.string().nullable(),
   /** Ids of the user's labels on the entry. */
@@ -86,8 +88,10 @@ export const entryListResponseSchema = z.object({
   view: z.enum(['all', 'unread']),
 });
 
+const scoreSchema = z.number().int().min(-MAX_SCORE).max(MAX_SCORE);
+
 export const entryStateSchema = z
-  .object({ unread: z.boolean(), starred: z.boolean(), published: z.boolean() })
+  .object({ unread: z.boolean(), starred: z.boolean(), published: z.boolean(), score: scoreSchema })
   .partial()
   .refine((s) => Object.keys(s).length > 0, { message: 'Set at least one flag' });
 
@@ -97,10 +101,16 @@ export const bulkEntryStateRequestSchema = z
     unread: z.boolean().optional(),
     starred: z.boolean().optional(),
     published: z.boolean().optional(),
+    score: scoreSchema.optional(),
   })
-  .refine((s) => s.unread !== undefined || s.starred !== undefined || s.published !== undefined, {
-    message: 'Set at least one flag',
-  });
+  .refine(
+    (s) =>
+      s.unread !== undefined ||
+      s.starred !== undefined ||
+      s.published !== undefined ||
+      s.score !== undefined,
+    { message: 'Set at least one flag' },
+  );
 
 /** Null or blank text clears the note. */
 export const entryNoteRequestSchema = z.object({

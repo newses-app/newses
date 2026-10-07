@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_SCORE } from './limits.ts';
 import { isKeySequence, MAX_BINDINGS_PER_ACTION, SHORTCUT_ACTIONS } from './shortcuts.ts';
 
 export const viewModeSchema = z.enum(['all', 'unread', 'adaptive']);
@@ -32,6 +33,10 @@ const prefsShape = {
       .array(z.string().refine(isKeySequence, 'Expected a key or two keys separated by a space'))
       .max(MAX_BINDINGS_PER_ACTION),
   ),
+  /** Entries scored above this are highlighted. */
+  scoreHighlightAbove: z.number().int().min(-MAX_SCORE).max(MAX_SCORE),
+  /** Entries scored below this are left out of feed, category, All, and Fresh lists and counts. */
+  scoreHideBelow: z.number().int().min(-MAX_SCORE).max(MAX_SCORE),
   /** Unread entries published within this many hours are Fresh. */
   freshMaxAgeHours: z.number().int().min(1).max(720),
   /** Default for this user's subscriptions; null uses the server default. */

@@ -292,6 +292,7 @@ export const userEntries = pgTable(
     starred: boolean('starred').notNull().default(false),
     published: boolean('published').notNull().default(false),
     readAt: tstz('read_at'),
+    score: integer('score').notNull().default(0),
     // Plain text; null when the user has no note on the entry.
     note: text('note'),
     // Public share link id; null when the entry is not shared.

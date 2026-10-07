@@ -10,6 +10,7 @@ import {
   mdiNoteTextOutline,
   mdiOpenInNew,
   mdiPaperclip,
+  mdiScoreboardOutline,
   mdiShareVariant,
   mdiShareVariantOutline,
   mdiStar,
@@ -19,14 +20,19 @@ import {
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useLabels } from '../../composables/useLabels.ts';
+import { usePrefs } from '../../composables/usePrefs.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
+import { isHighScore } from '../../lib/score.ts';
 import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
+import ScoreBadge from './ScoreBadge.vue';
 
 const props = defineProps<{ entry: Entry }>();
 const emit = defineEmits<{ change: [state: EntryState]; select: [] }>();
-const { t, locale } = useI18n();
+const { t, n, locale } = useI18n();
+const { prefs } = usePrefs();
+const high = computed(() => isHighScore(props.entry.score, prefs.value.scoreHighlightAbove));
 const ui = useUiStore();
 const allLabels = useLabels();
 const labels = computed(() =>
@@ -64,6 +70,9 @@ const enclosures = computed(() =>
         <span>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span
         >
+        <template v-if="entry.score !== 0">
+          · <ScoreBadge :score="entry.score" :high="high" />
+        </template>
       </div>
       <ul v-if="labels.length" class="entry-chips mt-2" :aria-label="t('labels.title')">
         <li v-for="label in labels" :key="label.id">
@@ -119,6 +128,13 @@ const enclosures = computed(() =>
           @click="ui.shareEntry = entry"
         >
           {{ entry.shareId ? t('sharing.shared') : t('sharing.share') }}
+        </v-btn>
+        <v-btn size="small" :prepend-icon="mdiScoreboardOutline" @click="ui.scoreEntry = entry">
+          {{
+            entry.score === 0
+              ? t('entries.setScore')
+              : t('entries.scoreValue', { n: n(entry.score) })
+          }}
         </v-btn>
         <v-btn
           size="small"
