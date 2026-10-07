@@ -23,6 +23,7 @@ import { authRoutes } from './routes/auth.ts';
 import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions, noEventRoutes } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
+import { imageRoutes } from './routes/images.ts';
 import { prefsRoutes } from './routes/prefs.ts';
 import {
   registerRequestDiagnostics,
@@ -67,6 +68,8 @@ const trustProxy = (trust: boolean | number | string) =>
 export function buildApp(deps: AppDeps) {
   const app = Fastify({
     loggerInstance: deps.logger,
+    // Proxied image paths carry the encoded image URL.
+    routerOptions: { maxParamLength: 8192 },
     trustProxy: trustProxy(deps.trustProxy ?? false),
   }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
@@ -123,7 +126,12 @@ export function buildApp(deps: AppDeps) {
         await api.register(authRoutes, services);
         await api.register(adminUserRoutes, services);
         await api.register(feedRoutes, services.feeds);
-        await api.register(entryRoutes, services.entries);
+        await api.register(entryRoutes, {
+          ...services.entries,
+          prefs: services.prefs,
+          images: services.feeds.images,
+        });
+        await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs });
         if (deps.events === false) await api.register(noEventRoutes);
         else await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });

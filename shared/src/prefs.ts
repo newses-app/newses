@@ -14,6 +14,8 @@ const prefsShape = {
   showContentPreview: z.boolean(),
   hideReadFeeds: z.boolean(),
   confirmCatchUp: z.boolean(),
+  /** Load entry images through the server, hiding the reader's address from image hosts. */
+  proxyImages: z.boolean(),
   /** Single-key shortcuts; off for users whose assistive technology sends key presses. */
   keyboardShortcuts: z.boolean(),
   /** Unread entries published within this many hours are Fresh. */

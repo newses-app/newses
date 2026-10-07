@@ -147,7 +147,14 @@ describe('Edge', () => {
       DistributionConfig: Match.objectLike({
         Aliases: [dev.domainName],
         ViewerCertificate: Match.objectLike({ AcmCertificateArn: CERTIFICATE_ARN }),
-        CacheBehaviors: API_PATHS.map((path) => Match.objectLike({ PathPattern: path })),
+        CacheBehaviors: [
+          // Managed CachingOptimized policy.
+          Match.objectLike({
+            PathPattern: '/api/v1/images/*',
+            CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
+          }),
+          ...API_PATHS.map((path) => Match.objectLike({ PathPattern: path })),
+        ],
       }),
     });
     edge.hasResourceProperties('AWS::Route53::RecordSet', {

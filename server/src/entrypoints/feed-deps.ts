@@ -4,6 +4,7 @@ import { S3BlobStore } from '../adapters/s3-blob-store.ts';
 import { PgBossJobQueue } from '../adapters/pg-boss-job-queue.ts';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import type { AppConfig } from '../core/config.ts';
+import { deriveKeys } from '../core/crypto.ts';
 import { HttpFetcher } from '../core/feeds/http.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import { JOB_DEFINITIONS, type Jobs } from '../core/jobs.ts';
@@ -26,6 +27,7 @@ export function createFeedDeps(args: {
     blobs: createBlobStore(args.config),
     settings: args.config.feeds,
     logger: args.logger,
+    keys: deriveKeys(args.config.appSecret),
   };
 }
 

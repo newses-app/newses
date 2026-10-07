@@ -9,6 +9,7 @@ export const DEFAULT_PREFS: Prefs = {
   showContentPreview: true,
   hideReadFeeds: false,
   confirmCatchUp: true,
+  proxyImages: false,
   keyboardShortcuts: true,
   freshMaxAgeHours: 24,
   updateIntervalMinutes: null,

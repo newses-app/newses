@@ -5,6 +5,7 @@ import { feedSources, subscriptions } from '../../db/schema.ts';
 import type { Blob, BlobStore, Logger } from '../ports.ts';
 import { decodeBody } from './decode.ts';
 import type { HostLimiter } from './host-limiter.ts';
+import { imageContentType } from './image-type.ts';
 import type { Fetcher, FetchRequest, FetchResult } from './http.ts';
 
 const MAX_ICON_BYTES = 256 * 1024;
@@ -35,17 +36,6 @@ export function iconCandidates(html: string, pageUrl: string): string[] {
   parser.end(html);
   found.push(new URL('/favicon.ico', pageUrl).href);
   return [...new Set(found)];
-}
-
-function looksLikeImage(body: Uint8Array, contentType: string | null): boolean {
-  if (/^image\//i.test(contentType ?? '')) return true;
-  const head = new TextDecoder('latin1').decode(body.subarray(0, 8));
-  return (
-    head.startsWith('\x89PNG') ||
-    head.startsWith('GIF8') ||
-    head.startsWith('\xff\xd8') ||
-    head.startsWith('\x00\x00\x01\x00')
-  );
 }
 
 export class FaviconService {
@@ -113,15 +103,13 @@ export class FaviconService {
     for (const url of candidates.slice(0, MAX_CANDIDATES)) {
       try {
         const response = await this.#fetch(url, { accept: 'image/*', maxBytes: MAX_ICON_BYTES });
+        const contentType = imageContentType(response.body, response.contentType);
         if (
+          contentType &&
           response.body.byteLength > 0 &&
-          response.body.byteLength <= MAX_ICON_BYTES &&
-          looksLikeImage(response.body, response.contentType)
+          response.body.byteLength <= MAX_ICON_BYTES
         ) {
-          return {
-            data: response.body,
-            contentType: response.contentType?.split(';')[0] ?? 'image/x-icon',
-          };
+          return { data: response.body, contentType };
         }
       } catch {
         // Try the next candidate.

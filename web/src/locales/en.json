@@ -145,6 +145,7 @@
     "markReadOnScroll": "In the combined layout, mark articles read as they scroll past",
     "hideReadFeeds": "Hide feeds without unread articles",
     "confirmCatchUp": "Ask before marking many articles read",
+    "proxyImages": "Load article images through this server, so image hosts cannot see your address",
     "categories": "Categories",
     "noCategories": "No categories yet.",
     "newCategory": "New category",

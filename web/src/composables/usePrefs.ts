@@ -3,6 +3,7 @@ import { DEFAULT_PREFS } from '@rss-reader/shared/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { api } from '../api.ts';
+import { ENTRIES_KEY } from './useEntries.ts';
 
 const PREFS_KEY = ['prefs'] as const;
 
@@ -24,7 +25,14 @@ export function usePrefs() {
       } as Prefs);
       return previous;
     },
-    onSuccess: (prefs) => queryClient.setQueryData(PREFS_KEY, prefs),
+    onSuccess: async (prefs, changes) => {
+      queryClient.setQueryData(PREFS_KEY, prefs);
+      // Loaded content keeps its image URLs until refetched.
+      if (changes.proxyImages !== undefined) {
+        await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
+        await queryClient.invalidateQueries({ queryKey: ['entry'] });
+      }
+    },
     onError: (_error, _changes, previous) => queryClient.setQueryData(PREFS_KEY, previous),
   });
   return {

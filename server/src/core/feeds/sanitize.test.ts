@@ -40,6 +40,25 @@ describe('sanitizeContent', () => {
     expect(clean).toContain('src="data:image/png;base64,AAAA"');
   });
 
+  it('drops tracking pixels but keeps ordinary images', () => {
+    const html = [
+      '<p>Text</p>',
+      '<img src="https://site.example/a.png" width="600" height="400">',
+      '<img src="https://site.example/p.gif" width="1" height="1">',
+      '<img src="/beacon.gif" width="0" height="0px">',
+      '<img src="https://feeds.feedburner.com/~r/site/~4/abc">',
+      '<img src="https://pixel.wp.com/g.gif?blog=1">',
+      '<img src="https://ad.doubleclick.net/x.gif">',
+      '<img src="https://notdoubleclick.net.example/x.png">',
+    ].join('');
+    const out = sanitizeContent(html, 'https://site.example/post');
+    expect(out).toContain('https://site.example/a.png');
+    expect(out).toContain('https://notdoubleclick.net.example/x.png');
+    for (const tracker of ['p.gif', 'beacon.gif', 'feedburner', 'pixel.wp.com', 'ad.doubleclick']) {
+      expect(out).not.toContain(tracker);
+    }
+  });
+
   it('strips control characters', () => {
     expect(sanitizeContent('<p>a\u0001b\u0007c</p>', null)).toBe('<p>abc</p>');
   });

@@ -1,10 +1,12 @@
 import type { Db } from '../../db/client.ts';
 import { CategoryService } from '../categories.ts';
+import type { Keys } from '../crypto.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
 import type { BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
 import { FaviconService } from './favicons.ts';
 import { HostLimiter } from './host-limiter.ts';
+import { ImageProxy } from './images.ts';
 import type { Fetcher } from './http.ts';
 import { Ingester } from './ingest.ts';
 import { OpmlService } from './opml.ts';
@@ -20,6 +22,8 @@ export interface FeedDeps {
   blobs: BlobStore;
   settings: FeedSettings;
   logger: Logger;
+  /** Keys derived from APP_SECRET. */
+  keys: Keys;
   /** Minimum milliseconds between request starts to one host (tests set 0). */
   hostGapMs?: number;
 }
@@ -30,7 +34,7 @@ const PER_HOST_GAP_MS = 1000;
 
 export function createFeedServices(deps: FeedDeps) {
   const { db, fetcher, blobs, settings, logger } = deps;
-  // One limiter for feeds and icons, so together they respect each host's limits.
+  // One limiter for feeds, icons, and images, so together they respect each host's limits.
   const hosts = new HostLimiter(PER_HOST_CONCURRENCY, deps.hostGapMs ?? PER_HOST_GAP_MS);
   const ingester = new Ingester(db, deps.realtime, settings);
   const updater = new FeedUpdater({
@@ -51,6 +55,7 @@ export function createFeedServices(deps: FeedDeps) {
     ingester,
     updater,
     favicons: new FaviconService(db, fetcher, blobs, logger, hosts),
+    images: new ImageProxy({ db, fetcher, blobs, hosts, key: deps.keys['image-url'], logger }),
     purger: new Purger(db, blobs, settings),
   };
 }

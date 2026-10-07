@@ -20,6 +20,7 @@ export async function handler(event: TickEvent): Promise<void> {
     }
     case 'purge':
       logger.info(await feeds.purger.purge(), 'Purged old entries');
+      logger.info({ images: await feeds.images.purge() }, 'Purged cached images');
       await sync.pruneTombstones();
       return;
     case 'auth.prune':

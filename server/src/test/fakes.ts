@@ -1,4 +1,5 @@
 import type { Db } from '../db/client.ts';
+import { deriveKeys } from '../core/crypto.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import type { Jobs } from '../core/jobs.ts';
@@ -96,6 +97,7 @@ export function testFeedDeps(
     blobs: new MemoryBlobStore(),
     settings: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 3 },
     logger: silentLogger,
+    keys: deriveKeys(TEST_APP_SECRET),
     hostGapMs: 0,
     ...overrides,
   };

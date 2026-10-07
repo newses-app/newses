@@ -71,6 +71,13 @@
       "when": 1791343702940,
       "tag": "0009_app_passwords",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791344237493,
+      "tag": "0010_image_cache",
+      "breakpoints": true
     }
   ]
 }

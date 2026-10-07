@@ -107,6 +107,15 @@ export class EdgeStack extends Stack {
       originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       responseHeadersPolicy: apiHeaders,
     };
+    // Proxied images are authorised by their signed URL, so they are cached at the edge without
+    // cookies or viewer headers in the cache key, for as long as the API's Cache-Control allows.
+    const imageBehavior: cloudfront.BehaviorOptions = {
+      origin: apiOrigin,
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      responseHeadersPolicy: apiHeaders,
+    };
 
     this.distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: `${resourceName(stage)} (${stage.domainName})`,
@@ -135,7 +144,11 @@ export class EdgeStack extends Stack {
           },
         ],
       },
-      additionalBehaviors: Object.fromEntries(API_PATHS.map((path) => [path, apiBehavior])),
+      // Listed first: CloudFront matches behaviours in order, and `/api/*` would also match.
+      additionalBehaviors: {
+        '/api/v1/images/*': imageBehavior,
+        ...Object.fromEntries(API_PATHS.map((path) => [path, apiBehavior])),
+      },
     });
 
     // Vite fingerprints assets/, so they are immutable; everything else is revalidated.

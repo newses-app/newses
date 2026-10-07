@@ -1,4 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
+import { isTrackingPixel } from './trackers.ts';
 
 // C0 controls other than tab, newline, and carriage return; and DEL.
 // eslint-disable-next-line no-control-regex
@@ -38,7 +39,7 @@ function resolveSrcset(srcset: string, base: string | null): string {
 /**
  * Sanitises entry HTML against an allow-list: no scripts, styles, event handlers, or
  * non-http(s) URLs (data: only for images). Relative URLs are resolved against `base`;
- * links open in a new tab without referrer.
+ * links open in a new tab without referrer. Tracking pixels are dropped.
  */
 export function sanitizeContent(html: string, base: string | null): string {
   return sanitizeHtml(stripControlChars(html), {
@@ -71,6 +72,7 @@ export function sanitizeContent(html: string, base: string | null): string {
     allowedSchemesByTag: { img: ['http', 'https', 'data'] },
     allowedIframeHostnames: ['www.youtube.com', 'www.youtube-nocookie.com', 'player.vimeo.com'],
     allowProtocolRelative: false,
+    exclusiveFilter: (frame) => frame.tag === 'img' && isTrackingPixel(frame.attribs),
     transformTags: {
       '*': (tagName, attribs) => {
         for (const attribute of URL_ATTRIBUTES[tagName] ?? []) {

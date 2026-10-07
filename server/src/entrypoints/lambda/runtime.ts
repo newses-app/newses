@@ -5,6 +5,7 @@ import type pino from 'pino';
 import { loadConfig } from '../../adapters/env-config.ts';
 import { NoopRealtime } from '../../adapters/noop-realtime.ts';
 import { SqsJobQueue } from '../../adapters/sqs-job-queue.ts';
+import { deriveKeys } from '../../core/crypto.ts';
 import { HttpFetcher } from '../../core/feeds/http.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
@@ -78,6 +79,7 @@ export async function createLambdaRuntime(role: string) {
     realtime: new NoopRealtime(),
     blobs: createBlobStore(config),
     settings: config.feeds,
+    keys: deriveKeys(config.appSecret),
     logger,
   };
   return { config, logger, pool, db, feedDeps };

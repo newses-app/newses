@@ -49,6 +49,7 @@ scheduler.every('feeds.dispatch', 60, async () => {
 });
 scheduler.every('feeds.purge', 6 * 60 * 60, async () => {
   logger.info(await feeds.purger.purge(), 'Purged old entries');
+  logger.info({ images: await feeds.images.purge() }, 'Purged cached images');
   await sync.pruneTombstones();
 });
 scheduler.every('auth.prune', 60 * 60, async () => {

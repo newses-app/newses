@@ -98,6 +98,19 @@ export const appPasswords = pgTable(
   (t) => [index('app_passwords_user_id_idx').on(t.userId)],
 );
 
+// Image proxy cache index: the blob lives at `key`; failures are remembered so hosts are not
+// asked again until the entry expires.
+export const imageCache = pgTable(
+  'image_cache',
+  {
+    key: text('key').primaryKey(),
+    fetchedAt: tstz('fetched_at').notNull().defaultNow(),
+    size: integer('size').notNull().default(0),
+    failed: boolean('failed').notNull().default(false),
+  },
+  (t) => [index('image_cache_fetched_at_idx').on(t.fetchedAt)],
+);
+
 // Failed-login counters keyed by `login:<name>` or `ip:<address>`.
 export const loginAttempts = pgTable('login_attempts', {
   key: text('key').primaryKey(),

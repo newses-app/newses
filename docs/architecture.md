@@ -101,7 +101,8 @@ Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 source
              dates parsed leniently, zone-less dates are UTC, unparseable dates are null
              entry links, enclosures, and site URLs kept only if absolute http(s)
   identify   feed GUID, else sha256(link + title), else sha256(content); duplicates within a document dropped
-  sanitise   allow-list HTML; strip control characters; resolve relative URLs (incl. srcset); titles to plain text
+  sanitise   allow-list HTML; strip control characters; resolve relative URLs (incl. srcset); drop tracking pixels
+             (1×1 images, images from hosts in `trackers.ts`); titles to plain text
   transform  hook: readability, site rewrites
   store      insert new entries; rewrite existing ones only when their content hash changed; replace enclosures
   fan out    new entries become unread user entries for every subscription, unless older than its purge age
@@ -120,12 +121,14 @@ Updater:
 - `Retry-After` (and HTTP 429 without it: 10 minutes) sets the source's `blocked_until`. A 429, or a 503 with `Retry-After`, also pauses every source on that host until then (`fetch_hosts`, shared by all processes), without counting failures.
 - "Update now" clears errors, re-enables the source, and enqueues a fetch. It is a no-op within a minute of the last fetch and refused (`throttled`) while `blocked_until` is in the future.
 - A permanent redirect (301/308 from the first hop on) moves the source to the new URL after a successful fetch, unless another source already has that URL.
+- Image proxy (per-user `proxyImages` preference): when an entry is served to such a user, `img` `src`/`srcset`, picture `source` `srcset`, and video `poster` URLs become `/api/v1/images/<hmac>/<base64url URL>`, signed with the `image-url` key. The route needs no session; it refuses unsigned URLs, then serves from `BlobStore` (`images/<sha256 of URL>`) or fetches once through `HttpFetcher` within the per-host limits and host pauses, up to 4 MB, accepting only images (declared or sniffed). Failures are not retried for 24 h. Responses are `public, max-age` 30 days, immutable, with a sandboxing CSP.
 - Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
 
 Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Starred and published entries are never purged.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
 - Deletes feed sources with no subscriptions and no kept entries, and their favicons.
+- Deletes proxied images and remembered failures fetched more than 30 days ago.
 - Deletes tombstones older than 30 days, and expired host pauses.
 
 Fetching untrusted URLs (`HttpFetcher`):
@@ -140,7 +143,7 @@ Subscription lifecycle:
 - Deleting a category moves its feeds and child categories to its parent.
 - OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines.
 
-Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticle`. Readability, image proxy rewriting, and tracking-pixel stripping are implemented as hook modules.
+Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticle`. Readability is implemented as a hook module.
 
 ## Data model
 
@@ -152,6 +155,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `recovery_codes` | User | SHA-256 hash, used time |
 | `sessions` | User | Token hash, kind (`cookie`/`bearer`), user agent, last seen, expiry |
 | `app_passwords` | User | Name, hash, last used |
+| `image_cache` | Instance | Blob key, fetch time, size, failed flag |
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
 | `categories` | User | Self-referencing tree (`parent_id`), order |
 | `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error, publisher TTL hint, `blocked_until`); site URL; favicon ref. Fetch interval is the shortest among its subscribers; subscriptions with HTTP-auth credentials get a dedicated source |
@@ -203,6 +207,7 @@ Search:
 |---|---|---|
 | Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`; typed client in `shared` |
 | Events | `/api/v1/events` | SSE: `counters` invalidation events |
+| Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
 | TTRSS-compatible | `/api/` (POST JSON `op`) | See below |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*` | See below |
@@ -282,6 +287,7 @@ flowchart LR
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
 - Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
 - CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
+- `/api/v1/images/*` is cached at the edge (managed CachingOptimized policy: no cookies or viewer headers in the key, TTL from the API's `Cache-Control`); other API paths are not cached.
 - Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `Data` because change sets resolve `ssm-secure` references: `db-password`, `admin-password`, and `app-secret` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is two hops (API Gateway appends CloudFront's address after the viewer's).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - Logs go to CloudWatch, kept a month.

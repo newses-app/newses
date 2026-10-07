@@ -13,15 +13,25 @@ import {
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { EntryServices } from '../../core/entries/index.ts';
+import type { ImageProxy } from '../../core/feeds/images.ts';
+import type { PrefsService } from '../../core/prefs.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 import { toCategory, toSubscription } from '../dto.ts';
 
 const idParams = z.object({ id: z.coerce.number().int() });
 
-export const entryRoutes: FastifyPluginAsyncZod<EntryServices> = (
-  app,
-  { entries, counters, sync },
-) => {
+export const entryRoutes: FastifyPluginAsyncZod<
+  EntryServices & { prefs: PrefsService; images: ImageProxy }
+> = (app, { entries, counters, sync, prefs, images }) => {
+  /** Points images at the proxy for users who turned it on. */
+  async function withImages<T extends { content?: string | null | undefined }>(
+    userId: number,
+    list: T[],
+  ): Promise<T[]> {
+    if (!list.some((e) => e.content) || !(await prefs.get(userId)).proxyImages) return list;
+    return list.map((e) => (e.content ? { ...e, content: images.rewrite(e.content) } : e));
+  }
+
   app.addHook('preHandler', requireUser);
   app.addHook('onSend', (_request, reply, payload, done) => {
     void reply.header('cache-control', 'no-store');
@@ -33,17 +43,23 @@ export const entryRoutes: FastifyPluginAsyncZod<EntryServices> = (
     { schema: { querystring: entryListQuerySchema, response: { 200: entryListResponseSchema } } },
     async (request) => {
       const { subscriptionId, categoryId, special, ...options } = request.query;
-      return entries.list(requireAuth(request).user.id, {
+      const userId = requireAuth(request).user.id;
+      const page = await entries.list(userId, {
         ...options,
         stream: { subscriptionId, categoryId, special },
       });
+      return { ...page, entries: await withImages(userId, page.entries) };
     },
   );
 
   app.get(
     '/entries/:id',
     { schema: { params: idParams, response: { 200: entrySchema } } },
-    async (request) => entries.get(requireAuth(request).user.id, request.params.id),
+    async (request) => {
+      const userId = requireAuth(request).user.id;
+      const [entry] = await withImages(userId, [await entries.get(userId, request.params.id)]);
+      return entry;
+    },
   );
 
   app.patch(
