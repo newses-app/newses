@@ -2,7 +2,8 @@ import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { WEB_CSP } from './web-csp.ts';
 
-const NOT_SPA = /^\/(api|public|healthz)(\/|$)/;
+/** API, compatibility-API, and public paths, which never fall back to the app. */
+const NOT_SPA = /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)|^\/public\.php$/;
 
 /** Serves the built SPA from `root`, falling back to index.html for client-side routes. */
 export function registerWeb(app: FastifyInstance, root: string): void {

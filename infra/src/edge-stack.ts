@@ -21,7 +21,15 @@ import {
 import type { GeneratedParameter } from './generated-parameter.ts';
 
 /** Paths served by the API; everything else is the static SPA. */
-export const API_PATHS = ['/api/*', '/reader/*', '/accounts/*', '/public/*'];
+/** Served by the API: native, compatibility (TTRSS, Google Reader, TTRSS feed icons), public pages, and the legacy TTRSS published-feed address. */
+export const API_PATHS = [
+  '/api/*',
+  '/reader/*',
+  '/accounts/*',
+  '/feed-icons/*',
+  '/public/*',
+  '/public.php',
+];
 
 /** Extensionless paths are client-side routes, so S3 serves index.html for them. */
 const SPA_ROUTES = `function handler(event) {

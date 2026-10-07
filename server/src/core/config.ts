@@ -19,6 +19,8 @@ export interface AppConfig {
   blobBucket: string | null;
   /** Origin of public links (published feeds), e.g. `https://reader.example`; null uses the request's. */
   publicUrl: string | null;
+  /** Log every compatibility-API call, credentials redacted, to capture client behaviour. */
+  compatTrace: boolean;
   /** Built web app to serve, or null when it is hosted elsewhere. */
   webDir: string | null;
   feeds: FeedSettings;

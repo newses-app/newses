@@ -13,6 +13,7 @@ describe('loadConfig', () => {
       blobBucket: null,
       webDir: null,
       publicUrl: null,
+      compatTrace: false,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
       appSecret: APP_SECRET,
@@ -26,6 +27,12 @@ describe('loadConfig', () => {
       'https://reader.example',
     );
     expect(() => loadConfig({ ...base, PUBLIC_URL: 'ftp://reader.example' })).toThrow(ConfigError);
+  });
+
+  it('turns on compatibility tracing only for true', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig({ ...base, COMPAT_TRACE: 'true' }).compatTrace).toBe(true);
+    expect(() => loadConfig({ ...base, COMPAT_TRACE: 'yes' })).toThrow(ConfigError);
   });
 
   it('parses overrides', () => {

@@ -22,6 +22,8 @@ export interface StageConfig {
   /** Production keeps its data when stacks are deleted. */
   retainData: boolean;
   backupDays: number;
+  /** Log every compatibility-API call (credentials redacted) to capture client behaviour. */
+  compatTrace: boolean;
 }
 
 export const STAGES: StageConfig[] = [
@@ -31,6 +33,7 @@ export const STAGES: StageConfig[] = [
     domainName: 'reader-dev.example.com',
     retainData: false,
     backupDays: 1,
+    compatTrace: true,
   },
   {
     name: 'prod',
@@ -38,6 +41,7 @@ export const STAGES: StageConfig[] = [
     domainName: 'reader.example.com',
     retainData: true,
     backupDays: 14,
+    compatTrace: false,
   },
 ];
 

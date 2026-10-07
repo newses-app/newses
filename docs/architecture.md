@@ -157,7 +157,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 |---|---|---|
 | `users` | Instance | Login (unique), Argon2id hash, role (`admin`/`user`), disabled flag; sealed TOTP secret, enabled time, last accepted time step |
 | `recovery_codes` | User | SHA-256 hash, used time |
-| `sessions` | User | Token hash, kind (`cookie`/`bearer`), user agent, last seen, expiry |
+| `sessions` | User | Token hash, kind (`cookie`/`bearer`/`api`), user agent, app password (`api` only), last seen, expiry |
 | `app_passwords` | User | Name, hash, last used |
 | `image_cache` | Instance | Blob key, fetch time, size, failed flag |
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
@@ -193,9 +193,10 @@ Search:
 |---|---|---|
 | Web | httpOnly, SameSite=Lax session cookie | CSRF token on state-changing requests; TOTP at login when enabled |
 | Electron / Capacitor | Bearer session token | TOTP at login when enabled; stored in OS secure storage (Electron `safeStorage`, platform keystore on mobile) |
-| TTRSS / Google Reader clients | App password → API session | App passwords bypass TOTP |
+| TTRSS / Google Reader clients | App password → `api` session | App passwords bypass TOTP |
 
-- Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days and bearer sessions 90 days, both sliding on use. Logging in ends the session the client sent, if any.
+- Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days, bearer and `api` sessions 90 days, all sliding on use. Logging in ends the session the client sent, if any.
+- `api` sessions are opened only by an app-password login through a compatibility API and belong to that app password: revoking it ends them, and each keeps its 10 most recent. `/api/v1` ignores them; the compatibility APIs accept nothing else.
 - The cookie is `__Host-rss_session` (Secure) over HTTPS and `rss_session` over plain HTTP; HTTPS is taken from `X-Forwarded-Proto` only when `TRUST_PROXY` trusts the proxy.
 - A user created with a generated password (the AWS bootstrap admin) has `password_change_required`: until they change it, every authenticated request other than session, login, logout, and password change gets 403 `password_change_required`, and the web app shows only the password change.
 - Cookie-session requests other than GET/HEAD/OPTIONS must send the session's CSRF token in `X-CSRF-Token`. Login accepts JSON only, so cross-site form posts cannot log a browser in.
@@ -216,8 +217,8 @@ Search:
 | Events | `/api/v1/events` | SSE: `counters` invalidation events |
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
-| TTRSS-compatible | `/api/` (POST JSON `op`) | See below |
-| Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*` | See below |
+| TTRSS-compatible | `/api/`, `/api/index.php` (POST, `op`) | See below |
+| Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*`; also under `/api/greader.php` | See below |
 
 ### Native REST API
 
@@ -251,11 +252,13 @@ Events stream:
   - `-6` recently read
   - `0` archived
 - Labels are exposed as feed ID `-1025 - label_id`.
-- `sid` maps to an API session; login accepts app passwords only.
+- Requests are POSTs whose body is JSON, whatever its declared type, or form-encoded; query strings are ignored, so passwords never appear in logged URLs. `sid` is an `api` session token; `login` accepts app passwords only and reports API level 20.
+- Every answer is HTTP 200 `{seq, status, content}`, `seq` echoing the request. Errors have status 1 and `content.error`: `NOT_LOGGED_IN`, `LOGIN_ERROR`, `API_DISABLED` (password must be changed), `UNKNOWN_METHOD` (with `method`), `INCORRECT_USAGE`.
 
 ### Google Reader API
 
-- Auth: `ClientLogin` with app password → `Auth` token; `/reader/api/0/token` for write tokens.
+- Auth: `ClientLogin` (POST form `Email`, `Passwd`; app passwords only) answers `SID=…`, `LSID=null`, `Auth=…` lines, or 401 `Error=BadAuthentication`. Calls send `Authorization: GoogleLogin auth=<token>`; without a valid `api` session they get 401, or 403 while the password must be changed. `/reader/api/0/token` issues the `T` write token, which writes accept unchecked: header authentication leaves no cross-site forgery to prevent.
+- Unimplemented endpoints answer 404.
 - Endpoints:
   - `user-info`, `subscription/list`, `subscription/edit`, `subscription/quickadd`, `subscription/export`
   - `tag/list`, `unread-count`
@@ -268,6 +271,8 @@ Events stream:
   - `user/-/state/com.google/read`
   - `user/-/label/<category or label>`
   - `feed/<url>`
+
+Both compatibility APIs log each unsupported call with the client's user agent. `COMPAT_TRACE` logs every call and its parameters, credentials redacted; it is on for the AWS `dev` stage.
 
 ## Deployment
 
@@ -289,7 +294,7 @@ Events stream:
 flowchart LR
   U[Browser / apps] --> CF[CloudFront]
   CF -- default --> S3W[(S3: SPA)]
-  CF -- "/api/*, /reader/*, /accounts/*, /public/*" --> API[HTTP API] --> FA[λ api]
+  CF -- "/api/*, /reader/*, /accounts/*, /feed-icons/*, /public/*, /public.php" --> API[HTTP API] --> FA[λ api]
   EB[EventBridge Scheduler] --> FT[λ tick]
   FT --> QF[[SQS fetch]] --> FF[λ fetch]
   FF --> QI[[SQS favicon]] --> FI[λ favicon]

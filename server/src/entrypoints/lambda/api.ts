@@ -14,6 +14,7 @@ const app = buildApp({
   logger,
   trustProxy: config.http.trustProxy,
   publicUrl: config.publicUrl,
+  compatTrace: config.compatTrace,
   // Lambda responses are buffered, so event streams cannot be held open; clients poll.
   events: false,
   services: {

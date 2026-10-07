@@ -27,7 +27,7 @@ const timestamps = () => ({
 });
 
 export const userRole = pgEnum('user_role', ['admin', 'user']);
-export const sessionKind = pgEnum('session_kind', ['cookie', 'bearer']);
+export const sessionKind = pgEnum('session_kind', ['cookie', 'bearer', 'api']);
 
 export const users = pgTable(
   'users',
@@ -75,6 +75,10 @@ export const sessions = pgTable(
     userAgent: text('user_agent'),
     // Cookie sessions only; sent back by the web app in X-CSRF-Token.
     csrfToken: text('csrf_token'),
+    // API sessions only: the app password that opened it; revoking that ends the session.
+    appPasswordId: bigint('app_password_id', { mode: 'number' }).references(() => appPasswords.id, {
+      onDelete: 'cascade',
+    }),
     createdAt: tstz('created_at').notNull().defaultNow(),
     lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
     expiresAt: tstz('expires_at').notNull(),
@@ -82,6 +86,7 @@ export const sessions = pgTable(
   (t) => [
     index('sessions_user_id_idx').on(t.userId),
     index('sessions_expires_at_idx').on(t.expiresAt),
+    index('sessions_app_password_idx').on(t.appPasswordId),
   ],
 );
 

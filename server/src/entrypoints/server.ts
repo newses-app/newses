@@ -49,6 +49,7 @@ const app = buildApp({
   trustProxy: config.http.trustProxy,
   webDir: config.webDir,
   publicUrl: config.publicUrl,
+  compatTrace: config.compatTrace,
   diagnostics: { snapshot: processSnapshot(pool) },
   services,
   healthChecks: {

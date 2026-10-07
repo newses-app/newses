@@ -1,13 +1,20 @@
-import { and, eq, gt, isNull, lt, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, ne, notInArray } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { sessions, users } from '../../db/schema.ts';
 import { DomainError } from '../errors.ts';
 import { hashToken, newToken } from './tokens.ts';
 
-export type SessionKind = 'cookie' | 'bearer';
+/** `api` sessions belong to compatibility clients and are opened only with an app password. */
+export type SessionKind = 'cookie' | 'bearer' | 'api';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-export const TTL_MS: Record<SessionKind, number> = { cookie: 30 * DAY_MS, bearer: 90 * DAY_MS };
+export const TTL_MS: Record<SessionKind, number> = {
+  cookie: 30 * DAY_MS,
+  bearer: 90 * DAY_MS,
+  api: 90 * DAY_MS,
+};
+/** Compatibility clients may log in on every sync; older sessions of an app password are dropped. */
+const MAX_SESSIONS_PER_APP_PASSWORD = 10;
 /** Sliding expiry is extended at most this often, to avoid a write per request. */
 const TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -28,7 +35,13 @@ export class SessionService {
     this.#now = now;
   }
 
-  async create(userId: number, kind: SessionKind, userAgent: string | null): Promise<NewSession> {
+  /** Opens a session; `api` sessions name the app password that opened them. */
+  async create(
+    userId: number,
+    kind: SessionKind,
+    userAgent: string | null,
+    appPasswordId: number | null = null,
+  ): Promise<NewSession> {
     const token = newToken();
     const now = this.#now();
     const [session] = await this.#db
@@ -39,12 +52,14 @@ export class SessionService {
         userAgent: userAgent?.slice(0, 512) ?? null,
         tokenHash: hashToken(token),
         csrfToken: kind === 'cookie' ? newToken() : null,
+        appPasswordId,
         createdAt: now,
         lastSeenAt: now,
         expiresAt: new Date(now.getTime() + TTL_MS[kind]),
       })
       .returning();
     if (!session) throw new Error('Session insert returned no row');
+    if (appPasswordId !== null) await this.#pruneAppPasswordSessions(appPasswordId);
     return { token, session };
   }
 
@@ -111,5 +126,17 @@ export class SessionService {
 
   async pruneExpired(): Promise<void> {
     await this.#db.delete(sessions).where(lt(sessions.expiresAt, this.#now()));
+  }
+
+  async #pruneAppPasswordSessions(appPasswordId: number): Promise<void> {
+    const newest = this.#db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.appPasswordId, appPasswordId))
+      .orderBy(desc(sessions.lastSeenAt), desc(sessions.id))
+      .limit(MAX_SESSIONS_PER_APP_PASSWORD);
+    await this.#db
+      .delete(sessions)
+      .where(and(eq(sessions.appPasswordId, appPasswordId), notInArray(sessions.id, newest)));
   }
 }

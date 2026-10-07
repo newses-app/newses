@@ -31,6 +31,8 @@ export interface AppPasswordInput {
   ip: string;
 }
 
+export type AppSessionInput = AppPasswordInput & { userAgent: string | null };
+
 export type LoggedIn = NewSession & { user: UserRow };
 
 /** A login either opens a session or, with 2FA on, returns a challenge for the code step. */
@@ -105,6 +107,23 @@ export class AuthService {
    * passwords are refused, so 2FA cannot be bypassed with them.
    */
   async authenticateAppPassword(input: AppPasswordInput): Promise<UserRow> {
+    return (await this.#matchAppPassword(input)).user;
+  }
+
+  /**
+   * Logs a compatibility client in with an app password, opening an `api` session tied to it,
+   * so revoking the app password ends the session.
+   */
+  async openAppSession(input: AppSessionInput): Promise<LoggedIn> {
+    const { user, appPassword } = await this.#matchAppPassword(input);
+    await this.#users.recordLogin(user.id);
+    const created = await this.#sessions.create(user.id, 'api', input.userAgent, appPassword.id);
+    return { ...created, user };
+  }
+
+  async #matchAppPassword(
+    input: AppPasswordInput,
+  ): Promise<{ user: UserRow; appPassword: AppPasswordRow }> {
     const account = accountKey(input.login);
     const ipKey = `ip:${input.ip}`;
     await this.#throttle.check([account, ipKey]);
@@ -116,7 +135,7 @@ export class AuthService {
       throw new DomainError('invalid_credentials', 'Invalid login or app password');
     }
     await this.#throttle.reset(account);
-    return user;
+    return { user, appPassword: match };
   }
 
   /** Re-checks the account password, so a stolen session cannot mint a lasting credential. */

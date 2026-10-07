@@ -21,6 +21,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `HTTP_PORT` | `8080` | Host port for the server |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `PUBLIC_URL` | unset | The address readers use, e.g. `https://reader.example.com`; makes published-feed links absolute. Unset uses each request's address, which needs a proxy that forwards `Host` |
+| `COMPAT_TRACE` | `false` | `true` logs every TTRSS and Google Reader API call with its parameters (credentials redacted), to diagnose a client |
 | `TRUST_PROXY` | `false` | `true`, the number of proxy hops, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
 | `FEED_UPDATE_INTERVAL_MINUTES` | `30` | Default minutes between fetches of a feed (5–1440) |
 | `FEED_PURGE_DAYS` | `60` | Default age in days after which entries are deleted unless starred, published, noted, labelled, or shared; `0` keeps everything |

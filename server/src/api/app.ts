@@ -17,6 +17,8 @@ import type { FeedServices } from '../core/feeds/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
 import { INSECURE_SESSION_COOKIE, registerAuth, SESSION_COOKIE } from './auth.ts';
+import { greaderRoutes } from './compat/greader.ts';
+import { ttrssRoutes } from './compat/ttrss.ts';
 import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -60,6 +62,8 @@ export interface AppDeps {
   events?: Omit<EventStreamOptions, 'realtime'> | false;
   /** Origin of public links (published feeds); null or omitted uses each request's origin. */
   publicUrl?: string | null;
+  /** Log every compatibility-API call, credentials redacted. */
+  compatTrace?: boolean;
   /** Directory of the built web app to serve at `/`; omitted when the SPA is hosted elsewhere. */
   webDir?: string | null;
   /** Logging of slow and abandoned requests; defaults to 2 s without a state snapshot. */
@@ -164,6 +168,13 @@ export function buildApp(deps: AppDeps) {
       images: services.feeds.images,
       publicUrl: deps.publicUrl ?? null,
     });
+    const compat = {
+      services: { auth: services.auth, sessions: services.sessions },
+      options: { trace: deps.compatTrace ?? false },
+    };
+    void app.register(ttrssRoutes, compat);
+    void app.register(greaderRoutes, compat);
+    void app.register(greaderRoutes, { ...compat, prefix: '/api/greader.php' });
   }
 
   if (deps.webDir) registerWeb(app, deps.webDir);

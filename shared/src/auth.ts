@@ -101,7 +101,8 @@ export const currentSessionSchema = z.object({
 
 export const sessionSchema = z.object({
   id: z.number().int(),
-  kind: z.enum(['cookie', 'bearer']),
+  /** `api`: a compatibility client signed in with an app password. */
+  kind: z.enum(['cookie', 'bearer', 'api']),
   userAgent: z.string().nullable(),
   createdAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),

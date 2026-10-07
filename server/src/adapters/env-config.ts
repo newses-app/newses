@@ -33,6 +33,7 @@ const schema = z
               .map((s) => s.trim())
               .filter(Boolean),
       ),
+    COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(60),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
@@ -69,6 +70,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     blobBucket: e.BLOB_BUCKET ?? null,
     webDir: e.WEB_DIR ?? null,
     publicUrl: e.PUBLIC_URL ?? null,
+    compatTrace: e.COMPAT_TRACE === 'true',
     feeds: {
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
       purgeDays: e.FEED_PURGE_DAYS,

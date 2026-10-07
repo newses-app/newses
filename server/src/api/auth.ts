@@ -79,6 +79,8 @@ export function registerAuth(app: FastifyInstance, sessions: SessionService): vo
       if (!bearer) clearSessionCookie(reply);
       return;
     }
+    // App-password sessions reach only the compatibility APIs.
+    if (result.session.kind === 'api') return;
     if (!bearer) {
       if (result.session.kind !== 'cookie') return;
       if (!SAFE_METHODS.has(request.method)) {
