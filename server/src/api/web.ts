@@ -20,7 +20,6 @@ export function registerWeb(app: FastifyInstance, root: string): void {
   });
 
   app.addHook('onSend', (_request, reply, payload, done) => {
-    void reply.header('x-content-type-options', 'nosniff');
     if (String(reply.getHeader('content-type')).startsWith('text/html')) {
       void reply
         .header('content-security-policy', WEB_CSP)

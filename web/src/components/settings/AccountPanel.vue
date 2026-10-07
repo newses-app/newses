@@ -37,10 +37,15 @@ async function changePassword() {
     ui.notify(t('account.passwordChanged'));
     await queryClient.invalidateQueries({ queryKey: ['sessions'] });
   } catch (err) {
+    const status = err instanceof ApiError ? err.status : null;
     error.value =
-      err instanceof ApiError && err.status === 401
+      status === 401
         ? t('account.wrongPassword')
-        : t('errors.generic');
+        : status === 400
+          ? t('account.tooCommon')
+          : status === 429
+            ? t('account.throttled')
+            : t('errors.generic');
   } finally {
     busy.value = false;
   }

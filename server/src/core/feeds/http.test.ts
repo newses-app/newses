@@ -104,9 +104,15 @@ describe('HttpFetcher', () => {
   it('blocks private addresses by default, including via DNS and redirects', async () => {
     const fetcher = new HttpFetcher();
     expect(await failure(fetcher.fetch(`${base}/feed`))).toMatchObject({ code: 'blocked_address' });
-    expect(await failure(fetcher.fetch('http://[::1]/'))).toMatchObject({
-      code: 'blocked_address',
-    });
+    for (const url of [
+      'http://[::1]/',
+      'http://203.0.113.5/',
+      'http://[::7f00:1]/',
+      'http://[64:ff9b::7f00:1]/',
+      'http://[2002:7f00:1::]/',
+    ]) {
+      expect(await failure(fetcher.fetch(url))).toMatchObject({ code: 'blocked_address' });
+    }
     const port = new URL(base).port;
     expect(await failure(fetcher.fetch(`http://localhost:${port}/feed`))).toMatchObject({
       code: 'blocked_address',

@@ -1,7 +1,7 @@
 import { SQSClient } from '@aws-sdk/client-sqs';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
-import pino from 'pino';
+import type pino from 'pino';
 import { loadConfig } from '../../adapters/env-config.ts';
 import { NoopRealtime } from '../../adapters/noop-realtime.ts';
 import { SqsJobQueue } from '../../adapters/sqs-job-queue.ts';
@@ -10,7 +10,7 @@ import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createDb } from '../../db/client.ts';
 import { createBlobStore } from '../feed-deps.ts';
-import { createPool } from '../runtime.ts';
+import { createLogger, createPool } from '../runtime.ts';
 
 const ssm = new SSMClient({});
 
@@ -51,7 +51,7 @@ export async function createLambdaRuntime(role: string) {
   await resolveDatabaseUrl();
   await resolveAdminPassword();
   const config = loadConfig();
-  const logger = pino({ level: config.logLevel, base: { role } });
+  const logger = createLogger(config, role);
   const pool = createPool(config, logger, {
     api: role === 'api',
     max: 2,

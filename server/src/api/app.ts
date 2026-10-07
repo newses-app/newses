@@ -69,6 +69,14 @@ export function buildApp(deps: AppDeps) {
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(errorHandler);
   registerRequestDiagnostics(app, { slowMs: 2000, ...deps.diagnostics });
+  app.addHook('onSend', (request, reply, payload, done) => {
+    void reply.header('x-content-type-options', 'nosniff');
+    // API responses carry per-user data; routes that may be cached set their own cache-control.
+    if (request.url.startsWith('/api/') && !reply.hasHeader('cache-control')) {
+      void reply.header('cache-control', 'no-store');
+    }
+    done(null, payload);
+  });
 
   app.get('/healthz', async (_request, reply) => {
     const results = await Promise.all(

@@ -29,6 +29,7 @@ import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutHandler } from '../composables/useShortcuts.ts';
 import { useTreeEditing } from '../composables/useTreeEditing.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
+import { safeUrl } from '../lib/format.ts';
 import { parseStream, SPECIAL_FEEDS, type StreamKey } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -306,9 +307,11 @@ useShortcutHandler((action: ShortcutAction) => {
     case 'toggleUnread':
       if (entry) change([entry], { unread: !entry.unread });
       return true;
-    case 'openOriginal':
-      if (entry?.link) window.open(entry.link, '_blank', 'noopener,noreferrer');
+    case 'openOriginal': {
+      const link = safeUrl(entry?.link);
+      if (link) window.open(link, '_blank', 'noopener,noreferrer');
       return true;
+    }
     case 'closeArticle':
       if (entryId.value !== null) void closeArticle();
       return true;

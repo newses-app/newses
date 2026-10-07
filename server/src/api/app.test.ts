@@ -41,3 +41,21 @@ describe('trustProxy', () => {
     expect(response.json()).toEqual({ ip: '203.0.113.9' });
   });
 });
+
+describe('security headers', () => {
+  it('sends nosniff everywhere and no-store on API responses', async () => {
+    const app = buildApp({ logger, healthChecks: {} });
+    app.get('/api/v1/thing', () => ({ ok: true }));
+    app.get('/api/v1/cached', (_request, reply) =>
+      reply.header('cache-control', 'private, max-age=60').send({ ok: true }),
+    );
+    const api = await app.inject({ url: '/api/v1/thing' });
+    expect(api.headers['x-content-type-options']).toBe('nosniff');
+    expect(api.headers['cache-control']).toBe('no-store');
+    const cached = await app.inject({ url: '/api/v1/cached' });
+    expect(cached.headers['cache-control']).toBe('private, max-age=60');
+    const health = await app.inject({ url: '/healthz' });
+    expect(health.headers['x-content-type-options']).toBe('nosniff');
+    expect(health.headers['cache-control']).toBeUndefined();
+  });
+});

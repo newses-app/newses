@@ -136,6 +136,22 @@ describe('parseFeed', () => {
     expect(load('rss091.xml').ttlSeconds).toBeNull();
   });
 
+  it('drops links and enclosures that are not http(s)', () => {
+    const feed = parseFeed(
+      `<rss version="2.0"><channel><title>T</title><link>javascript:alert(1)</link>
+        <item><title>A</title><link>javascript:alert(1)</link>
+          <enclosure url="data:text/html,x" type="text/html" length="1"/></item>
+        <item><title>B</title><link>/relative</link></item>
+      </channel></rss>`,
+      FEED_URL,
+    );
+    expect(feed.siteUrl).toBeNull();
+    expect(feed.entries.map((e) => [e.link, e.enclosures])).toEqual([
+      [null, []],
+      ['https://edge.example/relative', []],
+    ]);
+  });
+
   it('rejects HTML pages and structurally broken XML', () => {
     expect(() => load('not-a-feed.html')).toThrow(FeedParseError);
     expect(() => load('truncated.xml')).toThrow(FeedParseError);

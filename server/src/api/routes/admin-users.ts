@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { UserService } from '../../core/auth/users.ts';
 import { requireAdmin } from '../auth.ts';
 import { toUser } from '../dto.ts';
+import { logSecurity } from '../security-log.ts';
 
 const idParams = z.object({ id: z.coerce.number().int() });
 
@@ -24,7 +25,9 @@ export const adminUserRoutes: FastifyPluginAsyncZod<{ users: UserService }> = (a
     { schema: { body: createUserRequestSchema, response: { 201: userSchema } } },
     async (request, reply) => {
       const { login, password, role } = request.body;
-      return reply.code(201).send(toUser(await users.create(login, password, role)));
+      const user = await users.create(login, password, role);
+      logSecurity(request, 'user_created', { targetUserId: user.id, role });
+      return reply.code(201).send(toUser(user));
     },
   );
 
@@ -33,12 +36,12 @@ export const adminUserRoutes: FastifyPluginAsyncZod<{ users: UserService }> = (a
     { schema: { params: idParams, body: updateUserRequestSchema, response: { 200: userSchema } } },
     async (request) => {
       const { role, disabled } = request.body;
-      return toUser(
-        await users.update(request.params.id, {
-          ...(role && { role }),
-          ...(disabled !== undefined && { disabled }),
-        }),
-      );
+      const user = await users.update(request.params.id, {
+        ...(role && { role }),
+        ...(disabled !== undefined && { disabled }),
+      });
+      logSecurity(request, 'user_updated', { targetUserId: user.id, role, disabled });
+      return toUser(user);
     },
   );
 
@@ -47,12 +50,14 @@ export const adminUserRoutes: FastifyPluginAsyncZod<{ users: UserService }> = (a
     { schema: { params: idParams, body: resetPasswordRequestSchema } },
     async (request, reply) => {
       await users.setPassword(request.params.id, request.body.password);
+      logSecurity(request, 'user_password_reset', { targetUserId: request.params.id });
       return reply.code(204).send();
     },
   );
 
   app.delete('/admin/users/:id', { schema: { params: idParams } }, async (request, reply) => {
     await users.delete(request.params.id);
+    logSecurity(request, 'user_deleted', { targetUserId: request.params.id });
     return reply.code(204).send();
   });
   return Promise.resolve();

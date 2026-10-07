@@ -9,7 +9,7 @@ services:
       VIRTUAL_HOST: ${VIRTUAL_HOST:?set VIRTUAL_HOST in docker/.env}
       VIRTUAL_PORT: '8080'
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST:-}
-      TRUST_PROXY: ${TRUST_PROXY:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
     networks:
       - default
       - proxy

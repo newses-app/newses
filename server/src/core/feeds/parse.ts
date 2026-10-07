@@ -1,5 +1,6 @@
 import { parseFeed as parseAnyFeed } from 'feedsmith';
 import { parseFeedDate } from './dates.ts';
+import { httpUrl } from './url.ts';
 
 export interface ParsedEnclosure {
   url: string;
@@ -54,22 +55,13 @@ interface Media {
 const text = (value: Text): string | null =>
   (typeof value === 'string' ? value : value?.value)?.trim() || null;
 
-function resolve(url: string | null | undefined, base: string | null): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url.trim(), base ?? undefined).href;
-  } catch {
-    return url.trim() || null;
-  }
-}
-
 function mediaEnclosures(media: Media | undefined, base: string | null): ParsedEnclosure[] {
   const contents = [
     ...(media?.contents ?? []),
     ...(media?.groups ?? []).flatMap((g) => g.contents ?? []),
   ];
   return contents.flatMap((m) => {
-    const url = resolve(m.url, base);
+    const url = httpUrl(m.url, base);
     return url
       ? [
           {
@@ -139,7 +131,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
   switch (parsed.format) {
     case 'rss': {
       const feed = parsed.feed;
-      const siteUrl = resolve(feed.link, feedUrl);
+      const siteUrl = httpUrl(feed.link, feedUrl);
       const feedAuthor = feed.dc?.creators?.[0] ?? feed.itunes?.author ?? null;
       return {
         format: 'rss',
@@ -151,7 +143,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
           const duration = item.itunes?.duration ?? null;
           const enclosures = uniqueByUrl([
             ...(item.enclosures ?? []).flatMap((e) =>
-              enclosure(resolve(e.url, siteUrl ?? feedUrl), e.type, e.length),
+              enclosure(httpUrl(e.url, siteUrl ?? feedUrl), e.type, e.length),
             ),
             ...mediaEnclosures(item.media, siteUrl ?? feedUrl),
           ]);
@@ -160,7 +152,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
             first.durationSeconds = duration;
           return {
             guid: item.guid?.value?.trim() || null,
-            link: resolve(item.link ?? permalink, siteUrl ?? feedUrl),
+            link: httpUrl(item.link ?? permalink, siteUrl ?? feedUrl),
             title: text(item.title),
             author:
               item.dc?.creators?.[0] ??
@@ -178,20 +170,20 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
     }
     case 'atom': {
       const feed = parsed.feed;
-      const base = resolve(feed.xml?.base, feedUrl) ?? feedUrl;
+      const base = httpUrl(feed.xml?.base, feedUrl) ?? feedUrl;
       const alternate = (links?: { href?: string; rel?: string }[]) =>
         links?.find((l) => !l.rel || l.rel === 'alternate')?.href;
       const feedAuthor = feed.authors?.[0]?.name ?? null;
       return {
         format: 'atom',
         title: text(feed.title),
-        siteUrl: resolve(alternate(feed.links), base),
+        siteUrl: httpUrl(alternate(feed.links), base),
         ttlSeconds: ttlSeconds(undefined, feed.sy),
         entries: (feed.entries ?? []).map((entry) => {
           const media = entry.media;
           return {
             guid: entry.id?.trim() || null,
-            link: resolve(alternate(entry.links), base),
+            link: httpUrl(alternate(entry.links), base),
             title: text(entry.title),
             author: entry.authors?.[0]?.name ?? entry.dc?.creators?.[0] ?? feedAuthor,
             content:
@@ -203,7 +195,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
             enclosures: uniqueByUrl([
               ...(entry.links ?? [])
                 .filter((l) => l.rel === 'enclosure')
-                .flatMap((l) => enclosure(resolve(l.href, base), l.type, l.length)),
+                .flatMap((l) => enclosure(httpUrl(l.href, base), l.type, l.length)),
               ...mediaEnclosures(media, base),
             ]),
             categories: (entry.categories ?? [])
@@ -215,7 +207,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
     }
     case 'rdf': {
       const feed = parsed.feed;
-      const siteUrl = resolve(feed.link, feedUrl);
+      const siteUrl = httpUrl(feed.link, feedUrl);
       return {
         format: 'rdf',
         title: text(feed.title),
@@ -223,7 +215,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
         ttlSeconds: ttlSeconds(undefined, feed.sy),
         entries: (feed.items ?? []).map((item) => ({
           guid: item.rdf?.about?.trim() || item.link?.trim() || null,
-          link: resolve(item.link, siteUrl ?? feedUrl),
+          link: httpUrl(item.link, siteUrl ?? feedUrl),
           title: text(item.title),
           author: item.dc?.creators?.[0] ?? null,
           content: item.content?.encoded ?? item.description ?? null,
@@ -236,7 +228,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
     }
     case 'json': {
       const feed = parsed.feed;
-      const siteUrl = resolve(feed.home_page_url, feedUrl);
+      const siteUrl = httpUrl(feed.home_page_url, feedUrl);
       return {
         format: 'json',
         title: text(feed.title),
@@ -244,14 +236,14 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
         ttlSeconds: null,
         entries: (feed.items ?? []).map((item) => ({
           guid: item.id?.trim() || null,
-          link: resolve(item.url ?? item.external_url, siteUrl ?? feedUrl),
+          link: httpUrl(item.url ?? item.external_url, siteUrl ?? feedUrl),
           title: text(item.title),
           author: item.authors?.[0]?.name ?? feed.authors?.[0]?.name ?? null,
           content: item.content_html ?? item.content_text ?? item.summary ?? null,
           publishedAt: parseFeedDate(item.date_published ?? item.date_modified),
           updatedAt: parseFeedDate(item.date_modified),
           enclosures: (item.attachments ?? []).flatMap((a) =>
-            enclosure(resolve(a.url, siteUrl ?? feedUrl), a.mime_type, a.size_in_bytes),
+            enclosure(httpUrl(a.url, siteUrl ?? feedUrl), a.mime_type, a.size_in_bytes),
           ),
           categories: item.tags ?? [],
         })),

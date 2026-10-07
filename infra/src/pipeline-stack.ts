@@ -69,6 +69,7 @@ export class PipelineStack extends Stack {
         installCommands: ['node --version', 'corepack enable', 'pnpm install --frozen-lockfile'],
         commands: [
           'pnpm check',
+          'pnpm audit --prod --audit-level high',
           'pnpm --filter @rss-reader/web build',
           'cd infra && pnpm exec cdk synth',
         ],

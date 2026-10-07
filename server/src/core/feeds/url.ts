@@ -22,3 +22,14 @@ export function normalizeFeedUrl(input: string): string {
   url.hash = '';
   return url.href;
 }
+
+/** Absolute http(s) URL, or null: clients open these, so `javascript:` and `data:` must not pass. */
+export function httpUrl(input: string | null | undefined, base?: string | null): string | null {
+  if (!input?.trim()) return null;
+  try {
+    const url = new URL(input.trim(), base ?? undefined);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}

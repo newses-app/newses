@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
-import { feedSources } from '../../db/schema.ts';
+import { feedSources, subscriptions, users } from '../../db/schema.ts';
 import { FakeFetcher } from '../../test/fake-fetcher.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { MemoryBlobStore, silentLogger } from '../../test/fakes.ts';
@@ -60,6 +60,19 @@ describe('FaviconService', () => {
     const icon = await service.get(source?.id ?? 0);
     expect(icon?.contentType).toBe('image/png');
     expect([...(icon?.data ?? [])]).toEqual([...PNG]);
+
+    const [reader, stranger] = await db
+      .insert(users)
+      .values([
+        { login: 'icon-reader', passwordHash: 'x' },
+        { login: 'icon-stranger', passwordHash: 'x' },
+      ])
+      .returning();
+    await db
+      .insert(subscriptions)
+      .values({ userId: reader?.id ?? 0, feedSourceId: source?.id ?? 0 });
+    expect(await service.getForUser(reader?.id ?? 0, source?.id ?? 0)).not.toBeNull();
+    expect(await service.getForUser(stranger?.id ?? 0, source?.id ?? 0)).toBeNull();
   });
 
   it('falls back to /favicon.ico and records the check when nothing is found', async () => {

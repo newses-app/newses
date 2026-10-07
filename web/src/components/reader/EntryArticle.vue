@@ -12,7 +12,7 @@ import {
 } from '@mdi/js';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatDateTime } from '../../lib/format.ts';
+import { formatDateTime, safeUrl } from '../../lib/format.ts';
 
 const props = defineProps<{ entry: Entry }>();
 const emit = defineEmits<{ change: [state: EntryState]; select: [] }>();
@@ -22,6 +22,10 @@ const date = computed(() =>
   formatDateTime(props.entry.publishedAt ?? props.entry.sortAt, locale.value),
 );
 const title = computed(() => props.entry.title ?? t('entries.untitled'));
+const link = computed(() => safeUrl(props.entry.link));
+const enclosures = computed(() =>
+  (props.entry.enclosures ?? []).filter((enclosure) => safeUrl(enclosure.url)),
+);
 </script>
 
 <template>
@@ -29,8 +33,8 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
     <header class="mb-4">
       <h2 class="entry-heading text-headline-small mb-1" tabindex="-1">
         <a
-          v-if="entry.link"
-          :href="entry.link"
+          v-if="link"
+          :href="link"
           target="_blank"
           rel="noopener noreferrer"
           class="entry-title"
@@ -72,10 +76,10 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
           {{ entry.unread ? t('entries.markRead') : t('entries.markUnread') }}
         </v-btn>
         <v-btn
-          v-if="entry.link"
+          v-if="link"
           size="small"
           :prepend-icon="mdiOpenInNew"
-          :href="entry.link"
+          :href="link"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -88,10 +92,10 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-else-if="entry.content" class="article-content" v-html="entry.content" />
     <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
-    <v-list v-if="entry.enclosures?.length" density="compact" class="mt-4">
+    <v-list v-if="enclosures.length" density="compact" class="mt-4">
       <v-list-subheader>{{ t('entries.attachments') }}</v-list-subheader>
       <v-list-item
-        v-for="enclosure in entry.enclosures"
+        v-for="enclosure in enclosures"
         :key="enclosure.url"
         :href="enclosure.url"
         target="_blank"

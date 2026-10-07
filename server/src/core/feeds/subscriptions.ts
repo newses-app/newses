@@ -155,16 +155,7 @@ export class SubscriptionService {
     try {
       response = await this.#fetcher.fetch(url);
     } catch (err) {
-      if (
-        err instanceof FetchError &&
-        (err.code === 'blocked_address' || err.code === 'invalid_url')
-      ) {
-        throw new DomainError('invalid_input', err.message);
-      }
-      throw new DomainError(
-        'fetch_failed',
-        `Could not fetch ${url}: ${err instanceof Error ? err.message : 'error'}`,
-      );
+      throw fetchFailure(url, err);
     }
     const body = decodeBody(response.body, response.contentType);
     const finalUrl = normalizeFeedUrl(response.url);
@@ -249,5 +240,29 @@ export class SubscriptionService {
       .from(categories)
       .where(and(eq(categories.id, categoryId), eq(categories.userId, userId)));
     if (!row) throw new DomainError('not_found', 'Category not found');
+  }
+}
+
+/**
+ * Says why a URL could not be subscribed without echoing network errors, which would let users
+ * probe hosts and ports through the server.
+ */
+function fetchFailure(url: string, err: unknown): DomainError {
+  if (!(err instanceof FetchError))
+    return new DomainError('fetch_failed', `Could not fetch ${url}`);
+  switch (err.code) {
+    case 'invalid_url':
+      return new DomainError('invalid_input', `Not a valid URL: ${url}`);
+    case 'blocked_address':
+      return new DomainError('invalid_input', `${url} is on a private network`);
+    case 'http_status':
+      return new DomainError('fetch_failed', `${url} returned HTTP ${String(err.status)}`);
+    case 'too_large':
+      return new DomainError('fetch_failed', `${url} is too large`);
+    case 'too_many_redirects':
+      return new DomainError('fetch_failed', `${url} redirects too many times`);
+    case 'timeout':
+    case 'network':
+      return new DomainError('fetch_failed', `Could not connect to ${url}`);
   }
 }

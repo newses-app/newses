@@ -1,7 +1,7 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { Parser } from 'htmlparser2';
 import type { Db } from '../../db/client.ts';
-import { feedSources } from '../../db/schema.ts';
+import { feedSources, subscriptions } from '../../db/schema.ts';
 import type { Blob, BlobStore, Logger } from '../ports.ts';
 import { decodeBody } from './decode.ts';
 import type { HostLimiter } from './host-limiter.ts';
@@ -128,6 +128,16 @@ export class FaviconService {
       }
     }
     return null;
+  }
+
+  /** The icon of a feed the user subscribes to; other feeds are not disclosed. */
+  async getForUser(userId: number, feedSourceId: number): Promise<Blob | null> {
+    const [subscribed] = await this.#db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(and(eq(subscriptions.userId, userId), eq(subscriptions.feedSourceId, feedSourceId)))
+      .limit(1);
+    return subscribed ? this.get(feedSourceId) : null;
   }
 
   async get(feedSourceId: number): Promise<Blob | null> {

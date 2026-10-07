@@ -31,3 +31,14 @@ export function hostOf(url: string): string {
     return url;
   }
 }
+
+/** The URL if it is absolute http(s), else null; anything else must never reach `href` or `window.open`. */
+export function safeUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}

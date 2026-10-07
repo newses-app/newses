@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { COMMON_PASSWORDS } from './common-passwords.ts';
 
 export const loginNameSchema = z
   .string()
@@ -7,7 +8,11 @@ export const loginNameSchema = z
   .max(64)
   .regex(/^[\p{L}\p{N}._@-]+$/u, 'Use letters, digits, and . _ @ - only');
 
-export const passwordSchema = z.string().min(8).max(1024);
+export const passwordSchema = z
+  .string()
+  .min(8)
+  .max(1024)
+  .refine((p) => !COMMON_PASSWORDS.has(p.toLowerCase()), 'This password is too common');
 
 export const userRoleSchema = z.enum(['admin', 'user']);
 

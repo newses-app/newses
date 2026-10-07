@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passwordSchema } from '@rss-reader/shared';
 import type { AppConfig } from '../core/config.ts';
 
 const schema = z
@@ -31,7 +32,7 @@ const schema = z
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(60),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
     ADMIN_LOGIN: z.string().min(1).optional(),
-    ADMIN_PASSWORD: z.string().min(8).optional(),
+    ADMIN_PASSWORD: passwordSchema.optional(),
   })
   .refine((e) => (e.ADMIN_LOGIN === undefined) === (e.ADMIN_PASSWORD === undefined), {
     message: 'ADMIN_LOGIN and ADMIN_PASSWORD must be set together',

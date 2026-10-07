@@ -129,7 +129,7 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
     '/favicons/:id',
     { schema: { params: z.object({ id: z.coerce.number().int() }) } },
     async (request, reply) => {
-      const icon = await favicons.get(request.params.id);
+      const icon = await favicons.getForUser(requireAuth(request).user.id, request.params.id);
       if (!icon) return reply.code(404).send({ error: 'not_found', message: 'No icon' });
       return (
         reply

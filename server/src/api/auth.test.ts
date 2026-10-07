@@ -166,6 +166,47 @@ describe('auth API', () => {
   });
 });
 
+describe('password change', () => {
+  it('throttles wrong current passwords on the account', async () => {
+    const admin = await loginWithCookie('admin', 'admin password');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/users',
+      headers: { cookie: admin.cookie, 'x-csrf-token': admin.csrf },
+      payload: { login: 'dave', password: 'dave password' },
+    });
+    expect(res.statusCode).toBe(201);
+    const { cookie, csrf } = await loginWithCookie('dave', 'dave password');
+    const attempt = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/password',
+        headers: { cookie, 'x-csrf-token': csrf },
+        payload: { currentPassword: 'wrong', newPassword: 'dave password 2' },
+      });
+    for (let i = 0; i < 5; i++) expect((await attempt()).statusCode).toBe(401);
+    expect((await attempt()).statusCode).toBe(429);
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/admin/users/${String(res.json<{ id: number }>().id)}`,
+      headers: { cookie: admin.cookie, 'x-csrf-token': admin.csrf },
+    });
+    expect(deleted.statusCode).toBe(204);
+  });
+
+  it('rejects common passwords', async () => {
+    const { cookie, csrf } = await loginWithCookie('admin', 'admin password');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/users',
+      headers: { cookie, 'x-csrf-token': csrf },
+      payload: { login: 'erin', password: 'password1' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 describe('admin users API', () => {
   it('forbids non-admins', async () => {
     const { cookie } = await loginWithCookie('alice', 'alice password 2');

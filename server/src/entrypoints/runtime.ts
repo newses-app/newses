@@ -8,7 +8,7 @@ import type { Logger } from '../core/ports.ts';
 /** Config, logger, and pool shared by every entrypoint, plus ordered graceful shutdown. */
 export function createRuntime(role: string) {
   const config = loadConfig();
-  const logger = pino({ level: config.logLevel, base: { role } });
+  const logger = createLogger(config, role);
   const pool = createPool(config, logger, { api: role === 'server' });
 
   const shutdownSteps: (() => Promise<void>)[] = [];
@@ -42,6 +42,22 @@ export function createRuntime(role: string) {
       shutdownSteps.push(step);
     },
   };
+}
+
+/** Credentials never reach the logs, whatever a caller passes in. */
+const REDACT = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-csrf-token"]',
+  'res.headers["set-cookie"]',
+  '*.password',
+  '*.currentPassword',
+  '*.newPassword',
+  '*.token',
+];
+
+export function createLogger(config: AppConfig, role: string): pino.Logger {
+  return pino({ level: config.logLevel, base: { role }, redact: REDACT });
 }
 
 /** The database pool every role uses; `api` adds request-sized statement and lock limits. */

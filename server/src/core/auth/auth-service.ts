@@ -16,6 +16,8 @@ export interface LoginInput {
   userAgent: string | null;
 }
 
+const accountKey = (login: string) => `login:${login.trim().toLowerCase()}`;
+
 export class AuthService {
   readonly #users: UserService;
   readonly #sessions: SessionService;
@@ -28,21 +30,21 @@ export class AuthService {
   }
 
   async login(input: LoginInput): Promise<NewSession & { user: UserRow }> {
-    const accountKey = `login:${input.login.trim().toLowerCase()}`;
+    const account = accountKey(input.login);
     const ipKey = `ip:${input.ip}`;
-    await this.#throttle.check([accountKey, ipKey]);
+    await this.#throttle.check([account, ipKey]);
 
     const user = await this.#users.findByLogin(input.login);
     const valid = user
       ? await verifyPassword(user.passwordHash, input.password)
       : (await verifyAgainstDummy(input.password), false);
     if (!user || !valid || user.disabledAt !== null) {
-      await this.#throttle.recordFailure(accountKey, ACCOUNT_RULE);
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
       await this.#throttle.recordFailure(ipKey, IP_RULE);
       throw new DomainError('invalid_credentials', 'Invalid login or password');
     }
 
-    await this.#throttle.reset(accountKey);
+    await this.#throttle.reset(account);
     await this.#users.recordLogin(user.id);
     const created = await this.#sessions.create(user.id, input.kind, input.userAgent);
     return { ...created, user };
@@ -54,9 +56,14 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
+    // Shares the login counter, so a stolen session cannot be used to guess the password.
+    const account = accountKey(user.login);
+    await this.#throttle.check([account]);
     if (!(await verifyPassword(user.passwordHash, currentPassword))) {
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
       throw new DomainError('invalid_credentials', 'Current password is incorrect');
     }
+    await this.#throttle.reset(account);
     await this.#users.setPassword(user.id, newPassword, currentSessionId);
   }
 }

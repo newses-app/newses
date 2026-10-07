@@ -88,6 +88,7 @@ Rules:
 - Below 900 px one pane shows at a time; below 700 px secondary toolbar actions move into a menu.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
+- Every response carries `X-Content-Type-Options: nosniff`; API responses default to `Cache-Control: no-store`. On AWS, CloudFront adds HSTS to API responses too.
 - In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`. On AWS, CloudFront serves the build from S3 with the same headers, and a viewer-request function maps extensionless paths to `index.html`.
 
 ## Ingest pipeline
@@ -98,6 +99,7 @@ Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 source
   decode     bytes → text; charset from BOM, then HTTP Content-Type, then XML declaration/HTML meta, else UTF-8
   parse      feedsmith → per-format mapping to normalised entries; XML that fails to parse is a fetch error
              dates parsed leniently, zone-less dates are UTC, unparseable dates are null
+             entry links, enclosures, and site URLs kept only if absolute http(s)
   identify   feed GUID, else sha256(link + title), else sha256(content); duplicates within a document dropped
   sanitise   allow-list HTML; strip control characters; resolve relative URLs (incl. srcset); titles to plain text
   transform  hook: readability, site rewrites
@@ -128,7 +130,8 @@ Purge (every 6 h):
 
 Fetching untrusted URLs (`HttpFetcher`):
 - http(s) only, at most 5 redirects, a 20 s timeout, and a 10 MB body limit (lower per request where less is needed); downloads stop once the limit is exceeded. Responses are decompressed.
-- Private, loopback, link-local, and multicast addresses are refused unless allowed by `FETCH_ALLOW_PRIVATE_NETWORKS`. The check runs on the resolved address at connect time, which also covers redirects and DNS rebinding.
+- Private, loopback, link-local, multicast, documentation, and IPv4-embedding IPv6 (NAT64, 6to4, Teredo) addresses are refused unless allowed by `FETCH_ALLOW_PRIVATE_NETWORKS`. The check runs on the resolved address at connect time, which also covers redirects and DNS rebinding.
+- Subscribe errors name the failure class (private network, HTTP status, too large, unreachable), never the network error text.
 
 Subscription lifecycle:
 - Subscribing normalises the URL. An existing feed source is reused without fetching. Otherwise the URL is fetched and must parse as a feed, or be an HTML page whose `<link rel="alternate">` names exactly one feed; several feeds are returned for the user to choose.
@@ -184,7 +187,9 @@ Search:
 
 - Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days and bearer sessions 90 days, both sliding on use.
 - Cookie-session requests other than GET/HEAD/OPTIONS must send the session's CSRF token in `X-CSRF-Token`. Login accepts JSON only, so cross-site form posts cannot log a browser in.
-- Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes.
+- Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes. A wrong current password when changing it counts against the account.
+- Passwords are 8–1,024 characters and not on the bundled common-password list (`shared/src/common-passwords.ts`).
+- Logins, failures, lockouts, CSRF rejections, password changes, session revocations, and admin user changes are logged with a `security` field naming the event. The logger redacts credentials and auth headers.
 - Changing or resetting a password, or disabling a user, revokes their other sessions. The last active admin cannot be demoted, disabled, or deleted.
 
 ## APIs

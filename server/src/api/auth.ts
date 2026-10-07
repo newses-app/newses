@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   type SessionRow,
@@ -6,6 +7,7 @@ import {
   type UserRow,
 } from '../core/auth/sessions.ts';
 import { HttpError } from './errors.ts';
+import { logSecurity } from './security-log.ts';
 
 export const SESSION_COOKIE = 'rss_session';
 const CSRF_HEADER = 'x-csrf-token';
@@ -36,6 +38,13 @@ export function clearSessionCookie(reply: FastifyReply): void {
   void reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
+function csrfMatches(header: string | string[] | undefined, expected: string | null): boolean {
+  if (typeof header !== 'string' || !expected) return false;
+  const given = Buffer.from(header);
+  const wanted = Buffer.from(expected);
+  return given.length === wanted.length && timingSafeEqual(given, wanted);
+}
+
 /**
  * Resolves `Authorization: Bearer` or the session cookie into `request.auth`.
  * Cookie-authenticated unsafe requests must echo the session's CSRF token.
@@ -54,8 +63,8 @@ export function registerAuth(app: FastifyInstance, sessions: SessionService): vo
     if (!bearer) {
       if (result.session.kind !== 'cookie') return;
       if (!SAFE_METHODS.has(request.method)) {
-        const header = request.headers[CSRF_HEADER];
-        if (header !== result.session.csrfToken) {
+        if (!csrfMatches(request.headers[CSRF_HEADER], result.session.csrfToken)) {
+          logSecurity(request, 'csrf_rejected', { userId: result.user.id });
           throw new HttpError(403, 'csrf', 'Missing or invalid CSRF token');
         }
       }

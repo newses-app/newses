@@ -5,7 +5,7 @@ import { categories, feedSources, subscriptions } from '../../db/schema.ts';
 import type { CategoryService } from '../categories.ts';
 import { DomainError } from '../errors.ts';
 import type { SubscriptionService } from './subscriptions.ts';
-import { normalizeFeedUrl } from './url.ts';
+import { httpUrl, normalizeFeedUrl } from './url.ts';
 
 export interface OpmlImportResult {
   categoriesCreated: number;
@@ -70,7 +70,7 @@ export class OpmlService {
             }
             const [source] = await tx
               .insert(feedSources)
-              .values({ url, title: title || null, siteUrl: outline.htmlUrl?.trim() || null })
+              .values({ url, title: title || null, siteUrl: httpUrl(outline.htmlUrl) })
               .onConflictDoUpdate({ target: feedSources.url, set: { url: sql`excluded.url` } })
               .returning({ id: feedSources.id });
             if (!source) throw new Error('Feed source upsert returned no row');

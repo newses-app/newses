@@ -74,6 +74,19 @@ export class EdgeStack extends Stack {
       },
     });
 
+    // API routes set their own CSP (e.g. sandboxed icons), so only transport headers are forced.
+    const apiHeaders = new cloudfront.ResponseHeadersPolicy(this, 'ApiHeaders', {
+      responseHeadersPolicyName: resourceName(stage, 'api-headers'),
+      securityHeadersBehavior: {
+        contentTypeOptions: { override: true },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: false,
+          override: true,
+        },
+      },
+    });
+
     const apiOrigin = new origins.HttpOrigin(
       `${props.api.apiId}.execute-api.${this.region}.amazonaws.com`,
       {
@@ -92,6 +105,7 @@ export class EdgeStack extends Stack {
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
       cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
       originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+      responseHeadersPolicy: apiHeaders,
     };
 
     this.distribution = new cloudfront.Distribution(this, 'Cdn', {

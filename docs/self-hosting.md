@@ -67,11 +67,11 @@ Both include `pool` (`waiting` > 0: requests queued for a database connection) a
 1. In `docker/.env`, set `VIRTUAL_HOST` (and `LETSENCRYPT_HOST` when acme-companion issues certificates). If nginx-proxy's Docker network is not called `nginx-proxy`, set `NGINX_PROXY_NETWORK`.
 2. Add the override file to every command: `C -f docker/compose.nginx-proxy.yaml up -d`.
 
-The server then joins the proxy network and is not published on the host. `TRUST_PROXY` defaults to `true`.
+The server then joins the proxy network and is not published on the host. `TRUST_PROXY` defaults to `1`, the proxy being the only hop.
 
 ### Other proxies
 
-Forward to the server's port 8080 and pass `X-Forwarded-For` and `X-Forwarded-Proto`. Set `TRUST_PROXY` to `true` only if the server port is reachable solely through the proxy; otherwise set it to the proxy's address.
+Forward to the server's port 8080 and pass `X-Forwarded-For` and `X-Forwarded-Proto`. Set `TRUST_PROXY` to the number of proxies in front of the server or to the proxy's address. `true` also trusts `X-Forwarded-For` entries sent by clients, which lets them evade per-IP login throttling.
 
 `/api/v1/events` is a long-lived event stream. nginx and nginx-proxy need no extra configuration. Other proxies must not buffer its responses and must allow at least 30 s between bytes (the server sends a heartbeat every 25 s).
 
