@@ -27,7 +27,7 @@ describe('RssReaderStage', () => {
     for (const template of [params, data, app, edge]) {
       template.resourceCountIs('AWS::SecretsManager::Secret', 0);
     }
-    params.resourceCountIs('Custom::GeneratedParameter', 3);
+    params.resourceCountIs('Custom::GeneratedParameter', 4);
     for (const template of [data, app, edge]) {
       template.resourceCountIs('Custom::GeneratedParameter', 0);
     }

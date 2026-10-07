@@ -11,6 +11,7 @@ export class ParamsStack extends Stack {
   readonly dbPassword: GeneratedParameter;
   readonly adminPassword: GeneratedParameter;
   readonly originHeader: GeneratedParameter;
+  readonly appSecret: GeneratedParameter;
 
   constructor(scope: Construct, id: string, props: StackProps & { stage: StageConfig }) {
     super(scope, id, props);
@@ -25,6 +26,11 @@ export class ParamsStack extends Stack {
       parameterName: `${path}/admin-password`,
       type: 'SecureString',
       length: 24,
+    });
+    this.appSecret = new GeneratedParameter(this, 'AppSecret', {
+      parameterName: `${path}/app-secret`,
+      type: 'SecureString',
+      length: 64,
     });
     // A String parameter, because CloudFront headers cannot resolve SecureString parameters.
     this.originHeader = new GeneratedParameter(this, 'OriginHeader', {

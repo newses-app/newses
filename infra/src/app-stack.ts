@@ -41,7 +41,7 @@ export class AppStack extends Stack {
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
     const { stage, cluster, params, blobs } = props;
-    const { dbPassword, adminPassword, originHeader } = params;
+    const { dbPassword, adminPassword, originHeader, appSecret } = params;
 
     const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', {
       queueName: resourceName(stage, 'feed-fetch-dlq'),
@@ -84,6 +84,7 @@ export class AppStack extends Stack {
           DB_NAME: 'rss_reader',
           DB_USER: 'rss_reader',
           DB_PASSWORD_PARAMETER: dbPassword.parameterName,
+          APP_SECRET_PARAMETER: appSecret.parameterName,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
@@ -113,6 +114,7 @@ export class AppStack extends Stack {
         },
       });
       dbPassword.grantRead(handler);
+      appSecret.grantRead(handler);
       blobs.grantReadWrite(handler);
       fetchQueue.grantSendMessages(handler);
       faviconQueue.grantSendMessages(handler);

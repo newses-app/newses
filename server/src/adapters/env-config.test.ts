@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from './env-config.ts';
 
+const APP_SECRET = '0123456789abcdef0123456789abcdef';
+
 describe('loadConfig', () => {
   it('applies defaults', () => {
-    expect(loadConfig({ DATABASE_URL: 'postgres://u:p@db:5432/app' })).toEqual({
+    expect(loadConfig({ DATABASE_URL: 'postgres://u:p@db:5432/app', APP_SECRET })).toEqual({
       databaseUrl: 'postgres://u:p@db:5432/app',
       http: { host: '0.0.0.0', port: 8080, trustProxy: false },
       logLevel: 'info',
@@ -12,6 +14,7 @@ describe('loadConfig', () => {
       webDir: null,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
+      appSecret: APP_SECRET,
       bootstrapAdmin: null,
     });
   });
@@ -19,6 +22,7 @@ describe('loadConfig', () => {
   it('parses overrides', () => {
     const config = loadConfig({
       DATABASE_URL: 'postgresql://db/app',
+      APP_SECRET,
       HOST: '127.0.0.1',
       PORT: '3000',
       LOG_LEVEL: 'debug',
@@ -30,7 +34,7 @@ describe('loadConfig', () => {
   });
 
   it('parses proxy trust and admin bootstrap', () => {
-    const base = { DATABASE_URL: 'postgres://db/app' };
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
     expect(loadConfig({ ...base, TRUST_PROXY: 'true' }).http.trustProxy).toBe(true);
     expect(loadConfig({ ...base, TRUST_PROXY: '10.0.0.0/8' }).http.trustProxy).toBe('10.0.0.0/8');
     expect(loadConfig({ ...base, TRUST_PROXY: '2' }).http.trustProxy).toBe(2);
@@ -51,6 +55,9 @@ describe('loadConfig', () => {
 
   it('reports every invalid variable', () => {
     expect(() => loadConfig({ DATABASE_URL: 'mysql://db/app', PORT: 'abc' })).toThrow(ConfigError);
-    expect(() => loadConfig({ PORT: '70000' })).toThrow(/DATABASE_URL[\s\S]*PORT/);
+    expect(() => loadConfig({ PORT: '70000' })).toThrow(/DATABASE_URL[\s\S]*APP_SECRET[\s\S]*PORT/);
+    expect(() => loadConfig({ DATABASE_URL: 'postgres://db/app', APP_SECRET: 'short' })).toThrow(
+      /at least 32 characters/,
+    );
   });
 });

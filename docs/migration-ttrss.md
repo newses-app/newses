@@ -49,7 +49,7 @@ The official TTRSS compose stack does not publish the database port. Use one of:
 Run the importer on the TTRSS compose network, using the values from the TTRSS `.env`:
 
 ```
-docker run --rm --network <ttrss-project>_default -e DATABASE_URL=… <image> cli import-ttrss \
+docker run --rm --network <ttrss-project>_default -e DATABASE_URL=… -e APP_SECRET=… <image> cli import-ttrss \
   --source postgres://$TTRSS_DB_USER:$TTRSS_DB_PASS@db/$TTRSS_DB_NAME
 ```
 

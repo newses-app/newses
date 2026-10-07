@@ -5,6 +5,7 @@ import type { AppConfig } from '../core/config.ts';
 const schema = z
   .object({
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    APP_SECRET: z.string().min(32, 'APP_SECRET needs at least 32 characters'),
     HOST: z.string().min(1).default('0.0.0.0'),
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
@@ -72,6 +73,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       e.FETCH_ALLOW_PRIVATE_NETWORKS === true || e.FETCH_ALLOW_PRIVATE_NETWORKS.length > 0
         ? e.FETCH_ALLOW_PRIVATE_NETWORKS
         : false,
+    appSecret: e.APP_SECRET,
     bootstrapAdmin:
       e.ADMIN_LOGIN && e.ADMIN_PASSWORD
         ? { login: e.ADMIN_LOGIN, password: e.ADMIN_PASSWORD }

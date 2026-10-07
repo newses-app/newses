@@ -43,6 +43,12 @@ async function resolveAdminPassword(): Promise<void> {
   process.env.ADMIN_PASSWORD = await readParameter('ADMIN_PASSWORD_PARAMETER');
 }
 
+/** Sets APP_SECRET from the parameter named by APP_SECRET_PARAMETER, unless it is set. */
+async function resolveAppSecret(): Promise<void> {
+  if (process.env.APP_SECRET) return;
+  process.env.APP_SECRET = await readParameter('APP_SECRET_PARAMETER');
+}
+
 /**
  * Config, logger, pool, and the AWS feed adapters, created once per Lambda cold start.
  * Connecting may wait for a paused Aurora Serverless database to resume (about 15 s).
@@ -50,6 +56,7 @@ async function resolveAdminPassword(): Promise<void> {
 export async function createLambdaRuntime(role: string) {
   await resolveDatabaseUrl();
   await resolveAdminPassword();
+  await resolveAppSecret();
   const config = loadConfig();
   const logger = createLogger(config, role);
   const pool = createPool(config, logger, {

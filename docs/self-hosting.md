@@ -4,7 +4,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 
 ## Install
 
-1. `cp docker/.env.example docker/.env` and set `POSTGRES_PASSWORD`.
+1. `cp docker/.env.example docker/.env`, set `POSTGRES_PASSWORD`, and set `APP_SECRET` to the output of `openssl rand -base64 48`.
 2. Set `ADMIN_LOGIN` and `ADMIN_PASSWORD` for the first admin, or create it with the CLI after step 3.
 3. `C up -d --build`
 
@@ -17,6 +17,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | Variable | Default | Purpose |
 |---|---|---|
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | — | Database credentials; also used to build `DATABASE_URL` |
+| `APP_SECRET` | — | At least 32 characters; keys for encrypting stored 2FA secrets and feed passwords and for signing tokens. Back it up with the database: changing or losing it disables 2FA for every user and clears feed passwords |
 | `HTTP_PORT` | `8080` | Host port for the server |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `TRUST_PROXY` | `false` | `true`, the number of proxy hops, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |

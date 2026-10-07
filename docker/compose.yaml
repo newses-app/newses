@@ -8,6 +8,7 @@ x-app: &app
   restart: unless-stopped
   environment:
     DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    APP_SECRET: ${APP_SECRET:?set APP_SECRET in docker/.env}
     LOG_LEVEL: ${LOG_LEVEL:-info}
     TRUST_PROXY: ${TRUST_PROXY:-false}
     FETCH_ALLOW_PRIVATE_NETWORKS: ${FETCH_ALLOW_PRIVATE_NETWORKS:-}

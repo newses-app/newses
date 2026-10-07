@@ -22,6 +22,8 @@ export interface AppConfig {
   feeds: FeedSettings;
   /** Private addresses feeds may be fetched from: true for all, or CIDRs. Blocked by default. */
   fetchAllowPrivateNetworks: boolean | string[];
+  /** Root of the keys that encrypt stored secrets and sign tokens; changing it voids them. */
+  appSecret: string;
   /** Creates this admin on startup when the database has no users. */
   bootstrapAdmin: { login: string; password: string } | null;
 }
