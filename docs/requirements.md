@@ -6,7 +6,7 @@
 |---|---|---|
 | P1 | MVP reader, self-hosted | Family members read daily feeds in the web app on a Docker deployment; OPML from TTRSS imported |
 | P1.5 | AWS deployment | P1 build runs serverless on the AWS `dev` stage, deployed by the CDK pipeline from the `dev` branch |
-| P1.6 | Security and accessibility | Image proxy, HTTP-auth feeds, 2FA, and app passwords in daily use; Accessibility and Security non-functional requirements verified on the AWS `dev` stage |
+| P1.6 | Security and accessibility | Image proxy, 2FA, and app passwords in daily use; Accessibility and Security non-functional requirements verified on the AWS `dev` stage |
 | P2 | Power features | Labels, tags, notes, published feed, share links, and reading preferences in daily use |
 | P3 | TTRSS cut-over | All TTRSS users imported; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Electron builds for Windows/macOS/Linux; Capacitor Android build installed on a device |
@@ -26,7 +26,7 @@
 | Feed errors | P1 | Last error and time shown per feed; "feeds with errors" view; feed auto-disables after a configurable number of consecutive failures |
 | Favicons | P1 | Fetched per site, cached, shown in tree and headlines; fallback icon |
 | Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, or labelled entries |
-| HTTP-auth feeds | P1.6 | Basic auth credentials per subscription, encrypted at rest |
+| HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
 | Per-feed options | Later | Hide from "All articles", pause updates, always show images, auto-fetch full text |
 | Feed debugger | Later | Dry-run fetch shows raw response, parsed entries, and filter matches |
 | Generated feeds | Later | Secret-key RSS feed for any feed, category, or label |
