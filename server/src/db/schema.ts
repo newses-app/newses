@@ -229,6 +229,11 @@ export const entries = pgTable(
     author: text('author'),
     content: text('content'),
     contentHash: text('content_hash').notNull(),
+    // Normalised feed categories, copied to each subscriber as tags when the entry is fanned out.
+    categories: text('categories')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     lang: text('lang'),
     publishedAt: tstz('published_at'),
     sourceUpdatedAt: tstz('source_updated_at'),
@@ -348,6 +353,24 @@ export const entryLabels = pgTable(
   (t) => [
     primaryKey({ columns: [t.userEntryId, t.labelId] }),
     index('entry_labels_label_idx').on(t.labelId, t.userEntryId),
+  ],
+);
+
+// Normalised (see `normaliseTag` in shared); inserts and deletes touch the user entry for sync.
+export const entryTags = pgTable(
+  'entry_tags',
+  {
+    userEntryId: bigint('user_entry_id', { mode: 'number' })
+      .notNull()
+      .references(() => userEntries.id, { onDelete: 'cascade' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tag: text('tag').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userEntryId, t.tag] }),
+    index('entry_tags_user_tag_idx').on(t.userId, t.tag, t.userEntryId),
   ],
 );
 

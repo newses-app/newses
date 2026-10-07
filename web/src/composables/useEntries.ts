@@ -1,10 +1,12 @@
 import type { Entry, EntryListResponse, EntryState, MarkReadRequest } from '@rss-reader/shared';
+import { normaliseTags } from '@rss-reader/shared/client';
 import { type InfiniteData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
 import { patchEntryPages, statePatch } from '../lib/entry-cache.ts';
 import { parseStream, type StreamKey } from '../lib/streams.ts';
 import { COUNTERS_KEY, live } from './useCounters.ts';
+import { TAGS_KEY } from './useTags.ts';
 
 export const ENTRIES_KEY = 'entries';
 const PAGE_SIZE = 50;
@@ -103,6 +105,19 @@ export function useEntryActions() {
     }
   }
 
+  /** Replaces the entry's tags. */
+  async function setTags(entry: Entry, tags: string[]): Promise<void> {
+    patchCaches([entry.id], { tags: normaliseTags(tags).sort() });
+    try {
+      patchCaches([entry.id], await api.entries.setTags(entry.id, tags));
+    } catch (error) {
+      patchCaches([entry.id], { tags: entry.tags });
+      throw error;
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: TAGS_KEY });
+    }
+  }
+
   /** Replaces the entry's labels. */
   async function setLabels(entry: Entry, labelIds: number[]): Promise<void> {
     patchCaches([entry.id], { labels: [...labelIds].sort((a, b) => a - b) });
@@ -122,5 +137,5 @@ export function useEntryActions() {
     return updated;
   }
 
-  return { setState, setNote, setLabels, markRead };
+  return { setState, setNote, setTags, setLabels, markRead };
 }

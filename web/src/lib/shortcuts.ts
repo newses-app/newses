@@ -12,6 +12,7 @@ export type ShortcutAction =
   | 'openOriginal'
   | 'editNote'
   | 'editLabels'
+  | 'editTags'
   | 'closeArticle'
   | 'search'
   | 'help'
@@ -29,7 +30,8 @@ export type ShortcutAction =
   | 'gotoStarred'
   | 'gotoPublished'
   | 'gotoRecentlyRead'
-  | 'gotoSettings';
+  | 'gotoSettings'
+  | 'gotoTags';
 
 /** Key sequences (space-separated chords) and their actions, grouped for the help overlay. */
 export const SHORTCUT_GROUPS: { group: string; bindings: [string, ShortcutAction][] }[] = [
@@ -58,6 +60,7 @@ export const SHORTCUT_GROUPS: { group: string; bindings: [string, ShortcutAction
       ['o', 'openOriginal'],
       ['a n', 'editNote'],
       ['a l', 'editLabels'],
+      ['T', 'editTags'],
       ['a q', 'closeArticle'],
     ],
   },
@@ -83,6 +86,7 @@ export const SHORTCUT_GROUPS: { group: string; bindings: [string, ShortcutAction
       ['g p', 'gotoPublished'],
       ['g r', 'gotoRecentlyRead'],
       ['g P', 'gotoSettings'],
+      ['g t', 'gotoTags'],
       ['?', 'help'],
     ],
   },

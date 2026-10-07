@@ -43,11 +43,11 @@ export const entryRoutes: FastifyPluginAsyncZod<
     '/entries',
     { schema: { querystring: entryListQuerySchema, response: { 200: entryListResponseSchema } } },
     async (request) => {
-      const { subscriptionId, categoryId, labelId, special, ...options } = request.query;
+      const { subscriptionId, categoryId, labelId, tag, special, ...options } = request.query;
       const userId = requireAuth(request).user.id;
       const page = await entries.list(userId, {
         ...options,
-        stream: { subscriptionId, categoryId, labelId, special },
+        stream: { subscriptionId, categoryId, labelId, tag, special },
       });
       return { ...page, entries: await withImages(userId, page.entries) };
     },
@@ -96,10 +96,11 @@ export const entryRoutes: FastifyPluginAsyncZod<
     '/entries/mark-read',
     { schema: { body: markReadRequestSchema, response: { 200: updatedCountSchema } } },
     async (request) => {
-      const { subscriptionId, categoryId, labelId, special, olderThanDays, maxId } = request.body;
+      const { subscriptionId, categoryId, labelId, tag, special, olderThanDays, maxId } =
+        request.body;
       const updated = await entries.markRead(
         requireAuth(request).user.id,
-        { subscriptionId, categoryId, labelId, special },
+        { subscriptionId, categoryId, labelId, tag, special },
         { olderThanDays, maxId },
       );
       return { updated };

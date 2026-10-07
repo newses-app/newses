@@ -4,6 +4,7 @@ import { createDb, type Db } from '../../db/client.ts';
 import {
   enclosures,
   entries,
+  entryTags,
   feedSources,
   subscriptions,
   userEntries,
@@ -183,5 +184,27 @@ describe('Ingester', () => {
         .from(userEntries)
         .where(eq(userEntries.userId, carol?.id ?? 0)),
     ).toHaveLength(2);
+  });
+
+  it('copies feed categories as tags to every subscriber, without overwriting later edits', async () => {
+    await ingester.ingest(sourceId, null, [
+      entry({ guid: 't', title: 'T', categories: ['Open Source', 'open source', 'Rust, Go'] }),
+    ]);
+    const tags = async (userId: number) =>
+      (await db.select().from(entryTags).where(eq(entryTags.userId, userId)))
+        .map((row) => row.tag)
+        .sort();
+    expect(await tags(alice)).toEqual(['open source', 'rust go']);
+    expect(await tags(bob)).toEqual(['open source', 'rust go']);
+    const [delivered] = await db.select().from(userEntries).where(eq(userEntries.userId, alice));
+    // Tagging during fan-out does not rewrite the new user entries.
+    expect(delivered?.updatedAt.getTime()).toBe(delivered?.createdAt.getTime());
+
+    await db.delete(entryTags).where(eq(entryTags.userId, alice));
+    await ingester.ingest(sourceId, null, [
+      entry({ guid: 't', title: 'T changed', categories: ['Open Source', 'News'] }),
+    ]);
+    expect(await tags(alice)).toEqual([]);
+    expect((await db.select().from(entries))[0]?.categories).toEqual(['open source', 'news']);
   });
 });

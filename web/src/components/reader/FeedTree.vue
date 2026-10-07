@@ -8,6 +8,7 @@ import {
   mdiPlus,
   mdiShareVariantOutline,
   mdiStarOutline,
+  mdiTagMultipleOutline,
   mdiWhiteBalanceSunny,
 } from '@mdi/js';
 import { computed, provide, ref } from 'vue';
@@ -19,7 +20,7 @@ import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { type Dragged, useTreeEditing } from '../../composables/useTreeEditing.ts';
-import { labelKey } from '../../lib/streams.ts';
+import { labelKey, parseStream } from '../../lib/streams.ts';
 import { buildTree } from '../../lib/tree.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import FeedTreeCategory from './FeedTreeCategory.vue';
@@ -133,6 +134,15 @@ function dropOnRoot() {
           </v-list-item>
         </div>
       </template>
+      <div role="listitem">
+        <v-list-item
+          role="button"
+          :prepend-icon="mdiTagMultipleOutline"
+          :title="t('tags.browse')"
+          :active="current !== undefined && parseStream(current).tag !== undefined"
+          @click="ui.tagPickerOpen = true"
+        />
+      </div>
       <v-divider class="my-2" role="presentation" />
       <FeedTreeCategory v-for="node in tree.categories" :key="node.key" :node="node" :depth="0" />
       <FeedTreeFeed v-for="node in tree.feeds" :key="node.key" :node="node" :depth="0" />

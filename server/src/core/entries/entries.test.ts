@@ -484,3 +484,47 @@ describe('LabelService', () => {
     expect(removed.entries.map((e) => [e.id, e.labels])).toEqual([[ids.cherry, []]]);
   });
 });
+
+describe('TagService', () => {
+  it('sets normalised tags, counts them, and lists tag streams', async () => {
+    const apple = ids.apple ?? 0;
+    expect(await services.tags.setEntryTags(alice, apple, ['Baking', ' Fruit ', 'baking'])).toEqual(
+      ['baking', 'fruit'],
+    );
+    await services.tags.setEntryTags(alice, ids.banana ?? 0, ['baking']);
+    expect((await services.entries.get(alice, apple)).tags).toEqual(['baking', 'fruit']);
+    expect(await services.tags.list(alice)).toEqual([
+      { tag: 'baking', count: 2 },
+      { tag: 'fruit', count: 1 },
+    ]);
+    expect(await services.tags.list(bob)).toEqual([]);
+    await expect(services.tags.setEntryTags(bob, apple, ['x'])).rejects.toMatchObject({
+      code: 'not_found',
+    });
+
+    const stream = { tag: 'baking' };
+    const options = { stream, view: 'all', limit: 1, content: false } as const;
+    const page = await services.entries.list(alice, options);
+    const rest = await services.entries.list(alice, { ...options, cursor: page.cursor ?? '' });
+    expect(titles([...page.entries, ...rest.entries])).toEqual([
+      'Apple pie recipe',
+      'Banana bread',
+    ]);
+    expect((await services.entries.list(bob, { ...options, limit: 10 })).entries).toEqual([]);
+
+    await services.tags.setEntryTags(alice, apple, ['fruit']);
+    expect((await services.entries.get(alice, apple)).tags).toEqual(['fruit']);
+    await services.tags.setEntryTags(alice, apple, []);
+    expect((await services.entries.get(alice, apple)).tags).toEqual([]);
+  });
+
+  it('syncs entries whose tags changed', async () => {
+    const full = await services.sync.changes(alice, undefined, 100);
+    await services.tags.setEntryTags(alice, ids.cherry ?? 0, ['tart']);
+    const tagged = await services.sync.changes(alice, full.next, 100);
+    expect(tagged.entries.map((e) => [e.id, e.tags])).toEqual([[ids.cherry, ['tart']]]);
+    await services.tags.setEntryTags(alice, ids.cherry ?? 0, []);
+    const untagged = await services.sync.changes(alice, tagged.next, 100);
+    expect(untagged.entries.map((e) => [e.id, e.tags])).toEqual([[ids.cherry, []]]);
+  });
+});

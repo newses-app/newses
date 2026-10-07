@@ -93,6 +93,16 @@
     "preview": "Preview",
     "lowContrast": "Contrast is {ratio}:1; at least 4.5:1 keeps the label readable."
   },
+  "tags": {
+    "title": "Tags",
+    "edit": "Edit tags",
+    "hint": "Separate tags with commas; up to {n}.",
+    "browse": "Tags",
+    "search": "Find a tag",
+    "none": "No tags yet. Feeds' categories become tags, and you can add your own to any article.",
+    "count": "{n} article | {n} articles",
+    "stream": "Tag: {tag}"
+  },
   "search": { "label": "Search articles", "placeholder": "Search" },
   "view": {
     "label": "Show",
@@ -301,6 +311,7 @@
       "openOriginal": "Open original",
       "editNote": "Add or edit note",
       "editLabels": "Choose labels",
+      "editTags": "Edit tags",
       "closeArticle": "Close article",
       "search": "Search",
       "help": "Show this help",
@@ -318,7 +329,8 @@
       "gotoStarred": "Starred",
       "gotoPublished": "Published",
       "gotoRecentlyRead": "Recently read",
-      "gotoSettings": "Settings"
+      "gotoSettings": "Settings",
+      "gotoTags": "Browse tags"
     }
   }
 }

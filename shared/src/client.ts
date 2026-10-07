@@ -26,6 +26,7 @@ import type {
   EntryState,
   MarkReadRequest,
   SyncResponse,
+  TagCount,
 } from './entries.ts';
 import type {
   Category,
@@ -233,6 +234,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Null or blank text clears the note. */
       setNote: (entryId: number, note: EntryNoteRequest['note']) =>
         request<undefined>('PUT', `/entries/${id(entryId)}/note`, { body: { note } }),
+      /** Replaces the entry's tags; resolves to them normalised. */
+      setTags: (entryId: number, tags: string[]) =>
+        request<{ tags: string[] }>('PUT', `/entries/${id(entryId)}/tags`, { body: { tags } }),
       /** Replaces the entry's labels. */
       setLabels: (entryId: number, labelIds: number[]) =>
         request<undefined>('PUT', `/entries/${id(entryId)}/labels`, { body: { labelIds } }),
@@ -247,6 +251,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<Label>('PATCH', `/labels/${id(labelId)}`, { body }),
       delete: (labelId: number) => request<undefined>('DELETE', `/labels/${id(labelId)}`),
     },
+
+    /** The user's tags with entry counts. */
+    tags: () => request<TagCount[]>('GET', '/tags'),
 
     counters: () => request<Counters>('GET', '/counters'),
     /** Omit `since` for a full sync; call again with `next` while `more` is true. */

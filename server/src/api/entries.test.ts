@@ -165,6 +165,32 @@ describe('entries API', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('tags entries and lists them by tag', async () => {
+    const list = await app.inject({ method: 'GET', url: '/api/v1/entries', headers });
+    const id = list.json<EntryList>().entries[0]?.id ?? 0;
+    const saved = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/entries/${String(id)}/tags`,
+      headers,
+      payload: { tags: ['Long Reads', 'long reads', ' '] },
+    });
+    expect(saved.json()).toEqual({ tags: ['long reads'] });
+    const counts = await app.inject({ method: 'GET', url: '/api/v1/tags', headers });
+    expect(counts.json()).toEqual([{ tag: 'long reads', count: 1 }]);
+    const tagged = await app.inject({
+      method: 'GET',
+      url: '/api/v1/entries?tag=long%20reads',
+      headers,
+    });
+    expect(tagged.json<EntryList>().entries.map((e) => e.id)).toEqual([id]);
+    const both = await app.inject({
+      method: 'GET',
+      url: '/api/v1/entries?tag=x&labelId=1',
+      headers,
+    });
+    expect(both.statusCode).toBe(400);
+  });
+
   it('validates queries and stream selection', async () => {
     const both = await app.inject({
       method: 'GET',

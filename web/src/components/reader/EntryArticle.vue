@@ -13,12 +13,13 @@ import {
   mdiShareVariantOutline,
   mdiStar,
   mdiStarOutline,
+  mdiTagOutline,
 } from '@mdi/js';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useLabels } from '../../composables/useLabels.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
-import { labelKey } from '../../lib/streams.ts';
+import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
 
@@ -63,9 +64,20 @@ const enclosures = computed(() =>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span
         >
       </div>
-      <ul v-if="labels.length" class="entry-labels mt-2" :aria-label="t('labels.title')">
+      <ul v-if="labels.length" class="entry-chips mt-2" :aria-label="t('labels.title')">
         <li v-for="label in labels" :key="label.id">
           <LabelChip :label="label" :to="`/${labelKey(label.id)}`" />
+        </li>
+      </ul>
+      <ul v-if="entry.tags.length" class="entry-chips mt-2" :aria-label="t('tags.title')">
+        <li v-for="tag in entry.tags" :key="tag">
+          <v-chip
+            :to="streamPath(tagKey(tag))"
+            :prepend-icon="mdiTagOutline"
+            size="small"
+            variant="outlined"
+            >{{ tag }}</v-chip
+          >
         </li>
       </ul>
       <div class="mt-2 d-flex flex-wrap ga-1">
@@ -95,6 +107,9 @@ const enclosures = computed(() =>
         </v-btn>
         <v-btn size="small" :prepend-icon="mdiLabelOutline" @click="ui.labelsEntry = entry">
           {{ t('labels.title') }}
+        </v-btn>
+        <v-btn size="small" :prepend-icon="mdiTagOutline" @click="ui.tagsEntry = entry">
+          {{ t('tags.title') }}
         </v-btn>
         <v-btn
           size="small"
@@ -158,7 +173,7 @@ const enclosures = computed(() =>
 .entry-heading:focus {
   outline: none;
 }
-.entry-labels {
+.entry-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;

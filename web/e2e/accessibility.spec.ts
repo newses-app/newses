@@ -97,6 +97,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await expectNoViolations('entry-labels');
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
+        await page.locator('article').getByRole('button', { name: 'Tags', exact: true }).click();
+        await expect(dialog.getByLabel('Tags')).toBeVisible();
+        await expectNoViolations('entry-tags');
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+        await page
+          .getByRole('list', { name: 'Feeds' })
+          .getByRole('button', { name: 'Tags' })
+          .click();
+        await expect(dialog.getByRole('button', { name: 'Close' })).toBeVisible();
+        await expectNoViolations('tag-picker');
+        await dialog.getByRole('button', { name: 'Close' }).click();
+        await expect(dialog).toBeHidden();
       });
     });
 

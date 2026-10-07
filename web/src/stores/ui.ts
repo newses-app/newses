@@ -20,6 +20,9 @@ export const useUiStore = defineStore('ui', () => {
   const noteEntry = ref<Entry | null>(null);
   /** The entry whose labels are being chosen. */
   const labelsEntry = ref<Entry | null>(null);
+  /** The entry whose tags are being edited. */
+  const tagsEntry = ref<Entry | null>(null);
+  const tagPickerOpen = ref(false);
   const notice = ref<{ text: string; error: boolean } | null>(null);
   const confirmRequest = ref<ConfirmRequest | null>(null);
 
@@ -49,6 +52,8 @@ export const useUiStore = defineStore('ui', () => {
     editSubscriptionId,
     noteEntry,
     labelsEntry,
+    tagsEntry,
+    tagPickerOpen,
     notice,
     confirmRequest,
     notify,

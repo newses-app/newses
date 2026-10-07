@@ -1,27 +1,30 @@
 import { z } from 'zod';
 import { categorySchema, subscriptionSchema } from './feeds.ts';
 import { labelSchema } from './labels.ts';
-import { MAX_NOTE_LENGTH } from './limits.ts';
+import { MAX_NOTE_LENGTH, MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY } from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
 
 /**
  * One of `subscriptionId`, `categoryId` (0 = uncategorised; includes subcategories), `labelId`,
- * or `special`.
+ * `tag` (normalised), or `special`.
  */
 export const streamSchema = z.object({
   subscriptionId: z.coerce.number().int().optional(),
   categoryId: z.coerce.number().int().optional(),
   labelId: z.coerce.number().int().optional(),
+  tag: z.string().min(1).max(MAX_TAG_LENGTH).optional(),
   special: specialFeedSchema.optional(),
 });
 
 const singleStream = (stream: z.infer<typeof streamSchema>) =>
-  [stream.subscriptionId, stream.categoryId, stream.labelId, stream.special].filter(
+  [stream.subscriptionId, stream.categoryId, stream.labelId, stream.tag, stream.special].filter(
     (v) => v !== undefined,
   ).length <= 1;
-const ONE_STREAM = { message: 'Give at most one of subscriptionId, categoryId, labelId, special' };
+const ONE_STREAM = {
+  message: 'Give at most one of subscriptionId, categoryId, labelId, tag, special',
+};
 
 export const entryListQuerySchema = streamSchema
   .extend({
@@ -64,6 +67,8 @@ export const entrySchema = z.object({
   note: z.string().nullable(),
   /** Ids of the user's labels on the entry. */
   labels: z.array(z.number().int()),
+  /** The user's tags on the entry, normalised and sorted. */
+  tags: z.array(z.string()),
   /** Plain-text start of the content. */
   excerpt: z.string().nullable(),
   /** Sanitised HTML; present on single entries and when requested in lists. */
@@ -99,6 +104,13 @@ export const bulkEntryStateRequestSchema = z
 export const entryNoteRequestSchema = z.object({
   note: z.string().max(MAX_NOTE_LENGTH).nullable(),
 });
+
+/** Replaces the entry's tags; they are normalised and blank ones dropped. */
+export const entryTagsRequestSchema = z.object({
+  tags: z.array(z.string().max(200)).max(MAX_TAGS_PER_ENTRY),
+});
+
+export const tagCountSchema = z.object({ tag: z.string(), count: z.number().int() });
 
 export const markReadRequestSchema = streamSchema
   .extend({
@@ -161,6 +173,7 @@ export type EntryListResponse = z.infer<typeof entryListResponseSchema>;
 export type EntryState = z.infer<typeof entryStateSchema>;
 export type BulkEntryStateRequest = z.infer<typeof bulkEntryStateRequestSchema>;
 export type EntryNoteRequest = z.infer<typeof entryNoteRequestSchema>;
+export type TagCount = z.infer<typeof tagCountSchema>;
 export type MarkReadRequest = z.infer<typeof markReadRequestSchema>;
 export type Counters = z.infer<typeof countersSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;

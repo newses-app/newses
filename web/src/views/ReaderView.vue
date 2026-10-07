@@ -93,8 +93,9 @@ const subscription = computed(() =>
     : subscriptions.data.value?.find((s) => s.id === stream.value.subscriptionId),
 );
 const title = computed(() => {
-  const { special, categoryId, labelId } = stream.value;
+  const { special, categoryId, labelId, tag } = stream.value;
   if (special) return t(`special.${streamKey.value}`);
+  if (tag !== undefined) return t('tags.stream', { tag });
   if (labelId !== undefined) return labels.data.value?.find((l) => l.id === labelId)?.caption ?? '';
   if (subscription.value) return subscription.value.title;
   if (categoryId === 0) return t('tree.uncategorised');
@@ -316,6 +317,9 @@ useShortcutHandler((action: ShortcutAction) => {
       return true;
     case 'editLabels':
       if (entry) ui.labelsEntry = entry;
+      return true;
+    case 'editTags':
+      if (entry) ui.tagsEntry = entry;
       return true;
     case 'openOriginal': {
       const link = safeUrl(entry?.link);

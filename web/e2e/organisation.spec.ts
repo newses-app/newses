@@ -47,4 +47,29 @@ test.describe('organisation', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByText(caption)).toHaveCount(0);
   });
+
+  test('tags an article and browses by tag', async ({ page }) => {
+    const tag = `e2e tag ${String(Date.now())}`;
+    await page.goto('/all');
+    await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+    const article = page.locator('article');
+    await article.getByRole('button', { name: 'Tags', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Tags').fill(`${tag.toUpperCase()},`);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole('list', { name: 'Feeds' }).getByRole('button', { name: 'Tags' }).click();
+    await dialog.getByLabel('Find a tag').fill(tag);
+    await page.getByRole('option', { name: tag }).click();
+    await expect(page).toHaveURL(new RegExp(`/t${encodeURIComponent(tag)}$`));
+    await expect(page.getByRole('heading', { name: `Tag: ${tag}` })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Articles' }).getByRole('link')).toHaveCount(1);
+
+    await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+    await article.getByRole('button', { name: 'Tags', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Close' }).first().click();
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(article.getByRole('link', { name: tag })).toBeHidden();
+  });
 });

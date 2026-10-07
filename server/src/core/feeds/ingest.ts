@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { normaliseTags } from '@rss-reader/shared';
 import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { enclosures, entries } from '../../db/schema.ts';
@@ -27,6 +28,7 @@ interface PreparedEntry {
   contentHash: string;
   publishedAt: Date | null;
   sourceUpdatedAt: Date | null;
+  categories: string[];
   enclosures: ParsedEntry['enclosures'];
 }
 
@@ -48,6 +50,7 @@ function prepare(entry: ParsedEntry, siteUrl: string | null): PreparedEntry | nu
     contentHash: sha256(`${title ?? ''}\n${link ?? ''}\n${content ?? ''}`),
     publishedAt: entry.publishedAt,
     sourceUpdatedAt: entry.updatedAt,
+    categories: normaliseTags(entry.categories),
     enclosures: entry.enclosures,
   };
 }
@@ -102,6 +105,7 @@ export class Ingester {
             content: sql`excluded.content`,
             contentHash: sql`excluded.content_hash`,
             sourceUpdatedAt: sql`excluded.source_updated_at`,
+            categories: sql`excluded.categories`,
           },
           setWhere: sql`${entries.contentHash} <> excluded.content_hash`,
         })
@@ -142,23 +146,32 @@ export class Ingester {
 
   /**
    * Creates unread user entries for matching entries and subscriptions, skipping entries already
-   * older than the subscription's purge age. Returns the users who received entries.
+   * older than the subscription's purge age, and tags them with the entries' feed categories.
+   * Returns the users who received entries.
    */
   async #fanOut(executor: Pick<Db, 'execute'>, condition: SQL): Promise<number[]> {
     const rows = await executor.execute<{ user_id: number }>(sql`
-      INSERT INTO user_entries (user_id, entry_id, subscription_id, sort_at)
-      SELECT s.user_id, e.id, s.id, LEAST(coalesce(e.published_at, e.fetched_at), now())
-      FROM entries e
-      JOIN subscriptions s ON s.feed_source_id = e.feed_source_id
-      CROSS JOIN LATERAL (SELECT ${purgeDaysSql(this.#settings.purgeDays)} AS days) purge
-      WHERE ${condition}
-        AND (
-          purge.days = 0
-          OR LEAST(coalesce(e.published_at, e.fetched_at), now()) > now() - make_interval(days => purge.days)
-        )
-      ON CONFLICT (user_id, entry_id) DO NOTHING
-      RETURNING user_id`);
-    return [...new Set(rows.rows.map((row) => row.user_id))];
+      WITH delivered AS (
+        INSERT INTO user_entries (user_id, entry_id, subscription_id, sort_at)
+        SELECT s.user_id, e.id, s.id, LEAST(coalesce(e.published_at, e.fetched_at), now())
+        FROM entries e
+        JOIN subscriptions s ON s.feed_source_id = e.feed_source_id
+        CROSS JOIN LATERAL (SELECT ${purgeDaysSql(this.#settings.purgeDays)} AS days) purge
+        WHERE ${condition}
+          AND (
+            purge.days = 0
+            OR LEAST(coalesce(e.published_at, e.fetched_at), now()) > now() - make_interval(days => purge.days)
+          )
+        ON CONFLICT (user_id, entry_id) DO NOTHING
+        RETURNING id, user_id, entry_id
+      ), tagged AS (
+        INSERT INTO entry_tags (user_entry_id, user_id, tag)
+        SELECT d.id, d.user_id, tag
+        FROM delivered d JOIN entries e ON e.id = d.entry_id CROSS JOIN unnest(e.categories) AS tag
+        ON CONFLICT DO NOTHING
+      )
+      SELECT DISTINCT user_id FROM delivered`);
+    return rows.rows.map((row) => row.user_id);
   }
 
   async #notify(userIds: number[]): Promise<void> {

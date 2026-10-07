@@ -81,7 +81,7 @@ Rules:
 | `lib` | Pure logic: stream keys, tree building, shortcut matching, reordering, cache patches |
 | `stores` | Pinia store for UI state only (drawer, dialogs, notices) |
 
-- Routes: `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`; search is `?q=`.
+- Routes: `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`, `t<tag>` (URL-encoded); search is `?q=`.
 - Server data lives in the TanStack Query cache. State changes patch every cached copy, then save; a failure restores the previous flags. Headline lists are not refetched when entries change state, so read entries stay in place until the list is reloaded.
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
 - Counters refetch on `counters` events. Without a stream they are polled every 60 s, paused while the page is hidden; a closed stream is retried every 5 minutes.
@@ -106,6 +106,7 @@ Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 source
   transform  hook: readability, site rewrites
   store      insert new entries; rewrite existing ones only when their content hash changed; replace enclosures
   fan out    new entries become unread user entries for every subscription, unless older than its purge age
+             the entry's feed categories become the subscriber's tags
   filter     each subscriber's filters, in order, until "stop"
   notify     Realtime `counters` event per user who received entries
   schedule   next fetch after the interval, or after backoff on failure; favicon refresh when older than 30 days
@@ -147,7 +148,7 @@ Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticl
 
 ## Data model
 
-Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, labels, and user entries as tombstones for incremental sync. Assigning or removing a label touches the user entry, so sync carries its label ids.
+Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, labels, and user entries as tombstones for incremental sync. Assigning or removing a label or tag touches the user entry, so sync carries its label ids and tags; tags copied at fan-out do not.
 
 | Entity | Scope | Notes |
 |---|---|---|
@@ -160,12 +161,12 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `categories` | User | Self-referencing tree (`parent_id`), order |
 | `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error, publisher TTL hint, `blocked_until`); site URL; favicon ref. Fetch interval is the shortest among its subscribers; subscriptions with HTTP-auth credentials get a dedicated source |
 | `subscriptions` | User | → feed source, category; title override, interval and purge overrides, per-feed options, encrypted HTTP-auth credentials. Unique (user, feed source) |
-| `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, published/updated times, language, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
+| `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, published/updated times, language, normalised feed categories, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
 | `enclosures` | Shared | → entry; URL, MIME type, length, dimensions |
 | `user_entries` | User | → entry, subscription (nullable when archived) or archived feed; unread, starred, published, score, plain-text note (null when none), read time, share UUID. Unique (user, entry) |
 | `archived_feeds` | User | Title and URL of an unsubscribed feed that still holds kept entries |
 | `labels` / `entry_labels` | User | Caption (unique per user, case-insensitive), text and background colours (`#rrggbb`); many-to-many with `user_entries` |
-| `tags` | User | (user entry, tag) pairs |
+| `entry_tags` | User | (user entry, tag) pairs; tags are lower-case, single-spaced, without commas, at most 64 characters and 50 per entry |
 | `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), regex, inverse, scope (feeds/categories); actions: type + parameter |
 | `access_keys` | User | Secret keys for published feed and generated feeds |
 | `import_map` | Instance | (source system, source table, source id) → new id |
@@ -217,7 +218,7 @@ Search:
 
 ### Native REST API
 
-- Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), a label, or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
+- Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), a label, a tag, or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
 - Fresh: unread entries with `sort_at` within the user's `freshMaxAgeHours`. Recently read: entries read within the last 7 days, in reading order.
 - `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.

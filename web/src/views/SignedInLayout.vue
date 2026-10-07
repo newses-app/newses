@@ -8,6 +8,8 @@ import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
 import NoteDialog from '../components/dialogs/NoteDialog.vue';
 import ShortcutHelp from '../components/dialogs/ShortcutHelp.vue';
+import TagPickerDialog from '../components/dialogs/TagPickerDialog.vue';
+import TagsDialog from '../components/dialogs/TagsDialog.vue';
 import SubscribeDialog from '../components/dialogs/SubscribeDialog.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
 import { useLiveCounters } from '../composables/useCounters.ts';
@@ -54,6 +56,9 @@ useShortcutListener((action) => {
     case 'subscribe':
       ui.subscribeOpen = true;
       return true;
+    case 'gotoTags':
+      ui.tagPickerOpen = true;
+      return true;
     case 'toggleHideRead':
       update({ hideReadFeeds: !prefs.value.hideReadFeeds });
       return true;
@@ -73,6 +78,8 @@ useShortcutListener((action) => {
   <EditFeedDialog />
   <NoteDialog />
   <EntryLabelsDialog />
+  <TagsDialog />
+  <TagPickerDialog />
   <ShortcutHelp />
   <ConfirmDialog />
 </template>

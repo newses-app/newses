@@ -17,6 +17,7 @@ const entry = (id: number): Entry => ({
   published: false,
   note: null,
   labels: [],
+  tags: [],
   excerpt: null,
 });
 
