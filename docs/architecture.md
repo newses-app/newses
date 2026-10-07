@@ -88,7 +88,7 @@ Rules:
 - Below 900 px one pane shows at a time; below 700 px secondary toolbar actions move into a menu.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
-- Every response carries `X-Content-Type-Options: nosniff`; API responses default to `Cache-Control: no-store`. On AWS, CloudFront adds HSTS to API responses too.
+- Every response carries `X-Content-Type-Options: nosniff`, and HSTS (1 year) when the request arrived over HTTPS; API responses default to `Cache-Control: no-store`. On AWS, CloudFront also adds HSTS to every response and a viewer-response function adds `charset=utf-8` to text responses from S3.
 - In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`. On AWS, CloudFront serves the build from S3 with the same headers, and a viewer-request function maps extensionless paths to `index.html`.
 
 ## Ingest pipeline
@@ -190,10 +190,12 @@ Search:
 | Electron / Capacitor | Bearer session token | TOTP at login when enabled; stored in OS secure storage (Electron `safeStorage`, platform keystore on mobile) |
 | TTRSS / Google Reader clients | App password → API session | App passwords bypass TOTP |
 
-- Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days and bearer sessions 90 days, both sliding on use.
+- Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days and bearer sessions 90 days, both sliding on use. Logging in ends the session the client sent, if any.
+- The cookie is `__Host-rss_session` (Secure) over HTTPS and `rss_session` over plain HTTP; HTTPS is taken from `X-Forwarded-Proto` only when `TRUST_PROXY` trusts the proxy.
+- A user created with a generated password (the AWS bootstrap admin) has `password_change_required`: until they change it, every authenticated request other than session, login, logout, and password change gets 403 `password_change_required`, and the web app shows only the password change.
 - Cookie-session requests other than GET/HEAD/OPTIONS must send the session's CSRF token in `X-CSRF-Token`. Login accepts JSON only, so cross-site form posts cannot log a browser in.
-- Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes. A wrong current password when changing it counts against the account.
-- Passwords are 8–1,024 characters and not on the bundled common-password list (`shared/src/common-passwords.ts`).
+- Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes. A wrong current password when changing it counts against the account. A lockout only delays further password, code, and app-password checks for that account or IP; signed-in sessions keep working, so an attacker can at worst hold off new sign-ins 15 minutes at a time.
+- Passwords are 8–1,024 characters and not on the bundled common-password list (the 10,000 most frequent of 8+ characters, `shared/src/common-passwords.ts`).
 - Logins, failures, lockouts, CSRF rejections, password changes, session revocations, and admin user changes are logged with a `security` field naming the event. The logger redacts credentials and auth headers.
 - TOTP (RFC 6238: SHA-1, 6 digits, 30 s, ±1 step) is optional per user. With it on, a correct password returns a signed 5-minute challenge instead of a session; `POST /auth/login/2fa` exchanges it with a TOTP code or one of 10 single-use recovery codes. A code from a time step at or before the last accepted one is refused. Code failures count against the account and IP like password failures.
 - Starting enrolment and turning 2FA off re-check the password; turning off and regenerating recovery codes need a code. Enabling 2FA signs out the user's other sessions. Admins (`POST /admin/users/:id/2fa/reset`) and `cli user reset-2fa` turn it off and sign the user out everywhere.
@@ -301,4 +303,4 @@ Constraints:
 Operator setup, once per account:
 - `pnpm --filter @rss-reader/infra cdk bootstrap aws://123456789012/us-east-2`
 - `pnpm --filter @rss-reader/infra cdk deploy rss-reader-dev-pipeline` (and `rss-reader-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it.
-- The first admin is `admin`, with the password in the SSM SecureString `/rss-reader/<stage>/admin-password`.
+- The first admin is `admin`, with a generated password in the SSM SecureString `/rss-reader/<stage>/admin-password` that must be changed at first sign-in. Create a personal admin, then disable or delete `admin`.

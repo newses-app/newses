@@ -16,7 +16,7 @@ import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
-import { registerAuth, SESSION_COOKIE } from './auth.ts';
+import { INSECURE_SESSION_COOKIE, registerAuth, SESSION_COOKIE } from './auth.ts';
 import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -78,6 +78,10 @@ export function buildApp(deps: AppDeps) {
   registerRequestDiagnostics(app, { slowMs: 2000, ...deps.diagnostics });
   app.addHook('onSend', (request, reply, payload, done) => {
     void reply.header('x-content-type-options', 'nosniff');
+    // Reverse proxies and CloudFront may add it too; the app does not rely on them.
+    if (request.protocol === 'https') {
+      void reply.header('strict-transport-security', 'max-age=31536000');
+    }
     // API responses carry per-user data; routes that may be cached set their own cache-control.
     if (request.url.startsWith('/api/') && !reply.hasHeader('cache-control')) {
       void reply.header('cache-control', 'no-store');
@@ -111,7 +115,12 @@ export function buildApp(deps: AppDeps) {
         info: { title: 'rss-reader API', version: '1' },
         components: {
           securitySchemes: {
-            cookie: { type: 'apiKey', in: 'cookie', name: SESSION_COOKIE },
+            cookie: {
+              type: 'apiKey',
+              in: 'cookie',
+              name: SESSION_COOKIE,
+              description: `\`${INSECURE_SESSION_COOKIE}\` when the server is reached over plain HTTP`,
+            },
             bearer: { type: 'http', scheme: 'bearer' },
           },
         },

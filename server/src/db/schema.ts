@@ -37,6 +37,8 @@ export const users = pgTable(
     role: userRole('role').notNull().default('user'),
     disabledAt: tstz('disabled_at'),
     lastLoginAt: tstz('last_login_at'),
+    // Set for a generated initial password; only changing the password is allowed until cleared.
+    passwordChangeRequired: boolean('password_change_required').notNull().default(false),
     // Sealed TOTP secret; set while enrolling, required at login once `totp_enabled_at` is set.
     totpSecret: text('totp_secret'),
     totpEnabledAt: tstz('totp_enabled_at'),

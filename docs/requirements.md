@@ -95,7 +95,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Multi-user | P1 | Admin creates, disables, deletes users and resets passwords; users manage only their own data |
-| Admin bootstrap | P1 | First admin created from environment variables or CLI on an empty database |
+| Admin bootstrap | P1 | First admin created from environment variables or CLI on an empty database; a generated password must be changed at first sign-in |
 | Passwords | P1 | Argon2id hashes; change password in settings |
 | Sessions | P1 | Cookie sessions for web with CSRF protection; list and revoke own sessions; bearer tokens for apps |
 | Login rate limiting | P1 | Per-IP and per-account throttling with exponential delay |
@@ -143,6 +143,7 @@
 | Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
 | Privacy | No telemetry or third-party calls beyond feed, icon, and article fetches |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
+| Dependencies | High and critical advisories in production dependencies fail the pipeline (`pnpm audit`) and are fixed before the next deployment, at most 7 days after disclosure; moderate ones within 30 days; other dependency updates at least every 90 days |
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls; single-key shortcuts can be turned off; every drag action has a non-drag alternative |
 | Internationalisation | All UI strings externalised; English shipped |
 | Reliability | Worker restarts resume pending jobs; no entry loss on crash mid-ingest |

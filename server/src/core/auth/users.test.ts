@@ -39,11 +39,14 @@ describe('UserService', () => {
   });
 
   it('bootstraps an admin only into an empty database', async () => {
-    expect(await services.users.bootstrapAdmin('root', 'password1')).toBe(true);
+    expect(await services.users.bootstrapAdmin('root', 'password1', true)).toBe(true);
     expect(await services.users.bootstrapAdmin('other', 'password1')).toBe(false);
-    expect((await services.users.list()).map((u) => [u.login, u.role])).toEqual([
-      ['root', 'admin'],
-    ]);
+    expect(
+      (await services.users.list()).map((u) => [u.login, u.role, u.passwordChangeRequired]),
+    ).toEqual([['root', 'admin', true]]);
+    const root = await services.users.findByLogin('root');
+    await services.users.setPassword(root?.id ?? 0, 'a chosen password');
+    expect((await services.users.findByLogin('root'))?.passwordChangeRequired).toBe(false);
   });
 
   it('keeps at least one active admin', async () => {

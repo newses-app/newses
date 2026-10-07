@@ -11,6 +11,7 @@ export function toUser(row: UserRow): User {
     role: row.role,
     disabled: row.disabledAt !== null,
     twoFactor: row.totpEnabledAt !== null,
+    passwordChangeRequired: row.passwordChangeRequired,
     createdAt: row.createdAt.toISOString(),
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
   };

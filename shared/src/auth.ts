@@ -22,6 +22,8 @@ export const userSchema = z.object({
   role: userRoleSchema,
   disabled: z.boolean(),
   twoFactor: z.boolean(),
+  /** Only changing the password is allowed until it is. */
+  passwordChangeRequired: z.boolean(),
   createdAt: z.iso.datetime(),
   lastLoginAt: z.iso.datetime().nullable(),
 });

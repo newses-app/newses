@@ -11,6 +11,11 @@ export const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('./views/ChangePasswordView.vue'),
+    },
+    {
       path: '/',
       component: () => import('./views/SignedInLayout.vue'),
       children: [

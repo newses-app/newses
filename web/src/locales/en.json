@@ -184,6 +184,7 @@
     "mismatch": "The new passwords do not match.",
     "wrongPassword": "The current password is wrong.",
     "passwordChanged": "Password changed. Other devices were signed out.",
+    "changeRequired": "This account was set up with a generated password. Choose your own to continue.",
     "sessions": "Signed-in devices",
     "unknownDevice": "Unknown device",
     "lastSeen": "Last active {when}",

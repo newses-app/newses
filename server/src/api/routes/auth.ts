@@ -52,8 +52,15 @@ async function logFailure<T>(
   }
 }
 
-function sessionResponse(request: FastifyRequest, reply: FastifyReply, result: LoggedIn) {
+/** A new login ends the session the client was holding, so a planted session cannot survive it. */
+async function sessionResponse(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  sessions: SessionService,
+  result: LoggedIn,
+) {
   const { token, session, user } = result;
+  if (request.auth) await sessions.revoke(request.auth.user.id, request.auth.session.id);
   logSecurity(request, 'login', { userId: user.id, kind: session.kind });
   if (session.kind === 'bearer') return { user: toUser(user), token };
   setSessionCookie(reply, token);
@@ -84,7 +91,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
         logSecurity(request, 'login_second_factor_required', { userId: result.user.id });
         return { twoFactorRequired: true as const, challenge: result.challenge };
       }
-      return sessionResponse(request, reply, result);
+      return sessionResponse(request, reply, sessions, result);
     },
   );
 
@@ -95,7 +102,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
       const result = await logFailure(request, 'two_factor_failed', () =>
         auth.completeLogin({ ...request.body, ...client(request) }),
       );
-      return sessionResponse(request, reply, result);
+      return sessionResponse(request, reply, sessions, result);
     },
   );
 

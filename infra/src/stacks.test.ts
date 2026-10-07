@@ -69,6 +69,9 @@ describe('RssReaderStage', () => {
     app.hasResourceProperties('AWS::SQS::Queue', { QueueName: 'rss-reader-dev-feed-fetch' });
     app.hasResourceProperties('AWS::Scheduler::Schedule', { Name: 'rss-reader-dev-auth-prune' });
     edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'rss-reader-dev-spa-routes' });
+    edge.hasResourceProperties('AWS::CloudFront::Function', {
+      Name: 'rss-reader-dev-utf8-charset',
+    });
   });
 
   it('gives every Lambda function a log group the stack owns', () => {

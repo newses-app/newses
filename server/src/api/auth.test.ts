@@ -8,11 +8,12 @@ import { buildApp } from './app.ts';
 
 let database: TestDatabase;
 let app: ReturnType<typeof buildApp>;
+let services: ReturnType<typeof createTestServices>;
 
 beforeAll(async () => {
   database = await createTestDatabase();
   const db = createDb(database.pool);
-  const services = createTestServices(db, new HttpFetcher());
+  services = createTestServices(db, new HttpFetcher());
   await services.users.create('admin', 'admin password', 'admin');
   await services.users.create('alice', 'alice password');
   app = buildApp({ logger: pino({ level: 'silent' }), healthChecks: {}, services });
@@ -163,6 +164,87 @@ describe('auth API', () => {
     const throttled = await attempt();
     expect(throttled.statusCode).toBe(429);
     expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+  });
+});
+
+describe('session cookie', () => {
+  it('uses a __Host- Secure cookie and HSTS over HTTPS', async () => {
+    const https = buildApp({
+      logger: pino({ level: 'silent' }),
+      healthChecks: {},
+      services,
+      trustProxy: 1,
+    });
+    const headers = { 'x-forwarded-proto': 'https' };
+    const res = await https.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers,
+      payload: { login: 'admin', password: 'admin password' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['strict-transport-security']).toBe('max-age=31536000');
+    const cookie = res.cookies.find((c) => c.name === '__Host-rss_session');
+    expect(cookie).toMatchObject({ secure: true, httpOnly: true, path: '/' });
+    const session = await https.inject({
+      url: '/api/v1/auth/session',
+      headers: { ...headers, cookie: `__Host-rss_session=${cookie?.value ?? ''}` },
+    });
+    expect(session.statusCode).toBe(200);
+    // The unprefixed name is not read over HTTPS.
+    const plain = await https.inject({
+      url: '/api/v1/auth/session',
+      headers: { ...headers, cookie: `rss_session=${cookie?.value ?? ''}` },
+    });
+    expect(plain.statusCode).toBe(401);
+    expect((await app.inject({ url: '/healthz' })).headers['strict-transport-security']).toBe(
+      undefined,
+    );
+    await https.close();
+  });
+
+  it('ends the previous session when the client logs in again', async () => {
+    const first = await loginWithCookie('admin', 'admin password');
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      headers: { cookie: first.cookie, 'x-csrf-token': first.csrf },
+      payload: { login: 'admin', password: 'admin password' },
+    });
+    expect(again.statusCode).toBe(200);
+    const old = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { cookie: first.cookie },
+    });
+    expect(old.statusCode).toBe(401);
+  });
+});
+
+describe('generated initial password', () => {
+  it('allows only changing the password until it is changed', async () => {
+    await services.users.create('fresh', 'generated password', 'admin', true);
+    const fresh = await loginWithCookie('fresh', 'generated password');
+    const auth = { cookie: fresh.cookie, 'x-csrf-token': fresh.csrf };
+    const session = await app.inject({ url: '/api/v1/auth/session', headers: auth });
+    expect(session.json<{ user: { passwordChangeRequired: boolean } }>().user).toMatchObject({
+      passwordChangeRequired: true,
+    });
+    const blocked = await app.inject({ url: '/api/v1/subscriptions', headers: auth });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json()).toMatchObject({ error: 'password_change_required' });
+
+    const changed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password',
+      headers: auth,
+      payload: { currentPassword: 'generated password', newPassword: 'my own password' },
+    });
+    expect(changed.statusCode).toBe(204);
+    expect((await app.inject({ url: '/api/v1/subscriptions', headers: auth })).statusCode).toBe(
+      200,
+    );
+    const user = await services.users.findByLogin('fresh');
+    await services.users.delete(user?.id ?? 0);
   });
 });
 

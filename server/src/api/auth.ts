@@ -9,9 +9,20 @@ import {
 import { HttpError } from './errors.ts';
 import { logSecurity } from './security-log.ts';
 
-export const SESSION_COOKIE = 'rss_session';
+/** Over HTTPS the `__Host-` prefix pins the cookie to this host, Secure, and path `/`. */
+export const SESSION_COOKIE = '__Host-rss_session';
+/** Plain-HTTP deployments (a LAN without TLS) cannot use the prefix. */
+export const INSECURE_SESSION_COOKIE = 'rss_session';
 const CSRF_HEADER = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+/** All a user whose password must be changed may do. */
+const PASSWORD_CHANGE_ROUTES = new Set([
+  '/api/v1/auth/login',
+  '/api/v1/auth/login/2fa',
+  '/api/v1/auth/session',
+  '/api/v1/auth/password',
+  '/api/v1/auth/logout',
+]);
 
 export interface RequestAuth {
   user: UserRow;
@@ -24,18 +35,26 @@ declare module 'fastify' {
   }
 }
 
+const isHttps = (request: FastifyRequest) => request.protocol === 'https';
+
+export const sessionCookieName = (request: FastifyRequest) =>
+  isHttps(request) ? SESSION_COOKIE : INSECURE_SESSION_COOKIE;
+
 export function setSessionCookie(reply: FastifyReply, token: string): void {
-  void reply.setCookie(SESSION_COOKIE, token, {
+  void reply.setCookie(sessionCookieName(reply.request), token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: 'auto',
+    secure: isHttps(reply.request),
     path: '/',
     maxAge: TTL_MS.cookie / 1000,
   });
 }
 
 export function clearSessionCookie(reply: FastifyReply): void {
-  void reply.clearCookie(SESSION_COOKIE, { path: '/' });
+  void reply.clearCookie(sessionCookieName(reply.request), {
+    path: '/',
+    secure: isHttps(reply.request),
+  });
 }
 
 function csrfMatches(header: string | string[] | undefined, expected: string | null): boolean {
@@ -53,7 +72,7 @@ export function registerAuth(app: FastifyInstance, sessions: SessionService): vo
   app.decorateRequest('auth', null);
   app.addHook('onRequest', async (request, reply) => {
     const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.authorization ?? '')?.[1];
-    const token = bearer ?? request.cookies[SESSION_COOKIE];
+    const token = bearer ?? request.cookies[sessionCookieName(request)];
     if (!token) return;
     const result = await sessions.validate(token);
     if (!result) {
@@ -69,6 +88,12 @@ export function registerAuth(app: FastifyInstance, sessions: SessionService): vo
         }
       }
       if (result.refreshed) setSessionCookie(reply, token);
+    }
+    if (
+      result.user.passwordChangeRequired &&
+      !PASSWORD_CHANGE_ROUTES.has(request.routeOptions.url ?? '')
+    ) {
+      throw new HttpError(403, 'password_change_required', 'Change your password first');
     }
     request.auth = { user: result.user, session: result.session };
   });

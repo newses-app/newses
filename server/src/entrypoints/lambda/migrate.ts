@@ -13,7 +13,9 @@ export async function handler(): Promise<void> {
   logger.info('Migrations applied');
   if (!config.bootstrapAdmin) return;
   const { login, password } = config.bootstrapAdmin;
-  if (await createAuthServices(db, config.appSecret).users.bootstrapAdmin(login, password)) {
+  // The password is generated into SSM, so it only gets the admin as far as choosing a new one.
+  const users = createAuthServices(db, config.appSecret).users;
+  if (await users.bootstrapAdmin(login, password, true)) {
     logger.info({ login }, 'Created initial admin user');
   }
 }

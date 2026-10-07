@@ -8,16 +8,22 @@ export const SESSION_KEY = ['session'] as const;
 
 const fetchSession = () => api.auth.session();
 
-/** Redirects to the login page when the session is missing or expired. */
+/**
+ * Redirects to the login page when the session is missing or expired, and to the password change
+ * when the server requires one before anything else.
+ */
 export function installAuthGuard(router: Router, queryClient: QueryClient): void {
   router.beforeEach(async (to) => {
     if (to.meta.public) return true;
     try {
-      await queryClient.query({
+      const session = await queryClient.query({
         queryKey: SESSION_KEY,
         queryFn: fetchSession,
         staleTime: Infinity,
       });
+      const mustChange = session.user.passwordChangeRequired;
+      if (mustChange && to.name !== 'change-password') return { name: 'change-password' };
+      if (!mustChange && to.name === 'change-password') return '/all';
       return true;
     } catch (error) {
       if (isUnauthenticated(error)) return { name: 'login', query: { redirect: to.fullPath } };

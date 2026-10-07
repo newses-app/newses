@@ -40,10 +40,18 @@ export class UserService {
     return user;
   }
 
-  async create(login: string, password: string, role: UserRole = 'user'): Promise<UserRow> {
+  async create(
+    login: string,
+    password: string,
+    role: UserRole = 'user',
+    passwordChangeRequired = false,
+  ): Promise<UserRow> {
     const passwordHash = await hashPassword(password);
     try {
-      const [user] = await this.#db.insert(users).values({ login, passwordHash, role }).returning();
+      const [user] = await this.#db
+        .insert(users)
+        .values({ login, passwordHash, role, passwordChangeRequired })
+        .returning();
       if (!user) throw new Error('User insert returned no row');
       return user;
     } catch (err) {
@@ -52,12 +60,15 @@ export class UserService {
     }
   }
 
-  /** Creates the first admin when the database has no users. Returns whether it did. */
-  async bootstrapAdmin(login: string, password: string): Promise<boolean> {
+  /**
+   * Creates the first admin when the database has no users. Returns whether it did. A
+   * `generated` password must be changed at first sign-in.
+   */
+  async bootstrapAdmin(login: string, password: string, generated = false): Promise<boolean> {
     const [row] = await this.#db.select({ n: count() }).from(users);
     if (row && row.n > 0) return false;
     try {
-      await this.create(login, password, 'admin');
+      await this.create(login, password, 'admin', generated);
       return true;
     } catch (err) {
       // Another instance bootstrapped concurrently.
@@ -108,7 +119,7 @@ export class UserService {
     const passwordHash = await hashPassword(password);
     const updated = await this.#db
       .update(users)
-      .set({ passwordHash })
+      .set({ passwordHash, passwordChangeRequired: false })
       .where(eq(users.id, id))
       .returning({ id: users.id });
     if (updated.length === 0) throw new DomainError('not_found', 'User not found');

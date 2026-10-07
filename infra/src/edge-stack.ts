@@ -30,6 +30,20 @@ const SPA_ROUTES = `function handler(event) {
   return request;
 }`;
 
+/** S3 stores text files without a charset; browsers must not guess one. */
+const UTF8_CHARSET = `function handler(event) {
+  var response = event.response;
+  var type = response.headers['content-type'];
+  if (
+    type &&
+    !/charset=/i.test(type.value) &&
+    /^(text\\/|application\\/(javascript|json|manifest\\+json))/i.test(type.value)
+  ) {
+    type.value += '; charset=utf-8';
+  }
+  return response;
+}`;
+
 export interface EdgeStackProps extends StackProps {
   stage: StageConfig;
   api: apigw.HttpApi;
@@ -140,6 +154,14 @@ export class EdgeStack extends Stack {
               functionName: resourceName(stage, 'spa-routes'),
               runtime: cloudfront.FunctionRuntime.JS_2_0,
               code: cloudfront.FunctionCode.fromInline(SPA_ROUTES),
+            }),
+          },
+          {
+            eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE,
+            function: new cloudfront.Function(this, 'Utf8Charset', {
+              functionName: resourceName(stage, 'utf8-charset'),
+              runtime: cloudfront.FunctionRuntime.JS_2_0,
+              code: cloudfront.FunctionCode.fromInline(UTF8_CHARSET),
             }),
           },
         ],
