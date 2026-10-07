@@ -100,7 +100,7 @@
 | Sessions | P1 | Cookie sessions for web with CSRF protection; list and revoke own sessions; bearer tokens for apps |
 | Login rate limiting | P1 | Per-IP and per-account throttling with exponential delay |
 | Preferences | P1 | Per-user preferences for all reading/updating options |
-| TOTP 2FA | P1.6 | Enrol via QR code, recovery codes, required at web login once enabled |
+| TOTP 2FA | P1.6 | Enrol via QR code, recovery codes, required at every password login (web, desktop, mobile) once enabled; admin can reset |
 | App passwords | P1.6 | Named, revocable passwords for TTRSS/Google Reader API clients; bypass TOTP; last-used time shown |
 
 ### APIs and clients

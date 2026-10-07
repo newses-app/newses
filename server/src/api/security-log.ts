@@ -4,21 +4,29 @@ export type SecurityEvent =
   | 'login'
   | 'login_failed'
   | 'login_throttled'
+  | 'login_second_factor_required'
   | 'logout'
   | 'csrf_rejected'
   | 'session_revoked'
   | 'password_changed'
   | 'password_change_failed'
+  | 'two_factor_setup_started'
+  | 'two_factor_enabled'
+  | 'two_factor_disabled'
+  | 'two_factor_failed'
+  | 'recovery_codes_regenerated'
   | 'user_created'
   | 'user_updated'
   | 'user_password_reset'
-  | 'user_deleted';
+  | 'user_deleted'
+  | 'user_two_factor_reset';
 
 const WARN = new Set<SecurityEvent>([
   'login_failed',
   'login_throttled',
   'csrf_rejected',
   'password_change_failed',
+  'two_factor_failed',
 ]);
 
 /** One structured log line per security-relevant action, queryable by `security`. */

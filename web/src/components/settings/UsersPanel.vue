@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { User } from '@rss-reader/shared';
-import { mdiAccountPlus, mdiDelete, mdiLockReset } from '@mdi/js';
+import { mdiAccountPlus, mdiCellphoneKey, mdiDelete, mdiLockReset } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -64,6 +64,17 @@ async function resetPassword() {
     resetting.value = null;
 }
 
+async function resetTwoFactor(user: User) {
+  if (
+    await ui.confirm(
+      t('users.resetTwoFactor'),
+      t('users.resetTwoFactorConfirm', { login: user.login }),
+      t('users.resetTwoFactor'),
+    )
+  )
+    await run(() => api.admin.resetTwoFactor(user.id), t('users.twoFactorReset'));
+}
+
 async function remove(user: User) {
   if (
     await ui.confirm(
@@ -96,6 +107,7 @@ async function remove(user: User) {
           <th>{{ t('login.name') }}</th>
           <th>{{ t('users.admin') }}</th>
           <th>{{ t('users.enabled') }}</th>
+          <th class="d-none d-sm-table-cell">{{ t('users.twoFactor') }}</th>
           <th class="d-none d-sm-table-cell">{{ t('users.lastLogin') }}</th>
           <th>
             <span class="d-sr-only">{{ t('settings.actions') }}</span>
@@ -121,6 +133,9 @@ async function remove(user: User) {
             />
           </td>
           <td class="d-none d-sm-table-cell text-body-small">
+            {{ user.twoFactor ? t('common.on') : t('common.off') }}
+          </td>
+          <td class="d-none d-sm-table-cell text-body-small">
             {{ user.lastLoginAt ? formatRelative(user.lastLoginAt, locale) : t('users.never') }}
           </td>
           <td class="text-no-wrap text-end">
@@ -129,6 +144,13 @@ async function remove(user: User) {
               size="small"
               :aria-label="t('users.resetPasswordFor', { login: user.login })"
               @click="resetting = { user, password: '' }"
+            />
+            <v-btn
+              v-if="user.twoFactor"
+              :icon="mdiCellphoneKey"
+              size="small"
+              :aria-label="t('users.resetTwoFactorFor', { login: user.login })"
+              @click="resetTwoFactor(user)"
             />
             <v-btn
               :icon="mdiDelete"

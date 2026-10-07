@@ -3,9 +3,9 @@ import { SyncService } from '../../core/entries/sync.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
 import { createLambdaRuntime } from './runtime.ts';
 
-const { logger, db, feedDeps } = await createLambdaRuntime('tick');
+const { config, logger, db, feedDeps } = await createLambdaRuntime('tick');
 const feeds = createFeedServices(feedDeps);
-const { sessions, throttle } = createAuthServices(db);
+const { sessions, throttle } = createAuthServices(db, config.appSecret);
 const sync = new SyncService(db);
 
 /** Scheduled work, one task per EventBridge schedule, timed to coincide with dispatch. */

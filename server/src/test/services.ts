@@ -6,7 +6,7 @@ import { createFeedServices } from '../core/feeds/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import { PrefsService } from '../core/prefs.ts';
 import type { Db } from '../db/client.ts';
-import { testFeedDeps } from './fakes.ts';
+import { TEST_APP_SECRET, testFeedDeps } from './fakes.ts';
 
 /** Every API service over `db`, with fake adapters unless overridden. */
 export function createTestServices(
@@ -16,7 +16,7 @@ export function createTestServices(
 ): ApiServices {
   const deps = testFeedDeps(db, fetcher, overrides);
   return {
-    ...createAuthServices(db),
+    ...createAuthServices(db, TEST_APP_SECRET),
     feeds: createFeedServices(deps),
     entries: createEntryServices(db, deps.realtime),
     prefs: new PrefsService(db),

@@ -57,6 +57,13 @@
       "when": 1791341502942,
       "tag": "0007_safe_urls",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791342748755,
+      "tag": "0008_totp",
+      "breakpoints": true
     }
   ]
 }

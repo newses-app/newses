@@ -37,9 +37,27 @@ export const users = pgTable(
     role: userRole('role').notNull().default('user'),
     disabledAt: tstz('disabled_at'),
     lastLoginAt: tstz('last_login_at'),
+    // Sealed TOTP secret; set while enrolling, required at login once `totp_enabled_at` is set.
+    totpSecret: text('totp_secret'),
+    totpEnabledAt: tstz('totp_enabled_at'),
+    // Last accepted time step, so a code cannot be used twice.
+    totpLastStep: bigint('totp_last_step', { mode: 'number' }),
     ...timestamps(),
   },
   (t) => [uniqueIndex('users_login_key').on(sql`lower(${t.login})`)],
+);
+
+export const recoveryCodes = pgTable(
+  'recovery_codes',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    usedAt: tstz('used_at'),
+  },
+  (t) => [index('recovery_codes_user_id_idx').on(t.userId)],
 );
 
 export const sessions = pgTable(

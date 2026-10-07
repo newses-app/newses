@@ -1,6 +1,7 @@
 import type { LoginThrottle, ThrottleRule } from './login-throttle.ts';
 import { verifyAgainstDummy, verifyPassword } from './passwords.ts';
 import type { NewSession, SessionKind, SessionService, UserRow } from './sessions.ts';
+import type { TwoFactorService, TwoFactorSetup } from './two-factor.ts';
 import type { UserService } from './users.ts';
 import { DomainError } from '../errors.ts';
 
@@ -16,20 +17,39 @@ export interface LoginInput {
   userAgent: string | null;
 }
 
+export interface SecondFactorInput {
+  challenge: string;
+  code: string;
+  ip: string;
+  userAgent: string | null;
+}
+
+export type LoggedIn = NewSession & { user: UserRow };
+
+/** A login either opens a session or, with 2FA on, returns a challenge for the code step. */
+export type LoginResult = LoggedIn | { challenge: string; user: UserRow };
+
 const accountKey = (login: string) => `login:${login.trim().toLowerCase()}`;
 
 export class AuthService {
   readonly #users: UserService;
   readonly #sessions: SessionService;
   readonly #throttle: LoginThrottle;
+  readonly #twoFactor: TwoFactorService;
 
-  constructor(users: UserService, sessions: SessionService, throttle: LoginThrottle) {
+  constructor(
+    users: UserService,
+    sessions: SessionService,
+    throttle: LoginThrottle,
+    twoFactor: TwoFactorService,
+  ) {
     this.#users = users;
     this.#sessions = sessions;
     this.#throttle = throttle;
+    this.#twoFactor = twoFactor;
   }
 
-  async login(input: LoginInput): Promise<NewSession & { user: UserRow }> {
+  async login(input: LoginInput): Promise<LoginResult> {
     const account = accountKey(input.login);
     const ipKey = `ip:${input.ip}`;
     await this.#throttle.check([account, ipKey]);
@@ -44,10 +64,30 @@ export class AuthService {
       throw new DomainError('invalid_credentials', 'Invalid login or password');
     }
 
-    await this.#throttle.reset(account);
-    await this.#users.recordLogin(user.id);
-    const created = await this.#sessions.create(user.id, input.kind, input.userAgent);
-    return { ...created, user };
+    if (user.totpEnabledAt !== null) {
+      // The account counter is reset only once the code step succeeds too.
+      return {
+        challenge: this.#twoFactor.issueChallenge({ userId: user.id, kind: input.kind }),
+        user,
+      };
+    }
+    return this.#open(user, input.kind, input.userAgent);
+  }
+
+  /** The code step of a login: a TOTP or recovery code against the challenge from `login`. */
+  async completeLogin(input: SecondFactorInput): Promise<LoggedIn> {
+    const challenge = this.#twoFactor.readChallenge(input.challenge);
+    if (!challenge) throw new DomainError('invalid_input', 'Sign-in expired; start again');
+    const user = await this.#users.get(challenge.userId);
+    const account = accountKey(user.login);
+    const ipKey = `ip:${input.ip}`;
+    await this.#throttle.check([account, ipKey]);
+    if (user.disabledAt !== null || !(await this.#twoFactor.verify(user.id, input.code))) {
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
+      await this.#throttle.recordFailure(ipKey, IP_RULE);
+      throw new DomainError('invalid_credentials', 'Invalid code');
+    }
+    return this.#open(user, challenge.kind, input.userAgent);
   }
 
   async changePassword(
@@ -56,14 +96,71 @@ export class AuthService {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    // Shares the login counter, so a stolen session cannot be used to guess the password.
+    await this.#checkPassword(user, currentPassword);
+    await this.#users.setPassword(user.id, newPassword, currentSessionId);
+  }
+
+  /** Starts enrolment after re-checking the password, so a stolen session cannot enrol. */
+  async beginTwoFactor(user: UserRow, password: string): Promise<TwoFactorSetup> {
+    await this.#checkPassword(user, password);
+    return this.#twoFactor.begin(user);
+  }
+
+  /** Finishes enrolment, signs out the user's other sessions, and returns recovery codes. */
+  async enableTwoFactor(user: UserRow, currentSessionId: number, code: string): Promise<string[]> {
     const account = accountKey(user.login);
     await this.#throttle.check([account]);
-    if (!(await verifyPassword(user.passwordHash, currentPassword))) {
+    const codes = await this.#twoFactor.enable(user.id, code);
+    if (!codes) {
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
+      throw new DomainError('invalid_credentials', 'Invalid code');
+    }
+    await this.#sessions.revokeAll(user.id, currentSessionId);
+    return codes;
+  }
+
+  async disableTwoFactor(user: UserRow, password: string, code: string): Promise<void> {
+    await this.#checkPassword(user, password);
+    await this.#checkCode(user, code);
+    await this.#twoFactor.disable(user.id);
+  }
+
+  async regenerateRecoveryCodes(user: UserRow, code: string): Promise<string[]> {
+    await this.#checkCode(user, code);
+    return this.#twoFactor.regenerateRecoveryCodes(user.id);
+  }
+
+  /** Admin reset for a user who lost their authenticator: 2FA off and signed out everywhere. */
+  async resetTwoFactor(userId: number): Promise<void> {
+    await this.#users.get(userId);
+    await this.#twoFactor.disable(userId);
+    await this.#sessions.revokeAll(userId);
+  }
+
+  async #open(user: UserRow, kind: SessionKind, userAgent: string | null): Promise<LoggedIn> {
+    await this.#throttle.reset(accountKey(user.login));
+    await this.#users.recordLogin(user.id);
+    const created = await this.#sessions.create(user.id, kind, userAgent);
+    return { ...created, user };
+  }
+
+  // Re-authentication shares the login counter, so a stolen session cannot guess credentials.
+  async #checkPassword(user: UserRow, password: string): Promise<void> {
+    const account = accountKey(user.login);
+    await this.#throttle.check([account]);
+    if (!(await verifyPassword(user.passwordHash, password))) {
       await this.#throttle.recordFailure(account, ACCOUNT_RULE);
       throw new DomainError('invalid_credentials', 'Current password is incorrect');
     }
     await this.#throttle.reset(account);
-    await this.#users.setPassword(user.id, newPassword, currentSessionId);
+  }
+
+  async #checkCode(user: UserRow, code: string): Promise<void> {
+    const account = accountKey(user.login);
+    await this.#throttle.check([account]);
+    if (!(await this.#twoFactor.verify(user.id, code))) {
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
+      throw new DomainError('invalid_credentials', 'Invalid code');
+    }
   }
 }

@@ -21,6 +21,7 @@ export const userSchema = z.object({
   login: z.string(),
   role: userRoleSchema,
   disabled: z.boolean(),
+  twoFactor: z.boolean(),
   createdAt: z.iso.datetime(),
   lastLoginAt: z.iso.datetime().nullable(),
 });
@@ -32,11 +33,45 @@ export const loginRequestSchema = z.object({
   tokenType: z.enum(['cookie', 'bearer']).default('cookie'),
 });
 
-export const loginResponseSchema = z.object({
+export const loggedInResponseSchema = z.object({
   user: userSchema,
   csrfToken: z.string().optional(),
   token: z.string().optional(),
 });
+
+/** The password was right and 2FA is on: send a code with the challenge to `/auth/login/2fa`. */
+export const twoFactorChallengeSchema = z.object({
+  twoFactorRequired: z.literal(true),
+  challenge: z.string(),
+});
+
+export const loginResponseSchema = z.union([loggedInResponseSchema, twoFactorChallengeSchema]);
+
+/** A 6-digit authenticator code or a recovery code. */
+const secondFactorCodeSchema = z.string().trim().min(6).max(32);
+
+export const loginTwoFactorRequestSchema = z.object({
+  challenge: z.string().min(1).max(512),
+  code: secondFactorCodeSchema,
+});
+
+export const twoFactorStatusSchema = z.object({
+  enabled: z.boolean(),
+  recoveryCodesLeft: z.number().int(),
+});
+
+export const twoFactorSetupRequestSchema = z.object({ password: z.string().min(1).max(1024) });
+
+export const twoFactorSetupResponseSchema = z.object({ secret: z.string(), uri: z.string() });
+
+export const twoFactorCodeRequestSchema = z.object({ code: secondFactorCodeSchema });
+
+export const twoFactorDisableRequestSchema = z.object({
+  password: z.string().min(1).max(1024),
+  code: secondFactorCodeSchema,
+});
+
+export const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.string()) });
 
 export const currentSessionSchema = z.object({
   user: userSchema,
@@ -77,6 +112,10 @@ export type User = z.infer<typeof userSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
+export type LoggedInResponse = z.infer<typeof loggedInResponseSchema>;
+export type TwoFactorChallenge = z.infer<typeof twoFactorChallengeSchema>;
+export type TwoFactorStatus = z.infer<typeof twoFactorStatusSchema>;
+export type TwoFactorSetup = z.infer<typeof twoFactorSetupResponseSchema>;
 export type CurrentSession = z.infer<typeof currentSessionSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;

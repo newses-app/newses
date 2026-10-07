@@ -28,7 +28,7 @@ const deps = createFeedDeps({
 });
 onShutdown(() => deps.fetcher.close());
 const feeds = createFeedServices(deps);
-const { sessions, throttle } = createAuthServices(db);
+const { sessions, throttle } = createAuthServices(db, config.appSecret);
 const sync = new SyncService(db);
 
 // Jobs queued before host batching carry `feedSourceId` instead; their claims lapse and a later

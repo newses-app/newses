@@ -6,6 +6,8 @@
     "delete": "Delete",
     "save": "Save",
     "loading": "Loading",
+    "on": "On",
+    "off": "Off",
     "first": "First",
     "after": "After {name}"
   },
@@ -23,7 +25,13 @@
     "password": "Password",
     "submit": "Sign in",
     "invalid": "Wrong user name or password.",
-    "throttled": "Too many attempts. Try again in {seconds} seconds."
+    "throttled": "Too many attempts. Try again in {seconds} seconds.",
+    "code": "Authentication code",
+    "codePrompt": "Enter the 6-digit code from your authenticator app, or one of your recovery codes.",
+    "verify": "Verify",
+    "invalidCode": "That code is not valid.",
+    "expired": "Sign-in took too long. Please start again.",
+    "startOver": "Use a different account"
   },
   "special": {
     "all": "All articles",
@@ -181,6 +189,30 @@
     "thisDevice": "This device",
     "signOut": "Sign out"
   },
+  "twoFactor": {
+    "title": "Two-factor authentication",
+    "offSummary": "Sign-in asks for a code from an authenticator app as well as your password.",
+    "onSummary": "On. {count} unused recovery codes left.",
+    "setUp": "Set up two-factor authentication",
+    "continue": "Continue",
+    "passwordPrompt": "Confirm your password to continue.",
+    "scanPrompt": "Scan this code with an authenticator app, then enter the 6-digit code it shows.",
+    "qrAlt": "QR code for your authenticator app",
+    "manualEntry": "Or enter this key by hand:",
+    "codesPrompt": "Store these recovery codes somewhere safe. Each one signs you in once if you lose your authenticator. They will not be shown again.",
+    "copy": "Copy",
+    "copied": "Recovery codes copied.",
+    "download": "Download",
+    "savedCodes": "I have saved them",
+    "enabled": "Two-factor authentication is on. Other devices were signed out.",
+    "disable": "Turn off",
+    "disabled": "Two-factor authentication is off.",
+    "codeHint": "A code from your authenticator app, or a recovery code.",
+    "wrongPasswordOrCode": "The password or code is wrong.",
+    "newRecoveryCodes": "New recovery codes",
+    "recoveryCodes": "Recovery codes",
+    "regeneratePrompt": "Enter a code from your authenticator app. Your old recovery codes will stop working."
+  },
   "users": {
     "create": "New user",
     "admin": "Administrator",
@@ -195,7 +227,12 @@
     "deleteConfirm": "Delete {login} and all their data?",
     "adminFor": "Administrator: {login}",
     "enabledFor": "Enabled: {login}",
-    "deleteNamed": "Delete {login}"
+    "deleteNamed": "Delete {login}",
+    "twoFactor": "2FA",
+    "resetTwoFactor": "Reset two-factor authentication",
+    "resetTwoFactorFor": "Reset two-factor authentication for {login}",
+    "resetTwoFactorConfirm": "Turn off two-factor authentication for {login} and sign them out everywhere? They can set it up again after signing in.",
+    "twoFactorReset": "Two-factor authentication reset."
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

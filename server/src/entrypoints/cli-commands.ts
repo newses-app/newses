@@ -1,10 +1,13 @@
 import { parseArgs } from 'node:util';
 import { passwordSchema, loginNameSchema } from '@rss-reader/shared';
-import type { UserService } from '../core/auth/users.ts';
+import type { AuthServices } from '../core/auth/index.ts';
 
 export const USAGE = `Usage:
   cli user create <login> [--admin]    Create a user; password is read from stdin
-  cli user reset-password <login>      Set a new password from stdin and sign the user out everywhere`;
+  cli user reset-password <login>      Set a new password from stdin and sign the user out everywhere
+  cli user reset-2fa <login>           Turn off two-factor authentication and sign the user out everywhere`;
+
+const COMMANDS = new Set(['create', 'reset-password', 'reset-2fa']);
 
 export interface CliIo {
   readPassword: () => Promise<string>;
@@ -12,14 +15,18 @@ export interface CliIo {
 }
 
 /** Runs one CLI command. Returns the process exit code. */
-export async function runCli(args: string[], users: UserService, io: CliIo): Promise<number> {
+export async function runCli(
+  args: string[],
+  { users, auth }: Pick<AuthServices, 'users' | 'auth'>,
+  io: CliIo,
+): Promise<number> {
   const { positionals, values } = parseArgs({
     args,
     allowPositionals: true,
     options: { admin: { type: 'boolean', default: false } },
   });
   const [group, command, login] = positionals;
-  if (group !== 'user' || !login || (command !== 'create' && command !== 'reset-password')) {
+  if (group !== 'user' || !login || !command || !COMMANDS.has(command)) {
     io.print(USAGE);
     return 2;
   }
@@ -29,6 +36,17 @@ export async function runCli(args: string[], users: UserService, io: CliIo): Pro
     io.print(`Invalid login: ${name.error.issues[0]?.message ?? 'invalid'}`);
     return 1;
   }
+  if (command === 'reset-2fa') {
+    const user = await users.findByLogin(name.data);
+    if (!user) {
+      io.print(`No user "${name.data}"`);
+      return 1;
+    }
+    await auth.resetTwoFactor(user.id);
+    io.print(`Two-factor authentication off for "${user.login}"; existing sessions revoked`);
+    return 0;
+  }
+
   const password = passwordSchema.safeParse(await io.readPassword());
   if (!password.success) {
     io.print('Password must be 8 to 1024 characters');

@@ -9,6 +9,7 @@ export function toUser(row: UserRow): User {
     login: row.login,
     role: row.role,
     disabled: row.disabledAt !== null,
+    twoFactor: row.totpEnabledAt !== null,
     createdAt: row.createdAt.toISOString(),
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
   };

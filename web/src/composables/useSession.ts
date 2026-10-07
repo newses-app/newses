@@ -1,4 +1,4 @@
-import type { CurrentSession } from '@rss-reader/shared';
+import type { CurrentSession, LoggedInResponse } from '@rss-reader/shared';
 import { type QueryClient, useQuery, useQueryClient } from '@tanstack/vue-query';
 import type { Router } from 'vue-router';
 import { useRouter } from 'vue-router';
@@ -31,12 +31,23 @@ export function useSession() {
   const router = useRouter();
   const query = useQuery({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: Infinity });
 
-  async function login(login: string, password: string): Promise<void> {
-    const result = await api.auth.login({ login, password });
+  function signedIn(result: LoggedInResponse): void {
     queryClient.setQueryData<CurrentSession>(SESSION_KEY, {
       user: result.user,
       csrfToken: result.csrfToken ?? null,
     });
+  }
+
+  /** Signs in, or returns the challenge to pass to `completeLogin` with a 2FA code. */
+  async function login(login: string, password: string): Promise<string | null> {
+    const result = await api.auth.login({ login, password });
+    if ('challenge' in result) return result.challenge;
+    signedIn(result);
+    return null;
+  }
+
+  async function completeLogin(challenge: string, code: string): Promise<void> {
+    signedIn(await api.auth.loginTwoFactor({ challenge, code }));
   }
 
   async function logout(): Promise<void> {
@@ -48,5 +59,5 @@ export function useSession() {
     }
   }
 
-  return { session: query.data, login, logout };
+  return { session: query.data, login, completeLogin, logout };
 }

@@ -16,7 +16,7 @@ const app = buildApp({
   // Lambda responses are buffered, so event streams cannot be held open; clients poll.
   events: false,
   services: {
-    ...createAuthServices(db),
+    ...createAuthServices(db, config.appSecret),
     feeds: createFeedServices(feedDeps),
     entries: createEntryServices(db, feedDeps.realtime),
     prefs: new PrefsService(db),

@@ -10,11 +10,10 @@ async function readStdinLine(): Promise<string> {
   return input.split(/\r?\n/)[0] ?? '';
 }
 
-const { pool } = createRuntime('cli');
+const { config, pool } = createRuntime('cli');
 let code: number;
 try {
-  const { users } = createAuthServices(createDb(pool));
-  code = await runCli(process.argv.slice(2), users, {
+  code = await runCli(process.argv.slice(2), createAuthServices(createDb(pool), config.appSecret), {
     readPassword: readStdinLine,
     print: (line) => {
       console.log(line);

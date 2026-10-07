@@ -7,6 +7,7 @@ import { api, ApiError } from '../../api.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
+import TwoFactorSection from './TwoFactorSection.vue';
 
 const { t, locale } = useI18n();
 const ui = useUiStore();
@@ -108,6 +109,8 @@ async function revoke(id: number) {
         {{ t('account.changePassword') }}
       </v-btn>
     </v-form>
+
+    <TwoFactorSection />
 
     <h2 class="text-title-large mt-8 mb-2">{{ t('account.sessions') }}</h2>
     <v-list density="compact">

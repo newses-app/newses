@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb } from '../../db/client.ts';
 import { users as usersTable } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
+import { TEST_APP_SECRET } from '../../test/fakes.ts';
 import { createAuthServices, type AuthServices } from './index.ts';
 import { verifyPassword } from './passwords.ts';
 
@@ -10,7 +11,7 @@ let services: AuthServices;
 
 beforeAll(async () => {
   database = await createTestDatabase();
-  services = createAuthServices(createDb(database.pool));
+  services = createAuthServices(createDb(database.pool), TEST_APP_SECRET);
 });
 
 beforeEach(async () => {

@@ -45,6 +45,7 @@ Admins manage users through the admin API (`/api/v1/admin/users`). From the host
 
 - Create: `echo 'the password' | C exec -T server rss-reader cli user create <login> [--admin]`
 - Reset a password and sign the user out everywhere: `echo 'new password' | C exec -T server rss-reader cli user reset-password <login>`
+- Turn off a user's two-factor authentication and sign them out everywhere: `C exec server rss-reader cli user reset-2fa <login>`
 
 ## Logs
 

@@ -3,9 +3,13 @@ import type {
   changePasswordRequestSchema,
   createUserRequestSchema,
   CurrentSession,
+  LoggedInResponse,
   LoginResponse,
   loginRequestSchema,
+  loginTwoFactorRequestSchema,
   Session,
+  TwoFactorSetup,
+  TwoFactorStatus,
   updateUserRequestSchema,
   User,
 } from './auth.ts';
@@ -124,8 +128,14 @@ export function createApiClient(options: ApiClientOptions = {}) {
     },
 
     auth: {
+      /** Opens a session, or returns a challenge to finish with `loginTwoFactor`. */
       async login(body: z.input<typeof loginRequestSchema>) {
         const result = await request<LoginResponse>('POST', '/auth/login', { body });
+        if ('user' in result) csrfToken = result.csrfToken ?? csrfToken;
+        return result;
+      },
+      async loginTwoFactor(body: z.input<typeof loginTwoFactorRequestSchema>) {
+        const result = await request<LoggedInResponse>('POST', '/auth/login/2fa', { body });
         csrfToken = result.csrfToken ?? csrfToken;
         return result;
       },
@@ -143,6 +153,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<undefined>('DELETE', `/auth/sessions/${id(sessionId)}`),
       changePassword: (body: z.input<typeof changePasswordRequestSchema>) =>
         request<undefined>('POST', '/auth/password', { body }),
+      twoFactor: {
+        status: () => request<TwoFactorStatus>('GET', '/auth/2fa'),
+        setup: (password: string) =>
+          request<TwoFactorSetup>('POST', '/auth/2fa/setup', { body: { password } }),
+        enable: (code: string) =>
+          request<{ recoveryCodes: string[] }>('POST', '/auth/2fa/enable', { body: { code } }),
+        disable: (password: string, code: string) =>
+          request<undefined>('POST', '/auth/2fa/disable', { body: { password, code } }),
+        regenerateRecoveryCodes: (code: string) =>
+          request<{ recoveryCodes: string[] }>('POST', '/auth/2fa/recovery-codes', {
+            body: { code },
+          }),
+      },
     },
 
     admin: {
@@ -154,6 +177,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
       resetPassword: (userId: number, password: string) =>
         request<undefined>('POST', `/admin/users/${id(userId)}/password`, { body: { password } }),
       deleteUser: (userId: number) => request<undefined>('DELETE', `/admin/users/${id(userId)}`),
+      resetTwoFactor: (userId: number) =>
+        request<undefined>('POST', `/admin/users/${id(userId)}/2fa/reset`),
     },
 
     categories: {

@@ -13,7 +13,7 @@ export async function handler(): Promise<void> {
   logger.info('Migrations applied');
   if (!config.bootstrapAdmin) return;
   const { login, password } = config.bootstrapAdmin;
-  if (await createAuthServices(db).users.bootstrapAdmin(login, password)) {
+  if (await createAuthServices(db, config.appSecret).users.bootstrapAdmin(login, password)) {
     logger.info({ login }, 'Created initial admin user');
   }
 }

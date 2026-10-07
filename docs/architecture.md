@@ -148,7 +148,8 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 
 | Entity | Scope | Notes |
 |---|---|---|
-| `users` | Instance | Login (unique), Argon2id hash, role (`admin`/`user`), TOTP secret, disabled flag |
+| `users` | Instance | Login (unique), Argon2id hash, role (`admin`/`user`), disabled flag; sealed TOTP secret, enabled time, last accepted time step |
+| `recovery_codes` | User | SHA-256 hash, used time |
 | `sessions` | User | Token hash, kind (`cookie`/`bearer`), user agent, last seen, expiry |
 | `app_passwords` | User | Name, hash, last used |
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
@@ -182,7 +183,7 @@ Search:
 | Client | Credential | Notes |
 |---|---|---|
 | Web | httpOnly, SameSite=Lax session cookie | CSRF token on state-changing requests; TOTP at login when enabled |
-| Electron / Capacitor | Bearer session token | Stored in OS secure storage (Electron `safeStorage`, platform keystore on mobile) |
+| Electron / Capacitor | Bearer session token | TOTP at login when enabled; stored in OS secure storage (Electron `safeStorage`, platform keystore on mobile) |
 | TTRSS / Google Reader clients | App password → API session | App passwords bypass TOTP |
 
 - Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days and bearer sessions 90 days, both sliding on use.
@@ -190,6 +191,8 @@ Search:
 - Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes. A wrong current password when changing it counts against the account.
 - Passwords are 8–1,024 characters and not on the bundled common-password list (`shared/src/common-passwords.ts`).
 - Logins, failures, lockouts, CSRF rejections, password changes, session revocations, and admin user changes are logged with a `security` field naming the event. The logger redacts credentials and auth headers.
+- TOTP (RFC 6238: SHA-1, 6 digits, 30 s, ±1 step) is optional per user. With it on, a correct password returns a signed 5-minute challenge instead of a session; `POST /auth/login/2fa` exchanges it with a TOTP code or one of 10 single-use recovery codes. A code from a time step at or before the last accepted one is refused. Code failures count against the account and IP like password failures.
+- Starting enrolment and turning 2FA off re-check the password; turning off and regenerating recovery codes need a code. Enabling 2FA signs out the user's other sessions. Admins (`POST /admin/users/:id/2fa/reset`) and `cli user reset-2fa` turn it off and sign the user out everywhere.
 - Changing or resetting a password, or disabling a user, revokes their other sessions. The last active admin cannot be demoted, disabled, or deleted.
 - `APP_SECRET` (Docker env; SSM `app-secret` on AWS) is the root of per-purpose keys derived with HKDF-SHA256 (`server/src/core/crypto.ts`). Stored secrets are sealed with AES-256-GCM as `v1.<iv>.<ciphertext>.<tag>`, authenticated against their owning row; tokens are signed with HMAC-SHA256. A new secret voids every sealed value and signature; there is no rotation.
 

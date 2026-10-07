@@ -12,6 +12,9 @@ import type {
   RealtimeEvent,
 } from '../core/ports.ts';
 
+/** APP_SECRET for tests. */
+export const TEST_APP_SECRET = 'test app secret of at least thirty-two characters';
+
 export const silentLogger: Logger = {
   debug: () => undefined,
   info: () => undefined,

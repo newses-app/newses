@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../../db/client.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
+import { TEST_APP_SECRET } from '../../test/fakes.ts';
 import { createAuthServices, type AuthServices } from './index.ts';
 
 let database: TestDatabase;
@@ -14,7 +15,7 @@ const advance = (ms: number) => {
 
 beforeAll(async () => {
   database = await createTestDatabase();
-  services = createAuthServices(createDb(database.pool), () => now);
+  services = createAuthServices(createDb(database.pool), TEST_APP_SECRET, () => now);
 });
 
 afterAll(async () => {

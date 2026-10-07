@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api.ts';
@@ -9,11 +9,15 @@ import { useSession } from '../composables/useSession.ts';
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
-const { login } = useSession();
+const { login, completeLogin } = useSession();
 useDocumentTitle(() => t('login.submit'));
 
 const name = ref('');
 const password = ref('');
+/** Set once the password is accepted and an authentication code is needed. */
+const challenge = ref<string | null>(null);
+const code = ref('');
+const codeField = ref<{ focus: () => void } | null>(null);
 const busy = ref(false);
 const error = ref<string | null>(null);
 // Vuetify's autofocus waits for an IntersectionObserver callback, which can land after typing has
@@ -21,11 +25,28 @@ const error = ref<string | null>(null);
 const nameField = ref<{ focus: () => void } | null>(null);
 onMounted(() => nameField.value?.focus());
 
+function startOver(message: string | null = null) {
+  challenge.value = null;
+  code.value = '';
+  password.value = '';
+  error.value = message;
+  void nextTick(() => nameField.value?.focus());
+}
+
 async function submit() {
   busy.value = true;
   error.value = null;
   try {
-    await login(name.value.trim(), password.value);
+    if (challenge.value) {
+      await completeLogin(challenge.value, code.value.trim());
+    } else {
+      challenge.value = await login(name.value.trim(), password.value);
+      if (challenge.value) {
+        await nextTick();
+        codeField.value?.focus();
+        return;
+      }
+    }
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/all';
     // Only same-app paths, never another origin.
     await router.replace(
@@ -34,7 +55,10 @@ async function submit() {
   } catch (err) {
     if (err instanceof ApiError && err.status === 429)
       error.value = t('login.throttled', { seconds: err.retryAfterSeconds ?? 60 });
-    else if (err instanceof ApiError && err.status === 401) error.value = t('login.invalid');
+    else if (err instanceof ApiError && err.status === 401)
+      error.value = challenge.value ? t('login.invalidCode') : t('login.invalid');
+    else if (challenge.value && err instanceof ApiError && err.status === 400)
+      startOver(t('login.expired'));
     else error.value = t('errors.generic');
   } finally {
     busy.value = false;
@@ -53,7 +77,21 @@ async function submit() {
           </div>
         </v-card-item>
         <v-form @submit.prevent="submit">
-          <v-card-text>
+          <v-card-text v-if="challenge">
+            <p class="text-body-medium mb-4">{{ t('login.codePrompt') }}</p>
+            <v-text-field
+              ref="codeField"
+              v-model="code"
+              :label="t('login.code')"
+              autocomplete="one-time-code"
+              spellcheck="false"
+              required
+            />
+            <v-alert v-if="error" type="error" variant="tonal" density="compact">{{
+              error
+            }}</v-alert>
+          </v-card-text>
+          <v-card-text v-else>
             <v-text-field
               ref="nameField"
               v-model="name"
@@ -80,10 +118,13 @@ async function submit() {
               block
               size="large"
               :loading="busy"
-              :disabled="!name || !password"
+              :disabled="challenge ? !code.trim() : !name || !password"
             >
-              {{ t('login.submit') }}
+              {{ challenge ? t('login.verify') : t('login.submit') }}
             </v-btn>
+          </v-card-actions>
+          <v-card-actions v-if="challenge" class="pt-0">
+            <v-btn variant="text" block @click="startOver()">{{ t('login.startOver') }}</v-btn>
           </v-card-actions>
         </v-form>
       </v-card>

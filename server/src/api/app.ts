@@ -9,6 +9,7 @@ import {
 } from 'fastify-type-provider-zod';
 import type { AuthService } from '../core/auth/auth-service.ts';
 import type { SessionService } from '../core/auth/sessions.ts';
+import type { TwoFactorService } from '../core/auth/two-factor.ts';
 import type { UserService } from '../core/auth/users.ts';
 import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
@@ -34,6 +35,7 @@ export interface ApiServices {
   auth: AuthService;
   sessions: SessionService;
   users: UserService;
+  twoFactor: TwoFactorService;
   feeds: FeedServices;
   entries: EntryServices;
   prefs: PrefsService;
