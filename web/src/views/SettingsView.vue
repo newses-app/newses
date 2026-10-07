@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import AccountPanel from '../components/settings/AccountPanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
+import LabelsPanel from '../components/settings/LabelsPanel.vue';
 import PrefsPanel from '../components/settings/PrefsPanel.vue';
 import UsersPanel from '../components/settings/UsersPanel.vue';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
@@ -19,6 +20,7 @@ const isAdmin = computed(() => session.value?.user.role === 'admin');
 const tabs = computed(() => [
   'preferences',
   'feeds',
+  'labels',
   'account',
   ...(isAdmin.value ? ['users'] : []),
 ]);
@@ -51,6 +53,7 @@ useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings
     <v-container class="settings-container">
       <PrefsPanel v-if="tab === 'preferences'" />
       <FeedsPanel v-else-if="tab === 'feeds'" />
+      <LabelsPanel v-else-if="tab === 'labels'" />
       <AccountPanel v-else-if="tab === 'account'" />
       <UsersPanel v-else-if="tab === 'users' && isAdmin" />
     </v-container>

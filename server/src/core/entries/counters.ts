@@ -4,6 +4,11 @@ import type { Db } from '../../db/client.ts';
 import { categories, subscriptions } from '../../db/schema.ts';
 import { freshSince } from './streams.ts';
 
+interface LabelCountRow extends Record<string, unknown> {
+  id: number;
+  unread: string;
+}
+
 interface CountRow extends Record<string, unknown> {
   subscription_id: number | null;
   unread: string;
@@ -19,9 +24,12 @@ export class CounterService {
     this.#db = db;
   }
 
-  /** Unread counts per subscription, per category (including subcategories), and special feed. */
+  /**
+   * Unread counts per subscription, per category (including subcategories), per label, and per
+   * special feed.
+   */
   async get(userId: number): Promise<Counters> {
-    const [counts, subs, cats] = await Promise.all([
+    const [counts, subs, cats, labelCounts] = await Promise.all([
       this.#db.execute<CountRow>(sql`
         SELECT ue.subscription_id, count(*) AS unread,
           count(*) FILTER (WHERE ue.sort_at > ${freshSince(userId)}) AS fresh,
@@ -38,6 +46,13 @@ export class CounterService {
         .select({ id: categories.id, parentId: categories.parentId })
         .from(categories)
         .where(eq(categories.userId, userId)),
+      this.#db.execute<LabelCountRow>(sql`
+        SELECT l.id, count(ue.id) AS unread
+        FROM labels l
+        LEFT JOIN entry_labels el ON el.label_id = l.id
+        LEFT JOIN user_entries ue ON ue.id = el.user_entry_id AND ue.unread
+        WHERE l.user_id = ${userId}
+        GROUP BY l.id`),
     ]);
 
     const special = { all: 0, fresh: 0, starred: 0, published: 0 };
@@ -70,6 +85,7 @@ export class CounterService {
     return {
       subscriptions: subs.map((s) => ({ id: s.id, unread: bySubscription.get(s.id) ?? 0 })),
       categories: [...byCategory].map(([id, unread]) => ({ id, unread })),
+      labels: labelCounts.rows.map((row) => ({ id: row.id, unread: Number(row.unread) })),
       special,
     };
   }

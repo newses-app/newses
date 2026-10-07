@@ -3,6 +3,7 @@ import type { Entry, EntryState } from '@rss-reader/shared';
 import {
   mdiEmailMarkAsUnread,
   mdiEmailOpenOutline,
+  mdiLabelOutline,
   mdiNoteEditOutline,
   mdiNotePlusOutline,
   mdiNoteTextOutline,
@@ -15,13 +16,20 @@ import {
 } from '@mdi/js';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useLabels } from '../../composables/useLabels.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
+import { labelKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
+import LabelChip from '../labels/LabelChip.vue';
 
 const props = defineProps<{ entry: Entry }>();
 const emit = defineEmits<{ change: [state: EntryState]; select: [] }>();
 const { t, locale } = useI18n();
 const ui = useUiStore();
+const allLabels = useLabels();
+const labels = computed(() =>
+  (allLabels.data.value ?? []).filter((label) => props.entry.labels.includes(label.id)),
+);
 
 const date = computed(() =>
   formatDateTime(props.entry.publishedAt ?? props.entry.sortAt, locale.value),
@@ -55,6 +63,11 @@ const enclosures = computed(() =>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span
         >
       </div>
+      <ul v-if="labels.length" class="entry-labels mt-2" :aria-label="t('labels.title')">
+        <li v-for="label in labels" :key="label.id">
+          <LabelChip :label="label" :to="`/${labelKey(label.id)}`" />
+        </li>
+      </ul>
       <div class="mt-2 d-flex flex-wrap ga-1">
         <v-btn
           size="small"
@@ -79,6 +92,9 @@ const enclosures = computed(() =>
           @click="emit('change', { unread: !entry.unread })"
         >
           {{ entry.unread ? t('entries.markRead') : t('entries.markUnread') }}
+        </v-btn>
+        <v-btn size="small" :prepend-icon="mdiLabelOutline" @click="ui.labelsEntry = entry">
+          {{ t('labels.title') }}
         </v-btn>
         <v-btn
           size="small"
@@ -141,6 +157,13 @@ const enclosures = computed(() =>
 }
 .entry-heading:focus {
   outline: none;
+}
+.entry-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0;
+  list-style: none;
 }
 .entry-note {
   white-space: pre-wrap;

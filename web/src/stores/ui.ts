@@ -18,6 +18,8 @@ export const useUiStore = defineStore('ui', () => {
   const editSubscriptionId = ref<number | null>(null);
   /** The entry whose note is being edited. */
   const noteEntry = ref<Entry | null>(null);
+  /** The entry whose labels are being chosen. */
+  const labelsEntry = ref<Entry | null>(null);
   const notice = ref<{ text: string; error: boolean } | null>(null);
   const confirmRequest = ref<ConfirmRequest | null>(null);
 
@@ -46,6 +48,7 @@ export const useUiStore = defineStore('ui', () => {
     subscribeOpen,
     editSubscriptionId,
     noteEntry,
+    labelsEntry,
     notice,
     confirmRequest,
     notify,

@@ -1,7 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
-import { entries, feedSources, subscriptions, userEntries, users } from '../../db/schema.ts';
+import {
+  entries,
+  entryLabels,
+  feedSources,
+  labels,
+  subscriptions,
+  userEntries,
+  users,
+} from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { MemoryBlobStore } from '../../test/fakes.ts';
 import { faviconKey } from './favicons.ts';
@@ -39,7 +47,14 @@ afterAll(async () => {
 
 async function feedWith(
   purgeDays: number | null,
-  items: { guid: string; age: number; starred?: boolean; published?: boolean; note?: string }[],
+  items: {
+    guid: string;
+    age: number;
+    starred?: boolean;
+    published?: boolean;
+    note?: string;
+    labelled?: boolean;
+  }[],
 ) {
   const [source] = await db
     .insert(feedSources)
@@ -54,15 +69,25 @@ async function feedWith(
       .insert(entries)
       .values({ feedSourceId: source?.id ?? 0, guid: item.guid, contentHash: 'h' })
       .returning();
-    await db.insert(userEntries).values({
-      userId,
-      entryId: e?.id ?? 0,
-      subscriptionId: sub?.id ?? 0,
-      sortAt: daysAgo(item.age),
-      starred: item.starred ?? false,
-      published: item.published ?? false,
-      note: item.note ?? null,
-    });
+    const [ue] = await db
+      .insert(userEntries)
+      .values({
+        userId,
+        entryId: e?.id ?? 0,
+        subscriptionId: sub?.id ?? 0,
+        sortAt: daysAgo(item.age),
+        starred: item.starred ?? false,
+        published: item.published ?? false,
+        note: item.note ?? null,
+      })
+      .returning();
+    if (item.labelled) {
+      const [label] = await db
+        .insert(labels)
+        .values({ userId, caption: item.guid, fgColor: '#000000', bgColor: '#ffffff' })
+        .returning();
+      await db.insert(entryLabels).values({ userEntryId: ue?.id ?? 0, labelId: label?.id ?? 0 });
+    }
   }
   return { source, sub };
 }
@@ -78,13 +103,14 @@ const guids = async () =>
     .sort();
 
 describe('Purger', () => {
-  it('purges by global and per-feed age, keeping starred, published, and noted entries', async () => {
+  it('purges by age, keeping starred, published, noted, and labelled entries', async () => {
     await feedWith(null, [
       { guid: 'global-new', age: 10 },
       { guid: 'global-old', age: 40 },
       { guid: 'global-starred', age: 400, starred: true },
       { guid: 'global-published', age: 400, published: true },
       { guid: 'global-noted', age: 400, note: 'keep' },
+      { guid: 'global-labelled', age: 400, labelled: true },
     ]);
     await feedWith(5, [{ guid: 'short-old', age: 6 }]);
     await feedWith(0, [{ guid: 'never', age: 4000 }]);
@@ -92,6 +118,7 @@ describe('Purger', () => {
     const result = await purger.purge();
     expect(result.userEntries).toBe(2);
     expect(await guids()).toEqual([
+      'global-labelled',
       'global-new',
       'global-noted',
       'global-published',

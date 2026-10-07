@@ -13,6 +13,9 @@ export function streamCondition(userId: number, stream: Stream): SQL {
   if (stream.categoryId === 0)
     return sql`${user} AND ue.subscription_id IN (
       SELECT s.id FROM subscriptions s WHERE s.user_id = ${userId} AND s.category_id IS NULL)`;
+  if (stream.labelId !== undefined)
+    return sql`${user} AND ue.id IN (
+      SELECT el.user_entry_id FROM entry_labels el WHERE el.label_id = ${stream.labelId})`;
   if (stream.categoryId !== undefined)
     return sql`${user} AND ue.subscription_id IN (
       SELECT s.id FROM subscriptions s WHERE s.user_id = ${userId} AND s.category_id IN (

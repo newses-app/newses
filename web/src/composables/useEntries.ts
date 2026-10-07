@@ -103,6 +103,18 @@ export function useEntryActions() {
     }
   }
 
+  /** Replaces the entry's labels. */
+  async function setLabels(entry: Entry, labelIds: number[]): Promise<void> {
+    patchCaches([entry.id], { labels: [...labelIds].sort((a, b) => a - b) });
+    try {
+      await api.entries.setLabels(entry.id, labelIds);
+    } catch (error) {
+      patchCaches([entry.id], { labels: entry.labels });
+      throw error;
+    }
+    refreshCounters();
+  }
+
   async function markRead(request: MarkReadRequest): Promise<number> {
     const { updated } = await api.entries.markRead(request);
     await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
@@ -110,5 +122,5 @@ export function useEntryActions() {
     return updated;
   }
 
-  return { setState, setNote, markRead };
+  return { setState, setNote, setLabels, markRead };
 }

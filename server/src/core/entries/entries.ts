@@ -68,6 +68,7 @@ export interface HeadlineRow extends Record<string, unknown> {
   starred: boolean;
   published: boolean;
   note: string | null;
+  labels: number[];
   head: string | null;
   content?: string | null;
   /** Keyset sort key as text. */
@@ -79,6 +80,7 @@ export const headlineColumns = (withContent: boolean) => sql`
   ue.id, ue.entry_id, ue.subscription_id, coalesce(s.title, fs.title, fs.url) AS feed_title,
   e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
   ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.note,
+  array(SELECT el.label_id FROM entry_labels el WHERE el.user_entry_id = ue.id ORDER BY 1) AS labels,
   left(e.content, 4000) AS head${withContent ? sql`, e.content` : sql``}`;
 
 export const HEADLINE_FROM = sql`user_entries ue
@@ -100,6 +102,7 @@ export function toEntry(row: HeadlineRow): Entry {
     starred: row.starred,
     published: row.published,
     note: row.note,
+    labels: row.labels,
     excerpt: excerpt(row.head),
     ...(row.content !== undefined && { content: row.content }),
   };

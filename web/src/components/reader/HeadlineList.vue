@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { Entry } from '@rss-reader/shared';
 import { mdiNoteTextOutline, mdiRss, mdiStar, mdiStarOutline } from '@mdi/js';
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { useLabels } from '../../composables/useLabels.ts';
 import { useSentinel } from '../../composables/useSentinel.ts';
 import { formatRelative } from '../../lib/format.ts';
+import LabelChip from '../labels/LabelChip.vue';
 
 const props = defineProps<{
   entries: Entry[];
@@ -18,6 +20,9 @@ const props = defineProps<{
 const emit = defineEmits<{ loadMore: []; open: [entry: Entry]; toggleStar: [entry: Entry] }>();
 const { t, locale } = useI18n();
 const route = useRoute();
+const labels = useLabels();
+const labelsById = computed(() => new Map((labels.data.value ?? []).map((l) => [l.id, l])));
+const entryLabels = (entry: Entry) => entry.labels.flatMap((id) => labelsById.value.get(id) ?? []);
 
 const sentinel = ref<HTMLElement | null>(null);
 useSentinel(sentinel, () => {
@@ -78,6 +83,7 @@ const link = (entry: Entry) => ({
           </template>
           <v-list-item-title class="headline-title">
             {{ entry.title ?? t('entries.untitled') }}
+            <LabelChip v-for="label in entryLabels(entry)" :key="label.id" :label="label" />
           </v-list-item-title>
           <v-list-item-subtitle>
             <span v-if="entry.unread" class="d-sr-only">{{ t('entries.unreadLabel') }} · </span>

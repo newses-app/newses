@@ -25,12 +25,13 @@ import { useCounters } from '../composables/useCounters.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { ENTRIES_KEY, useEntry, useEntryActions, useEntryList } from '../composables/useEntries.ts';
 import { useCategories, useSubscriptions } from '../composables/useFeeds.ts';
+import { useLabels } from '../composables/useLabels.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutHandler } from '../composables/useShortcuts.ts';
 import { useTreeEditing } from '../composables/useTreeEditing.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { safeUrl } from '../lib/format.ts';
-import { parseStream, SPECIAL_FEEDS, type StreamKey } from '../lib/streams.ts';
+import { labelKey, parseStream, SPECIAL_FEEDS, type StreamKey } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -43,6 +44,7 @@ const queryClient = useQueryClient();
 const { prefs, update } = usePrefs();
 const subscriptions = useSubscriptions();
 const categories = useCategories();
+const labels = useLabels();
 const counters = useCounters();
 const actions = useEntryActions();
 const editing = useTreeEditing();
@@ -91,16 +93,18 @@ const subscription = computed(() =>
     : subscriptions.data.value?.find((s) => s.id === stream.value.subscriptionId),
 );
 const title = computed(() => {
-  const { special, categoryId } = stream.value;
+  const { special, categoryId, labelId } = stream.value;
   if (special) return t(`special.${streamKey.value}`);
+  if (labelId !== undefined) return labels.data.value?.find((l) => l.id === labelId)?.caption ?? '';
   if (subscription.value) return subscription.value.title;
   if (categoryId === 0) return t('tree.uncategorised');
   return categories.data.value?.find((c) => c.id === categoryId)?.title ?? '';
 });
 const unread = computed(() => {
   const data = counters.data.value;
-  const { special, subscriptionId, categoryId } = stream.value;
+  const { special, subscriptionId, categoryId, labelId } = stream.value;
   if (!data) return 0;
+  if (labelId !== undefined) return data.labels.find((l) => l.id === labelId)?.unread ?? 0;
   if (special && special !== 'recentlyRead') return data.special[special];
   if (subscriptionId !== undefined)
     return data.subscriptions.find((s) => s.id === subscriptionId)?.unread ?? 0;
@@ -205,10 +209,10 @@ function stepFeed(delta: 1 | -1) {
       keep: streamKey.value,
     },
   );
-  const keys = flattenTree(
-    tree,
-    SPECIAL_FEEDS.map((s) => s.key),
-  );
+  const keys = flattenTree(tree, [
+    ...SPECIAL_FEEDS.map((s) => s.key),
+    ...(labels.data.value ?? []).map((l) => labelKey(l.id)),
+  ]);
   const next = keys[keys.indexOf(streamKey.value) + delta];
   if (next) void router.push(`/${next}`);
 }
@@ -309,6 +313,9 @@ useShortcutHandler((action: ShortcutAction) => {
       return true;
     case 'editNote':
       if (entry) ui.noteEntry = entry;
+      return true;
+    case 'editLabels':
+      if (entry) ui.labelsEntry = entry;
       return true;
     case 'openOriginal': {
       const link = safeUrl(entry?.link);

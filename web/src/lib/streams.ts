@@ -2,7 +2,7 @@ import type { SpecialFeed, Stream } from '@rss-reader/shared';
 
 /**
  * A stream as a route segment: special feeds by name (`read` for recently read), `f<id>` for a
- * subscription, `c<id>` for a category (`c0` uncategorised).
+ * subscription, `c<id>` for a category (`c0` uncategorised), `l<id>` for a label.
  */
 export type StreamKey = string;
 
@@ -19,7 +19,7 @@ export const SPECIAL_FEEDS: { key: StreamKey; special: SpecialFeed }[] = Object.
 ).map(([key, special]) => ({ key, special }));
 
 /** Route pattern accepting every stream key. */
-export const STREAM_PATTERN = `${Object.keys(SPECIAL_KEYS).join('|')}|f\\d+|c\\d+`;
+export const STREAM_PATTERN = `${Object.keys(SPECIAL_KEYS).join('|')}|f\\d+|c\\d+|l\\d+`;
 
 export function parseStream(key: StreamKey): Stream {
   const special = SPECIAL_KEYS[key];
@@ -27,8 +27,10 @@ export function parseStream(key: StreamKey): Stream {
   const id = Number(key.slice(1));
   if (key.startsWith('f') && Number.isInteger(id)) return { subscriptionId: id };
   if (key.startsWith('c') && Number.isInteger(id)) return { categoryId: id };
+  if (key.startsWith('l') && Number.isInteger(id)) return { labelId: id };
   return { special: 'all' };
 }
 
 export const subscriptionKey = (id: number): StreamKey => `f${String(id)}`;
 export const categoryKey = (id: number): StreamKey => `c${String(id)}`;
+export const labelKey = (id: number): StreamKey => `l${String(id)}`;

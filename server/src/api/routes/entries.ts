@@ -17,7 +17,7 @@ import type { EntryServices } from '../../core/entries/index.ts';
 import type { ImageProxy } from '../../core/feeds/images.ts';
 import type { PrefsService } from '../../core/prefs.ts';
 import { requireAuth, requireUser } from '../auth.ts';
-import { toCategory, toSubscription } from '../dto.ts';
+import { toCategory, toLabel, toSubscription } from '../dto.ts';
 
 const idParams = z.object({ id: z.coerce.number().int() });
 
@@ -43,11 +43,11 @@ export const entryRoutes: FastifyPluginAsyncZod<
     '/entries',
     { schema: { querystring: entryListQuerySchema, response: { 200: entryListResponseSchema } } },
     async (request) => {
-      const { subscriptionId, categoryId, special, ...options } = request.query;
+      const { subscriptionId, categoryId, labelId, special, ...options } = request.query;
       const userId = requireAuth(request).user.id;
       const page = await entries.list(userId, {
         ...options,
-        stream: { subscriptionId, categoryId, special },
+        stream: { subscriptionId, categoryId, labelId, special },
       });
       return { ...page, entries: await withImages(userId, page.entries) };
     },
@@ -96,10 +96,10 @@ export const entryRoutes: FastifyPluginAsyncZod<
     '/entries/mark-read',
     { schema: { body: markReadRequestSchema, response: { 200: updatedCountSchema } } },
     async (request) => {
-      const { subscriptionId, categoryId, special, olderThanDays, maxId } = request.body;
+      const { subscriptionId, categoryId, labelId, special, olderThanDays, maxId } = request.body;
       const updated = await entries.markRead(
         requireAuth(request).user.id,
-        { subscriptionId, categoryId, special },
+        { subscriptionId, categoryId, labelId, special },
         { olderThanDays, maxId },
       );
       return { updated };
@@ -123,6 +123,7 @@ export const entryRoutes: FastifyPluginAsyncZod<
         ...result,
         categories: result.categories.map(toCategory),
         subscriptions: result.subscriptions.map(toSubscription),
+        labels: result.labels.map(toLabel),
       };
     },
   );

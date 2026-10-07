@@ -81,7 +81,7 @@ Rules:
 | `lib` | Pure logic: stream keys, tree building, shortcut matching, reordering, cache patches |
 | `stores` | Pinia store for UI state only (drawer, dialogs, notices) |
 
-- Routes: `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised); search is `?q=`.
+- Routes: `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`; search is `?q=`.
 - Server data lives in the TanStack Query cache. State changes patch every cached copy, then save; a failure restores the previous flags. Headline lists are not refetched when entries change state, so read entries stay in place until the list is reloaded.
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
 - Counters refetch on `counters` events. Without a stream they are polled every 60 s, paused while the page is hidden; a closed stream is retried every 5 minutes.
@@ -125,7 +125,7 @@ Updater:
 - Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
 
 Purge (every 6 h):
-- Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, or noted) are never purged.
+- Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, noted, or labelled) are never purged.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
 - Deletes feed sources with no subscriptions and no kept entries, and their favicons.
 - Deletes proxied images and remembered failures fetched more than 30 days ago.
@@ -147,7 +147,7 @@ Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticl
 
 ## Data model
 
-Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, and user entries as tombstones for incremental sync.
+Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, labels, and user entries as tombstones for incremental sync. Assigning or removing a label touches the user entry, so sync carries its label ids.
 
 | Entity | Scope | Notes |
 |---|---|---|
@@ -164,7 +164,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `enclosures` | Shared | → entry; URL, MIME type, length, dimensions |
 | `user_entries` | User | → entry, subscription (nullable when archived) or archived feed; unread, starred, published, score, plain-text note (null when none), read time, share UUID. Unique (user, entry) |
 | `archived_feeds` | User | Title and URL of an unsubscribed feed that still holds kept entries |
-| `labels` / `entry_labels` | User | Caption, colours; many-to-many with `user_entries` |
+| `labels` / `entry_labels` | User | Caption (unique per user, case-insensitive), text and background colours (`#rrggbb`); many-to-many with `user_entries` |
 | `tags` | User | (user entry, tag) pairs |
 | `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), regex, inverse, scope (feeds/categories); actions: type + parameter |
 | `access_keys` | User | Secret keys for published feed and generated feeds |
@@ -217,11 +217,11 @@ Search:
 
 ### Native REST API
 
-- Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
+- Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), a label, or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
 - Fresh: unread entries with `sort_at` within the user's `freshMaxAgeHours`. Recently read: entries read within the last 7 days, in reading order.
 - `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
-- `GET /sync` returns categories, subscriptions, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
+- `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
 
 Events stream:
 - Events are per-user invalidation signals; clients refetch what they describe. Events of one type within 1 s are sent once.

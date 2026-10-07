@@ -48,6 +48,7 @@ const counters: Counters = {
     { id: 11, unread: 0 },
     { id: 0, unread: 1 },
   ],
+  labels: [],
   special: { all: 4, fresh: 0, starred: 0, published: 0 },
 };
 

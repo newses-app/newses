@@ -37,6 +37,7 @@ import type {
   UpdateCategoryRequest,
   UpdateSubscriptionRequest,
 } from './feeds.ts';
+import type { CreateLabelRequest, Label, UpdateLabelRequest } from './labels.ts';
 import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
 
 export interface ApiClientOptions {
@@ -232,8 +233,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Null or blank text clears the note. */
       setNote: (entryId: number, note: EntryNoteRequest['note']) =>
         request<undefined>('PUT', `/entries/${id(entryId)}/note`, { body: { note } }),
+      /** Replaces the entry's labels. */
+      setLabels: (entryId: number, labelIds: number[]) =>
+        request<undefined>('PUT', `/entries/${id(entryId)}/labels`, { body: { labelIds } }),
       markRead: (body: MarkReadRequest) =>
         request<{ updated: number }>('POST', '/entries/mark-read', { body }),
+    },
+
+    labels: {
+      list: () => request<Label[]>('GET', '/labels'),
+      create: (body: CreateLabelRequest) => request<Label>('POST', '/labels', { body }),
+      update: (labelId: number, body: UpdateLabelRequest) =>
+        request<Label>('PATCH', `/labels/${id(labelId)}`, { body }),
+      delete: (labelId: number) => request<undefined>('DELETE', `/labels/${id(labelId)}`),
     },
 
     counters: () => request<Counters>('GET', '/counters'),

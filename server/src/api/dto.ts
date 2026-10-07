@@ -1,7 +1,8 @@
-import type { AppPassword, Category, Session, Subscription, User } from '@rss-reader/shared';
+import type { AppPassword, Category, Label, Session, Subscription, User } from '@rss-reader/shared';
 import type { AppPasswordRow } from '../core/auth/app-passwords.ts';
 import type { SessionRow, UserRow } from '../core/auth/sessions.ts';
 import type { CategoryRow } from '../core/categories.ts';
+import type { LabelRow } from '../core/entries/labels.ts';
 import type { SubscriptionView } from '../core/feeds/subscriptions.ts';
 
 export function toUser(row: UserRow): User {
@@ -70,4 +71,8 @@ export function toSubscription({ subscription, source }: SubscriptionView): Subs
         : Math.round(subscription.updateIntervalSeconds / 60),
     purgeDays: subscription.purgeDays,
   };
+}
+
+export function toLabel(row: LabelRow): Label {
+  return { id: row.id, caption: row.caption, fgColor: row.fgColor, bgColor: row.bgColor };
 }

@@ -92,6 +92,20 @@
       "when": 1791403812718,
       "tag": "0012_entry_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791404297175,
+      "tag": "0013_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791404297923,
+      "tag": "0014_label_triggers",
+      "breakpoints": true
     }
   ]
 }

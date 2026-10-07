@@ -382,3 +382,105 @@ describe('CounterService', () => {
     expect((await services.counters.get(bob)).special.all).toBe(1);
   });
 });
+
+describe('LabelService', () => {
+  const red = { fgColor: '#ffffff', bgColor: '#b00020' };
+
+  it('creates, renames, recolours, lists, and deletes labels per user', async () => {
+    const work = await services.labels.create(alice, { caption: 'Work', ...red });
+    await services.labels.create(alice, { caption: 'cooking', ...red });
+    await services.labels.create(bob, { caption: 'Work', ...red });
+    await expect(services.labels.create(alice, { caption: 'WORK', ...red })).rejects.toMatchObject({
+      code: 'conflict',
+    });
+    expect((await services.labels.list(alice)).map((l) => l.caption)).toEqual(['cooking', 'Work']);
+
+    const renamed = await services.labels.update(alice, work.id, {
+      caption: 'Job',
+      bgColor: '#000000',
+    });
+    expect(renamed).toMatchObject({ caption: 'Job', fgColor: '#ffffff', bgColor: '#000000' });
+    expect(await services.labels.update(alice, work.id, {})).toMatchObject({ caption: 'Job' });
+    await expect(services.labels.update(bob, work.id, { caption: 'x' })).rejects.toMatchObject({
+      code: 'not_found',
+    });
+    await expect(services.labels.delete(bob, work.id)).rejects.toMatchObject({ code: 'not_found' });
+    await services.labels.delete(alice, work.id);
+    expect((await services.labels.list(alice)).map((l) => l.caption)).toEqual(['cooking']);
+  });
+
+  it('assigns labels, lists label streams, and counts their unread entries', async () => {
+    const work = await services.labels.create(alice, { caption: 'Work', ...red });
+    const later = await services.labels.create(alice, { caption: 'Later', ...red });
+    const bobs = await services.labels.create(bob, { caption: 'Bob', ...red });
+    const apple = ids.apple ?? 0;
+    const date = ids.date ?? 0;
+
+    await services.labels.setEntryLabels(alice, apple, [work.id, later.id, work.id]);
+    await services.labels.setEntryLabels(alice, date, [work.id]);
+    expect((await services.entries.get(alice, apple)).labels).toEqual(
+      [work.id, later.id].sort((a, b) => a - b),
+    );
+    await expect(services.labels.setEntryLabels(alice, apple, [bobs.id])).rejects.toMatchObject({
+      code: 'not_found',
+    });
+    await expect(services.labels.setEntryLabels(bob, apple, [bobs.id])).rejects.toMatchObject({
+      code: 'not_found',
+    });
+
+    const stream = { labelId: work.id };
+    const page = await services.entries.list(alice, {
+      stream,
+      view: 'all',
+      limit: 1,
+      content: false,
+    });
+    const rest = await services.entries.list(alice, {
+      stream,
+      view: 'all',
+      limit: 1,
+      content: false,
+      cursor: page.cursor ?? '',
+    });
+    expect(titles([...page.entries, ...rest.entries])).toEqual([
+      'Apple pie recipe',
+      'Date squares',
+    ]);
+
+    await services.entries.setState(alice, [date], { unread: false });
+    expect((await services.counters.get(alice)).labels).toEqual(
+      expect.arrayContaining([
+        { id: work.id, unread: 1 },
+        { id: later.id, unread: 1 },
+      ]),
+    );
+    expect(await services.entries.markRead(alice, stream)).toBe(1);
+
+    // Replacing with a subset removes the rest; an unchanged set does not signal counters.
+    await services.labels.setEntryLabels(alice, apple, [later.id]);
+    expect((await services.entries.get(alice, apple)).labels).toEqual([later.id]);
+    realtime.published.length = 0;
+    await services.labels.setEntryLabels(alice, apple, [later.id]);
+    await services.labels.setEntryLabels(alice, ids.banana ?? 0, [later.id]);
+    expect(realtime.published).toEqual([{ userId: alice, event: { type: 'counters' } }]);
+    await services.labels.setEntryLabels(alice, apple, []);
+    expect((await services.entries.get(alice, apple)).labels).toEqual([]);
+  });
+
+  it('syncs labels, label deletions, and entries whose labels changed', async () => {
+    const work = await services.labels.create(alice, { caption: 'Work', ...red });
+    const full = await services.sync.changes(alice, undefined, 100);
+    expect(full.labels.map((l) => l.caption)).toEqual(['Work']);
+
+    await services.labels.setEntryLabels(alice, ids.cherry ?? 0, [work.id]);
+    const assigned = await services.sync.changes(alice, full.next, 100);
+    expect(assigned.entries.map((e) => [e.id, e.labels])).toEqual([[ids.cherry, [work.id]]]);
+    expect(assigned.labels).toEqual([]);
+
+    await services.labels.delete(alice, work.id);
+    const removed = await services.sync.changes(alice, assigned.next, 100);
+    expect(removed.deleted.labels).toEqual([work.id]);
+    // The cascade removed the label from the entry, which is a change.
+    expect(removed.entries.map((e) => [e.id, e.labels])).toEqual([[ids.cherry, []]]);
+  });
+});

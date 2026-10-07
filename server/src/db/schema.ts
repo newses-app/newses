@@ -315,6 +315,42 @@ export const userEntries = pgTable(
   ],
 );
 
+export const labels = pgTable(
+  'labels',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    caption: text('caption').notNull(),
+    // `#rrggbb`
+    fgColor: text('fg_color').notNull(),
+    bgColor: text('bg_color').notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex('labels_user_caption_key').on(t.userId, sql`lower(${t.caption})`),
+    index('labels_user_updated_idx').on(t.userId, t.updatedAt),
+  ],
+);
+
+// Inserts and deletes bump the user entry's updated_at (trigger), so sync carries its labels.
+export const entryLabels = pgTable(
+  'entry_labels',
+  {
+    userEntryId: bigint('user_entry_id', { mode: 'number' })
+      .notNull()
+      .references(() => userEntries.id, { onDelete: 'cascade' }),
+    labelId: integer('label_id')
+      .notNull()
+      .references(() => labels.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userEntryId, t.labelId] }),
+    index('entry_labels_label_idx').on(t.labelId, t.userEntryId),
+  ],
+);
+
 export const tombstones = pgTable(
   'tombstones',
   {

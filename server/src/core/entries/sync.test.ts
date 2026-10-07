@@ -81,7 +81,12 @@ describe('SyncService', () => {
       [second, false],
       [first, true],
     ]);
-    expect(delta.deleted).toEqual({ categories: [category?.id], subscriptions: [], entries: [] });
+    expect(delta.deleted).toEqual({
+      categories: [category?.id],
+      subscriptions: [],
+      labels: [],
+      entries: [],
+    });
 
     await db.delete(subscriptions).where(eq(subscriptions.id, subscriptionId));
     await db.delete(userEntries).where(eq(userEntries.id, second));
@@ -89,6 +94,7 @@ describe('SyncService', () => {
     expect(removed.deleted).toEqual({
       categories: [],
       subscriptions: [subscriptionId],
+      labels: [],
       entries: [second],
     });
     // The kept entry lost its subscription, which is a change.

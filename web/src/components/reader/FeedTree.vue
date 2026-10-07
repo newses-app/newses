@@ -15,9 +15,11 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import { useCounters } from '../../composables/useCounters.ts';
 import { useCategories, useSubscriptions } from '../../composables/useFeeds.ts';
+import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { type Dragged, useTreeEditing } from '../../composables/useTreeEditing.ts';
+import { labelKey } from '../../lib/streams.ts';
 import { buildTree } from '../../lib/tree.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import FeedTreeCategory from './FeedTreeCategory.vue';
@@ -34,6 +36,7 @@ const counters = useCounters();
 const subscriptions = useSubscriptions();
 const categories = useCategories();
 const editing = useTreeEditing();
+const labels = useLabels();
 
 const current = computed(() =>
   typeof route.params.stream === 'string' ? route.params.stream : undefined,
@@ -55,6 +58,14 @@ const special = computed(() => {
     { key: 'read', icon: mdiHistory, unread: 0 },
   ];
 });
+
+const labelItems = computed(() =>
+  (labels.data.value ?? []).map((label) => ({
+    label,
+    key: labelKey(label.id),
+    unread: counters.data.value?.labels.find((c) => c.id === label.id)?.unread ?? 0,
+  })),
+);
 
 const dragged = ref<Dragged | null>(null);
 const rootOver = ref(false);
@@ -101,6 +112,27 @@ function dropOnRoot() {
           </template>
         </v-list-item>
       </div>
+      <template v-if="labelItems.length">
+        <v-divider class="my-2" role="presentation" />
+        <div v-for="item in labelItems" :key="item.key" role="listitem">
+          <v-list-item
+            :to="`/${item.key}`"
+            :active="current === item.key"
+            :title="item.label.caption"
+          >
+            <template #prepend>
+              <span
+                class="label-swatch"
+                :style="{ backgroundColor: item.label.bgColor, borderColor: item.label.fgColor }"
+                aria-hidden="true"
+              />
+            </template>
+            <template v-if="item.unread > 0" #append>
+              <UnreadCount :n="item.unread" />
+            </template>
+          </v-list-item>
+        </div>
+      </template>
       <v-divider class="my-2" role="presentation" />
       <FeedTreeCategory v-for="node in tree.categories" :key="node.key" :node="node" :depth="0" />
       <FeedTreeFeed v-for="node in tree.feeds" :key="node.key" :node="node" :depth="0" />
@@ -143,6 +175,14 @@ function dropOnRoot() {
 <style scoped>
 .tree {
   --v-list-prepend-gap: 12px;
+}
+.label-swatch {
+  width: 14px;
+  height: 14px;
+  /* Centred in the 24px icon column, then the tree's prepend gap. */
+  margin-inline: 5px 17px;
+  border: 2px solid;
+  border-radius: 4px;
 }
 .drop-root {
   border: 1px dashed rgba(var(--v-theme-on-surface), 0.4);

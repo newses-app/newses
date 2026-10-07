@@ -24,6 +24,7 @@ import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions, noEventRoutes } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
 import { imageRoutes } from './routes/images.ts';
+import { labelRoutes } from './routes/labels.ts';
 import { prefsRoutes } from './routes/prefs.ts';
 import {
   registerRequestDiagnostics,
@@ -140,6 +141,7 @@ export function buildApp(deps: AppDeps) {
           prefs: services.prefs,
           images: services.feeds.images,
         });
+        await api.register(labelRoutes, { labels: services.entries.labels });
         await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs });
         if (deps.events === false) await api.register(noEventRoutes);

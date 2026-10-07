@@ -2,11 +2,12 @@ import type { Entry } from '@rss-reader/shared';
 import { and, eq, gte, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client.ts';
-import { categories, feedSources, subscriptions, tombstones } from '../../db/schema.ts';
+import { categories, feedSources, labels, subscriptions, tombstones } from '../../db/schema.ts';
 import type { CategoryRow } from '../categories.ts';
 import { DomainError } from '../errors.ts';
 import type { SubscriptionView } from '../feeds/subscriptions.ts';
 import { HEADLINE_FROM, type HeadlineRow, headlineColumns, toEntry } from './entries.ts';
+import type { LabelRow } from './labels.ts';
 
 /** Deletions are remembered this long; older sync tokens must resync from scratch. */
 export const TOMBSTONE_RETENTION_DAYS = 30;
@@ -27,8 +28,9 @@ function decodeToken(value: string): Token {
 export interface SyncResult {
   categories: CategoryRow[];
   subscriptions: SubscriptionView[];
+  labels: LabelRow[];
   entries: Entry[];
-  deleted: { categories: number[]; subscriptions: number[]; entries: number[] };
+  deleted: { categories: number[]; subscriptions: number[]; labels: number[]; entries: number[] };
   next: string;
   more: boolean;
 }
@@ -66,7 +68,7 @@ export class SyncService {
     const fromId = token?.i ?? 0;
     const to = state.watermark;
 
-    const [entryRows, categoryRows, subscriptionRows, deletedRows] = await Promise.all([
+    const [entryRows, categoryRows, subscriptionRows, labelRows, deletedRows] = await Promise.all([
       this.#db.execute<HeadlineRow & { u: string }>(sql`
         SELECT ${headlineColumns(false)}, ue.updated_at::text AS u FROM ${HEADLINE_FROM}
         WHERE ue.user_id = ${userId}
@@ -104,6 +106,16 @@ export class SyncService {
             ),
           ),
         ),
+      this.#db
+        .select()
+        .from(labels)
+        .where(
+          and(
+            eq(labels.userId, userId),
+            gte(labels.updatedAt, sql`${from}::timestamptz`),
+            lt(labels.updatedAt, sql`${to}::timestamptz`),
+          ),
+        ),
       token
         ? this.#db
             .select({ entity: tombstones.entity, id: tombstones.entityId })
@@ -125,16 +137,19 @@ export class SyncService {
     const deleted = {
       categories: [] as number[],
       subscriptions: [] as number[],
+      labels: [] as number[],
       entries: [] as number[],
     };
     for (const { entity, id } of deletedRows) {
       if (entity === 'category') deleted.categories.push(id);
       else if (entity === 'subscription') deleted.subscriptions.push(id);
+      else if (entity === 'label') deleted.labels.push(id);
       else if (entity === 'entry') deleted.entries.push(id);
     }
     return {
       categories: categoryRows,
       subscriptions: subscriptionRows,
+      labels: labelRows,
       entries: page.map(toEntry),
       deleted,
       next: encodeToken(next),

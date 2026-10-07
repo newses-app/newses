@@ -73,6 +73,26 @@
     "noteCleared": "Note removed",
     "unreadLabel": "Unread"
   },
+  "labels": {
+    "title": "Labels",
+    "forEntry": "Labels",
+    "hint": "Each label is listed in the sidebar with its unread articles.",
+    "none": "No labels yet.",
+    "newLabel": "New label",
+    "add": "Add",
+    "edit": "Edit label",
+    "editNamed": "Edit label {label}",
+    "delete": "Delete label",
+    "deleteNamed": "Delete label {label}",
+    "deleteConfirm": "Delete “{label}”? It is removed from all its articles.",
+    "caption": "Name",
+    "presets": "Colours",
+    "preset": "Colour pair {n}",
+    "fgColor": "Text colour",
+    "bgColor": "Background colour",
+    "preview": "Preview",
+    "lowContrast": "Contrast is {ratio}:1; at least 4.5:1 keeps the label readable."
+  },
   "search": { "label": "Search articles", "placeholder": "Search" },
   "view": {
     "label": "Show",
@@ -140,6 +160,7 @@
     "tabs": {
       "preferences": "Preferences",
       "feeds": "Feeds",
+      "labels": "Labels",
       "account": "Account",
       "users": "Users"
     },
@@ -279,6 +300,7 @@
       "toggleUnread": "Mark read or unread",
       "openOriginal": "Open original",
       "editNote": "Add or edit note",
+      "editLabels": "Choose labels",
       "closeArticle": "Close article",
       "search": "Search",
       "help": "Show this help",

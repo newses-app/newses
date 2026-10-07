@@ -11,6 +11,7 @@ export type ShortcutAction =
   | 'toggleUnread'
   | 'openOriginal'
   | 'editNote'
+  | 'editLabels'
   | 'closeArticle'
   | 'search'
   | 'help'
@@ -56,6 +57,7 @@ export const SHORTCUT_GROUPS: { group: string; bindings: [string, ShortcutAction
       ['u', 'toggleUnread'],
       ['o', 'openOriginal'],
       ['a n', 'editNote'],
+      ['a l', 'editLabels'],
       ['a q', 'closeArticle'],
     ],
   },

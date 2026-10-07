@@ -1,21 +1,27 @@
 import { z } from 'zod';
 import { categorySchema, subscriptionSchema } from './feeds.ts';
+import { labelSchema } from './labels.ts';
 import { MAX_NOTE_LENGTH } from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
 
-/** One of `subscriptionId`, `categoryId` (0 = uncategorised; includes subcategories), or `special`. */
+/**
+ * One of `subscriptionId`, `categoryId` (0 = uncategorised; includes subcategories), `labelId`,
+ * or `special`.
+ */
 export const streamSchema = z.object({
   subscriptionId: z.coerce.number().int().optional(),
   categoryId: z.coerce.number().int().optional(),
+  labelId: z.coerce.number().int().optional(),
   special: specialFeedSchema.optional(),
 });
 
 const singleStream = (stream: z.infer<typeof streamSchema>) =>
-  [stream.subscriptionId, stream.categoryId, stream.special].filter((v) => v !== undefined)
-    .length <= 1;
-const ONE_STREAM = { message: 'Give at most one of subscriptionId, categoryId, special' };
+  [stream.subscriptionId, stream.categoryId, stream.labelId, stream.special].filter(
+    (v) => v !== undefined,
+  ).length <= 1;
+const ONE_STREAM = { message: 'Give at most one of subscriptionId, categoryId, labelId, special' };
 
 export const entryListQuerySchema = streamSchema
   .extend({
@@ -42,7 +48,7 @@ export const enclosureSchema = z.object({
 
 export const entrySchema = z.object({
   id: z.number().int(),
-  /** Null once the feed has been unsubscribed (kept because starred, published, or noted). */
+  /** Null once the feed has been unsubscribed (kept because starred, published, noted, or labelled). */
   subscriptionId: z.number().int().nullable(),
   feedTitle: z.string().nullable(),
   title: z.string().nullable(),
@@ -56,6 +62,8 @@ export const entrySchema = z.object({
   published: z.boolean(),
   /** The user's plain-text note; null when there is none. */
   note: z.string().nullable(),
+  /** Ids of the user's labels on the entry. */
+  labels: z.array(z.number().int()),
   /** Plain-text start of the content. */
   excerpt: z.string().nullable(),
   /** Sanitised HTML; present on single entries and when requested in lists. */
@@ -107,6 +115,7 @@ export const countersSchema = z.object({
   subscriptions: z.array(z.object({ id: z.number().int(), unread: z.number().int() })),
   /** Totals include subcategories; id 0 is uncategorised. */
   categories: z.array(z.object({ id: z.number().int(), unread: z.number().int() })),
+  labels: z.array(z.object({ id: z.number().int(), unread: z.number().int() })),
   /** Unread counts of the special feeds. */
   special: z.object({
     all: z.number().int(),
@@ -125,11 +134,13 @@ export const syncQuerySchema = z.object({
 export const syncResponseSchema = z.object({
   categories: z.array(categorySchema),
   subscriptions: z.array(subscriptionSchema),
+  labels: z.array(labelSchema),
   /** Changed or new entries, without content. */
   entries: z.array(entrySchema),
   deleted: z.object({
     categories: z.array(z.number().int()),
     subscriptions: z.array(z.number().int()),
+    labels: z.array(z.number().int()),
     entries: z.array(z.number().int()),
   }),
   /** Token for the next call. */

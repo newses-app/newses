@@ -108,7 +108,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Native REST API | P1 | Versioned (`/api/v1`), OpenAPI document served; every web app action goes through it |
-| Incremental sync | P1 | A sync endpoint returns categories, subscriptions, and entries changed since a token, including deletions, without missing rows committed late |
+| Incremental sync | P1 | A sync endpoint returns categories, subscriptions, labels, and entries changed since a token, including deletions, without missing rows committed late |
 | Web app | P1 | Vue SPA; installable PWA; works in current Chrome, Firefox, Safari |
 | TTRSS-compatible API | P3 | TTRSS Android app and at least one other TTRSS client can log in, browse, read, star, publish, label, and subscribe |
 | Google Reader API | P3 | Reeder, NetNewsWire, and ReadYou can log in, sync, and mark read/starred |

@@ -39,7 +39,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       test('settings', async ({ page, expectNoViolations }) => {
         await signIn(page);
-        for (const tab of ['preferences', 'feeds', 'account', 'users']) {
+        for (const tab of ['preferences', 'feeds', 'labels', 'account', 'users']) {
           await page.goto(`/settings/${tab}`);
           await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
           await expectNoViolations(`settings-${tab}`);
@@ -75,6 +75,26 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await page.getByRole('table').getByRole('button', { name: /^Edit/ }).first().click();
         await expect(dialog.getByLabel('Title')).toBeVisible();
         await expectNoViolations('edit-feed');
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/settings/labels');
+        await page.getByRole('button', { name: 'New label' }).click();
+        await expect(dialog.getByLabel('Name')).toBeVisible();
+        await expectNoViolations('edit-label');
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/all');
+        await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+        await page.locator('article').getByRole('button', { name: /note$/ }).click();
+        await expect(dialog.getByLabel('Note')).toBeVisible();
+        await expectNoViolations('note');
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+        await page.locator('article').getByRole('button', { name: 'Labels', exact: true }).click();
+        await expect(dialog.getByLabel('New label')).toBeVisible();
+        await expectNoViolations('entry-labels');
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
       });
