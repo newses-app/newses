@@ -10,6 +10,7 @@ const ORPHAN_GRACE_DAYS = 7;
 
 /** User entries (`ue`) that purge and unsubscribe never delete. */
 export const KEPT_ENTRY = sql`(ue.starred OR ue.published OR ue.note IS NOT NULL
+  OR ue.share_id IS NOT NULL
   OR EXISTS (SELECT 1 FROM entry_labels el WHERE el.user_entry_id = ue.id))`;
 
 export interface PurgeResult {

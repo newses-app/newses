@@ -51,7 +51,7 @@ export const enclosureSchema = z.object({
 
 export const entrySchema = z.object({
   id: z.number().int(),
-  /** Null once the feed has been unsubscribed (kept because starred, published, noted, or labelled). */
+  /** Null once the feed has been unsubscribed and the entry kept (starred, published, noted, labelled, or shared). */
   subscriptionId: z.number().int().nullable(),
   feedTitle: z.string().nullable(),
   title: z.string().nullable(),
@@ -69,6 +69,8 @@ export const entrySchema = z.object({
   labels: z.array(z.number().int()),
   /** The user's tags on the entry, normalised and sorted. */
   tags: z.array(z.string()),
+  /** Public share link id (`/public/share/<id>`); null when not shared. */
+  shareId: z.uuid().nullable(),
   /** Plain-text start of the content. */
   excerpt: z.string().nullable(),
   /** Sanitised HTML; present on single entries and when requested in lists. */
@@ -109,6 +111,11 @@ export const entryNoteRequestSchema = z.object({
 export const entryTagsRequestSchema = z.object({
   tags: z.array(z.string().max(200)).max(MAX_TAGS_PER_ENTRY),
 });
+
+export const shareResponseSchema = z.object({ shareId: z.uuid() });
+
+/** The secret key in the user's published feed URL (`/public/feeds/<key>`). */
+export const publishedFeedResponseSchema = z.object({ key: z.string() });
 
 export const tagCountSchema = z.object({ tag: z.string(), count: z.number().int() });
 
@@ -174,6 +181,8 @@ export type EntryState = z.infer<typeof entryStateSchema>;
 export type BulkEntryStateRequest = z.infer<typeof bulkEntryStateRequestSchema>;
 export type EntryNoteRequest = z.infer<typeof entryNoteRequestSchema>;
 export type TagCount = z.infer<typeof tagCountSchema>;
+export type ShareResponse = z.infer<typeof shareResponseSchema>;
+export type PublishedFeedResponse = z.infer<typeof publishedFeedResponseSchema>;
 export type MarkReadRequest = z.infer<typeof markReadRequestSchema>;
 export type Counters = z.infer<typeof countersSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;

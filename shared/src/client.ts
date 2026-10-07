@@ -25,6 +25,8 @@ import type {
   EntryNoteRequest,
   EntryState,
   MarkReadRequest,
+  PublishedFeedResponse,
+  ShareResponse,
   SyncResponse,
   TagCount,
 } from './entries.ts';
@@ -234,6 +236,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Null or blank text clears the note. */
       setNote: (entryId: number, note: EntryNoteRequest['note']) =>
         request<undefined>('PUT', `/entries/${id(entryId)}/note`, { body: { note } }),
+      /** Shares the entry at `/public/share/<shareId>`; the same id while it stays shared. */
+      share: (entryId: number) => request<ShareResponse>('PUT', `/entries/${id(entryId)}/share`),
+      unshare: (entryId: number) => request<undefined>('DELETE', `/entries/${id(entryId)}/share`),
       /** Replaces the entry's tags; resolves to them normalised. */
       setTags: (entryId: number, tags: string[]) =>
         request<{ tags: string[] }>('PUT', `/entries/${id(entryId)}/tags`, { body: { tags } }),
@@ -250,6 +255,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
       update: (labelId: number, body: UpdateLabelRequest) =>
         request<Label>('PATCH', `/labels/${id(labelId)}`, { body }),
       delete: (labelId: number) => request<undefined>('DELETE', `/labels/${id(labelId)}`),
+    },
+
+    /** The user's shared entries, newest first. */
+    shares: () => request<Entry[]>('GET', '/shares'),
+
+    /** The key in the published feed URL, `/public/feeds/<key>`. */
+    publishedFeed: {
+      get: () => request<PublishedFeedResponse>('GET', '/published-feed'),
+      regenerate: () => request<PublishedFeedResponse>('POST', '/published-feed/regenerate'),
     },
 
     /** The user's tags with entry counts. */

@@ -2,7 +2,7 @@ import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { WEB_CSP } from './web-csp.ts';
 
-const NOT_SPA = /^\/(api|healthz)(\/|$)/;
+const NOT_SPA = /^\/(api|public|healthz)(\/|$)/;
 
 /** Serves the built SPA from `root`, falling back to index.html for client-side routes. */
 export function registerWeb(app: FastifyInstance, root: string): void {
@@ -20,7 +20,11 @@ export function registerWeb(app: FastifyInstance, root: string): void {
   });
 
   app.addHook('onSend', (_request, reply, payload, done) => {
-    if (String(reply.getHeader('content-type')).startsWith('text/html')) {
+    // Public pages set their own, stricter policy.
+    if (
+      String(reply.getHeader('content-type')).startsWith('text/html') &&
+      !reply.hasHeader('content-security-policy')
+    ) {
       void reply
         .header('content-security-policy', WEB_CSP)
         .header('x-frame-options', 'DENY')

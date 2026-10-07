@@ -139,7 +139,7 @@ describe('SubscriptionService.subscribe', () => {
 });
 
 describe('SubscriptionService.unsubscribe', () => {
-  it('keeps starred, published, and noted entries and removes the rest', async () => {
+  it('keeps starred, published, noted, and shared entries and removes the rest', async () => {
     fetcher.set('https://u.example/rss', { body: rss('U') });
     const result = await service.subscribe(userId, 'https://u.example/rss');
     if (result.status !== 'subscribed') throw new Error('expected subscription');
@@ -147,7 +147,11 @@ describe('SubscriptionService.unsubscribe', () => {
     const made = await db
       .insert(entries)
       .values(
-        ['a', 'b', 'c', 'd'].map((guid) => ({ feedSourceId: source.id, guid, contentHash: guid })),
+        ['a', 'b', 'c', 'd', 'e'].map((guid) => ({
+          feedSourceId: source.id,
+          guid,
+          contentHash: guid,
+        })),
       )
       .returning();
     await db.insert(userEntries).values(
@@ -159,6 +163,7 @@ describe('SubscriptionService.unsubscribe', () => {
         starred: i === 0,
         published: i === 1,
         note: i === 2 ? 'keep' : null,
+        shareId: i === 3 ? crypto.randomUUID() : null,
       })),
     );
 
@@ -171,7 +176,8 @@ describe('SubscriptionService.unsubscribe', () => {
         [false, false, 'keep', null],
       ]),
     );
-    expect(kept).toHaveLength(3);
+    expect(kept.filter((e) => e.shareId !== null)).toHaveLength(1);
+    expect(kept).toHaveLength(4);
     await expect(service.unsubscribe(userId, subscription.id)).rejects.toMatchObject({
       code: 'not_found',
     });

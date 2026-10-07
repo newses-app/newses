@@ -85,6 +85,8 @@ export class AppStack extends Stack {
           DB_USER: 'rss_reader',
           DB_PASSWORD_PARAMETER: dbPassword.parameterName,
           APP_SECRET_PARAMETER: appSecret.parameterName,
+          // CloudFront does not forward the viewer's Host, so public links need the domain.
+          PUBLIC_URL: `https://${stage.domainName}`,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,

@@ -23,6 +23,8 @@ export const useUiStore = defineStore('ui', () => {
   /** The entry whose tags are being edited. */
   const tagsEntry = ref<Entry | null>(null);
   const tagPickerOpen = ref(false);
+  /** The entry whose share link is shown. */
+  const shareEntry = ref<Entry | null>(null);
   const notice = ref<{ text: string; error: boolean } | null>(null);
   const confirmRequest = ref<ConfirmRequest | null>(null);
 
@@ -54,6 +56,7 @@ export const useUiStore = defineStore('ui', () => {
     labelsEntry,
     tagsEntry,
     tagPickerOpen,
+    shareEntry,
     notice,
     confirmRequest,
     notify,

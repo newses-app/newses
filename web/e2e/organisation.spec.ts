@@ -72,4 +72,40 @@ test.describe('organisation', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(article.getByRole('link', { name: tag })).toBeHidden();
   });
+
+  test('shares an article publicly and revokes the link', async ({ page, browser }) => {
+    await page.goto('/all');
+    await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+    const article = page.locator('article');
+    const title = (await article.getByRole('heading').first().textContent())?.trim() ?? '';
+    await article.getByRole('button', { name: /^Shared?$/ }).click();
+    const dialog = page.getByRole('dialog');
+    // A link left over from an earlier run is revoked first.
+    const stop = dialog.getByRole('button', { name: 'Stop sharing' });
+    if (await stop.isVisible()) await stop.click();
+    await dialog.getByRole('button', { name: 'Create link' }).click();
+    const url = await dialog.getByRole('textbox', { name: 'Public link' }).inputValue();
+    expect(url).toMatch(/\/public\/share\/[0-9a-f-]{36}$/);
+
+    const visitor = await browser.newContext();
+    const publicPage = await visitor.newPage();
+    const response = await publicPage.goto(url);
+    expect(response?.status()).toBe(200);
+    await expect(publicPage.getByRole('heading', { level: 1 })).toHaveText(title);
+
+    await dialog.getByRole('button', { name: 'Stop sharing' }).click();
+    await expect(dialog.getByRole('button', { name: 'Create link' })).toBeVisible();
+    expect((await publicPage.goto(url))?.status()).toBe(404);
+    await visitor.close();
+  });
+
+  test('serves the published feed at its address', async ({ page, request }) => {
+    await page.goto('/settings/sharing');
+    const address = await page.getByRole('textbox', { name: 'Feed address' }).inputValue();
+    expect(address).toMatch(/\/public\/feeds\/[\w-]{43}$/);
+    const feed = await request.get(address);
+    expect(feed.status()).toBe(200);
+    expect(feed.headers()['content-type']).toContain('application/rss+xml');
+    expect(await feed.text()).toContain('<title>Published articles</title>');
+  });
 });

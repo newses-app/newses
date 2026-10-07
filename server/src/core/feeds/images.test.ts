@@ -31,6 +31,9 @@ describe('ImageProxy', () => {
     );
     expect(proxy.path('data:image/gif;base64,R0lGOD')).toBe('data:image/gif;base64,R0lGOD');
     expect(proxy.path('/relative.png')).toBe('/relative.png');
+    expect(proxy.path('https://img.example/a.png', 'https://reader.example')).toMatch(
+      /^https:\/\/reader\.example\/api\/v1\/images\//,
+    );
   });
 
   it('rewrites image sources and leaves everything else alone', () => {

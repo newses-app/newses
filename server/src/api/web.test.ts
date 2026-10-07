@@ -41,5 +41,8 @@ describe('web app serving', () => {
     expect(api.statusCode).toBe(404);
     expect(api.json()).toMatchObject({ error: 'not_found' });
     expect((await app.inject({ method: 'POST', url: '/all' })).statusCode).toBe(404);
+    const unknown = await app.inject({ method: 'GET', url: '/public/nope' });
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.body).not.toContain('<title>app</title>');
   });
 });

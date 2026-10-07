@@ -3,6 +3,7 @@ import type { Entry, EntryState } from '@rss-reader/shared';
 import {
   mdiEmailMarkAsUnread,
   mdiEmailOpenOutline,
+  mdiLinkVariant,
   mdiLabelOutline,
   mdiNoteEditOutline,
   mdiNotePlusOutline,
@@ -110,6 +111,14 @@ const enclosures = computed(() =>
         </v-btn>
         <v-btn size="small" :prepend-icon="mdiTagOutline" @click="ui.tagsEntry = entry">
           {{ t('tags.title') }}
+        </v-btn>
+        <v-btn
+          size="small"
+          :prepend-icon="mdiLinkVariant"
+          :color="entry.shareId ? 'primary' : undefined"
+          @click="ui.shareEntry = entry"
+        >
+          {{ entry.shareId ? t('sharing.shared') : t('sharing.share') }}
         </v-btn>
         <v-btn
           size="small"

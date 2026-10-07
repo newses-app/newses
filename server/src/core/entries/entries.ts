@@ -70,6 +70,7 @@ export interface HeadlineRow extends Record<string, unknown> {
   note: string | null;
   labels: number[];
   tags: string[];
+  share_id: string | null;
   head: string | null;
   content?: string | null;
   /** Keyset sort key as text. */
@@ -80,7 +81,7 @@ export interface HeadlineRow extends Record<string, unknown> {
 export const headlineColumns = (withContent: boolean) => sql`
   ue.id, ue.entry_id, ue.subscription_id, coalesce(s.title, fs.title, fs.url) AS feed_title,
   e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
-  ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.note,
+  ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.note, ue.share_id,
   array(SELECT el.label_id FROM entry_labels el WHERE el.user_entry_id = ue.id ORDER BY 1) AS labels,
   array(SELECT et.tag FROM entry_tags et WHERE et.user_entry_id = ue.id ORDER BY 1) AS tags,
   left(e.content, 4000) AS head${withContent ? sql`, e.content` : sql``}`;
@@ -106,6 +107,7 @@ export function toEntry(row: HeadlineRow): Entry {
     note: row.note,
     labels: row.labels,
     tags: row.tags,
+    shareId: row.share_id,
     excerpt: excerpt(row.head),
     ...(row.content !== undefined && { content: row.content }),
   };
@@ -303,6 +305,61 @@ export class EntryService {
       .where(and(eq(userEntries.userId, userId), eq(userEntries.id, id)))
       .returning({ id: userEntries.id });
     if (updated.length === 0) throw new DomainError('not_found', 'Entry not found');
+  }
+
+  /** Shares one of the user's entries at a public link; returns its id, existing or new. */
+  async share(userId: number, id: number): Promise<string> {
+    const result = await this.#db.execute<{ share_id: string }>(sql`
+      UPDATE user_entries SET share_id = coalesce(share_id, gen_random_uuid())
+      WHERE id = ${id} AND user_id = ${userId}
+      RETURNING share_id`);
+    const row = result.rows[0];
+    if (!row) throw new DomainError('not_found', 'Entry not found');
+    return row.share_id;
+  }
+
+  /** Revokes the entry's share link. */
+  async unshare(userId: number, id: number): Promise<void> {
+    const updated = await this.#db
+      .update(userEntries)
+      .set({ shareId: null })
+      .where(and(eq(userEntries.userId, userId), eq(userEntries.id, id)))
+      .returning({ id: userEntries.id });
+    if (updated.length === 0) throw new DomainError('not_found', 'Entry not found');
+  }
+
+  /** The user's shared entries, newest first. */
+  async listShared(userId: number): Promise<Entry[]> {
+    const result = await this.#db.execute<HeadlineRow>(sql`
+      SELECT ${headlineColumns(false)} FROM ${HEADLINE_FROM}
+      WHERE ue.user_id = ${userId} AND ue.share_id IS NOT NULL
+      ORDER BY ue.sort_at DESC, ue.id DESC`);
+    return result.rows.map(toEntry);
+  }
+
+  /** An entry shared at `shareId`, with content, unless its owner is disabled. */
+  async getShared(shareId: string): Promise<{ userId: number; entry: Entry } | null> {
+    const result = await this.#db.execute<HeadlineRow & { user_id: number }>(sql`
+      SELECT ${headlineColumns(true)}, ue.user_id FROM ${HEADLINE_FROM}
+      JOIN users u ON u.id = ue.user_id
+      WHERE ue.share_id = ${shareId} AND u.disabled_at IS NULL`);
+    const row = result.rows[0];
+    if (!row) return null;
+    const entry = toEntry(row);
+    await this.#attachEnclosures([row], [entry]);
+    return { userId: row.user_id, entry };
+  }
+
+  /** The user's most recently published entries, with content, for their public feed. */
+  async listPublished(userId: number, limit: number): Promise<Entry[]> {
+    const result = await this.#db.execute<HeadlineRow>(sql`
+      SELECT ${headlineColumns(true)} FROM ${HEADLINE_FROM}
+      WHERE ue.user_id = ${userId} AND ue.published
+      ORDER BY ue.sort_at DESC NULLS LAST, ue.id DESC NULLS LAST
+      LIMIT ${limit}`);
+    const entries = result.rows.map(toEntry);
+    await this.#attachEnclosures(result.rows, entries);
+    return entries;
   }
 
   /**

@@ -18,6 +18,7 @@ const entry = (id: number): Entry => ({
   note: null,
   labels: [],
   tags: [],
+  shareId: null,
   excerpt: null,
 });
 

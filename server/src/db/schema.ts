@@ -14,6 +14,7 @@ import {
   timestamp,
   unique,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 
 const tstz = (name: string) => timestamp(name, { withTimezone: true });
@@ -293,6 +294,8 @@ export const userEntries = pgTable(
     readAt: tstz('read_at'),
     // Plain text; null when the user has no note on the entry.
     note: text('note'),
+    // Public share link id; null when the entry is not shared.
+    shareId: uuid('share_id').unique(),
     ...timestamps(),
   },
   (t) => [
@@ -372,6 +375,21 @@ export const entryTags = pgTable(
     primaryKey({ columns: [t.userEntryId, t.tag] }),
     index('entry_tags_user_tag_idx').on(t.userId, t.tag, t.userEntryId),
   ],
+);
+
+// Secret keys in public URLs (published feed). Stored as is, so the URL can be shown again.
+export const accessKeys = pgTable(
+  'access_keys',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    purpose: text('purpose').notNull(),
+    key: text('key').notNull().unique(),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+  },
+  (t) => [unique('access_keys_user_purpose_key').on(t.userId, t.purpose)],
 );
 
 export const tombstones = pgTable(

@@ -27,6 +27,8 @@ import { imageRoutes } from './routes/images.ts';
 import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
 import { prefsRoutes } from './routes/prefs.ts';
+import { publicRoutes } from './routes/public.ts';
+import { sharingRoutes } from './routes/sharing.ts';
 import {
   registerRequestDiagnostics,
   type RequestDiagnosticsOptions,
@@ -56,6 +58,8 @@ export interface AppDeps {
   services?: ApiServices;
   /** Event stream settings (tests override timings); false where streams cannot be held open. */
   events?: Omit<EventStreamOptions, 'realtime'> | false;
+  /** Origin of public links (published feeds); null or omitted uses each request's origin. */
+  publicUrl?: string | null;
   /** Directory of the built web app to serve at `/`; omitted when the SPA is hosted elsewhere. */
   webDir?: string | null;
   /** Logging of slow and abandoned requests; defaults to 2 s without a state snapshot. */
@@ -144,6 +148,7 @@ export function buildApp(deps: AppDeps) {
         });
         await api.register(labelRoutes, { labels: services.entries.labels });
         await api.register(tagRoutes, { tags: services.entries.tags });
+        await api.register(sharingRoutes, services.entries);
         await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs });
         if (deps.events === false) await api.register(noEventRoutes);
@@ -151,6 +156,14 @@ export function buildApp(deps: AppDeps) {
       },
       { prefix: '/api/v1' },
     );
+    void app.register(publicRoutes, {
+      prefix: '/public',
+      entries: services.entries.entries,
+      accessKeys: services.entries.accessKeys,
+      prefs: services.prefs,
+      images: services.feeds.images,
+      publicUrl: deps.publicUrl ?? null,
+    });
   }
 
   if (deps.webDir) registerWeb(app, deps.webDir);

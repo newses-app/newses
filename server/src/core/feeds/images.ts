@@ -50,22 +50,25 @@ export class ImageProxy {
     this.#logger = deps.logger;
   }
 
-  /** The proxy path for an image URL; other values (data: URLs, garbage) are returned as is. */
-  path(url: string): string {
+  /**
+   * The proxy path for an image URL, after `origin` when given (for documents read elsewhere,
+   * such as feeds); other values (data: URLs, garbage) are returned as is.
+   */
+  path(url: string, origin = ''): string {
     const absolute = httpUrl(url);
     if (!absolute) return url;
     const encoded = Buffer.from(absolute).toString('base64url');
-    return `${IMAGE_PATH}/${sign(this.#key, absolute)}/${encoded}`;
+    return `${origin}${IMAGE_PATH}/${sign(this.#key, absolute)}/${encoded}`;
   }
 
-  /** Points image sources in sanitised entry HTML at the proxy. */
-  rewrite(html: string): string {
+  /** Points image sources in sanitised entry HTML at the proxy, after `origin` when given. */
+  rewrite(html: string, origin = ''): string {
     const srcset = (value: string) =>
       value
         .split(',')
         .map((candidate) => {
           const [url = '', ...descriptor] = candidate.trim().split(/\s+/);
-          return [this.path(url), ...descriptor].join(' ');
+          return [this.path(url, origin), ...descriptor].join(' ');
         })
         .join(', ');
     return sanitizeHtml(html, {
@@ -75,7 +78,7 @@ export class ImageProxy {
       allowedSchemesByTag: { img: ['http', 'https', 'data'] },
       transformTags: {
         img: (tagName, attribs) => {
-          if (attribs.src) attribs.src = this.path(attribs.src);
+          if (attribs.src) attribs.src = this.path(attribs.src, origin);
           if (attribs.srcset) attribs.srcset = srcset(attribs.srcset);
           return { tagName, attribs };
         },
@@ -85,7 +88,7 @@ export class ImageProxy {
           return { tagName, attribs };
         },
         video: (tagName, attribs) => {
-          if (attribs.poster) attribs.poster = this.path(attribs.poster);
+          if (attribs.poster) attribs.poster = this.path(attribs.poster, origin);
           return { tagName, attribs };
         },
       },

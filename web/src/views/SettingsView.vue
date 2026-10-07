@@ -6,6 +6,7 @@ import AccountPanel from '../components/settings/AccountPanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
 import LabelsPanel from '../components/settings/LabelsPanel.vue';
 import PrefsPanel from '../components/settings/PrefsPanel.vue';
+import SharingPanel from '../components/settings/SharingPanel.vue';
 import UsersPanel from '../components/settings/UsersPanel.vue';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSession } from '../composables/useSession.ts';
@@ -21,6 +22,7 @@ const tabs = computed(() => [
   'preferences',
   'feeds',
   'labels',
+  'sharing',
   'account',
   ...(isAdmin.value ? ['users'] : []),
 ]);
@@ -54,6 +56,7 @@ useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings
       <PrefsPanel v-if="tab === 'preferences'" />
       <FeedsPanel v-else-if="tab === 'feeds'" />
       <LabelsPanel v-else-if="tab === 'labels'" />
+      <SharingPanel v-else-if="tab === 'sharing'" />
       <AccountPanel v-else-if="tab === 'account'" />
       <UsersPanel v-else-if="tab === 'users' && isAdmin" />
     </v-container>

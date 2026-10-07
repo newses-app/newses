@@ -12,11 +12,20 @@ describe('loadConfig', () => {
       blobDir: '/data/blobs',
       blobBucket: null,
       webDir: null,
+      publicUrl: null,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
       appSecret: APP_SECRET,
       bootstrapAdmin: null,
     });
+  });
+
+  it('trims the public URL and accepts only http(s)', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig({ ...base, PUBLIC_URL: 'https://reader.example/' }).publicUrl).toBe(
+      'https://reader.example',
+    );
+    expect(() => loadConfig({ ...base, PUBLIC_URL: 'ftp://reader.example' })).toThrow(ConfigError);
   });
 
   it('parses overrides', () => {

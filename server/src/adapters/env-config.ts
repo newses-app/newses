@@ -12,6 +12,10 @@ const schema = z
     BLOB_DIR: z.string().min(1).default('/data/blobs'),
     BLOB_BUCKET: z.string().min(1).optional(),
     WEB_DIR: z.string().min(1).optional(),
+    PUBLIC_URL: z
+      .url({ protocol: /^https?$/ })
+      .transform((v) => v.replace(/\/+$/, ''))
+      .optional(),
     TRUST_PROXY: z
       .string()
       .default('false')
@@ -64,6 +68,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     blobDir: e.BLOB_DIR,
     blobBucket: e.BLOB_BUCKET ?? null,
     webDir: e.WEB_DIR ?? null,
+    publicUrl: e.PUBLIC_URL ?? null,
     feeds: {
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
       purgeDays: e.FEED_PURGE_DAYS,

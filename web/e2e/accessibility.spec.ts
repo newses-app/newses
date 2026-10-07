@@ -39,7 +39,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       test('settings', async ({ page, expectNoViolations }) => {
         await signIn(page);
-        for (const tab of ['preferences', 'feeds', 'labels', 'account', 'users']) {
+        for (const tab of ['preferences', 'feeds', 'labels', 'sharing', 'account', 'users']) {
           await page.goto(`/settings/${tab}`);
           await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
           await expectNoViolations(`settings-${tab}`);
@@ -101,6 +101,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await expect(dialog.getByLabel('Tags')).toBeVisible();
         await expectNoViolations('entry-tags');
         await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+        await page
+          .locator('article')
+          .getByRole('button', { name: /^Share/ })
+          .click();
+        await expect(dialog.getByText('Share link')).toBeVisible();
+        await expectNoViolations('share');
+        await dialog.getByRole('button', { name: 'Close' }).click();
         await expect(dialog).toBeHidden();
         await page
           .getByRole('list', { name: 'Feeds' })

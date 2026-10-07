@@ -9,6 +9,7 @@ import { COUNTERS_KEY, live } from './useCounters.ts';
 import { TAGS_KEY } from './useTags.ts';
 
 export const ENTRIES_KEY = 'entries';
+export const SHARES_KEY = ['shares'] as const;
 const PAGE_SIZE = 50;
 
 export interface EntryListOptions {
@@ -105,6 +106,21 @@ export function useEntryActions() {
     }
   }
 
+  /** Shares the entry at a public link; returns the link's id. */
+  async function share(entry: Entry): Promise<string> {
+    const { shareId } = await api.entries.share(entry.id);
+    patchCaches([entry.id], { shareId });
+    void queryClient.invalidateQueries({ queryKey: SHARES_KEY });
+    return shareId;
+  }
+
+  /** Revokes the entry's share link. */
+  async function unshare(entry: Pick<Entry, 'id'>): Promise<void> {
+    await api.entries.unshare(entry.id);
+    patchCaches([entry.id], { shareId: null });
+    void queryClient.invalidateQueries({ queryKey: SHARES_KEY });
+  }
+
   /** Replaces the entry's tags. */
   async function setTags(entry: Entry, tags: string[]): Promise<void> {
     patchCaches([entry.id], { tags: normaliseTags(tags).sort() });
@@ -137,5 +153,5 @@ export function useEntryActions() {
     return updated;
   }
 
-  return { setState, setNote, setTags, setLabels, markRead };
+  return { setState, setNote, setTags, setLabels, share, unshare, markRead };
 }

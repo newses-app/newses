@@ -54,6 +54,7 @@ async function feedWith(
     published?: boolean;
     note?: string;
     labelled?: boolean;
+    shared?: boolean;
   }[],
 ) {
   const [source] = await db
@@ -79,6 +80,7 @@ async function feedWith(
         starred: item.starred ?? false,
         published: item.published ?? false,
         note: item.note ?? null,
+        shareId: item.shared ? crypto.randomUUID() : null,
       })
       .returning();
     if (item.labelled) {
@@ -103,7 +105,7 @@ const guids = async () =>
     .sort();
 
 describe('Purger', () => {
-  it('purges by age, keeping starred, published, noted, and labelled entries', async () => {
+  it('purges by age, keeping starred, published, noted, labelled, and shared entries', async () => {
     await feedWith(null, [
       { guid: 'global-new', age: 10 },
       { guid: 'global-old', age: 40 },
@@ -111,6 +113,7 @@ describe('Purger', () => {
       { guid: 'global-published', age: 400, published: true },
       { guid: 'global-noted', age: 400, note: 'keep' },
       { guid: 'global-labelled', age: 400, labelled: true },
+      { guid: 'global-shared', age: 400, shared: true },
     ]);
     await feedWith(5, [{ guid: 'short-old', age: 6 }]);
     await feedWith(0, [{ guid: 'never', age: 4000 }]);
@@ -122,6 +125,7 @@ describe('Purger', () => {
       'global-new',
       'global-noted',
       'global-published',
+      'global-shared',
       'global-starred',
       'never',
     ]);
