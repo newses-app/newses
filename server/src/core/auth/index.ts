@@ -1,5 +1,6 @@
 import type { Db } from '../../db/client.ts';
 import { deriveKey } from '../crypto.ts';
+import { AppPasswordService } from './app-passwords.ts';
 import { AuthService } from './auth-service.ts';
 import { LoginThrottle } from './login-throttle.ts';
 import { SessionService } from './sessions.ts';
@@ -15,8 +16,9 @@ export function createAuthServices(db: Db, appSecret: string, now: () => Date = 
     { totp: deriveKey(appSecret, 'totp'), challenge: deriveKey(appSecret, 'login-challenge') },
     now,
   );
-  const auth = new AuthService(users, sessions, throttle, twoFactor);
-  return { sessions, users, throttle, twoFactor, auth };
+  const appPasswords = new AppPasswordService(db, now);
+  const auth = new AuthService(users, sessions, throttle, twoFactor, appPasswords);
+  return { sessions, users, throttle, twoFactor, appPasswords, auth };
 }
 
 export type AuthServices = ReturnType<typeof createAuthServices>;

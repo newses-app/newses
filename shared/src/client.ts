@@ -1,6 +1,9 @@
 import type { z } from 'zod';
 import type {
+  AppPassword,
   changePasswordRequestSchema,
+  CreateAppPasswordResponse,
+  createAppPasswordRequestSchema,
   createUserRequestSchema,
   CurrentSession,
   LoggedInResponse,
@@ -153,6 +156,13 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<undefined>('DELETE', `/auth/sessions/${id(sessionId)}`),
       changePassword: (body: z.input<typeof changePasswordRequestSchema>) =>
         request<undefined>('POST', '/auth/password', { body }),
+      appPasswords: {
+        list: () => request<AppPassword[]>('GET', '/auth/app-passwords'),
+        create: (body: z.input<typeof createAppPasswordRequestSchema>) =>
+          request<CreateAppPasswordResponse>('POST', '/auth/app-passwords', { body }),
+        revoke: (appPasswordId: number) =>
+          request<undefined>('DELETE', `/auth/app-passwords/${id(appPasswordId)}`),
+      },
       twoFactor: {
         status: () => request<TwoFactorStatus>('GET', '/auth/2fa'),
         setup: (password: string) =>

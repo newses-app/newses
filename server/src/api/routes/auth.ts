@@ -1,5 +1,8 @@
 import {
+  appPasswordSchema,
   changePasswordRequestSchema,
+  createAppPasswordRequestSchema,
+  createAppPasswordResponseSchema,
   currentSessionSchema,
   loggedInResponseSchema,
   loginRequestSchema,
@@ -17,17 +20,19 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { AuthService, LoggedIn } from '../../core/auth/auth-service.ts';
+import type { AppPasswordService } from '../../core/auth/app-passwords.ts';
 import type { SessionService } from '../../core/auth/sessions.ts';
 import type { TwoFactorService } from '../../core/auth/two-factor.ts';
 import { DomainError } from '../../core/errors.ts';
 import { clearSessionCookie, requireAuth, requireUser, setSessionCookie } from '../auth.ts';
-import { toSession, toUser } from '../dto.ts';
+import { toAppPassword, toSession, toUser } from '../dto.ts';
 import { logSecurity, type SecurityEvent } from '../security-log.ts';
 
 export interface AuthRoutesOptions {
   auth: AuthService;
   sessions: SessionService;
   twoFactor: TwoFactorService;
+  appPasswords: AppPasswordService;
 }
 
 /** Logs `event` when `work` fails with a domain error (wrong password, wrong code, lockout). */
@@ -57,7 +62,7 @@ function sessionResponse(request: FastifyRequest, reply: FastifyReply, result: L
 
 export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
   app,
-  { auth, sessions, twoFactor },
+  { auth, sessions, twoFactor, appPasswords },
 ) => {
   const client = (request: FastifyRequest) => ({
     ip: request.ip,
@@ -140,6 +145,43 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
         auth.changePassword(user, session.id, currentPassword, newPassword),
       );
       logSecurity(request, 'password_changed');
+      return reply.code(204).send();
+    },
+  );
+
+  app.get(
+    '/auth/app-passwords',
+    { preHandler: requireUser, schema: { response: { 200: z.array(appPasswordSchema) } } },
+    async (request) => (await appPasswords.list(requireAuth(request).user.id)).map(toAppPassword),
+  );
+
+  app.post(
+    '/auth/app-passwords',
+    {
+      preHandler: requireUser,
+      schema: {
+        body: createAppPasswordRequestSchema,
+        response: { 201: createAppPasswordResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const { user } = requireAuth(request);
+      const created = await logFailure(request, 'app_password_create_failed', () =>
+        auth.createAppPassword(user, request.body.password, request.body.name),
+      );
+      logSecurity(request, 'app_password_created', { appPasswordId: created.appPassword.id });
+      return reply
+        .code(201)
+        .send({ appPassword: toAppPassword(created.appPassword), password: created.password });
+    },
+  );
+
+  app.delete(
+    '/auth/app-passwords/:id',
+    { preHandler: requireUser, schema: { params: z.object({ id: z.coerce.number().int() }) } },
+    async (request, reply) => {
+      await appPasswords.revoke(requireAuth(request).user.id, request.params.id);
+      logSecurity(request, 'app_password_revoked', { appPasswordId: request.params.id });
       return reply.code(204).send();
     },
   );

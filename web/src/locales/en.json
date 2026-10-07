@@ -213,6 +213,21 @@
     "recoveryCodes": "Recovery codes",
     "regeneratePrompt": "Enter a code from your authenticator app. Your old recovery codes will stop working."
   },
+  "appPasswords": {
+    "title": "App passwords",
+    "summary": "Apps that use the TTRSS or Google Reader API sign in with an app password instead of your password. They skip two-factor authentication, so give each app its own and revoke any you no longer use.",
+    "create": "New app password",
+    "name": "Name",
+    "nameHint": "The app or device it is for, e.g. \"Reeder on iPhone\".",
+    "createdPrompt": "Enter this password in {name} together with your user name. It will not be shown again.",
+    "copied": "App password copied.",
+    "none": "No app passwords.",
+    "lastUsed": "Last used {when}",
+    "neverUsed": "Never used",
+    "revoke": "Revoke",
+    "revokeNamed": "Revoke {name}",
+    "revokeConfirm": "Revoke {name}? Apps using it will be signed out."
+  },
   "users": {
     "create": "New user",
     "admin": "Administrator",
@@ -221,7 +236,7 @@
     "never": "Never",
     "resetPassword": "Reset password",
     "resetPasswordFor": "Reset password for {login}",
-    "resetHint": "The user is signed out everywhere.",
+    "resetHint": "The user is signed out everywhere and their app passwords stop working.",
     "passwordReset": "Password reset.",
     "delete": "Delete user",
     "deleteConfirm": "Delete {login} and all their data?",

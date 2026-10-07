@@ -71,6 +71,25 @@ export const twoFactorDisableRequestSchema = z.object({
   code: secondFactorCodeSchema,
 });
 
+export const appPasswordSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  createdAt: z.iso.datetime(),
+  lastUsedAt: z.iso.datetime().nullable(),
+});
+
+export const createAppPasswordRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  /** The account password, re-checked before a lasting credential is issued. */
+  password: z.string().min(1).max(1024),
+});
+
+/** `password` is shown once; only its hash is stored. */
+export const createAppPasswordResponseSchema = z.object({
+  appPassword: appPasswordSchema,
+  password: z.string(),
+});
+
 export const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.string()) });
 
 export const currentSessionSchema = z.object({
@@ -116,6 +135,8 @@ export type LoggedInResponse = z.infer<typeof loggedInResponseSchema>;
 export type TwoFactorChallenge = z.infer<typeof twoFactorChallengeSchema>;
 export type TwoFactorStatus = z.infer<typeof twoFactorStatusSchema>;
 export type TwoFactorSetup = z.infer<typeof twoFactorSetupResponseSchema>;
+export type AppPassword = z.infer<typeof appPasswordSchema>;
+export type CreateAppPasswordResponse = z.infer<typeof createAppPasswordResponseSchema>;
 export type CurrentSession = z.infer<typeof currentSessionSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;

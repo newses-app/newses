@@ -53,7 +53,7 @@ export const adminUserRoutes: FastifyPluginAsyncZod<{ users: UserService; auth: 
     '/admin/users/:id/password',
     { schema: { params: idParams, body: resetPasswordRequestSchema } },
     async (request, reply) => {
-      await users.setPassword(request.params.id, request.body.password);
+      await auth.resetPassword(request.params.id, request.body.password);
       logSecurity(request, 'user_password_reset', { targetUserId: request.params.id });
       return reply.code(204).send();
     },

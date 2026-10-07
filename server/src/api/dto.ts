@@ -1,4 +1,5 @@
-import type { Category, Session, Subscription, User } from '@rss-reader/shared';
+import type { AppPassword, Category, Session, Subscription, User } from '@rss-reader/shared';
+import type { AppPasswordRow } from '../core/auth/app-passwords.ts';
 import type { SessionRow, UserRow } from '../core/auth/sessions.ts';
 import type { CategoryRow } from '../core/categories.ts';
 import type { SubscriptionView } from '../core/feeds/subscriptions.ts';
@@ -12,6 +13,15 @@ export function toUser(row: UserRow): User {
     twoFactor: row.totpEnabledAt !== null,
     createdAt: row.createdAt.toISOString(),
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
+  };
+}
+
+export function toAppPassword(row: AppPasswordRow): AppPassword {
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.createdAt.toISOString(),
+    lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
   };
 }
 

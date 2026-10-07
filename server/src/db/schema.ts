@@ -82,6 +82,22 @@ export const sessions = pgTable(
   ],
 );
 
+// Passwords for compatibility-API clients that cannot do 2FA; only the hash is kept.
+export const appPasswords = pgTable(
+  'app_passwords',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+    lastUsedAt: tstz('last_used_at'),
+  },
+  (t) => [index('app_passwords_user_id_idx').on(t.userId)],
+);
+
 // Failed-login counters keyed by `login:<name>` or `ip:<address>`.
 export const loginAttempts = pgTable('login_attempts', {
   key: text('key').primaryKey(),

@@ -64,6 +64,13 @@
       "when": 1791342748755,
       "tag": "0008_totp",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791343702940,
+      "tag": "0009_app_passwords",
+      "breakpoints": true
     }
   ]
 }

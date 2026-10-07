@@ -7,6 +7,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { AppPasswordService } from '../core/auth/app-passwords.ts';
 import type { AuthService } from '../core/auth/auth-service.ts';
 import type { SessionService } from '../core/auth/sessions.ts';
 import type { TwoFactorService } from '../core/auth/two-factor.ts';
@@ -36,6 +37,7 @@ export interface ApiServices {
   sessions: SessionService;
   users: UserService;
   twoFactor: TwoFactorService;
+  appPasswords: AppPasswordService;
   feeds: FeedServices;
   entries: EntryServices;
   prefs: PrefsService;

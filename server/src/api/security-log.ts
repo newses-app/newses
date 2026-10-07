@@ -15,6 +15,9 @@ export type SecurityEvent =
   | 'two_factor_disabled'
   | 'two_factor_failed'
   | 'recovery_codes_regenerated'
+  | 'app_password_created'
+  | 'app_password_create_failed'
+  | 'app_password_revoked'
   | 'user_created'
   | 'user_updated'
   | 'user_password_reset'
@@ -27,6 +30,7 @@ const WARN = new Set<SecurityEvent>([
   'csrf_rejected',
   'password_change_failed',
   'two_factor_failed',
+  'app_password_create_failed',
 ]);
 
 /** One structured log line per security-relevant action, queryable by `security`. */

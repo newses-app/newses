@@ -4,7 +4,7 @@ import type { AuthServices } from '../core/auth/index.ts';
 
 export const USAGE = `Usage:
   cli user create <login> [--admin]    Create a user; password is read from stdin
-  cli user reset-password <login>      Set a new password from stdin and sign the user out everywhere
+  cli user reset-password <login>      Set a new password from stdin; revokes sessions and app passwords
   cli user reset-2fa <login>           Turn off two-factor authentication and sign the user out everywhere`;
 
 const COMMANDS = new Set(['create', 'reset-password', 'reset-2fa']);
@@ -62,8 +62,8 @@ export async function runCli(
       io.print(`No user "${name.data}"`);
       return 1;
     }
-    await users.setPassword(user.id, password.data);
-    io.print(`Password reset for "${user.login}"; existing sessions revoked`);
+    await auth.resetPassword(user.id, password.data);
+    io.print(`Password reset for "${user.login}"; sessions and app passwords revoked`);
   }
   return 0;
 }

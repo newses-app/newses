@@ -1,3 +1,4 @@
+import type { AppPasswordRow, AppPasswordService } from './app-passwords.ts';
 import type { LoginThrottle, ThrottleRule } from './login-throttle.ts';
 import { verifyAgainstDummy, verifyPassword } from './passwords.ts';
 import type { NewSession, SessionKind, SessionService, UserRow } from './sessions.ts';
@@ -24,6 +25,12 @@ export interface SecondFactorInput {
   userAgent: string | null;
 }
 
+export interface AppPasswordInput {
+  login: string;
+  password: string;
+  ip: string;
+}
+
 export type LoggedIn = NewSession & { user: UserRow };
 
 /** A login either opens a session or, with 2FA on, returns a challenge for the code step. */
@@ -36,17 +43,20 @@ export class AuthService {
   readonly #sessions: SessionService;
   readonly #throttle: LoginThrottle;
   readonly #twoFactor: TwoFactorService;
+  readonly #appPasswords: AppPasswordService;
 
   constructor(
     users: UserService,
     sessions: SessionService,
     throttle: LoginThrottle,
     twoFactor: TwoFactorService,
+    appPasswords: AppPasswordService,
   ) {
     this.#users = users;
     this.#sessions = sessions;
     this.#throttle = throttle;
     this.#twoFactor = twoFactor;
+    this.#appPasswords = appPasswords;
   }
 
   async login(input: LoginInput): Promise<LoginResult> {
@@ -88,6 +98,41 @@ export class AuthService {
       throw new DomainError('invalid_credentials', 'Invalid code');
     }
     return this.#open(user, challenge.kind, input.userAgent);
+  }
+
+  /**
+   * Authenticates a compatibility-API client by login and app password, without TOTP. Account
+   * passwords are refused, so 2FA cannot be bypassed with them.
+   */
+  async authenticateAppPassword(input: AppPasswordInput): Promise<UserRow> {
+    const account = accountKey(input.login);
+    const ipKey = `ip:${input.ip}`;
+    await this.#throttle.check([account, ipKey]);
+    const user = await this.#users.findByLogin(input.login);
+    const match = user ? await this.#appPasswords.match(user.id, input.password) : null;
+    if (!user || !match || user.disabledAt !== null) {
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
+      await this.#throttle.recordFailure(ipKey, IP_RULE);
+      throw new DomainError('invalid_credentials', 'Invalid login or app password');
+    }
+    await this.#throttle.reset(account);
+    return user;
+  }
+
+  /** Re-checks the account password, so a stolen session cannot mint a lasting credential. */
+  async createAppPassword(
+    user: UserRow,
+    password: string,
+    name: string,
+  ): Promise<{ appPassword: AppPasswordRow; password: string }> {
+    await this.#checkPassword(user, password);
+    return this.#appPasswords.create(user.id, name);
+  }
+
+  /** Admin reset: a new password, every session and app password revoked. */
+  async resetPassword(userId: number, password: string): Promise<void> {
+    await this.#users.setPassword(userId, password);
+    await this.#appPasswords.revokeAll(userId);
   }
 
   async changePassword(
