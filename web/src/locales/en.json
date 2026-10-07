@@ -128,6 +128,26 @@
     "sharedArticles": "Shared articles",
     "noShares": "No articles are shared."
   },
+  "reading": {
+    "title": "Article text",
+    "font": "Font",
+    "fonts": {
+      "default": "Default",
+      "sans": "Sans-serif",
+      "serif": "Serif",
+      "mono": "Monospace"
+    },
+    "size": "Text size",
+    "width": "Line width",
+    "widths": {
+      "narrow": "Narrow",
+      "medium": "Medium",
+      "wide": "Wide",
+      "full": "Full width"
+    },
+    "preview": "Preview",
+    "sample": "The quick brown fox jumps over the lazy dog. Feeds you follow are shown in this font, at this size, up to this width."
+  },
   "search": { "label": "Search articles", "placeholder": "Search" },
   "view": {
     "label": "Show",

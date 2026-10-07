@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Prefs } from '@rss-reader/shared';
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDurations } from '../../composables/useDurations.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
@@ -17,6 +17,22 @@ const viewItems = choices('viewMode', ['adaptive', 'all', 'unread'], 'view');
 const orderItems = choices('sortOrder', ['newest', 'oldest', 'title'], 'order');
 const layoutItems = choices('layout', ['threePane', 'combined'], 'layout');
 const themeItems = choices('theme', ['system', 'light', 'dark'], 'theme');
+const fontItems = choices('articleFont', ['default', 'sans', 'serif', 'mono'], 'reading.fonts');
+const widthItems = choices('articleWidth', ['narrow', 'medium', 'wide', 'full'], 'reading.widths');
+/** The slider shows changes as it moves (mouse or keys) and saves once it rests. */
+const fontSize = ref<number | null>(null);
+let saveSize: ReturnType<typeof setTimeout> | undefined;
+function saveFontSize() {
+  clearTimeout(saveSize);
+  if (fontSize.value !== null) update({ articleFontSize: fontSize.value });
+  fontSize.value = null;
+}
+function changeSize(value: number) {
+  fontSize.value = value;
+  clearTimeout(saveSize);
+  saveSize = setTimeout(saveFontSize, 400);
+}
+onBeforeUnmount(saveFontSize);
 const freshItems = computed(() =>
   [6, 12, 24, 48, 72, 168].map((hours) => ({
     title: t('time.hours', { n: hours }, hours),
@@ -94,6 +110,46 @@ const switches = [
       </v-col>
     </v-row>
 
+    <h3 class="text-title-medium mb-2">{{ t('reading.title') }}</h3>
+    <v-row>
+      <v-col cols="12" sm="6">
+        <v-select
+          :model-value="prefs.articleFont"
+          :items="fontItems"
+          :label="t('reading.font')"
+          @update:model-value="(v) => update({ articleFont: v })"
+        />
+      </v-col>
+      <v-col cols="12" sm="6">
+        <v-select
+          :model-value="prefs.articleWidth"
+          :items="widthItems"
+          :label="t('reading.width')"
+          @update:model-value="(v) => update({ articleWidth: v })"
+        />
+      </v-col>
+      <v-col cols="12">
+        <v-slider
+          :model-value="fontSize ?? prefs.articleFontSize"
+          :label="t('reading.size')"
+          :aria-label="t('reading.size')"
+          :min="12"
+          :max="28"
+          :step="1"
+          thumb-label
+          @update:model-value="changeSize"
+        />
+      </v-col>
+    </v-row>
+    <div
+      class="article-content reading-preview mb-8"
+      :style="{ fontSize: fontSize === null ? undefined : `${fontSize / 16}rem` }"
+      role="note"
+      :aria-label="t('reading.preview')"
+    >
+      <p>{{ t('reading.sample') }}</p>
+    </div>
+
     <h2 class="text-title-large mt-4 mb-1">{{ t('settings.updates') }}</h2>
     <p class="text-body-medium text-medium-emphasis mb-4">{{ t('settings.updatesHint') }}</p>
     <v-row>
@@ -120,3 +176,15 @@ const switches = [
     }}</v-btn>
   </section>
 </template>
+
+<style scoped>
+.reading-preview {
+  max-width: var(--article-width, 50rem);
+  padding: 1rem;
+  border: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 4px;
+}
+.reading-preview p {
+  margin: 0;
+}
+</style>

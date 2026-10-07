@@ -9,6 +9,12 @@ const prefsShape = {
   sortOrder: headlineOrderSchema,
   layout: z.enum(['threePane', 'combined']),
   theme: z.enum(['system', 'light', 'dark']),
+  /** Typeface of article text; `default` follows the app. System fonts only, so nothing loads. */
+  articleFont: z.enum(['default', 'sans', 'serif', 'mono']),
+  /** Article text size in CSS pixels. */
+  articleFontSize: z.number().int().min(12).max(28),
+  /** Maximum width of the article column. */
+  articleWidth: z.enum(['narrow', 'medium', 'wide', 'full']),
   /** Combined layout: mark entries read as they scroll past. */
   markReadOnScroll: z.boolean(),
   showContentPreview: z.boolean(),

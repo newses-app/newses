@@ -189,6 +189,9 @@ const enclosures = computed(() =>
   padding: 0;
   list-style: none;
 }
+.entry-heading {
+  font-family: var(--article-font, inherit);
+}
 .entry-note {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

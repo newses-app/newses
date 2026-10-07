@@ -53,6 +53,6 @@ watch(
 
 <style scoped>
 .article-column {
-  max-width: 50rem;
+  max-width: var(--article-width, 50rem);
 }
 </style>

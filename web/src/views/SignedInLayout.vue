@@ -16,6 +16,7 @@ import FeedTree from '../components/reader/FeedTree.vue';
 import { useLiveCounters } from '../composables/useCounters.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
+import { readingStyle } from '../lib/reading.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -27,6 +28,10 @@ const { prefs, loaded, update } = usePrefs();
 
 watchEffect(() => {
   if (loaded.value) theme.change(prefs.value.theme);
+});
+watchEffect(() => {
+  for (const [name, value] of Object.entries(readingStyle(prefs.value)))
+    document.documentElement.style.setProperty(name, value);
 });
 
 useLiveCounters();

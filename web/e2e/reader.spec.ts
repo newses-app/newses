@@ -128,6 +128,47 @@ test.describe('reader', () => {
     await expect(page.locator('.v-theme--light').first()).toBeVisible();
   });
 
+  test('applies reading preferences to articles', async ({ page }) => {
+    await page.goto('/settings');
+    await page.locator('.v-select').filter({ hasText: 'Font' }).click();
+    await page.getByRole('option', { name: 'Serif', exact: true }).click();
+    await page.locator('.v-select').filter({ hasText: 'Line width' }).click();
+    await page.getByRole('option', { name: 'Narrow' }).click();
+    const slider = page.getByRole('slider', { name: 'Text size' });
+    await slider.focus();
+    // The size is saved once the slider rests.
+    const saved = page.waitForResponse(
+      (r) =>
+        r.url().endsWith('/api/v1/prefs') && !!r.request().postData()?.includes('articleFontSize'),
+    );
+    await slider.press('Home');
+    for (let i = 0; i < 8; i++) await slider.press('ArrowRight');
+    await expect(slider).toHaveAttribute('aria-valuenow', '20');
+    await saved;
+
+    await page.goto('/all');
+    await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+    const content = page.locator('.article-content').first();
+    await expect(content).toHaveCSS('font-size', '20px');
+    await expect(content).toHaveCSS('font-family', /serif$/);
+    await expect(page.locator('.article-column')).toHaveCSS('max-width', '640px');
+
+    await page.goto('/settings');
+    await page.locator('.v-select').filter({ hasText: 'Font' }).click();
+    await page.getByRole('option', { name: 'Default' }).click();
+    await page.locator('.v-select').filter({ hasText: 'Line width' }).click();
+    await page.getByRole('option', { name: 'Medium' }).click();
+    const reset = page.waitForResponse(
+      (r) =>
+        r.url().endsWith('/api/v1/prefs') && !!r.request().postData()?.includes('articleFontSize'),
+    );
+    await slider.focus();
+    await slider.press('Home');
+    for (let i = 0; i < 4; i++) await slider.press('ArrowRight');
+    await expect(slider).toHaveAttribute('aria-valuenow', '16');
+    await reset;
+  });
+
   test('shows one pane at a time on phones @mobile', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'phone layout');
     await page.goto('/all');

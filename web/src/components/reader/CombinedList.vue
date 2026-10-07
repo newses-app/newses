@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .combined-card {
-  max-width: 50rem;
+  max-width: var(--article-width, 50rem);
 }
 /* Read entries dim their heading only, which keeps every text above AA contrast. */
 .combined-card.read :deep(.entry-heading) {

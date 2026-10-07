@@ -1,8 +1,9 @@
-/* Article bodies: sanitised feed HTML rendered with v-html. */
+/* Article bodies: sanitised feed HTML rendered with v-html. Reading preferences set the variables. */
 .article-content {
   overflow-wrap: anywhere;
   line-height: 1.6;
-  font-size: 1rem;
+  font-family: var(--article-font, inherit);
+  font-size: var(--article-font-size, 1rem);
 }
 .article-content img,
 .article-content video,

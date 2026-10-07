@@ -86,6 +86,7 @@ Rules:
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
 - Counters refetch on `counters` events. Without a stream they are polled every 60 s, paused while the page is hidden; a closed stream is retried every 5 minutes.
 - Below 900 px one pane shows at a time; below 700 px secondary toolbar actions move into a menu.
+- Reading preferences (font, text size, line width) set CSS custom properties on the document root that article styles read. Fonts are system font stacks, so nothing is downloaded.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
 - Every response carries `X-Content-Type-Options: nosniff`, and HSTS (1 year) when the request arrived over HTTPS; API responses default to `Cache-Control: no-store`. On AWS, CloudFront also adds HSTS to every response and a viewer-response function adds `charset=utf-8` to text responses from S3.
