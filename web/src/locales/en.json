@@ -214,6 +214,7 @@
   "settings": {
     "tabs": {
       "preferences": "Preferences",
+      "shortcuts": "Shortcuts",
       "feeds": "Feeds",
       "labels": "Labels",
       "sharing": "Sharing",
@@ -338,6 +339,25 @@
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "show": "Keyboard shortcuts",
+    "settingsHint": "Each action can have up to four keys or two-key sequences. Your changes replace that action's defaults.",
+    "disabledHint": "Single-key shortcuts are turned off in Preferences, so these bindings do nothing until you turn them on.",
+    "conflicts": "Some keys are bound more than once, so only one of their actions runs: {list}",
+    "action": "Action",
+    "keys": "Keys",
+    "unbound": "Not set",
+    "add": "Add keys",
+    "addNamed": "Add keys for {action}",
+    "removeNamed": "Remove {keys} from {action}",
+    "resetNamed": "Reset {action} to its default keys",
+    "resetAll": "Reset all shortcuts",
+    "resetAllConfirm": "Every action goes back to its default keys.",
+    "recordHint": "With the Keys field focused, press a key, or two keys in turn for a sequence. Pressing a third key starts over. Tab moves on; Esc cancels.",
+    "pressKeys": "Press keys…",
+    "clear": "Clear",
+    "replace": "Replace",
+    "blocked": "These keys clash with {actions}: one is the start of the other. Choose different keys.",
+    "duplicate": "This action already has these keys.",
+    "moved": "These keys are bound to {actions}; saving moves them to this action.",
     "groups": {
       "navigation": "Navigation",
       "article": "Article",

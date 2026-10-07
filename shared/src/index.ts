@@ -5,4 +5,5 @@ export * from './prefs-defaults.ts';
 export * from './entries.ts';
 export * from './labels.ts';
 export * from './limits.ts';
+export * from './shortcuts.ts';
 export * from './client.ts';

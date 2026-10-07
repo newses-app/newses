@@ -14,6 +14,7 @@ export const DEFAULT_PREFS: Prefs = {
   confirmCatchUp: true,
   proxyImages: false,
   keyboardShortcuts: true,
+  shortcutBindings: {},
   freshMaxAgeHours: 24,
   updateIntervalMinutes: null,
   purgeDays: null,

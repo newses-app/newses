@@ -1,5 +1,19 @@
-import { inject, type InjectionKey, onBeforeUnmount, onMounted, provide, shallowRef } from 'vue';
-import { isTyping, type ShortcutAction, ShortcutMatcher, usesArrowKeys } from '../lib/shortcuts.ts';
+import {
+  computed,
+  inject,
+  type InjectionKey,
+  onBeforeUnmount,
+  onMounted,
+  provide,
+  shallowRef,
+} from 'vue';
+import {
+  effectiveBindings,
+  isTyping,
+  type ShortcutAction,
+  ShortcutMatcher,
+  usesArrowKeys,
+} from '../lib/shortcuts.ts';
 import { usePrefs } from './usePrefs.ts';
 
 type Handler = (action: ShortcutAction) => boolean;
@@ -12,8 +26,11 @@ const HANDLERS: InjectionKey<{ value: Handler | null }> = Symbol('shortcut-handl
 export function useShortcutListener(global: Handler): void {
   const page = shallowRef<Handler | null>(null);
   provide(HANDLERS, page);
-  const matcher = new ShortcutMatcher();
   const { prefs } = usePrefs();
+  // Rebuilt when the user's bindings change, which also drops a pending chord prefix.
+  const matcher = computed(
+    () => new ShortcutMatcher(effectiveBindings(prefs.value.shortcutBindings)),
+  );
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!prefs.value.keyboardShortcuts) return;
@@ -21,7 +38,7 @@ export function useShortcutListener(global: Handler): void {
     if (isTyping(event.target) && event.key !== 'Escape') return;
     if (event.key.startsWith('Arrow') && usesArrowKeys(event.target)) return;
     if (document.querySelector('.v-overlay--active:is(.v-dialog, .v-menu)')) return;
-    const action = matcher.press(event.key);
+    const action = matcher.value.press(event.key);
     if (!action) return;
     if (page.value?.(action) || global(action)) event.preventDefault();
   };

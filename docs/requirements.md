@@ -7,7 +7,7 @@
 | P1 | MVP reader, self-hosted | Family members read daily feeds in the web app on a Docker deployment; OPML from TTRSS imported |
 | P1.5 | AWS deployment | P1 build runs serverless on the AWS `dev` stage, deployed by the CDK pipeline from the `dev` branch |
 | P1.6 | Security and accessibility | Image proxy, 2FA, and app passwords in daily use; Accessibility and Security non-functional requirements verified on the AWS `dev` stage |
-| P2 | Power features | Labels, tags, notes, published feed, share links, and reading preferences in daily use |
+| P2 | Power features | Labels, tags, notes, published feed, share links, reading preferences, and remappable shortcuts in daily use |
 | P3 | TTRSS cut-over | All TTRSS users imported; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Electron builds for Windows/macOS/Linux; Capacitor Android build installed on a device |
 | Later | Backlog | Not scheduled |
@@ -46,6 +46,7 @@
 | Catch-up | P1 | Mark feed/category/special feed read: all, or older than 1 day / 1 week / 2 weeks |
 | Live counters | P1 | Unread counts update without reload within 5 s of ingest (SSE), falling back to polling when the stream is unavailable |
 | Keyboard shortcuts | P1 | TTRSS default bindings (`j`/`k`, `n`/`p`, `s`, `u`, `o`, `/`, `f a`, `g a`, …); `?` shows a help overlay |
+| Remappable shortcuts | P2 | Per-user keys or two-key sequences per action; settings record them, flag clashes, and reset to defaults; the help overlay shows the user's bindings |
 | Themes | P1 | Light, dark, follow system |
 | Reading preferences | P2 | Font family, size, line width per user |
 | Enclosures | Later | Inline audio/video players and image galleries for enclosures |

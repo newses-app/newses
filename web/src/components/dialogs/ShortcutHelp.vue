@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from 'vue';
+import { computed, onBeforeUnmount, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
-import { SHORTCUT_GROUPS } from '../../lib/shortcuts.ts';
+import { usePrefs } from '../../composables/usePrefs.ts';
+import { ACTION_GROUPS, displayKeys, effectiveBindings } from '../../lib/shortcuts.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
 const { t } = useI18n();
-const KEY_NAMES: Record<string, string> = { ArrowDown: '↓', ArrowUp: '↑', Escape: 'Esc' };
+const { prefs } = usePrefs();
+const bindings = computed(() => effectiveBindings(prefs.value.shortcutBindings));
 // Escape closes the help even before the dialog has taken focus (it opens from a key press).
 const onKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') ui.helpOpen = false;
@@ -23,27 +25,29 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown);
 });
 const restoreFocus = useReturnFocus(() => ui.helpOpen);
-const keys = (sequence: string) => sequence.split(' ').map((key) => KEY_NAMES[key] ?? key);
 </script>
 
 <template>
   <v-dialog v-model="ui.helpOpen" max-width="760" scrollable @after-leave="restoreFocus">
     <v-card :title="t('shortcuts.title')">
-      <v-card-text>
+      <!-- Focusable so keyboard users can scroll a long list. -->
+      <v-card-text tabindex="0">
         <v-row>
-          <v-col v-for="group in SHORTCUT_GROUPS" :key="group.group" cols="12" sm="6">
+          <v-col v-for="group in ACTION_GROUPS" :key="group.group" cols="12" sm="6">
             <h3 class="text-title-small mb-2">{{ t(`shortcuts.groups.${group.group}`) }}</h3>
             <table class="w-100 text-body-medium">
               <tbody>
-                <tr v-for="[sequence, action] in group.bindings" :key="sequence">
-                  <td class="py-1 pe-4 text-no-wrap">
-                    <template v-for="(key, index) in keys(sequence)" :key="index">
-                      <kbd>{{ key }}</kbd
-                      ><span v-if="index < keys(sequence).length - 1"> </span>
-                    </template>
-                  </td>
-                  <td class="py-1">{{ t(`shortcuts.actions.${action}`) }}</td>
-                </tr>
+                <template v-for="action in group.actions" :key="action">
+                  <tr v-for="sequence in bindings[action]" :key="sequence">
+                    <td class="py-1 pe-4 text-no-wrap">
+                      <template v-for="(key, index) in displayKeys(sequence)" :key="index">
+                        <kbd>{{ key }}</kbd
+                        ><span v-if="index < displayKeys(sequence).length - 1"> </span>
+                      </template>
+                    </td>
+                    <td class="py-1">{{ t(`shortcuts.actions.${action}`) }}</td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </v-col>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isKeySequence, MAX_BINDINGS_PER_ACTION, SHORTCUT_ACTIONS } from './shortcuts.ts';
 
 export const viewModeSchema = z.enum(['all', 'unread', 'adaptive']);
 export const headlineOrderSchema = z.enum(['newest', 'oldest', 'title']);
@@ -24,6 +25,13 @@ const prefsShape = {
   proxyImages: z.boolean(),
   /** Single-key shortcuts; off for users whose assistive technology sends key presses. */
   keyboardShortcuts: z.boolean(),
+  /** Key sequences per action, replacing that action's defaults; `[]` unbinds it. */
+  shortcutBindings: z.partialRecord(
+    z.enum(SHORTCUT_ACTIONS),
+    z
+      .array(z.string().refine(isKeySequence, 'Expected a key or two keys separated by a space'))
+      .max(MAX_BINDINGS_PER_ACTION),
+  ),
   /** Unread entries published within this many hours are Fresh. */
   freshMaxAgeHours: z.number().int().min(1).max(720),
   /** Default for this user's subscriptions; null uses the server default. */

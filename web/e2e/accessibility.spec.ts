@@ -39,7 +39,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
       test('settings', async ({ page, expectNoViolations }) => {
         await signIn(page);
-        for (const tab of ['preferences', 'feeds', 'labels', 'sharing', 'account', 'users']) {
+        for (const tab of [
+          'preferences',
+          'shortcuts',
+          'feeds',
+          'labels',
+          'sharing',
+          'account',
+          'users',
+        ]) {
           await page.goto(`/settings/${tab}`);
           await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
           await expectNoViolations(`settings-${tab}`);
@@ -75,6 +83,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await page.getByRole('table').getByRole('button', { name: /^Edit/ }).first().click();
         await expect(dialog.getByLabel('Title')).toBeVisible();
         await expectNoViolations('edit-feed');
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/settings/shortcuts');
+        await page.getByRole('button', { name: 'Add keys for Show this help' }).click();
+        await dialog.getByRole('textbox', { name: 'Keys' }).press('s');
+        await expect(dialog.getByRole('button', { name: 'Replace' })).toBeVisible();
+        await expectNoViolations('record-shortcut');
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
 

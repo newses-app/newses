@@ -128,6 +128,32 @@ test.describe('reader', () => {
     await expect(page.locator('.v-theme--light').first()).toBeVisible();
   });
 
+  test('remaps a shortcut and resets it', async ({ page }) => {
+    await page.goto('/settings/shortcuts');
+    await page.getByRole('button', { name: 'Add keys for Show this help' }).click();
+    const dialog = page.getByRole('dialog');
+    const keys = dialog.getByRole('textbox', { name: 'Keys' });
+    await keys.press('s');
+    await expect(dialog.getByRole('button', { name: 'Replace' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Clear' }).click();
+    await keys.press('z');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Remove z from Show this help' })).toBeVisible();
+
+    await page.goto('/all');
+    await expect(page.getByRole('list', { name: 'Articles' })).toBeVisible();
+    await page.locator('body').press('z');
+    await expect(dialog.getByText('Keyboard shortcuts')).toBeVisible();
+    await expect(dialog.locator('kbd', { hasText: /^z$/ })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Close' }).click();
+
+    await page.goto('/settings/shortcuts');
+    await page.getByRole('button', { name: 'Reset all shortcuts' }).click();
+    await dialog.getByRole('button', { name: 'Reset all shortcuts' }).click();
+    await expect(page.getByRole('button', { name: 'Remove z from Show this help' })).toBeHidden();
+  });
+
   test('applies reading preferences to articles', async ({ page }) => {
     await page.goto('/settings');
     await page.locator('.v-select').filter({ hasText: 'Font' }).click();
