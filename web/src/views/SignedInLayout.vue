@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
+import NoteDialog from '../components/dialogs/NoteDialog.vue';
 import ShortcutHelp from '../components/dialogs/ShortcutHelp.vue';
 import SubscribeDialog from '../components/dialogs/SubscribeDialog.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
@@ -69,6 +70,7 @@ useShortcutListener((action) => {
   <router-view />
   <SubscribeDialog />
   <EditFeedDialog />
+  <NoteDialog />
   <ShortcutHelp />
   <ConfirmDialog />
 </template>

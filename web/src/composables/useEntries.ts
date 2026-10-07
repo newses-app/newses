@@ -92,6 +92,17 @@ export function useEntryActions() {
     refreshCounters();
   }
 
+  /** Saves the entry's note; null or blank text clears it. */
+  async function setNote(entry: Entry, note: string | null): Promise<void> {
+    patchCaches([entry.id], { note: note?.trim() || null });
+    try {
+      await api.entries.setNote(entry.id, note);
+    } catch (error) {
+      patchCaches([entry.id], { note: entry.note });
+      throw error;
+    }
+  }
+
   async function markRead(request: MarkReadRequest): Promise<number> {
     const { updated } = await api.entries.markRead(request);
     await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
@@ -99,5 +110,5 @@ export function useEntryActions() {
     return updated;
   }
 
-  return { setState, markRead };
+  return { setState, setNote, markRead };
 }

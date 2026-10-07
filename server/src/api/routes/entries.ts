@@ -3,6 +3,7 @@ import {
   countersSchema,
   entryListQuerySchema,
   entryListResponseSchema,
+  entryNoteRequestSchema,
   entrySchema,
   entryStateSchema,
   markReadRequestSchema,
@@ -70,6 +71,15 @@ export const entryRoutes: FastifyPluginAsyncZod<
       await entries.setState(userId, [request.params.id], request.body);
       const { content, enclosures, ...entry } = await entries.get(userId, request.params.id);
       return entry;
+    },
+  );
+
+  app.put(
+    '/entries/:id/note',
+    { schema: { params: idParams, body: entryNoteRequestSchema } },
+    async (request, reply) => {
+      await entries.setNote(requireAuth(request).user.id, request.params.id, request.body.note);
+      return reply.code(204).send();
     },
   );
 

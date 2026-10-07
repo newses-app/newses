@@ -71,7 +71,7 @@ afterAll(async () => {
 });
 
 interface EntryList {
-  entries: { id: number; title: string; unread: boolean; starred: boolean }[];
+  entries: { id: number; title: string; unread: boolean; starred: boolean; note: string | null }[];
   cursor: string | null;
 }
 
@@ -132,6 +132,37 @@ describe('entries API', () => {
       payload: { special: 'all' },
     });
     expect(caughtUp.json()).toEqual({ updated: 2 });
+  });
+
+  it('sets, finds, and clears notes', async () => {
+    const list = await app.inject({ method: 'GET', url: '/api/v1/entries', headers });
+    const id = list.json<EntryList>().entries[0]?.id ?? 0;
+    const url = `/api/v1/entries/${String(id)}/note`;
+    const saved = await app.inject({ method: 'PUT', url, headers, payload: { note: 'llamas' } });
+    expect(saved.statusCode).toBe(204);
+    const found = await app.inject({ method: 'GET', url: '/api/v1/entries?q=llamas', headers });
+    expect(found.json<EntryList>().entries).toMatchObject([{ id, note: 'llamas' }]);
+    const tooLong = await app.inject({
+      method: 'PUT',
+      url,
+      headers,
+      payload: { note: 'x'.repeat(10_001) },
+    });
+    expect(tooLong.statusCode).toBe(400);
+    await app.inject({ method: 'PUT', url, headers, payload: { note: null } });
+    const single = await app.inject({
+      method: 'GET',
+      url: `/api/v1/entries/${String(id)}`,
+      headers,
+    });
+    expect(single.json<{ note: string | null }>().note).toBeNull();
+    const missing = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/entries/0/note',
+      headers,
+      payload: { note: 'x' },
+    });
+    expect(missing.statusCode).toBe(404);
   });
 
   it('validates queries and stream selection', async () => {

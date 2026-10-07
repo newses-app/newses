@@ -85,6 +85,13 @@
       "when": 1791346417514,
       "tag": "0011_password_change_required",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791403812718,
+      "tag": "0012_entry_notes",
+      "breakpoints": true
     }
   ]
 }

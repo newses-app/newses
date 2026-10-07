@@ -15,6 +15,7 @@ const entry = (id: number): Entry => ({
   unread: true,
   starred: false,
   published: false,
+  note: null,
   excerpt: null,
 });
 

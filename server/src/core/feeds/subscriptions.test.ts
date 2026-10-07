@@ -139,14 +139,16 @@ describe('SubscriptionService.subscribe', () => {
 });
 
 describe('SubscriptionService.unsubscribe', () => {
-  it('keeps starred and published entries and removes the rest', async () => {
+  it('keeps starred, published, and noted entries and removes the rest', async () => {
     fetcher.set('https://u.example/rss', { body: rss('U') });
     const result = await service.subscribe(userId, 'https://u.example/rss');
     if (result.status !== 'subscribed') throw new Error('expected subscription');
     const { subscription, source } = result.subscription;
     const made = await db
       .insert(entries)
-      .values(['a', 'b', 'c'].map((guid) => ({ feedSourceId: source.id, guid, contentHash: guid })))
+      .values(
+        ['a', 'b', 'c', 'd'].map((guid) => ({ feedSourceId: source.id, guid, contentHash: guid })),
+      )
       .returning();
     await db.insert(userEntries).values(
       made.map((entry, i) => ({
@@ -156,18 +158,20 @@ describe('SubscriptionService.unsubscribe', () => {
         sortAt: new Date(),
         starred: i === 0,
         published: i === 1,
+        note: i === 2 ? 'keep' : null,
       })),
     );
 
     await service.unsubscribe(userId, subscription.id);
     const kept = await db.select().from(userEntries);
-    expect(kept.map((e) => [e.starred, e.published, e.subscriptionId])).toEqual(
+    expect(kept.map((e) => [e.starred, e.published, e.note, e.subscriptionId])).toEqual(
       expect.arrayContaining([
-        [true, false, null],
-        [false, true, null],
+        [true, false, null, null],
+        [false, true, null, null],
+        [false, false, 'keep', null],
       ]),
     );
-    expect(kept).toHaveLength(2);
+    expect(kept).toHaveLength(3);
     await expect(service.unsubscribe(userId, subscription.id)).rejects.toMatchObject({
       code: 'not_found',
     });

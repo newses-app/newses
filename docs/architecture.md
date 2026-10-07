@@ -125,7 +125,7 @@ Updater:
 - Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
 
 Purge (every 6 h):
-- Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Starred and published entries are never purged.
+- Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, or noted) are never purged.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
 - Deletes feed sources with no subscriptions and no kept entries, and their favicons.
 - Deletes proxied images and remembered failures fetched more than 30 days ago.
@@ -139,7 +139,7 @@ Fetching untrusted URLs (`HttpFetcher`):
 Subscription lifecycle:
 - Subscribing normalises the URL. An existing feed source is reused without fetching. Otherwise the URL is fetched and must parse as a feed, or be an HTML page whose `<link rel="alternate">` names exactly one feed; several feeds are returned for the user to choose.
 - Subscribing to a new source ingests the response that validated it, so the feed is not fetched twice. OPML import creates sources and subscriptions only; their entries arrive with the first scheduled fetch. Subscribing to a source that already has entries delivers those within the purge window immediately.
-- Unsubscribing deletes the user's entries from that feed except starred and published ones, which stay with no subscription. Feed sources without subscriptions are left for purge.
+- Unsubscribing deletes the user's entries from that feed except kept ones, which stay with no subscription. Feed sources without subscriptions are left for purge.
 - Deleting a category moves its feeds and child categories to its parent.
 - OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines.
 
@@ -162,7 +162,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `subscriptions` | User | → feed source, category; title override, interval and purge overrides, per-feed options, encrypted HTTP-auth credentials. Unique (user, feed source) |
 | `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, published/updated times, language, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
 | `enclosures` | Shared | → entry; URL, MIME type, length, dimensions |
-| `user_entries` | User | → entry, subscription (nullable when archived) or archived feed; unread, starred, published, score, note, read time, share UUID. Unique (user, entry) |
+| `user_entries` | User | → entry, subscription (nullable when archived) or archived feed; unread, starred, published, score, plain-text note (null when none), read time, share UUID. Unique (user, entry) |
 | `archived_feeds` | User | Title and URL of an unsubscribed feed that still holds kept entries |
 | `labels` / `entry_labels` | User | Caption, colours; many-to-many with `user_entries` |
 | `tags` | User | (user entry, tag) pairs |
@@ -179,6 +179,7 @@ Headline lists use keyset pagination on (sort key, id). `user_entries.sort_at` i
 
 Search:
 - A generated `tsvector` (`simple` configuration, markup stripped) on `entries`; queries use `websearch_to_tsquery` (quotes, `OR`, `-`).
+- The user's notes match too, through a partial GIN index on `to_tsvector('simple', note)`. Notes do not count towards the 20,000 below.
 - A query matching at most 20,000 entries instance-wide (counted from the GIN index) is resolved into a materialised set of the user's matches, then sorted. A more common one walks the headline index, where matches are dense.
 - Relevance order ranks (`ts_rank`) the 1,000 most recent matches and pages by offset.
 

@@ -1,6 +1,6 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { categories, feedSources, subscriptions, userEntries } from '../../db/schema.ts';
+import { categories, feedSources, subscriptions } from '../../db/schema.ts';
 import { isUniqueViolation } from '../db-errors.ts';
 import { DomainError } from '../errors.ts';
 import { decodeBody } from './decode.ts';
@@ -8,6 +8,7 @@ import { discoverFeeds, type FeedCandidate, looksLikeHtml } from './discover.ts'
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
 import type { Ingester } from './ingest.ts';
 import { FeedParseError, type ParsedFeed, parseFeed } from './parse.ts';
+import { KEPT_ENTRY } from './purge.ts';
 import type { FeedUpdater } from './updater.ts';
 import { normalizeFeedUrl } from './url.ts';
 
@@ -128,7 +129,7 @@ export class SubscriptionService {
     return this.get(userId, id);
   }
 
-  /** Removes the subscription and its entries, except starred and published ones. */
+  /** Removes the subscription and its entries, except kept ones (see `KEPT_ENTRY`). */
   async unsubscribe(userId: number, id: number): Promise<void> {
     await this.#db.transaction(async (tx) => {
       const deleted = await tx
@@ -137,16 +138,9 @@ export class SubscriptionService {
         .returning({ id: subscriptions.id });
       if (deleted.length === 0) throw new DomainError('not_found', 'Subscription not found');
       // The foreign key has already set subscription_id to null on this user's entries.
-      await tx
-        .delete(userEntries)
-        .where(
-          and(
-            eq(userEntries.userId, userId),
-            sql`${userEntries.subscriptionId} IS NULL`,
-            eq(userEntries.starred, false),
-            eq(userEntries.published, false),
-          ),
-        );
+      await tx.execute(sql`
+        DELETE FROM user_entries ue
+        WHERE ue.user_id = ${userId} AND ue.subscription_id IS NULL AND NOT ${KEPT_ENTRY}`);
     });
   }
 

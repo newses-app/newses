@@ -3,6 +3,9 @@ import type { Entry, EntryState } from '@rss-reader/shared';
 import {
   mdiEmailMarkAsUnread,
   mdiEmailOpenOutline,
+  mdiNoteEditOutline,
+  mdiNotePlusOutline,
+  mdiNoteTextOutline,
   mdiOpenInNew,
   mdiPaperclip,
   mdiShareVariant,
@@ -13,10 +16,12 @@ import {
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
+import { useUiStore } from '../../stores/ui.ts';
 
 const props = defineProps<{ entry: Entry }>();
 const emit = defineEmits<{ change: [state: EntryState]; select: [] }>();
 const { t, locale } = useI18n();
+const ui = useUiStore();
 
 const date = computed(() =>
   formatDateTime(props.entry.publishedAt ?? props.entry.sortAt, locale.value),
@@ -76,6 +81,13 @@ const enclosures = computed(() =>
           {{ entry.unread ? t('entries.markRead') : t('entries.markUnread') }}
         </v-btn>
         <v-btn
+          size="small"
+          :prepend-icon="entry.note ? mdiNoteEditOutline : mdiNotePlusOutline"
+          @click="ui.noteEntry = entry"
+        >
+          {{ entry.note ? t('entries.editNote') : t('entries.addNote') }}
+        </v-btn>
+        <v-btn
           v-if="link"
           size="small"
           :prepend-icon="mdiOpenInNew"
@@ -87,6 +99,16 @@ const enclosures = computed(() =>
         </v-btn>
       </div>
     </header>
+    <v-alert
+      v-if="entry.note"
+      :icon="mdiNoteTextOutline"
+      :title="t('entries.note')"
+      variant="tonal"
+      density="compact"
+      class="entry-note mb-4"
+    >
+      {{ entry.note }}
+    </v-alert>
     <v-skeleton-loader v-if="entry.content === undefined" type="paragraph@3" />
     <!-- Content is sanitised by the server against an allow-list before storage. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
@@ -119,5 +141,9 @@ const enclosures = computed(() =>
 }
 .entry-heading:focus {
   outline: none;
+}
+.entry-note {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>

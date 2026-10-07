@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { categorySchema, subscriptionSchema } from './feeds.ts';
+import { MAX_NOTE_LENGTH } from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
@@ -41,7 +42,7 @@ export const enclosureSchema = z.object({
 
 export const entrySchema = z.object({
   id: z.number().int(),
-  /** Null once the feed has been unsubscribed (kept because starred or published). */
+  /** Null once the feed has been unsubscribed (kept because starred, published, or noted). */
   subscriptionId: z.number().int().nullable(),
   feedTitle: z.string().nullable(),
   title: z.string().nullable(),
@@ -53,6 +54,8 @@ export const entrySchema = z.object({
   unread: z.boolean(),
   starred: z.boolean(),
   published: z.boolean(),
+  /** The user's plain-text note; null when there is none. */
+  note: z.string().nullable(),
   /** Plain-text start of the content. */
   excerpt: z.string().nullable(),
   /** Sanitised HTML; present on single entries and when requested in lists. */
@@ -83,6 +86,11 @@ export const bulkEntryStateRequestSchema = z
   .refine((s) => s.unread !== undefined || s.starred !== undefined || s.published !== undefined, {
     message: 'Set at least one flag',
   });
+
+/** Null or blank text clears the note. */
+export const entryNoteRequestSchema = z.object({
+  note: z.string().max(MAX_NOTE_LENGTH).nullable(),
+});
 
 export const markReadRequestSchema = streamSchema
   .extend({
@@ -141,6 +149,7 @@ export type Entry = z.infer<typeof entrySchema>;
 export type EntryListResponse = z.infer<typeof entryListResponseSchema>;
 export type EntryState = z.infer<typeof entryStateSchema>;
 export type BulkEntryStateRequest = z.infer<typeof bulkEntryStateRequestSchema>;
+export type EntryNoteRequest = z.infer<typeof entryNoteRequestSchema>;
 export type MarkReadRequest = z.infer<typeof markReadRequestSchema>;
 export type Counters = z.infer<typeof countersSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;

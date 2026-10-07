@@ -307,6 +307,9 @@ useShortcutHandler((action: ShortcutAction) => {
     case 'toggleUnread':
       if (entry) change([entry], { unread: !entry.unread });
       return true;
+    case 'editNote':
+      if (entry) ui.noteEntry = entry;
+      return true;
     case 'openOriginal': {
       const link = safeUrl(entry?.link);
       if (link) window.open(link, '_blank', 'noopener,noreferrer');

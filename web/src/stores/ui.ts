@@ -1,3 +1,4 @@
+import type { Entry } from '@rss-reader/shared';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
@@ -15,6 +16,8 @@ export const useUiStore = defineStore('ui', () => {
   const helpOpen = ref(false);
   const subscribeOpen = ref(false);
   const editSubscriptionId = ref<number | null>(null);
+  /** The entry whose note is being edited. */
+  const noteEntry = ref<Entry | null>(null);
   const notice = ref<{ text: string; error: boolean } | null>(null);
   const confirmRequest = ref<ConfirmRequest | null>(null);
 
@@ -42,6 +45,7 @@ export const useUiStore = defineStore('ui', () => {
     helpOpen,
     subscribeOpen,
     editSubscriptionId,
+    noteEntry,
     notice,
     confirmRequest,
     notify,

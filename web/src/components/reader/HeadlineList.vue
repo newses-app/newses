@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Entry } from '@rss-reader/shared';
-import { mdiRss, mdiStar, mdiStarOutline } from '@mdi/js';
+import { mdiNoteTextOutline, mdiRss, mdiStar, mdiStarOutline } from '@mdi/js';
 import { nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -83,6 +83,12 @@ const link = (entry: Entry) => ({
             <span v-if="entry.unread" class="d-sr-only">{{ t('entries.unreadLabel') }} · </span>
             <span>{{ entry.feedTitle }}</span> ·
             <time :datetime="entry.sortAt">{{ formatRelative(entry.sortAt, locale) }}</time>
+            <span v-if="entry.note" class="note">
+              —
+              <v-icon :icon="mdiNoteTextOutline" size="14" aria-hidden="true" />
+              <span class="d-sr-only">{{ t('entries.noteLabel') }}</span>
+              {{ entry.note }}
+            </span>
             <template v-if="showPreview && entry.excerpt"> — {{ entry.excerpt }}</template>
           </v-list-item-subtitle>
         </v-list-item>

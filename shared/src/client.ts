@@ -22,6 +22,7 @@ import type {
   Entry,
   EntryListQuery,
   EntryListResponse,
+  EntryNoteRequest,
   EntryState,
   MarkReadRequest,
   SyncResponse,
@@ -228,6 +229,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<Entry>('PATCH', `/entries/${id(entryId)}`, { body }),
       updateMany: (body: BulkEntryStateRequest) =>
         request<{ updated: number }>('PATCH', '/entries', { body }),
+      /** Null or blank text clears the note. */
+      setNote: (entryId: number, note: EntryNoteRequest['note']) =>
+        request<undefined>('PUT', `/entries/${id(entryId)}/note`, { body: { note } }),
       markRead: (body: MarkReadRequest) =>
         request<{ updated: number }>('POST', '/entries/mark-read', { body }),
     },

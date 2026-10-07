@@ -273,6 +273,22 @@ describe('EntryService.list', () => {
       'Cherry tart',
     ]);
     await expect(list({ order: 'relevance' })).rejects.toMatchObject({ code: 'invalid_input' });
+
+    // The user's own notes match too; another user's notes do not.
+    await services.entries.setNote(alice, ids.date ?? 0, 'Grandma’s zucchini variant');
+    const [bobsApple] = await db
+      .select({ id: userEntries.id })
+      .from(userEntries)
+      .where(eq(userEntries.userId, bob));
+    await services.entries.setNote(bob, bobsApple?.id ?? 0, 'zucchini');
+    expect(titles((await list({ q: 'zucchini' })).entries)).toEqual(['Date squares']);
+    expect(titles((await list({ q: 'zucchini', order: 'newest' })).entries)).toEqual([
+      'Date squares',
+    ]);
+    expect(titles((await list({ q: 'zucchini OR cherry', order: 'oldest' })).entries)).toEqual([
+      'Date squares',
+      'Cherry tart',
+    ]);
   });
 
   it('rejects malformed cursors', async () => {
@@ -313,6 +329,20 @@ describe('EntryService state', () => {
         ).entries,
       ),
     ).toEqual(['Apple pie recipe']);
+  });
+
+  it('sets and clears notes, only on the user’s own entries', async () => {
+    const id = ids.apple ?? 0;
+    await services.entries.setNote(alice, id, '  Try with pears \n');
+    expect((await services.entries.get(alice, id)).note).toBe('Try with pears');
+    await services.entries.setNote(alice, id, '   ');
+    expect((await services.entries.get(alice, id)).note).toBeNull();
+    await services.entries.setNote(alice, id, 'x');
+    await services.entries.setNote(alice, id, null);
+    expect((await services.entries.get(alice, id)).note).toBeNull();
+    await expect(services.entries.setNote(bob, id, 'mine')).rejects.toMatchObject({
+      code: 'not_found',
+    });
   });
 
   it('catches up a stream, optionally by age or up to an id', async () => {

@@ -1,0 +1,2 @@
+ALTER TABLE "user_entries" ADD COLUMN "note" text;--> statement-breakpoint
+CREATE INDEX "user_entries_note_search_idx" ON "user_entries" USING gin (to_tsvector('simple', "note")) WHERE "user_entries"."note" IS NOT NULL;

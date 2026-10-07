@@ -67,6 +67,7 @@ export interface HeadlineRow extends Record<string, unknown> {
   unread: boolean;
   starred: boolean;
   published: boolean;
+  note: string | null;
   head: string | null;
   content?: string | null;
   /** Keyset sort key as text. */
@@ -77,7 +78,7 @@ export interface HeadlineRow extends Record<string, unknown> {
 export const headlineColumns = (withContent: boolean) => sql`
   ue.id, ue.entry_id, ue.subscription_id, coalesce(s.title, fs.title, fs.url) AS feed_title,
   e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
-  ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published,
+  ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.note,
   left(e.content, 4000) AS head${withContent ? sql`, e.content` : sql``}`;
 
 export const HEADLINE_FROM = sql`user_entries ue
@@ -98,10 +99,18 @@ export function toEntry(row: HeadlineRow): Entry {
     unread: row.unread,
     starred: row.starred,
     published: row.published,
+    note: row.note,
     excerpt: excerpt(row.head),
     ...(row.content !== undefined && { content: row.content }),
   };
 }
+
+/** The user's note on `ue` matches `query`; served by the partial index on notes. */
+const noteMatches = (query: SQL) =>
+  sql`(ue.note IS NOT NULL AND to_tsvector('simple', ue.note) @@ ${query})`;
+
+/** Entry text or the user's note matches `query`. */
+const matches = (query: SQL) => sql`(e.search @@ ${query} OR ${noteMatches(query)})`;
 
 interface OrderSpec {
   /** Sort key expression; also returned as `k` for the cursor. */
@@ -136,11 +145,13 @@ export class EntryService {
   }
 
   /**
-   * One page of headlines in `stream`, keyset-paginated; full-text search when `q` is given.
+   * One page of headlines in `stream`, keyset-paginated; full-text search of entry text and the
+   * user's notes when `q` is given.
    *
    * Search plans by selectivity, because the planner's estimates for text queries are unreliable:
-   * a query matching few entries instance-wide is resolved from the GIN index into a materialised
-   * set that is then sorted; a common one walks the headline index, where matches are dense.
+   * a query matching few entries instance-wide is resolved from the GIN indexes into a materialised
+   * set that is then sorted; a common one walks the headline index, where matches are dense. Notes
+   * are few, so they do not count towards selectivity.
    */
   async list(userId: number, options: ListOptions): Promise<ListResult> {
     const cursor = options.cursor ? decodeCursor(options.cursor) : null;
@@ -153,14 +164,19 @@ export class EntryService {
     const query = options.q ? sql`websearch_to_tsquery('simple', ${options.q})` : null;
     const selective = query !== null && (await this.#isSelective(query));
     const spec = orderSpec(order === 'relevance' ? 'newest' : order, options.stream);
-    // The user's matches, for selective searches. Materialised, so no plan can walk an index
-    // hoping to meet matches; sorting by its columns rather than table columns keeps it that way.
+    // The user's matches (by entry text or note), for selective searches. Materialised, so no
+    // plan can walk an index hoping to meet matches; sorting by its columns rather than table
+    // columns keeps it that way.
     const hits =
       query && selective
-        ? sql`WITH matched AS MATERIALIZED (SELECT e.id FROM entries e WHERE e.search @@ ${query}),
+        ? sql`WITH matched AS MATERIALIZED (
+              SELECT ue.id FROM entries e JOIN user_entries ue ON ue.entry_id = e.id
+              WHERE e.search @@ ${query} AND ue.user_id = ${userId}
+              UNION
+              SELECT ue.id FROM user_entries ue WHERE ue.user_id = ${userId} AND ${noteMatches(query)}),
             hits AS MATERIALIZED (
               SELECT ue.id, ue.sort_at AS t, ${spec.key} AS k
-              FROM matched m JOIN user_entries ue ON ue.entry_id = m.id JOIN entries e ON e.id = m.id
+              FROM matched m JOIN user_entries ue ON ue.id = m.id JOIN entries e ON e.id = ue.entry_id
               WHERE ${where})`
         : null;
 
@@ -171,13 +187,14 @@ export class EntryService {
         ? sql`${hits}, candidates AS (SELECT id FROM hits ORDER BY t DESC LIMIT ${SEARCH_CANDIDATES})`
         : sql`WITH candidates AS (
             SELECT ue.id FROM user_entries ue JOIN entries e ON e.id = ue.entry_id
-            WHERE ${where} AND e.search @@ ${query}
+            WHERE ${where} AND ${matches(query)}
             ORDER BY ue.sort_at DESC NULLS LAST LIMIT ${SEARCH_CANDIDATES})`;
       const result = await this.#db.execute<HeadlineRow>(sql`
         ${candidates}
         SELECT ${headlineColumns(options.content)}
         FROM candidates c JOIN ${HEADLINE_FROM} ON ue.id = c.id
-        ORDER BY ts_rank(e.search, ${query}) DESC, ue.id DESC
+        ORDER BY ts_rank(e.search, ${query})
+          + ts_rank(to_tsvector('simple', coalesce(ue.note, '')), ${query}) DESC, ue.id DESC
         OFFSET ${offset} LIMIT ${options.limit + 1}`);
       rows = result.rows;
     } else {
@@ -188,7 +205,7 @@ export class EntryService {
         cursor && 'k' in cursor
           ? sql` AND (${key}, ${id}) ${comparison} (${cursor.k}::${spec.keyType}, ${cursor.i})`
           : sql``;
-      const filter = hits ? sql`TRUE` : query ? sql`${where} AND e.search @@ ${query}` : where;
+      const filter = hits ? sql`TRUE` : query ? sql`${where} AND ${matches(query)}` : where;
       // Matches the indexes' `DESC NULLS LAST` (forward) or its backward scan; keys are never null.
       const direction = sql.raw(spec.direction === 'DESC' ? 'DESC NULLS LAST' : 'ASC NULLS FIRST');
       const result = await this.#db.execute<HeadlineRow>(sql`
@@ -269,6 +286,17 @@ export class EntryService {
       .returning({ id: userEntries.id });
     if (updated.length > 0) await this.#realtime.publish(userId, { type: 'counters' });
     return updated.length;
+  }
+
+  /** Sets or, with null or blank text, clears the user's note on an entry. */
+  async setNote(userId: number, id: number, note: string | null): Promise<void> {
+    const text = note?.trim() || null;
+    const updated = await this.#db
+      .update(userEntries)
+      .set({ note: text })
+      .where(and(eq(userEntries.userId, userId), eq(userEntries.id, id)))
+      .returning({ id: userEntries.id });
+    if (updated.length === 0) throw new DomainError('not_found', 'Entry not found');
   }
 
   /**

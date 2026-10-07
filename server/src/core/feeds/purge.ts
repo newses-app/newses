@@ -8,6 +8,9 @@ import { purgeDaysSql } from './ingest.ts';
 /** Unreferenced entries are deleted only after they have been absent from their feed this long. */
 const ORPHAN_GRACE_DAYS = 7;
 
+/** User entries (`ue`) that purge and unsubscribe never delete. */
+export const KEPT_ENTRY = sql`(ue.starred OR ue.published OR ue.note IS NOT NULL)`;
+
 export interface PurgeResult {
   userEntries: number;
   entries: number;
@@ -26,16 +29,16 @@ export class Purger {
   }
 
   /**
-   * Deletes user entries older than their subscription's purge age (never starred or published
-   * ones), then entries nobody references that have left their feed, then feed sources with no
-   * subscribers and no kept entries. Also forgets expired host cooldowns.
+   * Deletes user entries older than their subscription's purge age (never kept ones), then
+   * entries nobody references that have left their feed, then feed sources with no subscribers
+   * and no kept entries. Also forgets expired host cooldowns.
    */
   async purge(): Promise<PurgeResult> {
     const userEntries = await this.#db.execute(sql`
       DELETE FROM user_entries ue
       USING subscriptions s CROSS JOIN LATERAL (SELECT ${purgeDaysSql(this.#settings.purgeDays)} AS days) purge
       WHERE ue.subscription_id = s.id
-        AND NOT ue.starred AND NOT ue.published
+        AND NOT ${KEPT_ENTRY}
         AND purge.days > 0
         AND ue.sort_at < now() - make_interval(days => purge.days)`);
 

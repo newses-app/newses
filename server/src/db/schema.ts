@@ -286,6 +286,8 @@ export const userEntries = pgTable(
     starred: boolean('starred').notNull().default(false),
     published: boolean('published').notNull().default(false),
     readAt: tstz('read_at'),
+    // Plain text; null when the user has no note on the entry.
+    note: text('note'),
     ...timestamps(),
   },
   (t) => [
@@ -306,6 +308,10 @@ export const userEntries = pgTable(
       .on(t.userId, t.readAt.desc())
       .where(sql`${t.readAt} IS NOT NULL`),
     index('user_entries_user_updated_idx').on(t.userId, t.updatedAt),
+    // Expression index over the few rows with notes, so search pays nothing for the rest.
+    index('user_entries_note_search_idx')
+      .using('gin', sql`to_tsvector('simple', ${t.note})`)
+      .where(sql`${t.note} IS NOT NULL`),
   ],
 );
 

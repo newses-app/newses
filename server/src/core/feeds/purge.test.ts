@@ -39,7 +39,7 @@ afterAll(async () => {
 
 async function feedWith(
   purgeDays: number | null,
-  items: { guid: string; age: number; starred?: boolean; published?: boolean }[],
+  items: { guid: string; age: number; starred?: boolean; published?: boolean; note?: string }[],
 ) {
   const [source] = await db
     .insert(feedSources)
@@ -61,6 +61,7 @@ async function feedWith(
       sortAt: daysAgo(item.age),
       starred: item.starred ?? false,
       published: item.published ?? false,
+      note: item.note ?? null,
     });
   }
   return { source, sub };
@@ -77,19 +78,26 @@ const guids = async () =>
     .sort();
 
 describe('Purger', () => {
-  it('purges by global and per-feed age, keeping starred and published entries', async () => {
+  it('purges by global and per-feed age, keeping starred, published, and noted entries', async () => {
     await feedWith(null, [
       { guid: 'global-new', age: 10 },
       { guid: 'global-old', age: 40 },
       { guid: 'global-starred', age: 400, starred: true },
       { guid: 'global-published', age: 400, published: true },
+      { guid: 'global-noted', age: 400, note: 'keep' },
     ]);
     await feedWith(5, [{ guid: 'short-old', age: 6 }]);
     await feedWith(0, [{ guid: 'never', age: 4000 }]);
 
     const result = await purger.purge();
     expect(result.userEntries).toBe(2);
-    expect(await guids()).toEqual(['global-new', 'global-published', 'global-starred', 'never']);
+    expect(await guids()).toEqual([
+      'global-new',
+      'global-noted',
+      'global-published',
+      'global-starred',
+      'never',
+    ]);
   });
 
   it('deletes unreferenced entries only after they leave the feed', async () => {
