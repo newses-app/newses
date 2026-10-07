@@ -8,7 +8,7 @@
 | P1.5 | AWS deployment | P1 build runs serverless on the AWS `dev` stage, deployed by the CDK pipeline from the `dev` branch |
 | P1.6 | Security and accessibility | Image proxy, 2FA, and app passwords in daily use; Accessibility and Security non-functional requirements verified on the AWS `dev` stage |
 | P2 | Power features | Labels, tags, notes, published feed, share links, reading preferences, and remappable shortcuts in daily use |
-| P3 | TTRSS cut-over | All TTRSS users imported; TTRSS and Google Reader clients work against the server; TTRSS retired |
+| P3 | TTRSS cut-over | All TTRSS users imported; filters, scoring, and full text in daily use; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Electron builds for Windows/macOS/Linux; Capacitor Android build installed on a device |
 | Later | Backlog | Not scheduled |
 
@@ -61,8 +61,8 @@
 | Labels | P2 | User-defined labels with foreground/background colour; assign many per entry; each label appears as a virtual feed with counts |
 | Tags | P2 | Free-text tags per entry (feed-provided categories imported as tags); browse entries by tag |
 | Notes | P2 | Plain-text note per entry, shown in list and article; searchable |
-| Filters | Later | Rules match title, content, title-or-content, author, link, or tags by regex, optionally inverted; match any/all rules; scoped to all feeds or selected feeds/categories; actions: delete, mark read, star, publish, assign label, add tag, adjust score, stop processing; run on ingest; "test" previews matches; "apply" runs against existing entries |
-| Scoring | Later | Integer score per entry; entries above/below configurable thresholds are highlighted/hidden |
+| Filters | P3 | Rules match title, content, title-or-content, author, link, or tags by regex, optionally inverted; match any/all rules; scoped to all feeds or selected feeds/categories; actions: delete, mark read, star, publish, assign label, add tag, adjust score, stop processing; run on ingest; "test" previews matches; "apply" runs against existing entries |
+| Scoring | P3 | Integer score per entry; entries above/below configurable thresholds are highlighted/hidden |
 
 ### Search
 
@@ -85,7 +85,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Sanitisation | P1 | All entry HTML sanitised on ingest against an allow-list; scripts, event handlers, and unsafe URLs removed |
-| Full text | Later | Readability extraction on demand per article and automatically per opted-in feed; original content kept |
+| Full text | P3 | Readability extraction on demand per article and automatically per opted-in feed; original content kept |
 | Image proxy | P1.6 | Optional per user; entry images served through the server (privacy, mixed content); responses cached; tracking pixels (1×1 images, known trackers) stripped |
 | Lazy images | Later | Article images load lazily |
 | Starred image cache | Later | Images of starred entries stored permanently |
@@ -111,8 +111,8 @@
 | Native REST API | P1 | Versioned (`/api/v1`), OpenAPI document served; every web app action goes through it |
 | Incremental sync | P1 | A sync endpoint returns categories, subscriptions, labels, and entries changed since a token, including deletions, without missing rows committed late |
 | Web app | P1 | Vue SPA; installable PWA; works in current Chrome, Firefox, Safari |
-| TTRSS-compatible API | P3 | TTRSS Android app and at least one other TTRSS client can log in, browse, read, star, publish, label, and subscribe |
-| Google Reader API | P3 | Reeder, NetNewsWire, and ReadYou can log in, sync, and mark read/starred |
+| TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe |
+| Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | Desktop app | P4 | Electron app with configurable server URL, secure token storage, native notifications for new entries |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent |
 | Offline reading | Later | Local store of recent unread/starred entries; queued state changes replayed on reconnect |

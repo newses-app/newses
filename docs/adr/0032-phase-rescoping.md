@@ -1,6 +1,6 @@
 # 0032. Phase rescoping after P1
 
-- Status: Accepted
+- Status: Superseded by 0042
 - Date: 2026-10-05
 
 ## Context
