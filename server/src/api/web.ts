@@ -2,7 +2,7 @@ import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { WEB_CSP } from './web-csp.ts';
 
-/** API, compatibility-API, and public paths, which never fall back to the app. */
+/** API, compatibility-API, and public paths, which never fall back to the app; the service worker's `navigateFallbackDenylist` in web/vite.config.ts must match. */
 const NOT_SPA = /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)|^\/public\.php$/;
 
 /** Serves the built SPA from `root`, falling back to index.html for client-side routes. */

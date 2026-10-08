@@ -31,7 +31,12 @@ export default defineConfig({
       workbox: {
         // The app shell only: API responses are never cached (online-first).
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallbackDenylist: [/^\/api\//, /^\/healthz/],
+        // Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and
+        // feeds, the native and compatibility APIs, and feed icons never get the app shell.
+        navigateFallbackDenylist: [
+          /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)/,
+          /^\/public\.php$/,
+        ],
       },
     }),
   ],

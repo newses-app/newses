@@ -120,6 +120,14 @@ test.describe('organisation', () => {
     const url = await dialog.getByRole('textbox', { name: 'Public link' }).inputValue();
     expect(url).toMatch(/\/public\/share\/[0-9a-f-]{36}$/);
 
+    // The owner's browser runs the app's service worker, which must leave public pages to the server.
+    await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+    const ownTab = await page.context().newPage();
+    await ownTab.goto(url);
+    await expect(ownTab.getByRole('heading', { level: 1 })).toHaveText(title);
+    expect(ownTab.url()).toBe(url);
+    await ownTab.close();
+
     const visitor = await browser.newContext();
     const publicPage = await visitor.newPage();
     const response = await publicPage.goto(url);
