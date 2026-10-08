@@ -113,6 +113,7 @@
 | Web app | P1 | Vue SPA; installable PWA; works in current Chrome, Firefox, Safari |
 | TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe |
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
+| App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app with configurable server URL, secure token storage, native notifications for new entries |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent |
 | Offline reading | Later | Local store of recent unread/starred entries; queued state changes replayed on reconnect |

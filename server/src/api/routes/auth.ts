@@ -1,4 +1,5 @@
 import {
+  appConnectionSchema,
   appPasswordSchema,
   changePasswordRequestSchema,
   createAppPasswordRequestSchema,
@@ -33,7 +34,12 @@ export interface AuthRoutesOptions {
   sessions: SessionService;
   twoFactor: TwoFactorService;
   appPasswords: AppPasswordService;
+  /** Origin shown to apps; null uses each request's origin. */
+  publicUrl: string | null;
 }
+
+/** Apps polling more often than this keep the AWS database from pausing. */
+export const SYNC_INTERVAL_MINUTES = 60;
 
 /** Logs `event` when `work` fails with a domain error (wrong password, wrong code, lockout). */
 async function logFailure<T>(
@@ -69,7 +75,7 @@ async function sessionResponse(
 
 export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
   app,
-  { auth, sessions, twoFactor, appPasswords },
+  { auth, sessions, twoFactor, appPasswords, publicUrl },
 ) => {
   const client = (request: FastifyRequest) => ({
     ip: request.ip,
@@ -160,6 +166,15 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
     '/auth/app-passwords',
     { preHandler: requireUser, schema: { response: { 200: z.array(appPasswordSchema) } } },
     async (request) => (await appPasswords.list(requireAuth(request).user.id)).map(toAppPassword),
+  );
+
+  app.get(
+    '/auth/app-passwords/connection',
+    { preHandler: requireUser, schema: { response: { 200: appConnectionSchema } } },
+    (request) => ({
+      serverUrl: publicUrl ?? `${request.protocol}://${request.host}`,
+      syncIntervalMinutes: SYNC_INTERVAL_MINUTES,
+    }),
   );
 
   app.post(

@@ -32,8 +32,29 @@ export interface ListOptions {
   offset?: number | undefined;
   /** Only entries with a larger id. */
   sinceId?: number | undefined;
-  /** Only starred entries within the stream. */
-  starredOnly?: boolean | undefined;
+  /** Only entries with these flags within the stream. */
+  flags?: EntryFlags | undefined;
+  /** Only entries sorted at or after this time. */
+  sortedFrom?: Date | undefined;
+  /** Only entries sorted before this time. */
+  sortedBefore?: Date | undefined;
+}
+
+export interface EntryFlags {
+  unread?: boolean | undefined;
+  starred?: boolean | undefined;
+}
+
+export type IdListOptions = Pick<
+  ListOptions,
+  'stream' | 'cursor' | 'limit' | 'flags' | 'sortedFrom' | 'sortedBefore'
+> & { order?: 'newest' | 'oldest' | undefined };
+
+export interface EntryRef {
+  id: number;
+  subscriptionId: number | null;
+  /** `sort_at` in microseconds since the epoch, as text. */
+  sortAtUsec: string;
 }
 
 export interface ListResult {
@@ -146,6 +167,19 @@ function orderSpec(order: Exclude<ListOrder, 'relevance'>, stream: Stream): Orde
   return { key: time, keyType: sql`timestamptz`, direction: order === 'oldest' ? 'ASC' : 'DESC' };
 }
 
+/** Conditions for `ListOptions` flags and sort-time bounds. */
+function filters(options: Pick<ListOptions, 'flags' | 'sortedFrom' | 'sortedBefore'>): SQL {
+  const parts: SQL[] = [];
+  const { unread, starred } = options.flags ?? {};
+  if (unread !== undefined) parts.push(unread ? sql` AND ue.unread` : sql` AND NOT ue.unread`);
+  if (starred !== undefined) parts.push(starred ? sql` AND ue.starred` : sql` AND NOT ue.starred`);
+  if (options.sortedFrom)
+    parts.push(sql` AND ue.sort_at >= ${options.sortedFrom.toISOString()}::timestamptz`);
+  if (options.sortedBefore)
+    parts.push(sql` AND ue.sort_at < ${options.sortedBefore.toISOString()}::timestamptz`);
+  return sql.join(parts);
+}
+
 export class EntryService {
   readonly #db: Db;
   readonly #realtime: Realtime;
@@ -181,7 +215,7 @@ export class EntryService {
     const view = cursor?.v ?? (await this.#resolveView(stream, options.view));
     const where = sql`${stream}${view === 'unread' ? sql` AND ue.unread` : sql``}${
       options.sinceId === undefined ? sql`` : sql` AND ue.id > ${options.sinceId}`
-    }${options.starredOnly ? sql` AND ue.starred` : sql``}`;
+    }${filters(options)}`;
     const query = options.q ? sql`websearch_to_tsquery('simple', ${options.q})` : null;
     const selective = query !== null && (await this.#isSelective(query));
     const spec = orderSpec(order === 'relevance' ? 'newest' : order, options.stream);
@@ -250,6 +284,64 @@ export class EntryService {
     const entries = page.map(toEntry);
     if (options.content || options.enclosures) await this.#attachEnclosures(page, entries);
     return { entries, cursor: next && encodeCursor(next), view };
+  }
+
+  /**
+   * Ids of entries in `stream`, newest or oldest first, keyset-paginated; for clients that sync
+   * by id lists, so it reads no entry text.
+   */
+  async listIds(
+    userId: number,
+    options: IdListOptions,
+  ): Promise<{ refs: EntryRef[]; cursor: string | null }> {
+    const cursor = options.cursor ? decodeCursor(options.cursor) : null;
+    if (cursor && !('k' in cursor)) throw new DomainError('invalid_input', 'Invalid cursor');
+    const spec = orderSpec(options.order ?? 'newest', options.stream);
+    const comparison = spec.direction === 'DESC' ? sql`<` : sql`>`;
+    const after = cursor
+      ? sql` AND (${spec.key}, ue.id) ${comparison} (${cursor.k}::${spec.keyType}, ${cursor.i})`
+      : sql``;
+    const direction = sql.raw(spec.direction === 'DESC' ? 'DESC NULLS LAST' : 'ASC NULLS FIRST');
+    const result = await this.#db.execute<{
+      id: string;
+      subscription_id: number | null;
+      usec: string;
+      k: string;
+    }>(sql`
+      SELECT ue.id, ue.subscription_id, ${spec.key}::text AS k,
+        (extract(epoch FROM ue.sort_at) * 1000000)::bigint::text AS usec
+      FROM user_entries ue
+      WHERE ${shownCondition(userId, options.stream)}${filters(options)}${after}
+      ORDER BY ${spec.key} ${direction}, ue.id ${direction}
+      LIMIT ${options.limit + 1}`);
+    const page = result.rows.slice(0, options.limit);
+    const last = page.at(-1);
+    return {
+      refs: page.map((row) => ({
+        id: Number(row.id),
+        subscriptionId: row.subscription_id,
+        sortAtUsec: row.usec,
+      })),
+      cursor:
+        result.rows.length > options.limit && last
+          ? encodeCursor({ v: 'all', k: last.k, i: Number(last.id) })
+          : null,
+    };
+  }
+
+  /** The user's entries among `ids`, with content and enclosures, newest first. */
+  async getMany(userId: number, ids: number[]): Promise<Entry[]> {
+    if (ids.length === 0) return [];
+    const result = await this.#db.execute<HeadlineRow>(sql`
+      SELECT ${headlineColumns(true)} FROM ${HEADLINE_FROM}
+      WHERE ue.user_id = ${userId} AND ue.id IN (${sql.join(
+        ids.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+      ORDER BY ue.sort_at DESC, ue.id DESC`);
+    const entries = result.rows.map(toEntry);
+    await this.#attachEnclosures(result.rows, entries);
+    return entries;
   }
 
   /** How many of `rows` (at most `limit`, at least one) fit the page's content budget. */
@@ -406,21 +498,29 @@ export class EntryService {
 
   /**
    * Catch-up: marks unread entries in `stream` read, optionally only those older than
-   * `olderThanDays` or with an id up to `maxId`.
+   * `olderThanDays`, with an id up to `maxId`, or delivered to the user by `deliveredBy`.
    */
   async markRead(
     userId: number,
     stream: Stream,
-    options: { olderThanDays?: number | undefined; maxId?: number | undefined } = {},
+    options: {
+      olderThanDays?: number | undefined;
+      maxId?: number | undefined;
+      deliveredBy?: Date | undefined;
+    } = {},
   ): Promise<number> {
     const older =
       options.olderThanDays === undefined
         ? sql``
         : sql` AND ue.sort_at < now() - make_interval(days => ${options.olderThanDays})`;
     const upTo = options.maxId === undefined ? sql`` : sql` AND ue.id <= ${options.maxId}`;
+    const delivered =
+      options.deliveredBy === undefined
+        ? sql``
+        : sql` AND ue.created_at <= ${options.deliveredBy.toISOString()}::timestamptz`;
     const result = await this.#db.execute(sql`
       UPDATE user_entries ue SET unread = false, read_at = now()
-      WHERE ${streamCondition(userId, stream)} AND ue.unread${older}${upTo}`);
+      WHERE ${streamCondition(userId, stream)} AND ue.unread${older}${upTo}${delivered}`);
     const updated = result.rowCount ?? 0;
     if (updated > 0) await this.#realtime.publish(userId, { type: 'counters' });
     return updated;

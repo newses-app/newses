@@ -265,21 +265,34 @@ Events stream:
 ### Google Reader API
 
 - Auth: `ClientLogin` (POST form `Email`, `Passwd`; app passwords only) answers `SID=…`, `LSID=null`, `Auth=…` lines, or 401 `Error=BadAuthentication`. Calls send `Authorization: GoogleLogin auth=<token>`; without a valid `api` session they get 401, or 403 while the password must be changed. `/reader/api/0/token` issues the `T` write token, which writes accept unchecked: header authentication leaves no cross-site forgery to prevent.
-- Unimplemented endpoints answer 404.
-- Endpoints:
-  - `user-info`, `subscription/list`, `subscription/edit`, `subscription/quickadd`, `subscription/export`
+- Endpoints (JSON whatever `output` asks; writes answer `OK`; others 404):
+  - `user-info`, `subscription/list`, `subscription/edit` (`subscribe`, `unsubscribe`, `edit`), `subscription/quickadd`, `subscription/export` (OPML)
   - `tag/list`, `unread-count`
-  - `stream/contents`, `stream/items/ids`, `stream/items/contents`
+  - `stream/contents` (stream in the path or `s`), `stream/items/ids`, `stream/items/contents` (`i` repeated)
   - `edit-tag`, `rename-tag`, `disable-tag`, `mark-all-as-read`
-- Item IDs: long form `tag:google.com,2005:reader/item/<16 hex>` and decimal short form, both derived from `user_entries` ID.
-- Streams:
-  - `user/-/state/com.google/reading-list`
-  - `user/-/state/com.google/starred`
-  - `user/-/state/com.google/read`
-  - `user/-/label/<category or label>`
-  - `feed/<url>`
+- Item IDs are `user_entries` IDs: long form `tag:google.com,2005:reader/item/<16 hex>` in items, decimal in `stream/items/ids`; requests may use either, or bare 16-digit hex.
+- Streams (`user/<id>/…` is the same as `user/-/…`):
+
+| Stream | Selects |
+|---|---|
+| `user/-/state/com.google/reading-list` | All |
+| `user/-/state/com.google/starred` | Starred |
+| `user/-/state/com.google/read` | All, read only |
+| `user/-/state/com.google/broadcast` | Published |
+| `user/-/label/<name>` | The folder with that name, else the tag |
+| `feed/<subscription id>` | That subscription; `feed/<feed URL>` also matches |
+
+- Folders are categories, named by their path (`Parent/Child`); tags are labels. A label whose caption equals a folder's name is hidden from the API, and tagging items with a folder's name does nothing. Tagging with an unknown name creates the label; `subscription/edit` with an unknown folder creates a top-level category.
+- `it`/`xt` include or exclude the `read` and `starred` states (`kept-unread` counts as unread); `ot` and `nt` (seconds) bound the sort time, `ot` inclusive; `r=o` lists oldest first; `c` continues from a page's `continuation`.
+- Page sizes: `stream/contents` default 20, at most 1,000 and within the entry list's content budget; `stream/items/ids` default 1,000, at most 10,000; `stream/items/contents` at most 1,000 ids.
+- `edit-tag` adds and removes `read`, `kept-unread` (marks unread), `starred`, `broadcast` (published), and labels.
+- `mark-all-as-read` marks the stream read, with `ts` (microseconds) only entries delivered to the user by then.
+- Items carry `categories` with their states, folder, and tags; `origin.streamId` is the subscription; `summary.content` goes through the image proxy for users who turned it on. `subscription/list` gives `iconUrl` from the feed icon path, absolute from `PUBLIC_URL` or the request's origin.
+- `quickadd` subscribes to the first feed a page advertises.
 
 Both compatibility APIs log each unsupported call with the client's user agent. `COMPAT_TRACE` logs every call and its parameters, credentials redacted; it is on for the AWS `dev` stage.
+
+The settings page shows apps' connection details from `/api/v1/auth/app-passwords/connection`: the server URL (`PUBLIC_URL`, else the request's origin) and the suggested sync interval, 60 minutes, so the AWS database can pause between syncs.
 
 ## Deployment
 

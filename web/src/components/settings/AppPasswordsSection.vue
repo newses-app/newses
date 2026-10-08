@@ -2,10 +2,11 @@
 import type { AppPassword } from '@rss-reader/shared';
 import { mdiContentCopy, mdiDelete, mdiKeyPlus } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
+import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -16,9 +17,27 @@ type Dialog =
 const { t, locale } = useI18n();
 const ui = useUiStore();
 const queryClient = useQueryClient();
+const { session } = useSession();
 const appPasswords = useQuery({
   queryKey: ['appPasswords'],
   queryFn: () => api.auth.appPasswords.list(),
+});
+const connection = useQuery({
+  queryKey: ['appConnection'],
+  queryFn: () => api.auth.appPasswords.connection(),
+  staleTime: Infinity,
+});
+
+/** What to type into each kind of app. */
+const connectionRows = computed(() => {
+  const server = connection.data.value?.serverUrl;
+  if (!server) return [];
+  return [
+    { key: 'ttrss', title: t('appPasswords.ttrssUrl'), value: `${server}/` },
+    { key: 'greader', title: t('appPasswords.greaderUrl'), value: server },
+    { key: 'freshrss', title: t('appPasswords.freshrssUrl'), value: `${server}/api/greader.php` },
+    { key: 'login', title: t('appPasswords.userName'), value: session.value?.user.login ?? '' },
+  ];
 });
 
 const dialog = ref<Dialog | null>(null);
@@ -56,10 +75,10 @@ async function create() {
   }
 }
 
-async function copy(password: string) {
+async function copy(text: string, message = t('appPasswords.copied')) {
   try {
-    await navigator.clipboard.writeText(password);
-    ui.notify(t('appPasswords.copied'));
+    await navigator.clipboard.writeText(text);
+    ui.notify(message);
   } catch {
     ui.notify(t('errors.generic'), true);
   }
@@ -123,6 +142,32 @@ async function revoke(appPassword: AppPassword) {
       {{ t('appPasswords.none') }}
     </p>
 
+    <template v-if="connection.data.value">
+      <h3 class="text-title-medium mt-4">{{ t('appPasswords.connect') }}</h3>
+      <v-list density="compact" :aria-label="t('appPasswords.connect')">
+        <v-list-item
+          v-for="row in connectionRows"
+          :key="row.key"
+          :title="row.title"
+          :data-connection="row.key"
+        >
+          <v-list-item-subtitle class="connection-value">{{ row.value }}</v-list-item-subtitle>
+          <template #append>
+            <v-btn
+              :icon="mdiContentCopy"
+              size="small"
+              variant="text"
+              :aria-label="t('appPasswords.copyNamed', { name: row.title })"
+              @click="copy(row.value, t('appPasswords.copiedValue'))"
+            />
+          </template>
+        </v-list-item>
+      </v-list>
+      <p class="text-body-medium mb-4">
+        {{ t('appPasswords.syncInterval', { minutes: connection.data.value.syncIntervalMinutes }) }}
+      </p>
+    </template>
+
     <v-dialog
       :model-value="dialog !== null"
       max-width="460"
@@ -184,6 +229,12 @@ async function revoke(appPassword: AppPassword) {
 </template>
 
 <style scoped>
+.connection-value {
+  font-family: monospace;
+  word-break: break-all;
+  white-space: normal;
+}
+
 .password {
   font-size: 1.1rem;
   word-break: break-all;

@@ -220,14 +220,15 @@ describe('Google Reader API', () => {
 
   it('logs unsupported endpoints and traces form parameters', async () => {
     const token = await readerLogin(app, 'pat', appPassword);
-    const missing = await reader(app, 'POST', '/reader/api/0/edit-tag', {
+    const missing = await reader(app, 'GET', '/reader/api/0/preference/stream/list', { token });
+    expect(missing.statusCode).toBe(404);
+    expect(logged('Unsupported compatibility call')).toMatchObject([
+      { compat: 'greader', unsupported: 'GET /reader/api/0/preference/stream/list' },
+    ]);
+    await reader(app, 'POST', '/reader/api/0/edit-tag', {
       token,
       form: { i: ['1', '2'], a: 'user/-/state/com.google/read', T: 'x' },
     });
-    expect(missing.statusCode).toBe(404);
-    expect(logged('Unsupported compatibility call')).toMatchObject([
-      { compat: 'greader', unsupported: 'POST /reader/api/0/edit-tag' },
-    ]);
     expect(logged('Compatibility call').at(-1)).toMatchObject({
       params: { i: ['1', '2'], a: 'user/-/state/com.google/read', T: '[redacted]' },
     });

@@ -92,6 +92,14 @@ export const createAppPasswordResponseSchema = z.object({
   password: z.string(),
 });
 
+/** What apps need to connect through the compatibility APIs. */
+export const appConnectionSchema = z.object({
+  /** Origin of the server, from `PUBLIC_URL` when set. */
+  serverUrl: z.string(),
+  /** The shortest sync interval apps should be set to. */
+  syncIntervalMinutes: z.number().int(),
+});
+
 export const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.string()) });
 
 export const currentSessionSchema = z.object({
@@ -140,6 +148,7 @@ export type TwoFactorStatus = z.infer<typeof twoFactorStatusSchema>;
 export type TwoFactorSetup = z.infer<typeof twoFactorSetupResponseSchema>;
 export type AppPassword = z.infer<typeof appPasswordSchema>;
 export type CreateAppPasswordResponse = z.infer<typeof createAppPasswordResponseSchema>;
+export type AppConnection = z.infer<typeof appConnectionSchema>;
 export type CurrentSession = z.infer<typeof currentSessionSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;

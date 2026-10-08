@@ -474,7 +474,7 @@ export function ttrssOps({ entries: entryServices, feeds, prefs }: TtrssDeps): T
           ? await entries.list(userId, {
               stream,
               view: viewMode === 'unread' ? 'unread' : viewMode === 'adaptive' ? 'adaptive' : 'all',
-              starredOnly: viewMode === 'marked',
+              flags: viewMode === 'marked' ? { starred: true } : undefined,
               ...(search
                 ? { q: search }
                 : {

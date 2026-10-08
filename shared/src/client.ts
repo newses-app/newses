@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type {
+  AppConnection,
   AppPassword,
   changePasswordRequestSchema,
   CreateAppPasswordResponse,
@@ -163,6 +164,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<undefined>('POST', '/auth/password', { body }),
       appPasswords: {
         list: () => request<AppPassword[]>('GET', '/auth/app-passwords'),
+        connection: () => request<AppConnection>('GET', '/auth/app-passwords/connection'),
         create: (body: z.input<typeof createAppPasswordRequestSchema>) =>
           request<CreateAppPasswordResponse>('POST', '/auth/app-passwords', { body }),
         revoke: (appPasswordId: number) =>

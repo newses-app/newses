@@ -117,4 +117,26 @@ describe('app passwords', () => {
       code: 'invalid_credentials',
     });
   });
+
+  it('tell apps where to connect, from PUBLIC_URL when set', async () => {
+    const auth = await sessionFor(pat);
+    const connection = await call('GET', '/auth/app-passwords/connection', auth);
+    expect(connection.json()).toEqual({
+      serverUrl: 'http://localhost:80',
+      syncIntervalMinutes: 60,
+    });
+    const configured = buildApp({
+      logger: pino({ level: 'silent' }),
+      healthChecks: {},
+      services,
+      publicUrl: 'https://rss.example',
+    });
+    const response = await configured.inject({
+      method: 'GET',
+      url: '/api/v1/auth/app-passwords/connection',
+      headers: { cookie: auth.cookie },
+    });
+    expect(response.json()).toMatchObject({ serverUrl: 'https://rss.example' });
+    await configured.close();
+  });
 });

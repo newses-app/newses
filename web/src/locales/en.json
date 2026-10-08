@@ -324,7 +324,15 @@
     "neverUsed": "Never used",
     "revoke": "Revoke",
     "revokeNamed": "Revoke {name}",
-    "revokeConfirm": "Revoke {name}? Apps using it will be signed out."
+    "revokeConfirm": "Revoke {name}? Apps using it will be signed out.",
+    "connect": "Connecting apps",
+    "ttrssUrl": "Server URL for TTRSS apps (TTRSS for Android, Newsboat)",
+    "greaderUrl": "Server URL for Google Reader apps (ReadYou)",
+    "freshrssUrl": "Server URL for apps that offer only FreshRSS",
+    "userName": "User name",
+    "syncInterval": "Sign in with your user name and an app password. Set apps to sync no more often than every {minutes} minutes.",
+    "copyNamed": "Copy {name}",
+    "copiedValue": "Copied."
   },
   "users": {
     "create": "New user",

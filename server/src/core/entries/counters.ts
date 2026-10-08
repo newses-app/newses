@@ -90,4 +90,19 @@ export class CounterService {
       special,
     };
   }
+
+  /**
+   * Per subscription, the sort time of its newest unread entry shown in its list, in microseconds
+   * since the epoch as text.
+   */
+  async newestUnread(userId: number): Promise<Map<number, string>> {
+    const result = await this.#db.execute<{ subscription_id: number; usec: string }>(sql`
+      SELECT ue.subscription_id,
+        (extract(epoch FROM max(ue.sort_at)) * 1000000)::bigint::text AS usec
+      FROM user_entries ue
+      WHERE ue.user_id = ${userId} AND ue.unread AND ue.subscription_id IS NOT NULL
+        AND ${scoreShown(userId)}
+      GROUP BY ue.subscription_id`);
+    return new Map(result.rows.map((row) => [row.subscription_id, row.usec]));
+  }
 }

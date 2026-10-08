@@ -18,6 +18,7 @@ import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
 import { INSECURE_SESSION_COOKIE, registerAuth, SESSION_COOKIE } from './auth.ts';
 import { greaderRoutes } from './compat/greader.ts';
+import { greaderEndpoints } from './compat/greader-ops.ts';
 import { ttrssRoutes } from './compat/ttrss.ts';
 import { feedIconRoutes, ttrssConfig, ttrssOps } from './compat/ttrss-ops.ts';
 import { errorHandler } from './errors.ts';
@@ -143,7 +144,7 @@ export function buildApp(deps: AppDeps) {
       async (api) => {
         registerAuth(api, services.sessions);
         api.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
-        await api.register(authRoutes, services);
+        await api.register(authRoutes, { ...services, publicUrl: deps.publicUrl ?? null });
         await api.register(adminUserRoutes, services);
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {
@@ -180,8 +181,12 @@ export function buildApp(deps: AppDeps) {
       loginConfig: ttrssConfig(ttrssDeps),
     });
     void app.register(feedIconRoutes, ttrssDeps);
-    void app.register(greaderRoutes, compat);
-    void app.register(greaderRoutes, { ...compat, prefix: '/api/greader.php' });
+    const greader = {
+      ...compat,
+      endpoints: greaderEndpoints({ ...ttrssDeps, publicUrl: deps.publicUrl ?? null }),
+    };
+    void app.register(greaderRoutes, greader);
+    void app.register(greaderRoutes, { ...greader, prefix: '/api/greader.php' });
   }
 
   if (deps.webDir) registerWeb(app, deps.webDir);
