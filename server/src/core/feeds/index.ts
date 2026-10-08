@@ -4,7 +4,7 @@ import type { Keys } from '../crypto.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
 import type { BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
-import { FaviconService } from './favicons.ts';
+import { FaviconService, IconTokens } from './favicons.ts';
 import { HostLimiter } from './host-limiter.ts';
 import { ImageProxy } from './images.ts';
 import type { Fetcher } from './http.ts';
@@ -55,6 +55,7 @@ export function createFeedServices(deps: FeedDeps) {
     ingester,
     updater,
     favicons: new FaviconService(db, fetcher, blobs, logger, hosts),
+    iconTokens: new IconTokens(deps.keys['feed-icons']),
     images: new ImageProxy({ db, fetcher, blobs, hosts, key: deps.keys['image-url'], logger }),
     purger: new Purger(db, blobs, settings),
   };

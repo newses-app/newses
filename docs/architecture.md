@@ -218,6 +218,7 @@ Search:
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
 | TTRSS-compatible | `/api/`, `/api/index.php` (POST, `op`) | See below |
+| TTRSS feed icons | `/feed-icons/<user segment>/<id>.ico` | Signed per-user path, no session; see below |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*`; also under `/api/greader.php` | See below |
 
 ### Native REST API
@@ -243,17 +244,23 @@ Events stream:
 
 ### TTRSS-compatible API
 
-- Operations: `login`, `logout`, `isLoggedIn`, `getApiLevel`, `getVersion`, `getUnread`, `getCounters`, `getFeeds`, `getCategories`, `getFeedTree`, `getHeadlines`, `getArticle`, `updateArticle`, `catchupFeed`, `updateFeed`, `getConfig`, `getPref`, `getLabels`, `setArticleLabel`, `shareToPublished`, `subscribeToFeed`, `unsubscribeFeed`.
-- Special feed IDs:
+- Operations: `login`, `logout`, `isLoggedIn`, `getApiLevel`, `getVersion`, `getConfig`, `getPref`, `getUnread`, `getCounters`, `getFeeds`, `getCategories`, `getFeedTree`, `getHeadlines`, `getArticle`, `updateArticle`, `catchupFeed`, `updateFeed`, `getLabels`, `setArticleLabel`, `subscribeToFeed`, `unsubscribeFeed`. `shareToPublished` is not supported.
+- Feed IDs are subscription IDs; special feed IDs:
   - `-1` starred
   - `-2` published
   - `-3` fresh
   - `-4` all
   - `-6` recently read
-  - `0` archived
-- Labels are exposed as feed ID `-1025 - label_id`.
+  - `0` archived (empty)
+- Category IDs are category IDs; `0` uncategorised, `-1` special feeds, `-2` labels, `-3` all feeds, `-4` all feeds with special feeds and labels. Category streams include subcategories.
+- Labels are feed ID `-1025 - label_id`, in feed lists, counters, `getLabels`, `setArticleLabel`, and each headline's `labels` (`[feed ID, caption, fg, bg]`). A non-numeric `feed_id` names a tag.
+- `getHeadlines` pages by `limit` (at most 200) and `skip`; `view_mode` `unread`, `adaptive`, and `marked` (starred) apply, others list all; `order_by=date_reverse` lists oldest first; `search` uses full-text search, across all feeds with `search_mode=all_feeds`.
+- `updateArticle` fields: 0 starred, 1 published, 2 unread, 3 note (`data`); modes 0 clear, 1 set, 2 toggle.
+- `subscribeToFeed` codes: 0 already subscribed, 1 added (`feed_id`), 2 invalid URL, 3 no feed found, 4 several feeds found (`feeds`: URL → title), 5 fetch failed.
+- `getConfig` (also `config` in the `login` answer) gives `icons_url` `feed-icons/<user segment>`: icons are served at `/feed-icons/<segment>/<subscription id>.ico`, the segment being the user ID signed with the `feed-icons` key, and only for that user's subscriptions.
+- Content goes through the image proxy for users who turned it on. `getPref` answers the TTRSS preferences that have an equivalent here and `null` for others, which are logged.
 - Requests are POSTs whose body is JSON, whatever its declared type, or form-encoded; query strings are ignored, so passwords never appear in logged URLs. `sid` is an `api` session token; `login` accepts app passwords only and reports API level 20.
-- Every answer is HTTP 200 `{seq, status, content}`, `seq` echoing the request. Errors have status 1 and `content.error`: `NOT_LOGGED_IN`, `LOGIN_ERROR`, `API_DISABLED` (password must be changed), `UNKNOWN_METHOD` (with `method`), `INCORRECT_USAGE`.
+- Every answer is HTTP 200 `{seq, status, content}`, `seq` echoing the request. Errors have status 1 and `content.error`: `NOT_LOGGED_IN`, `LOGIN_ERROR`, `API_DISABLED` (password must be changed), `UNKNOWN_METHOD` (with `method`), `INCORRECT_USAGE`, `FEED_NOT_FOUND`.
 
 ### Google Reader API
 
@@ -294,7 +301,7 @@ Both compatibility APIs log each unsupported call with the client's user agent. 
 flowchart LR
   U[Browser / apps] --> CF[CloudFront]
   CF -- default --> S3W[(S3: SPA)]
-  CF -- "/api/*, /reader/*, /accounts/*, /feed-icons/*, /public/*, /public.php" --> API[HTTP API] --> FA[λ api]
+  CF -- "/api, /api/*, /reader/*, /accounts/*, /feed-icons/*, /public/*, /public.php" --> API[HTTP API] --> FA[λ api]
   EB[EventBridge Scheduler] --> FT[λ tick]
   FT --> QF[[SQS fetch]] --> FF[λ fetch]
   FF --> QI[[SQS favicon]] --> FI[λ favicon]

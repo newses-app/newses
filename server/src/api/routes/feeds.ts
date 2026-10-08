@@ -11,6 +11,7 @@ import {
 import type { FastifyPluginAsyncZod, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { FeedServices } from '../../core/feeds/index.ts';
+import { sendIcon } from '../icons.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 import { toCategory, toSubscription } from '../dto.ts';
 
@@ -131,18 +132,7 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
     async (request, reply) => {
       const icon = await favicons.getForUser(requireAuth(request).user.id, request.params.id);
       if (!icon) return reply.code(404).send({ error: 'not_found', message: 'No icon' });
-      return (
-        reply
-          .type(icon.contentType)
-          .header('cache-control', 'private, max-age=86400')
-          .header('x-content-type-options', 'nosniff')
-          // Icons may be SVG; never let one run script on this origin.
-          .header(
-            'content-security-policy',
-            "default-src 'none'; style-src 'unsafe-inline'; sandbox",
-          )
-          .send(Buffer.from(icon.data))
-      );
+      return sendIcon(reply, icon);
     },
   );
 

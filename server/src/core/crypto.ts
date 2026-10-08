@@ -8,11 +8,18 @@ import {
 } from 'node:crypto';
 
 /** Each use of the app secret gets its own key, so one key's output never verifies under another. */
-export type KeyPurpose = 'totp' | 'feed-credentials' | 'image-url' | 'login-challenge';
+export type KeyPurpose =
+  'totp' | 'feed-credentials' | 'image-url' | 'login-challenge' | 'feed-icons';
 
 export type Keys = Record<KeyPurpose, Buffer>;
 
-const PURPOSES: KeyPurpose[] = ['totp', 'feed-credentials', 'image-url', 'login-challenge'];
+const PURPOSES: KeyPurpose[] = [
+  'totp',
+  'feed-credentials',
+  'image-url',
+  'login-challenge',
+  'feed-icons',
+];
 const VERSION = 'v1';
 const IV_BYTES = 12;
 

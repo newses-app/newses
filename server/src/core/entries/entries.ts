@@ -26,6 +26,14 @@ export interface ListOptions {
   cursor?: string | undefined;
   limit: number;
   content: boolean;
+  /** Attach enclosures even without content. */
+  enclosures?: boolean | undefined;
+  /** Skips this many entries; for clients that page by offset rather than cursor. */
+  offset?: number | undefined;
+  /** Only entries with a larger id. */
+  sinceId?: number | undefined;
+  /** Only starred entries within the stream. */
+  starredOnly?: boolean | undefined;
 }
 
 export interface ListResult {
@@ -171,7 +179,9 @@ export class EntryService {
       throw new DomainError('invalid_input', 'Relevance order requires a search query');
     const stream = shownCondition(userId, options.stream);
     const view = cursor?.v ?? (await this.#resolveView(stream, options.view));
-    const where = sql`${stream}${view === 'unread' ? sql` AND ue.unread` : sql``}`;
+    const where = sql`${stream}${view === 'unread' ? sql` AND ue.unread` : sql``}${
+      options.sinceId === undefined ? sql`` : sql` AND ue.id > ${options.sinceId}`
+    }${options.starredOnly ? sql` AND ue.starred` : sql``}`;
     const query = options.q ? sql`websearch_to_tsquery('simple', ${options.q})` : null;
     const selective = query !== null && (await this.#isSelective(query));
     const spec = orderSpec(order === 'relevance' ? 'newest' : order, options.stream);
@@ -192,7 +202,7 @@ export class EntryService {
         : null;
 
     let rows: HeadlineRow[];
-    const offset = cursor && 'o' in cursor ? cursor.o : 0;
+    const offset = cursor && 'o' in cursor ? cursor.o : (options.offset ?? 0);
     if (order === 'relevance' && query) {
       const candidates = hits
         ? sql`${hits}, candidates AS (SELECT id FROM hits ORDER BY t DESC LIMIT ${SEARCH_CANDIDATES})`
@@ -225,7 +235,7 @@ export class EntryService {
         FROM ${hits ? sql`hits h JOIN ${HEADLINE_FROM} ON ue.id = h.id` : HEADLINE_FROM}
         WHERE ${filter}${after}
         ORDER BY ${key} ${direction}, ${id} ${direction}
-        LIMIT ${options.limit + 1}`);
+        ${cursor ? sql`` : sql`OFFSET ${offset}`} LIMIT ${options.limit + 1}`);
       rows = result.rows;
     }
 
@@ -238,7 +248,7 @@ export class EntryService {
       else if (last.k != null) next = { v: view, k: last.k, i: Number(last.id) };
     }
     const entries = page.map(toEntry);
-    if (options.content) await this.#attachEnclosures(page, entries);
+    if (options.content || options.enclosures) await this.#attachEnclosures(page, entries);
     return { entries, cursor: next && encodeCursor(next), view };
   }
 
@@ -298,6 +308,31 @@ export class EntryService {
       .update(userEntries)
       .set(set)
       .where(and(eq(userEntries.userId, userId), inArray(userEntries.id, ids), or(...differs)))
+      .returning({ id: userEntries.id });
+    if (updated.length > 0) await this.#realtime.publish(userId, { type: 'counters' });
+    return updated.length;
+  }
+
+  /** Flips one flag on the user's entries; returns how many changed. */
+  async toggle(
+    userId: number,
+    ids: number[],
+    flag: 'unread' | 'starred' | 'published',
+  ): Promise<number> {
+    if (ids.length === 0) return 0;
+    const set: PgUpdateSetSource<typeof userEntries> =
+      flag === 'unread'
+        ? {
+            unread: sql`NOT ${userEntries.unread}`,
+            readAt: sql`CASE WHEN ${userEntries.unread} THEN now() END`,
+          }
+        : flag === 'starred'
+          ? { starred: sql`NOT ${userEntries.starred}` }
+          : { published: sql`NOT ${userEntries.published}` };
+    const updated = await this.#db
+      .update(userEntries)
+      .set(set)
+      .where(and(eq(userEntries.userId, userId), inArray(userEntries.id, ids)))
       .returning({ id: userEntries.id });
     if (updated.length > 0) await this.#realtime.publish(userId, { type: 'counters' });
     return updated.length;

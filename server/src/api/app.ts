@@ -19,6 +19,7 @@ import type { PrefsService } from '../core/prefs.ts';
 import { INSECURE_SESSION_COOKIE, registerAuth, SESSION_COOKIE } from './auth.ts';
 import { greaderRoutes } from './compat/greader.ts';
 import { ttrssRoutes } from './compat/ttrss.ts';
+import { feedIconRoutes, ttrssConfig, ttrssOps } from './compat/ttrss-ops.ts';
 import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -172,7 +173,13 @@ export function buildApp(deps: AppDeps) {
       services: { auth: services.auth, sessions: services.sessions },
       options: { trace: deps.compatTrace ?? false },
     };
-    void app.register(ttrssRoutes, compat);
+    const ttrssDeps = { entries: services.entries, feeds: services.feeds, prefs: services.prefs };
+    void app.register(ttrssRoutes, {
+      ...compat,
+      ops: ttrssOps(ttrssDeps),
+      loginConfig: ttrssConfig(ttrssDeps),
+    });
+    void app.register(feedIconRoutes, ttrssDeps);
     void app.register(greaderRoutes, compat);
     void app.register(greaderRoutes, { ...compat, prefix: '/api/greader.php' });
   }

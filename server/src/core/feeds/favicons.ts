@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { Parser } from 'htmlparser2';
 import type { Db } from '../../db/client.ts';
+import { sign, verify } from '../crypto.ts';
 import { feedSources, subscriptions } from '../../db/schema.ts';
 import type { Blob, BlobStore, Logger } from '../ports.ts';
 import { decodeBody } from './decode.ts';
@@ -134,5 +135,28 @@ export class FaviconService {
       .from(feedSources)
       .where(eq(feedSources.id, feedSourceId));
     return source?.key ? this.#blobs.get(source.key) : null;
+  }
+}
+
+/**
+ * Per-user path segments for icon URLs given to compatibility clients, which fetch icons without
+ * credentials: only the holder of a user's segment can read that user's feeds' icons.
+ */
+export class IconTokens {
+  readonly #key: Buffer;
+
+  constructor(key: Buffer) {
+    this.#key = key;
+  }
+
+  issue(userId: number): string {
+    return `${String(userId)}.${sign(this.#key, `icons:${String(userId)}`)}`;
+  }
+
+  /** The user a segment was issued to, or null when it is not one. */
+  userOf(token: string): number | null {
+    const [id = '', mac = ''] = token.split('.');
+    if (!/^\d+$/.test(id) || !verify(this.#key, `icons:${id}`, mac)) return null;
+    return Number(id);
   }
 }

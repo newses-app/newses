@@ -23,6 +23,8 @@ import type { GeneratedParameter } from './generated-parameter.ts';
 /** Paths served by the API; everything else is the static SPA. */
 /** Served by the API: native, compatibility (TTRSS, Google Reader, TTRSS feed icons), public pages, and the legacy TTRSS published-feed address. */
 export const API_PATHS = [
+  // `/api/*` does not match `/api`, where some TTRSS clients post without the trailing slash.
+  '/api',
   '/api/*',
   '/reader/*',
   '/accounts/*',

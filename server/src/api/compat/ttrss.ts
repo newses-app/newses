@@ -15,7 +15,12 @@ export const TTRSS_API_LEVEL = 20;
 export const TTRSS_VERSION = '1.0 (rss-reader)';
 
 export type TtrssErrorCode =
-  'NOT_LOGGED_IN' | 'LOGIN_ERROR' | 'API_DISABLED' | 'UNKNOWN_METHOD' | 'INCORRECT_USAGE';
+  | 'NOT_LOGGED_IN'
+  | 'LOGIN_ERROR'
+  | 'API_DISABLED'
+  | 'UNKNOWN_METHOD'
+  | 'INCORRECT_USAGE'
+  | 'FEED_NOT_FOUND';
 
 /** A failure answered as `{"status": 1, "content": {"error": code, …}}`. */
 export class TtrssError extends Error {
@@ -75,8 +80,11 @@ function readParams(request: FastifyRequest): TtrssParams {
   return parsed as TtrssParams;
 }
 
-/** Login, logout, and API information. */
-function sessionOps({ auth, sessions }: CompatServices): TtrssOps {
+/** Login, logout, and API information; `login` adds `config` when given one. */
+function sessionOps(
+  { auth, sessions }: CompatServices,
+  loginConfig?: (userId: number) => Promise<unknown>,
+): TtrssOps {
   return {
     login: {
       public: true,
@@ -95,7 +103,11 @@ function sessionOps({ auth, sessions }: CompatServices): TtrssOps {
           await sessions.revoke(result.user.id, result.session.id);
           throw new TtrssError('API_DISABLED');
         }
-        return { session_id: result.token, api_level: TTRSS_API_LEVEL };
+        return {
+          session_id: result.token,
+          api_level: TTRSS_API_LEVEL,
+          ...(loginConfig && { config: await loginConfig(result.user.id) }),
+        };
       },
     },
     logout: {
@@ -122,6 +134,8 @@ export interface TtrssRoutesOptions {
   options: CompatOptions;
   /** Ops beyond the session ops. */
   ops?: TtrssOps;
+  /** `config` returned by `login`. */
+  loginConfig?: (userId: number) => Promise<unknown>;
 }
 
 /**
@@ -130,9 +144,9 @@ export interface TtrssRoutesOptions {
  */
 export const ttrssRoutes: FastifyPluginAsync<TtrssRoutesOptions> = (
   app,
-  { services, options, ops = {} },
+  { services, options, ops = {}, loginConfig },
 ) => {
-  const all: TtrssOps = { ...ops, ...sessionOps(services) };
+  const all: TtrssOps = { ...ops, ...sessionOps(services, loginConfig) };
 
   // Bodies are parsed by the handler, whatever their declared type.
   app.removeAllContentTypeParsers();
