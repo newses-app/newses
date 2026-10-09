@@ -22,7 +22,10 @@ try {
     async importTtrss(url: string, options: Parameters<typeof importTtrss>[1]) {
       const source = await TtrssSource.open(url);
       try {
-        return await importTtrss({ db, source, steps: IMPORT_STEPS }, options);
+        return await importTtrss(
+          { db, source, steps: IMPORT_STEPS, purgeDays: config.feeds.purgeDays },
+          options,
+        );
       } finally {
         await source.close();
       }

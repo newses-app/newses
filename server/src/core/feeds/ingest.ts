@@ -17,7 +17,13 @@ export interface IngestResult {
 /** At most this many entries are taken from one document, newest first by position. */
 const MAX_ENTRIES_PER_FETCH = 500;
 
-const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
+/**
+ * GUID prefix of entries imported from TTRSS, whose own GUIDs are not the feed's. The first
+ * fetched item with the same link takes such an entry over instead of duplicating it.
+ */
+export const IMPORTED_GUID_PREFIX = 'ttrss:';
+
+export const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
 interface PreparedEntry {
   guid: string;
@@ -55,6 +61,28 @@ function prepare(entry: ParsedEntry, siteUrl: string | null): PreparedEntry | nu
   };
 }
 
+/**
+ * Gives new items the imported entries with the same link, so the upsert updates those entries
+ * rather than adding duplicates. Of several imported entries with one link, the newest is taken.
+ */
+async function adoptImported(
+  tx: Pick<Db, 'execute'>,
+  feedSourceId: number,
+  fresh: PreparedEntry[],
+): Promise<void> {
+  const byLink = new Map<string, string>();
+  for (const entry of fresh)
+    if (entry.link && !byLink.has(entry.link)) byLink.set(entry.link, entry.guid);
+  if (byLink.size === 0) return;
+  await tx.execute(sql`
+    UPDATE entries e SET guid = n.guid, last_seen_at = now()
+    FROM unnest(${sql.param([...byLink.keys()])}::text[], ${sql.param([...byLink.values()])}::text[]) AS n(link, guid)
+    WHERE e.id = (
+      SELECT max(i.id) FROM entries i
+      WHERE i.feed_source_id = ${feedSourceId} AND i.link = n.link
+        AND i.guid LIKE ${`${IMPORTED_GUID_PREFIX}%`})`);
+}
+
 /** Purge age of subscription `s`: its override, else its user's preference, else the default. */
 export const purgeDaysSql = (defaultDays: number): SQL<number> =>
   sql`coalesce(s.purge_days, ${userPrefInt(sql`s.user_id`, 'purgeDays')}, ${defaultDays})`;
@@ -85,12 +113,19 @@ export class Ingester {
     if (prepared.length === 0) return { inserted: 0, updated: 0 };
 
     const result = await this.#db.transaction(async (tx) => {
-      await tx
+      const seen = await tx
         .update(entries)
         .set({ lastSeenAt: sql`now()` })
         .where(
           and(eq(entries.feedSourceId, feedSourceId), inArray(entries.guid, [...byGuid.keys()])),
-        );
+        )
+        .returning({ guid: entries.guid });
+      const known = new Set(seen.map((row) => row.guid));
+      await adoptImported(
+        tx,
+        feedSourceId,
+        prepared.filter((entry) => !known.has(entry.guid) && entry.link),
+      );
 
       // Inserts new entries; rewrites existing ones only when their content changed.
       const written = await tx

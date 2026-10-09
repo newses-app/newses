@@ -258,6 +258,10 @@ export const entries = pgTable(
     index('entries_feed_source_published_idx').on(t.feedSourceId, t.publishedAt.desc()),
     index('entries_search_idx').using('gin', t.search),
     index('entries_last_seen_idx').on(t.lastSeenAt),
+    // Imported entries not yet matched to a fetched item, looked up by link when one arrives.
+    index('entries_imported_link_idx')
+      .on(t.feedSourceId, t.link)
+      .where(sql`${t.guid} LIKE 'ttrss:%'`),
   ],
 );
 

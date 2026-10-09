@@ -46,7 +46,7 @@ async function run(changes: Partial<ImportOptions> = {}) {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
-      { db, source, steps: IMPORT_STEPS },
+      { db, source, steps: IMPORT_STEPS, purgeDays: 60 },
       { dryRun: false, force: false, ...changes },
     );
   } finally {

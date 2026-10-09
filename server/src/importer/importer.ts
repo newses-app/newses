@@ -31,6 +31,10 @@ export interface ImportContext {
   options: ImportOptions;
   /** The TTRSS users being imported. */
   users: SourceUser[];
+  /** Reads the target; within a dry run it sees what the run has written so far. */
+  db: Writer;
+  /** The instance's default purge age in days; 0 never purges. */
+  purgeDays: number;
   /** Runs one batch of writes in its own transaction (a savepoint within a dry run). */
   write: <T>(work: (tx: Writer) => Promise<T>) => Promise<T>;
 }
@@ -45,6 +49,8 @@ export interface ImportDeps {
   db: Db;
   source: TtrssSource;
   steps: readonly ImportStep[];
+  /** The instance's default purge age in days (`FEED_PURGE_DAYS`); 0 never purges. */
+  purgeDays: number;
   /** Defaults to `VERIFIED_SCHEMA_VERSIONS`. */
   schemaVersions?: readonly number[];
 }
@@ -86,6 +92,8 @@ export async function importTtrss(deps: ImportDeps, options: ImportOptions): Pro
       report,
       options,
       users,
+      db: base,
+      purgeDays: deps.purgeDays,
       write: (work) => base.transaction((tx) => work(tx)),
     };
     for (const step of steps) await step.run(context);

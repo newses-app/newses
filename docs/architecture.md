@@ -104,6 +104,7 @@ Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 source
              dates parsed leniently, zone-less dates are UTC, unparseable dates are null
              entry links, enclosures, and site URLs kept only if absolute http(s)
   identify   feed GUID, else sha256(link + title), else sha256(content); duplicates within a document dropped
+             a new item takes over an imported entry (GUID `ttrss:…`) with the same link in the same source
   sanitise   allow-list HTML; strip control characters; resolve relative URLs (incl. srcset); drop tracking pixels
              (1×1 images, images from hosts in `trackers.ts`); titles to plain text
   transform  hook: readability, site rewrites

@@ -8,6 +8,8 @@ export interface Skipped {
   item: string;
   sourceId: number;
   reason: string;
+  /** How many items this line stands for, when skipped together for one reason. */
+  count: number;
 }
 
 /** Information about an imported item that does not affect reconciliation. */
@@ -26,6 +28,9 @@ interface Section {
 /** An item and its source id; rows without an id (preferences) pass 0. */
 const label = ({ item, sourceId }: { item: string; sourceId: number }) =>
   sourceId ? `${item} ${String(sourceId)}` : item;
+
+const skippedCount = (skipped: Skipped[], item: string) =>
+  skipped.filter((s) => s.item === item).reduce((sum, s) => sum + s.count, 0);
 
 /** Rows not owned by a user (feed sources, entries) are reported under this name. */
 export const SHARED = '(shared)';
@@ -60,8 +65,8 @@ export class ImportReport {
     tallies.set(item, tally);
   }
 
-  skip(login: string, item: string, sourceId: number, reason: string): void {
-    this.#section(login).skipped.push({ item, sourceId, reason });
+  skip(login: string, item: string, sourceId: number, reason: string, count = 1): void {
+    if (count > 0) this.#section(login).skipped.push({ item, sourceId, reason, count });
   }
 
   /** Records what the import did with an item beyond counting it: adoptions, options left out. */
@@ -84,9 +89,7 @@ export class ImportReport {
   /** Whether every counted item was imported or skipped with a reason. */
   get reconciled(): boolean {
     return [...this.#sections.values()].every(({ tallies, skipped }) =>
-      [...tallies].every(
-        ([item, t]) => t.source === t.imported + skipped.filter((s) => s.item === item).length,
-      ),
+      [...tallies].every(([item, t]) => t.source === t.imported + skippedCount(skipped, item)),
     );
   }
 
@@ -101,7 +104,7 @@ export class ImportReport {
           `    ${'item'.padEnd(width)}  ${'source'.padStart(8)}  ${'imported'.padStart(8)}`,
         );
         for (const [item, t] of tallies) {
-          const skips = skipped.filter((s) => s.item === item).length;
+          const skips = skippedCount(skipped, item);
           const mark = t.source === t.imported + skips ? ' ' : '!';
           lines.push(
             `  ${mark} ${item.padEnd(width)}  ${String(t.source).padStart(8)}  ${String(t.imported).padStart(8)}`,
@@ -110,7 +113,8 @@ export class ImportReport {
       }
       if (skipped.length > 0) {
         lines.push('  skipped:');
-        for (const s of skipped) lines.push(`    ${label(s)}: ${s.reason}`);
+        for (const s of skipped)
+          lines.push(`    ${label(s)}: ${s.reason}${s.count > 1 ? ` (${String(s.count)})` : ''}`);
       }
       if (notes.length > 0) {
         lines.push('  notes:');

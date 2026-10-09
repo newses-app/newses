@@ -12,7 +12,7 @@ cli import-ttrss --source <postgres-url> [--users alice,bob] [--since YYYY-MM-DD
 |---|---|
 | `--source` | Connection URL of the TTRSS database (or a restored copy) |
 | `--users` | Import only these TTRSS logins (default: all) |
-| `--since` | Skip entries older than this date, except starred, published, labelled, or noted ones |
+| `--since` | Skip entries older than this date, except starred, published, labelled, noted, or shared ones |
 | `--dry-run` | Read and map everything, write nothing, print the report |
 | `--force` | Re-import into users who have used this instance since their last import |
 
@@ -93,10 +93,10 @@ Nothing runs in AWS for an import. The operator runs the rss-reader image on the
 | `ttrss_users` | `users` | `access_level` ≥ 10 → `admin`. A new user gets a temporary password, printed once in the report, which must be changed at first sign-in. A user here with the same login (any case) is adopted, keeping its password and role. Logins not allowed here are skipped. Users already imported are left unchanged on re-runs. TOTP and password hashes are not carried over |
 | `ttrss_feed_categories` | `categories` | `parent_cat` → `parent_id`; `order_id` and `collapsed` kept. A title already used under the same parent merges into that category |
 | `ttrss_feeds` | `feed_sources` + `subscriptions` | One feed source per normalised `feed_url` across all users, first fetched within 30 minutes of the import. Per user: title, category, `order_id`, `update_interval` (minutes, held to 15 min–7 days; `-1`, updates off, is noted and the feed is fetched), `purge_interval` (`-1` → never). Feeds with `auth_login` and invalid URLs are skipped; a user's second feed with the same normalised URL is skipped as a duplicate. Options with no equivalent (`hidden`, `cache_images`, `hide_images`, `always_display_enclosures`, `mark_unread_on_update`, `update_on_checksum_change`, `strip_images`, `rtl_content`, `cache_content`, `private`, `include_in_digest` off) are noted |
-| `ttrss_entries` | `entries` | Title, link, author, content, `content_hash`, `updated`/`date_entered`, `lang`. TTRSS GUIDs are owner-scoped hashes, so entries are deduplicated across users by (feed source, link, content hash) |
-| `ttrss_user_entries` | `user_entries` | `unread`, `marked` → starred, `published`, `score`, `note`, `last_read`, `uuid` → share UUID; `orig_feed_id` → archived feed |
-| `ttrss_archived_feeds` | `archived_feeds` | Title, URLs |
-| `ttrss_enclosures` | `enclosures` | URL, type, duration, dimensions |
+| `ttrss_entries` | `entries` | Title, link, author, content (sanitised as fetched items are), `updated` → published time, `date_entered` → fetch time, `lang`. TTRSS keeps a copy per user; copies with the same feed source, title, link, and content become one entry, whose GUID is `ttrss:` and that content hash. Times are read as UTC |
+| `ttrss_user_entries` | `user_entries` | `unread`, `marked` → starred, `published`, `last_read` → read time; sort time is `updated`, at most now. Entries older than their subscription's purge age are skipped unless kept (starred, published, noted, labelled, or shared). Entries of skipped feeds are skipped; those of archived feeds (`orig_feed_id`) are kept without a subscription, under a feed source for the archived feed's URL. Copies of one article for one user merge: read if either was, starred or published if either was |
+| `ttrss_archived_feeds` | — | Skipped and reported; their entries are imported as above |
+| `ttrss_enclosures` | `enclosures` | URL, type, duration (seconds or `h:m:s`), dimensions |
 | `ttrss_labels2` | `labels` | Caption, `fg_color`, `bg_color` |
 | `ttrss_user_labels2` | `entry_labels` | Joined via the label's owner to that user's `user_entries` |
 | `ttrss_tags` | `tags` | `post_int_id` → `user_entries` |
@@ -113,7 +113,7 @@ Not imported:
 - Error logs.
 - Feed-browser cache.
 
-Imported entries are matched to newly fetched items by link, so the first fetch after import does not duplicate them.
+The first fetch after an import takes over each imported entry whose link matches a fetched item, so it is not duplicated; the entry gets the feed's GUID and current content, and keeps every user's state.
 
 ## Checking an import
 

@@ -1,0 +1,1 @@
+CREATE INDEX "entries_imported_link_idx" ON "entries" USING btree ("feed_source_id","link") WHERE "entries"."guid" LIKE 'ttrss:%';

@@ -130,6 +130,53 @@ describe('Ingester', () => {
     expect(delivered.some((e) => e.unread)).toBe(false);
   });
 
+  it('takes over an imported entry with the same link instead of duplicating it', async () => {
+    const [imported] = await db
+      .insert(entries)
+      .values([
+        {
+          feedSourceId: sourceId,
+          guid: 'ttrss:older',
+          link: 'https://f.example/1',
+          contentHash: 'a',
+        },
+        {
+          feedSourceId: sourceId,
+          guid: 'ttrss:newer',
+          link: 'https://f.example/1',
+          contentHash: 'b',
+        },
+      ])
+      .returning()
+      .then((rows) => rows.slice(1));
+    await db
+      .insert(userEntries)
+      .values({ userId: alice, entryId: imported?.id ?? 0, sortAt: new Date(), unread: false });
+    const result = await ingester.ingest(sourceId, null, [
+      entry({ guid: 'g1', title: 'One', link: 'https://f.example/1', content: 'fresh' }),
+      entry({ guid: 'g2', title: 'Two', link: 'https://f.example/2' }),
+    ]);
+    expect(result).toEqual({ inserted: 1, updated: 1 });
+    const stored = await db.select().from(entries).orderBy(entries.id);
+    expect(stored.map((e) => [e.guid, e.title])).toEqual([
+      ['ttrss:older', null],
+      ['g1', 'One'],
+      ['g2', 'Two'],
+    ]);
+    expect(stored[1]?.id).toBe(imported?.id);
+    // Alice keeps her read copy; bob receives only the new item.
+    const delivered = await db.select().from(userEntries);
+    expect(delivered.filter((e) => e.userId === alice).map((e) => [e.entryId, e.unread])).toEqual(
+      expect.arrayContaining([
+        [imported?.id, false],
+        [stored[2]?.id, true],
+      ]),
+    );
+    expect(delivered.filter((e) => e.userId === bob).map((e) => e.entryId)).toEqual([
+      stored[2]?.id,
+    ]);
+  });
+
   it('derives stable identities for entries without GUIDs and drops in-document duplicates', async () => {
     const items = [
       entry({ title: 'No guid', link: 'https://f.example/x' }),
