@@ -5,7 +5,7 @@ The importer reads a TTRSS PostgreSQL database directly and writes into this ins
 ## CLI
 
 ```
-cli import-ttrss --source <postgres-url> [--users alice,bob] [--since YYYY-MM-DD] [--dry-run]
+cli import-ttrss --source <postgres-url> [--users alice,bob] [--since YYYY-MM-DD] [--dry-run] [--force]
 ```
 
 | Option | Effect |
@@ -14,16 +14,19 @@ cli import-ttrss --source <postgres-url> [--users alice,bob] [--since YYYY-MM-DD
 | `--users` | Import only these TTRSS logins (default: all) |
 | `--since` | Skip entries older than this date, except starred, published, labelled, or noted ones |
 | `--dry-run` | Read and map everything, write nothing, print the report |
+| `--force` | Re-import into users who have used this instance since their last import |
 
 Behaviour:
-- Verifies `ttrss_version.schema_version` is within the supported range before reading.
-- Batched and resumable: `import_map` records every imported source row, so re-running skips or updates rows already imported.
+- Refuses a source whose `ttrss_version.schema_version` the importer has not been verified against.
+- Reads the source in one read-only `REPEATABLE READ` transaction, so the import sees a single consistent snapshot.
+- Batched and resumable: each batch commits on its own, and `import_map` records every imported source row, so re-running skips or updates rows already imported.
 - Re-running after the first import applies changes made in TTRSS since then. Source state wins.
-- Ends with a reconciliation report: per user, source vs imported counts of feeds, categories, entries, unread, starred, published, labels, notes, and filters, plus every skipped item and the reason.
+- Refuses to re-import into users who changed anything here since their last import finished (entry state, feeds, categories, labels), unless `--force`. Entries fetched here since then do not count as changes.
+- Ends with a reconciliation report: per user, source vs imported counts of feeds, categories, entries, unread, starred, published, labels, notes, and filters, plus every skipped item and the reason. Counts that do not add up are marked `!`, and the command then exits with status 1.
 
-## Getting access to the source database
+## Running the import
 
-The official TTRSS compose stack does not publish the database port. Use one of:
+The source is read through a PostgreSQL URL. The official TTRSS compose stack does not publish its database port, so restore a dump (A) or join its network (B).
 
 ### A. Restore a copy (recommended)
 
@@ -31,32 +34,57 @@ The official TTRSS compose stack does not publish the database port. Use one of:
    ```
    docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > ttrss.dump
    ```
-2. Copy `ttrss.dump` to the new host and restore it into a scratch database:
+2. On the rss-reader host, restore it into a scratch database beside rss-reader's own:
    ```
-   docker compose exec db createdb -U "$POSTGRES_USER" ttrss_import
-   docker compose exec -T db pg_restore -U "$POSTGRES_USER" -d ttrss_import --no-owner < ttrss.dump
+   docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" ttrss_import'
+   docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d ttrss_import --no-owner' < ttrss.dump
    ```
-   For a `.sql.gz` backup: `gunzip -c backup.sql.gz | docker compose exec -T db psql -U "$POSTGRES_USER" -d ttrss_import`.
-3. Import:
+   For a `.sql.gz` backup: `gunzip -c backup.sql.gz | docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d ttrss_import'`.
+3. Import, with a dry run first:
    ```
-   docker compose run --rm cli import-ttrss --source postgres://USER:PASS@db/ttrss_import --dry-run
-   docker compose run --rm cli import-ttrss --source postgres://USER:PASS@db/ttrss_import
+   docker compose exec server sh -c 'rss-reader cli import-ttrss --source "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@db/ttrss_import" --dry-run'
+   docker compose exec server sh -c 'rss-reader cli import-ttrss --source "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@db/ttrss_import"'
    ```
-4. Drop `ttrss_import` when finished.
+   `POSTGRES_USER` and `POSTGRES_PASSWORD` are rss-reader's, from `docker/.env`; the server container has them in `DATABASE_URL`, so `--source "${DATABASE_URL%/*}/ttrss_import"` works too.
+4. Drop `ttrss_import` when finished: `docker compose exec db sh -c 'dropdb -U "$POSTGRES_USER" ttrss_import'`.
 
 ### B. Read the live database
 
-Run the importer on the TTRSS compose network, using the values from the TTRSS `.env`:
+When TTRSS runs on the same Docker host, connect rss-reader's server container to TTRSS's network for the import. Both stacks name their database service `db`, so address TTRSS's by its container name:
 
 ```
-docker run --rm --network <ttrss-project>_default -e DATABASE_URL=… -e APP_SECRET=… <image> cli import-ttrss \
-  --source postgres://$TTRSS_DB_USER:$TTRSS_DB_PASS@db/$TTRSS_DB_NAME
+docker network connect <ttrss-project>_default rss-reader-server-1
+docker compose exec server rss-reader cli import-ttrss \
+  --source postgres://$TTRSS_DB_USER:$TTRSS_DB_PASS@<ttrss-project>-db-1/$TTRSS_DB_NAME --dry-run
+docker network disconnect <ttrss-project>_default rss-reader-server-1
 ```
+
+Use the values from the TTRSS `.env`. The import only reads, in one read-only transaction.
 
 ### AWS
 
-1. Upload the dump to the blob bucket.
-2. Run the `cli` task definition as a one-off ECS task. It restores the dump into a scratch database on RDS, runs the import, and drops the scratch database.
+Nothing runs in AWS for an import. The operator runs the rss-reader image on their own machine with Docker. The source is a dump restored into a local Postgres, as in A. The target is the stage's Aurora database, reached over its public TLS endpoint.
+
+1. Restore the dump into a local rss-reader Docker stack's `db` (A, steps 1–2), or into any Postgres the container can reach.
+2. Read the stage's connection details (stage `dev` or `prod`), with AWS credentials for account `123456789012` in `us-east-2`:
+   ```
+   STAGE=dev
+   HOST=$(aws rds describe-db-clusters --db-cluster-identifier rss-reader-$STAGE --query 'DBClusters[0].Endpoint' --output text)
+   DB_PASS=$(aws ssm get-parameter --name /rss-reader/$STAGE/db-password --with-decryption --query Parameter.Value --output text)
+   APP_SECRET=$(aws ssm get-parameter --name /rss-reader/$STAGE/app-secret --with-decryption --query Parameter.Value --output text)
+   curl -fsSo rds-ca.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+   ```
+3. Import from the directory holding `docker/compose.yaml`, so the container joins the local stack's network and reaches its `db`:
+   ```
+   docker compose run --rm --no-deps -v "$PWD/rds-ca.pem:/rds-ca.pem:ro" \
+     -e NODE_EXTRA_CA_CERTS=/rds-ca.pem -e APP_SECRET="$APP_SECRET" \
+     -e DATABASE_URL="postgres://rss_reader:$(printf %s "$DB_PASS" | jq -sRr @uri)@$HOST:5432/rss_reader?sslmode=verify-full" \
+     server cli import-ttrss --source "postgres://<local user>:<local password>@db/ttrss_import" --dry-run
+   ```
+   Run it again without `--dry-run` to import. The first connection waits up to 30 s while a paused database resumes.
+4. Delete `rds-ca.pem`, and unset `DB_PASS` and `APP_SECRET`.
+
+`APP_SECRET` must be the stage's, so the stage can read anything the import seals.
 
 ## Mapping
 

@@ -4,6 +4,9 @@ import { verifyPassword } from '../core/auth/passwords.ts';
 import { createDb } from '../db/client.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { TEST_APP_SECRET } from '../test/fakes.ts';
+import { ImportError } from '../importer/errors.ts';
+import type { ImportOptions } from '../importer/importer.ts';
+import { ImportReport } from '../importer/report.ts';
 import { runCli, USAGE } from './cli-commands.ts';
 
 let database: TestDatabase;
@@ -57,5 +60,59 @@ describe('cli', () => {
     expect(await run(['user', 'create', 'bad name'])).toMatchObject({ code: 1 });
     expect(await run(['user', 'create', 'shorty'], 'short')).toMatchObject({ code: 1 });
     expect(await run([])).toEqual({ code: 2, output: USAGE });
+  });
+
+  it('runs TTRSS imports with their options, printing the report', async () => {
+    const calls: [string, ImportOptions][] = [];
+    let outcome: () => ImportReport = () => new ImportReport(true);
+    const output: string[] = [];
+    const importRun = (args: string[]) =>
+      runCli(
+        ['import-ttrss', ...args],
+        {
+          ...services,
+          importTtrss: (source, options) => {
+            calls.push([source, options]);
+            return Promise.resolve(outcome());
+          },
+        },
+        { readPassword: () => Promise.resolve(''), print: (line) => output.push(line) },
+      );
+    const url = 'postgres://u:p@db/ttrss_import';
+    expect(
+      await importRun([
+        '--source',
+        url,
+        '--users',
+        'pat, kid',
+        '--since',
+        '2025-01-31',
+        '--dry-run',
+      ]),
+    ).toBe(0);
+    expect(calls[0]).toEqual([
+      url,
+      {
+        users: ['pat', 'kid'],
+        since: new Date('2025-01-31T00:00:00Z'),
+        dryRun: true,
+        force: false,
+      },
+    ]);
+    expect(output.at(-1)).toContain('TTRSS import report (dry run');
+    expect(await importRun(['--users', 'pat'])).toBe(2);
+    expect(await importRun(['--source', url, '--since', '31/01/2025'])).toBe(2);
+    expect(await importRun(['--source', url, '--bogus'])).toBe(2);
+    outcome = () => {
+      throw new ImportError('TTRSS schema version 1 is not supported');
+    };
+    expect(await importRun(['--source', url, '--force'])).toBe(1);
+    expect(output.at(-1)).toBe('TTRSS schema version 1 is not supported');
+    outcome = () => {
+      const report = new ImportReport(false);
+      report.count('pat', 'feeds', { source: 1 });
+      return report;
+    };
+    expect(await importRun(['--source', url])).toBe(1);
   });
 });

@@ -172,7 +172,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `entry_tags` | User | (user entry, tag) pairs; tags are lower-case, single-spaced, without commas, at most 64 characters and 50 per entry |
 | `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), regex, inverse, scope (feeds/categories); actions: type + parameter |
 | `access_keys` | User | Secret keys for published feed and generated feeds |
-| `import_map` | Instance | (source system, source table, source id) → new id |
+| `import_map` | Instance | (TTRSS table, source id) → new id and owning user; on user rows, when that user's last import finished |
 
 Key indexes:
 - `user_entries (user_id, unread)`, partial indexes on `starred` and `published`.

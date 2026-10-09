@@ -411,3 +411,22 @@ export const tombstones = pgTable(
   },
   (t) => [index('tombstones_user_deleted_idx').on(t.userId, t.deletedAt)],
 );
+
+// Rows imported from TTRSS, so re-running an import updates them instead of adding copies.
+export const importMap = pgTable(
+  'import_map',
+  {
+    sourceTable: text('source_table').notNull(),
+    sourceId: bigint('source_id', { mode: 'number' }).notNull(),
+    targetId: bigint('target_id', { mode: 'number' }).notNull(),
+    // The user the row belongs to; null for shared rows (feed sources, entries).
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    importedAt: tstz('imported_at').notNull().defaultNow(),
+    // On `ttrss_users` rows: when that user's last import finished.
+    completedAt: tstz('completed_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.sourceTable, t.sourceId] }),
+    index('import_map_user_idx').on(t.userId),
+  ],
+);
