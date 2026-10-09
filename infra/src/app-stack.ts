@@ -62,6 +62,16 @@ export class AppStack extends Stack {
       deadLetterQueue: { queue: faviconDlq, maxReceiveCount: 2 },
     });
 
+    const extractDlq = new sqs.Queue(this, 'EntryExtractDlq', {
+      queueName: resourceName(stage, 'entry-extract-dlq'),
+      retentionPeriod: Duration.days(14),
+    });
+    const extractQueue = new sqs.Queue(this, 'EntryExtractQueue', {
+      queueName: resourceName(stage, 'entry-extract'),
+      visibilityTimeout: Duration.minutes(20),
+      deadLetterQueue: { queue: extractDlq, maxReceiveCount: 2 },
+    });
+
     const fn = (name: string, options: { timeout: Duration; memorySize?: number }) => {
       const functionName = resourceName(stage, name);
       const handler = new nodejs.NodejsFunction(this, `${name}Function`, {
@@ -91,6 +101,7 @@ export class AppStack extends Stack {
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
+          ENTRY_EXTRACT_QUEUE_URL: extractQueue.queueUrl,
           // The Lambda runtime's CA bundle includes the RDS certificate authorities.
           NODE_EXTRA_CA_CERTS: '/var/runtime/ca-cert.pem',
           NODE_OPTIONS: '--enable-source-maps',
@@ -121,6 +132,7 @@ export class AppStack extends Stack {
       blobs.grantReadWrite(handler);
       fetchQueue.grantSendMessages(handler);
       faviconQueue.grantSendMessages(handler);
+      extractQueue.grantSendMessages(handler);
       return handler;
     };
 
@@ -162,6 +174,16 @@ export class AppStack extends Stack {
     favicon.addEventSource(
       new SqsEventSource(faviconQueue, {
         batchSize: 5,
+        maxConcurrency: 2,
+        reportBatchItemFailures: true,
+      }),
+    );
+
+    const extract = fn('extract', { timeout: Duration.minutes(10) });
+    // One feed source's pending entries per invocation, fetched one after another.
+    extract.addEventSource(
+      new SqsEventSource(extractQueue, {
+        batchSize: 1,
         maxConcurrency: 2,
         reportBatchItemFailures: true,
       }),

@@ -27,6 +27,7 @@ import { authRoutes } from './routes/auth.ts';
 import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions, noEventRoutes } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
+import { filterRoutes } from './routes/filters.ts';
 import { imageRoutes } from './routes/images.ts';
 import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
@@ -151,8 +152,13 @@ export function buildApp(deps: AppDeps) {
           ...services.entries,
           prefs: services.prefs,
           images: services.feeds.images,
+          fullText: services.feeds.fullText,
         });
         await api.register(labelRoutes, { labels: services.entries.labels });
+        await api.register(filterRoutes, {
+          filters: services.entries.filters,
+          entries: services.entries.entries,
+        });
         await api.register(tagRoutes, { tags: services.entries.tags });
         await api.register(sharingRoutes, services.entries);
         await api.register(imageRoutes, { images: services.feeds.images });

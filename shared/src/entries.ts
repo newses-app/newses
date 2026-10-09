@@ -77,6 +77,8 @@ export const entrySchema = z.object({
   excerpt: z.string().nullable(),
   /** Sanitised HTML; present on single entries and when requested in lists. */
   content: z.string().nullable().optional(),
+  /** Readability extraction of the linked page, sanitised; present with content once extracted. */
+  fullContent: z.string().nullable().optional(),
   enclosures: z.array(enclosureSchema).optional(),
 });
 
@@ -196,3 +198,6 @@ export type PublishedFeedResponse = z.infer<typeof publishedFeedResponseSchema>;
 export type MarkReadRequest = z.infer<typeof markReadRequestSchema>;
 export type Counters = z.infer<typeof countersSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;
+
+export const fullTextResponseSchema = z.object({ content: z.string() });
+export type FullTextResponse = z.infer<typeof fullTextResponseSchema>;

@@ -52,7 +52,9 @@ describe('RssReaderStage', () => {
       }),
     ) as { Properties: { FunctionName: string; Tags: { Key: string; Value: string }[] } }[];
     expect(functions.map((f) => f.Properties.FunctionName).sort()).toEqual(
-      ['api', 'favicon', 'fetch', 'migrate', 'tick'].map((name) => `rss-reader-dev-${name}`),
+      ['api', 'extract', 'favicon', 'fetch', 'migrate', 'tick'].map(
+        (name) => `rss-reader-dev-${name}`,
+      ),
     );
     for (const { Properties } of functions) {
       expect(Properties.Tags).toEqual(
@@ -119,7 +121,7 @@ describe('App', () => {
         },
       }),
     ) as { Properties: Record<string, unknown> }[];
-    expect(functions).toHaveLength(5);
+    expect(functions).toHaveLength(6);
     app.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'rss-reader-dev-api',
       Environment: { Variables: Match.objectLike({ TRUST_PROXY: '2' }) },

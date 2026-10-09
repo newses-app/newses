@@ -34,6 +34,25 @@ test.describe('reader', () => {
     ).toBeVisible();
   });
 
+  test('shows an article’s full text from its page, and the feed’s version again', async ({
+    page,
+  }) => {
+    await page.goto('/all');
+    await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+    const article = page.locator('article');
+    const fullText = article.getByRole('button', { name: 'Full text' });
+    await fullText.click();
+    // The page is fetched live: either the article shows, or the reason it could not be read.
+    await expect(
+      article.locator('[data-full-text]').or(page.locator('.v-snackbar').filter({ hasText: /./ })),
+    ).toBeVisible({ timeout: 20_000 });
+    if (await article.locator('[data-full-text]').isVisible()) {
+      await expect(fullText).toHaveAttribute('aria-pressed', 'true');
+      await fullText.click();
+      await expect(article.locator('[data-full-text]')).toBeHidden();
+    }
+  });
+
   test('navigates with keyboard shortcuts', async ({ page }) => {
     await page.goto('/all');
     await expect(

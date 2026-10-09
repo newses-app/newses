@@ -1,3 +1,4 @@
+import { MAX_SCORE } from '@rss-reader/shared';
 import { sql } from 'drizzle-orm';
 import { DomainError } from '../../core/errors.ts';
 import { IMPORTED_GUID_PREFIX, purgeDaysSql, sha256 } from '../../core/feeds/ingest.ts';
@@ -23,6 +24,7 @@ interface SourceEntryRow {
   marked: boolean;
   published: boolean;
   last_read: Date | null;
+  score: number;
   /** Has a note, a share link, or a label: kept like starred and published entries. */
   marked_otherwise: boolean;
   title: string;
@@ -47,7 +49,7 @@ interface SourceEnclosureRow {
 // TTRSS stores times without a zone, in UTC.
 const ENTRY_QUERY = (after: string, limit: string) => `
   SELECT ue.int_id AS id, ue.ref_id, ue.feed_id, ue.orig_feed_id, ue.unread, ue.marked,
-    ue.published, ue.last_read AT TIME ZONE 'UTC' AS last_read,
+    ue.published, ue.score, ue.last_read AT TIME ZONE 'UTC' AS last_read,
     (coalesce(ue.note, '') <> '' OR ue.uuid <> '' OR EXISTS (
       SELECT 1 FROM ttrss_user_labels2 ul JOIN ttrss_labels2 l ON l.id = ul.label_id
       WHERE ul.article_id = ue.ref_id AND l.owner_uid = ue.owner_uid)) AS marked_otherwise,
@@ -57,6 +59,8 @@ const ENTRY_QUERY = (after: string, limit: string) => `
   FROM ttrss_user_entries ue JOIN ttrss_entries e ON e.id = ue.ref_id
   WHERE ue.owner_uid = $1 AND ue.int_id > ${after}
   ORDER BY ue.int_id LIMIT ${limit}`;
+
+const clampScore = (score: number) => Math.max(-MAX_SCORE, Math.min(MAX_SCORE, score));
 
 /** Seconds from a TTRSS duration: plain seconds or `[h:]m:s`. */
 export function durationSeconds(text: string): number | null {
@@ -191,6 +195,10 @@ async function writeBatch(
       unread,
       starred: row.marked || (current?.starred ?? false),
       published: row.published || (current?.published ?? false),
+      // Merged copies keep the score furthest from zero.
+      score: [clampScore(row.score), current?.score ?? 0].reduce((a, b) =>
+        Math.abs(b) > Math.abs(a) ? b : a,
+      ),
       readAt: unread ? null : (row.last_read ?? current?.readAt ?? row.date_entered),
     });
   }
@@ -205,6 +213,7 @@ async function writeBatch(
         unread: sql`excluded.unread`,
         starred: sql`excluded.starred`,
         published: sql`excluded.published`,
+        score: sql`excluded.score`,
         readAt: sql`excluded.read_at`,
       },
     })

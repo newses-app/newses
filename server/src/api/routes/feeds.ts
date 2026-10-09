@@ -20,7 +20,7 @@ const OPML_TYPES = ['application/xml', 'text/xml', 'text/x-opml', 'application/x
 
 export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
   app,
-  { categories, subscriptions, opml, updater, favicons },
+  { categories, subscriptions, opml, updater, favicons, fullText },
 ) => {
   app.addHook('preHandler', requireUser);
 
@@ -104,7 +104,9 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
     },
     async (request) => {
       const { title, categoryId, sortOrder, updateIntervalMinutes, purgeDays } = request.body;
-      const view = await subscriptions.update(requireAuth(request).user.id, request.params.id, {
+      const userId = requireAuth(request).user.id;
+      const before = await subscriptions.get(userId, request.params.id);
+      const view = await subscriptions.update(userId, request.params.id, {
         ...(title !== undefined && { title }),
         ...(categoryId !== undefined && { categoryId }),
         ...(sortOrder !== undefined && { sortOrder }),
@@ -112,7 +114,11 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
           updateIntervalSeconds: updateIntervalMinutes === null ? null : updateIntervalMinutes * 60,
         }),
         ...(purgeDays !== undefined && { purgeDays }),
+        ...(request.body.fullText !== undefined && { fullText: request.body.fullText }),
       });
+      // Turning full text on extracts the feed's newest entries too.
+      if (view.subscription.fullText && !before.subscription.fullText)
+        await fullText.queueFor(view.source.id);
       return toSubscription(view);
     },
   );

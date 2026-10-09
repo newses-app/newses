@@ -13,7 +13,11 @@ describe('SqsJobQueue', () => {
       },
     };
     const queue = new SqsJobQueue<Jobs>(
-      { 'feed.fetch': 'https://sqs/fetch', 'feed.favicon': 'https://sqs/favicon' },
+      {
+        'feed.fetch': 'https://sqs/fetch',
+        'feed.favicon': 'https://sqs/favicon',
+        'entry.extract': 'https://sqs/extract',
+      },
       client as never,
     );
     expect(await queue.enqueue('feed.fetch', { feedSourceIds: [1, 2] }, { key: 'a.example' })).toBe(

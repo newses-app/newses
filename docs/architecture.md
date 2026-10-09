@@ -48,7 +48,7 @@ Workspace packages exist only where runtime or toolchain differs.
 ## Runtime model
 
 - Docker: one container image, role selected by command: `server`, `worker`, `migrate`, `cli`.
-- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune), `fetch`, `favicon`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
+- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune), `fetch`, `favicon`, `extract`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
 
 Rules:
 - Server is stateless; sessions live in Postgres.
@@ -107,12 +107,12 @@ Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 source
              a new item takes over an imported entry (GUID `ttrss:…`) with the same link in the same source
   sanitise   allow-list HTML; strip control characters; resolve relative URLs (incl. srcset); drop tracking pixels
              (1×1 images, images from hosts in `trackers.ts`); titles to plain text
-  transform  hook: readability, site rewrites
   store      insert new entries; rewrite existing ones only when their content hash changed; replace enclosures
   fan out    new entries become unread user entries for every subscription, unless older than its purge age
              the entry's feed categories become the subscriber's tags
-  filter     each subscriber's filters, in order, until "stop"
+  filter     each recipient's enabled filters, in order, until "stop" (see Filters)
   notify     Realtime `counters` event per user who received entries
+  full text  `entry.extract` job for the source when a subscriber opted in and entries were added
   schedule   next fetch after the interval, or after backoff on failure; favicon refresh when older than 30 days
 ```
 
@@ -148,7 +148,10 @@ Subscription lifecycle:
 - Deleting a category moves its feeds and child categories to its parent.
 - OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines.
 
-Internal hooks: `beforeIngest`, `transformContent`, `afterIngest`, `renderArticle`. Readability is implemented as a hook module.
+Full text:
+- `entry.extract` jobs (one per feed source at a time) take the source's 20 newest entries not tried yet, newest first, and fetch each linked page through the per-host limits (HTML only, at most 5 MB). Readability (`@mozilla/readability` on linkedom) extracts the article, which is sanitised like feed content and stored in `entries.full_content`. Failures are recorded in `full_content_error` and not retried by jobs.
+- `POST /api/v1/entries/:id/full-text` extracts on demand, retrying earlier failures, and returns the stored text when there is one.
+- Readers see the full text first for subscriptions opted in to it, with a toggle back to the feed's content, and on request for others. TTRSS and Google Reader clients get it in place of the content for opted-in subscriptions. The original content is always kept, and search indexes it only.
 
 ## Data model
 
@@ -164,14 +167,14 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
 | `categories` | User | Self-referencing tree (`parent_id`), order |
 | `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error, publisher TTL hint, `blocked_until`); site URL; favicon ref. Fetch interval is the shortest among its subscribers; subscriptions with HTTP-auth credentials get a dedicated source |
-| `subscriptions` | User | → feed source, category; title override, interval and purge overrides, per-feed options, encrypted HTTP-auth credentials. Unique (user, feed source) |
-| `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, published/updated times, language, normalised feed categories, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
+| `subscriptions` | User | → feed source, category; title override, interval and purge overrides, full-text opt-in, per-feed options, encrypted HTTP-auth credentials. Unique (user, feed source) |
+| `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, extracted full text (with attempt time and error), published/updated times, language, normalised feed categories, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
 | `enclosures` | Shared | → entry; URL, MIME type, length, dimensions |
 | `user_entries` | User | → entry, subscription (nullable when archived) or archived feed; unread, starred, published, score, plain-text note (null when none), read time, share UUID. Unique (user, entry) |
 | `archived_feeds` | User | Title and URL of an unsubscribed feed that still holds kept entries |
 | `labels` / `entry_labels` | User | Caption (unique per user, case-insensitive), text and background colours (`#rrggbb`); many-to-many with `user_entries` |
 | `entry_tags` | User | (user entry, tag) pairs; tags are lower-case, single-spaced, without commas, at most 64 characters and 50 per entry |
-| `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), regex, inverse, scope (feeds/categories); actions: type + parameter |
+| `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), RE2 pattern, inverse, scope (subscription and category id arrays; empty for all feeds); actions: type with a label, tag, or score |
 | `access_keys` | User | Secret keys for published feed and generated feeds |
 | `import_map` | Instance | (TTRSS table, source id) → new id and owning user; on user rows, when that user's last import finished |
 
@@ -230,6 +233,12 @@ Search:
 - `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
 - `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
+
+Filters:
+- Patterns are RE2 syntax (re2js), matched case-insensitively and in linear time; patterns RE2 cannot compile are refused when saved.
+- `content` rules match the stored HTML; `tag` rules match each tag; a category scope includes its subcategories.
+- Enabled filters run in order on each user entry as it is delivered (fetch and new-subscription backfill), in the same transaction, until a `stop` action. Matching filters' actions combine: delete wins, scores add up within ±1,000,000, labels and tags accumulate (at most 50 tags).
+- `POST /filters/test` checks a draft against the user's 1,000 most recent entries and returns up to 50 matches. `POST /filters/:id/apply` runs one saved filter over existing entries, newest first, for at most 15 s per call, returning a cursor to continue; it never deletes kept entries (starred, published, noted, labelled, shared).
 
 Events stream:
 - Events are per-user invalidation signals; clients refetch what they describe. Events of one type within 1 s are sent once.
@@ -320,9 +329,10 @@ flowchart LR
   EB[EventBridge Scheduler] --> FT[λ tick]
   FT --> QF[[SQS fetch]] --> FF[λ fetch]
   FF --> QI[[SQS favicon]] --> FI[λ favicon]
-  FA & FT & FF & FI --> DB[(Aurora Serverless v2)]
+  FA & FF --> QX[[SQS extract]] --> FX[λ extract]
+  FA & FT & FF & FI & FX --> DB[(Aurora Serverless v2)]
   FA & FF & FI --> S3B[(S3: blobs)]
-  FF & FI --> NET((Internet feeds))
+  FA & FF & FI & FX --> NET((Internet feeds))
 ```
 
 - Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.

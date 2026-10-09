@@ -2,6 +2,8 @@ import type { ImportStep } from './importer.ts';
 import { categoriesStep } from './steps/categories.ts';
 import { entriesStep } from './steps/entries.ts';
 import { feedsStep } from './steps/feeds.ts';
+import { filtersStep } from './steps/filters.ts';
+import { fullTextStep } from './steps/full-text.ts';
 import { labelsStep } from './steps/labels.ts';
 import { prefsStep } from './steps/prefs.ts';
 import { sharingStep } from './steps/sharing.ts';
@@ -18,4 +20,6 @@ export const IMPORT_STEPS: readonly ImportStep[] = [
   labelsStep,
   tagsStep,
   sharingStep,
+  filtersStep,
+  fullTextStep,
 ];

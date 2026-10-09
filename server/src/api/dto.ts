@@ -70,6 +70,7 @@ export function toSubscription({ subscription, source }: SubscriptionView): Subs
         ? null
         : Math.round(subscription.updateIntervalSeconds / 60),
     purgeDays: subscription.purgeDays,
+    fullText: subscription.fullText,
   };
 }
 

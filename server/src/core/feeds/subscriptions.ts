@@ -30,6 +30,7 @@ export interface SubscriptionChanges {
   sortOrder?: number;
   updateIntervalSeconds?: number | null;
   purgeDays?: number | null;
+  fullText?: boolean;
 }
 
 type Resolved =
@@ -122,6 +123,7 @@ export class SubscriptionService {
           updateIntervalSeconds: changes.updateIntervalSeconds,
         }),
         ...(changes.purgeDays !== undefined && { purgeDays: changes.purgeDays }),
+        ...(changes.fullText !== undefined && { fullText: changes.fullText }),
       })
       .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
       .returning({ id: subscriptions.id });

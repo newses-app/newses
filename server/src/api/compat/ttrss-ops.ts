@@ -131,8 +131,24 @@ export function ttrssOps({ entries: entryServices, feeds, prefs }: TtrssDeps): T
     return new Map((await labelService.list(userId)).map((label) => [label.id, label]));
   }
 
-  /** Content with images pointed at the proxy, for users who turned it on. */
-  async function proxied(userId: number, list: Entry[]): Promise<Entry[]> {
+  /**
+   * Content for clients: the full text for subscriptions opted in to it, with images pointed at
+   * the proxy for users who turned it on.
+   */
+  async function proxied(userId: number, given: Entry[]): Promise<Entry[]> {
+    let list = given;
+    if (list.some((e) => e.fullContent)) {
+      const opted = new Set(
+        (await feeds.subscriptions.list(userId))
+          .filter((v) => v.subscription.fullText)
+          .map((v) => v.subscription.id),
+      );
+      list = list.map((e) =>
+        e.fullContent && e.subscriptionId !== null && opted.has(e.subscriptionId)
+          ? { ...e, content: e.fullContent }
+          : e,
+      );
+    }
     if (!list.some((e) => e.content) || !(await prefs.get(userId)).proxyImages) return list;
     return list.map((e) => (e.content ? { ...e, content: feeds.images.rewrite(e.content) } : e));
   }

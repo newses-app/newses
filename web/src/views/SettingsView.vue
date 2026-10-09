@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import AccountPanel from '../components/settings/AccountPanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
+import FiltersPanel from '../components/settings/FiltersPanel.vue';
 import LabelsPanel from '../components/settings/LabelsPanel.vue';
 import PrefsPanel from '../components/settings/PrefsPanel.vue';
 import SharingPanel from '../components/settings/SharingPanel.vue';
@@ -24,6 +25,7 @@ const tabs = computed(() => [
   'shortcuts',
   'feeds',
   'labels',
+  'filters',
   'sharing',
   'account',
   ...(isAdmin.value ? ['users'] : []),
@@ -59,6 +61,7 @@ useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings
       <ShortcutsPanel v-else-if="tab === 'shortcuts'" />
       <FeedsPanel v-else-if="tab === 'feeds'" />
       <LabelsPanel v-else-if="tab === 'labels'" />
+      <FiltersPanel v-else-if="tab === 'filters'" />
       <SharingPanel v-else-if="tab === 'sharing'" />
       <AccountPanel v-else-if="tab === 'account'" />
       <UsersPanel v-else-if="tab === 'users' && isAdmin" />

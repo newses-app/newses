@@ -7,3 +7,5 @@ export * from './labels.ts';
 export * from './limits.ts';
 export * from './shortcuts.ts';
 export * from './client.ts';
+export * from './filters.ts';
+export * from './filter-options.ts';

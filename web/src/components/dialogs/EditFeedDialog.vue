@@ -36,6 +36,7 @@ const title = ref('');
 const categoryId = ref<number | null>(null);
 const interval = ref<number | null>(null);
 const purgeDays = ref<number | null>(null);
+const fullText = ref(false);
 const busy = ref(false);
 /** The feed this one follows in its category, or null for first: the non-drag way to reorder. */
 const after = ref<number | null>(null);
@@ -56,6 +57,7 @@ watch(subscription, (s) => {
   categoryId.value = s.categoryId;
   interval.value = s.updateIntervalMinutes;
   purgeDays.value = s.purgeDays;
+  fullText.value = s.fullText;
   after.value = precedingId(inCategory(s.categoryId), s.id);
 });
 
@@ -91,6 +93,7 @@ function save() {
       title: title.value.trim() || null,
       updateIntervalMinutes: interval.value,
       purgeDays: purgeDays.value,
+      fullText: fullText.value,
     });
     if (moved)
       await editing.moveFeed(s.id, categoryId.value, beforeIdAfter(siblings.value, after.value));
@@ -142,6 +145,12 @@ async function unsubscribe() {
           <v-select v-model="after" :label="t('feeds.position')" :items="positionItems" />
           <v-select v-model="interval" :label="t('feeds.interval')" :items="intervalItems" />
           <v-select v-model="purgeDays" :label="t('feeds.purge')" :items="purgeItems" />
+          <v-checkbox
+            v-model="fullText"
+            :label="t('feeds.fullText')"
+            :hint="t('feeds.fullTextHint')"
+            persistent-hint
+          />
           <p class="text-body-small text-medium-emphasis">
             <template v-if="subscription.lastFetchedAt">
               {{

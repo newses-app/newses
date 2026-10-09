@@ -7,6 +7,7 @@ import type { Jobs } from '../jobs.ts';
 import type { JobQueue, Logger } from '../ports.ts';
 import { userPrefInt } from '../prefs.ts';
 import { decodeBody } from './decode.ts';
+import type { FullTextService } from './fulltext.ts';
 import type { HostLimiter } from './host-limiter.ts';
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
 import type { Ingester } from './ingest.ts';
@@ -64,8 +65,11 @@ export class FeedUpdater {
   readonly #settings: FeedSettings;
   readonly #logger: Logger;
   readonly #hosts: HostLimiter;
+  readonly #fullText: FullTextService | undefined;
 
   constructor(deps: {
+    /** Queues full text for opted-in feeds' new entries. */
+    fullText?: FullTextService;
     db: Db;
     fetcher: Fetcher;
     ingester: Ingester;
@@ -81,6 +85,7 @@ export class FeedUpdater {
     this.#settings = deps.settings;
     this.#logger = deps.logger;
     this.#hosts = deps.hosts;
+    this.#fullText = deps.fullText;
   }
 
   /**
@@ -211,6 +216,7 @@ export class FeedUpdater {
       ttlSeconds = feed.ttlSeconds;
       const result = await this.#ingester.ingest(source.id, siteUrl, feed.entries);
       this.#logger.debug({ feedSourceId: source.id, ...result }, 'Feed ingested');
+      if (result.inserted > 0) await this.#fullText?.queueFor(source.id);
     }
     const next = nextFetchSeconds(interval, [ttlSeconds, response.maxAgeSeconds]);
     await this.#db

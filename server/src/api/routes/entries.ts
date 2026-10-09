@@ -10,10 +10,12 @@ import {
   syncQuerySchema,
   syncResponseSchema,
   updatedCountSchema,
+  fullTextResponseSchema,
 } from '@rss-reader/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { EntryServices } from '../../core/entries/index.ts';
+import type { FullTextService } from '../../core/feeds/fulltext.ts';
 import type { ImageProxy } from '../../core/feeds/images.ts';
 import type { PrefsService } from '../../core/prefs.ts';
 import { requireAuth, requireUser } from '../auth.ts';
@@ -22,15 +24,19 @@ import { toCategory, toLabel, toSubscription } from '../dto.ts';
 const idParams = z.object({ id: z.coerce.number().int() });
 
 export const entryRoutes: FastifyPluginAsyncZod<
-  EntryServices & { prefs: PrefsService; images: ImageProxy }
-> = (app, { entries, counters, sync, prefs, images }) => {
+  EntryServices & { prefs: PrefsService; images: ImageProxy; fullText: FullTextService }
+> = (app, { entries, counters, sync, prefs, images, fullText }) => {
   /** Points images at the proxy for users who turned it on. */
-  async function withImages<T extends { content?: string | null | undefined }>(
-    userId: number,
-    list: T[],
-  ): Promise<T[]> {
-    if (!list.some((e) => e.content) || !(await prefs.get(userId)).proxyImages) return list;
-    return list.map((e) => (e.content ? { ...e, content: images.rewrite(e.content) } : e));
+  async function withImages<
+    T extends { content?: string | null | undefined; fullContent?: string | null | undefined },
+  >(userId: number, list: T[]): Promise<T[]> {
+    if (!list.some((e) => e.content || e.fullContent) || !(await prefs.get(userId)).proxyImages)
+      return list;
+    return list.map((e) => ({
+      ...e,
+      ...(e.content && { content: images.rewrite(e.content) }),
+      ...(e.fullContent && { fullContent: images.rewrite(e.fullContent) }),
+    }));
   }
 
   app.addHook('preHandler', requireUser);
@@ -60,6 +66,17 @@ export const entryRoutes: FastifyPluginAsyncZod<
       const userId = requireAuth(request).user.id;
       const [entry] = await withImages(userId, [await entries.get(userId, request.params.id)]);
       return entry;
+    },
+  );
+
+  app.post(
+    '/entries/:id/full-text',
+    { schema: { params: idParams, response: { 200: fullTextResponseSchema } } },
+    async (request) => {
+      const userId = requireAuth(request).user.id;
+      const content = await fullText.forUser(userId, request.params.id);
+      const [result] = await withImages(userId, [{ fullContent: content }]);
+      return { content: result?.fullContent ?? content };
     },
   );
 

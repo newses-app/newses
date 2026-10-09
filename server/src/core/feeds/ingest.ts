@@ -5,6 +5,7 @@ import type { Db } from '../../db/client.ts';
 import { enclosures, entries } from '../../db/schema.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Realtime } from '../ports.ts';
+import { runFilters } from '../filters/run.ts';
 import { userPrefInt } from '../prefs.ts';
 import type { ParsedEntry } from './parse.ts';
 import { sanitizeContent, sanitizeTitle, stripControlChars } from './sanitize.ts';
@@ -165,7 +166,7 @@ export class Ingester {
       }
 
       const newIds = written.filter((row) => row.inserted).map((row) => row.id);
-      const users = newIds.length > 0 ? await this.#fanOut(tx, inArray(sql`e.id`, newIds)) : [];
+      const users = newIds.length > 0 ? await this.#deliver(tx, inArray(sql`e.id`, newIds)) : [];
       return { inserted: newIds.length, updated: written.length - newIds.length, users };
     });
 
@@ -175,17 +176,29 @@ export class Ingester {
 
   /** Gives a new subscription the feed's existing entries within its purge window. */
   async backfill(subscriptionId: number): Promise<void> {
-    const users = await this.#fanOut(this.#db, sql`s.id = ${subscriptionId}`);
+    const users = await this.#db.transaction((tx) =>
+      this.#deliver(tx, sql`s.id = ${subscriptionId}`),
+    );
     await this.#notify(users);
+  }
+
+  /** Fans out, then runs each recipient's filters over what they received. */
+  async #deliver(executor: Pick<Db, 'execute'>, condition: SQL): Promise<number[]> {
+    const delivered = await this.#fanOut(executor, condition);
+    await runFilters(executor, delivered);
+    return [...new Set(delivered.map((d) => d.userId))];
   }
 
   /**
    * Creates unread user entries for matching entries and subscriptions, skipping entries already
    * older than the subscription's purge age, and tags them with the entries' feed categories.
-   * Returns the users who received entries.
+   * Returns the user entries created.
    */
-  async #fanOut(executor: Pick<Db, 'execute'>, condition: SQL): Promise<number[]> {
-    const rows = await executor.execute<{ user_id: number }>(sql`
+  async #fanOut(
+    executor: Pick<Db, 'execute'>,
+    condition: SQL,
+  ): Promise<{ id: number; userId: number }[]> {
+    const rows = await executor.execute<{ id: string; user_id: number }>(sql`
       WITH delivered AS (
         INSERT INTO user_entries (user_id, entry_id, subscription_id, sort_at)
         SELECT s.user_id, e.id, s.id, LEAST(coalesce(e.published_at, e.fetched_at), now())
@@ -205,8 +218,8 @@ export class Ingester {
         FROM delivered d JOIN entries e ON e.id = d.entry_id CROSS JOIN unnest(e.categories) AS tag
         ON CONFLICT DO NOTHING
       )
-      SELECT DISTINCT user_id FROM delivered`);
-    return rows.rows.map((row) => row.user_id);
+      SELECT id, user_id FROM delivered`);
+    return rows.rows.map((row) => ({ id: Number(row.id), userId: row.user_id }));
   }
 
   async #notify(userIds: number[]): Promise<void> {

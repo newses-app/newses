@@ -21,7 +21,7 @@ export const router = createRouter({
       children: [
         { path: '', redirect: '/all' },
         {
-          path: 'settings/:tab(preferences|shortcuts|feeds|labels|sharing|account|users)?',
+          path: 'settings/:tab(preferences|shortcuts|feeds|labels|filters|sharing|account|users)?',
           name: 'settings',
           component: () => import('./views/SettingsView.vue'),
         },

@@ -212,6 +212,8 @@ export const subscriptions = pgTable(
     title: text('title'),
     updateIntervalSeconds: integer('update_interval_seconds'),
     purgeDays: integer('purge_days'),
+    // New entries get their full text extracted, and readers see it first.
+    fullText: boolean('full_text').notNull().default(false),
     sortOrder: integer('sort_order').notNull().default(0),
     ...timestamps(),
   },
@@ -241,6 +243,11 @@ export const entries = pgTable(
       .notNull()
       .default(sql`'{}'`),
     lang: text('lang'),
+    // Readability extraction of the linked page, sanitised; the original content is kept.
+    fullContent: text('full_content'),
+    // Set once extraction was tried, with `full_content_error` when it failed.
+    fullContentAt: tstz('full_content_at'),
+    fullContentError: text('full_content_error'),
     publishedAt: tstz('published_at'),
     sourceUpdatedAt: tstz('source_updated_at'),
     fetchedAt: tstz('fetched_at').notNull().defaultNow(),
@@ -385,6 +392,67 @@ export const entryTags = pgTable(
     primaryKey({ columns: [t.userEntryId, t.tag] }),
     index('entry_tags_user_tag_idx').on(t.userId, t.tag, t.userEntryId),
   ],
+);
+
+// Filters run on each user's newly delivered entries, in `sort_order`; see `core/filters`.
+export const filters = pgTable(
+  'filters',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    enabled: boolean('enabled').notNull().default(true),
+    matchAny: boolean('match_any').notNull().default(false),
+    inverse: boolean('inverse').notNull().default(false),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('filters_user_idx').on(t.userId, t.sortOrder)],
+);
+
+export const filterRules = pgTable(
+  'filter_rules',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    filterId: integer('filter_id')
+      .notNull()
+      .references(() => filters.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    // title, content, titleOrContent, author, link, tag
+    field: text('field').notNull(),
+    // RE2 syntax, matched case-insensitively.
+    pattern: text('pattern').notNull(),
+    inverse: boolean('inverse').notNull().default(false),
+    // Scope; both empty for all feeds. Ids of deleted subscriptions and categories match nothing.
+    subscriptionIds: integer('subscription_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    categoryIds: integer('category_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+  },
+  (t) => [index('filter_rules_filter_idx').on(t.filterId, t.position)],
+);
+
+export const filterActions = pgTable(
+  'filter_actions',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    filterId: integer('filter_id')
+      .notNull()
+      .references(() => filters.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    // delete, markRead, star, publish, label, tag, score, stop
+    type: text('type').notNull(),
+    labelId: integer('label_id').references(() => labels.id, { onDelete: 'cascade' }),
+    tag: text('tag'),
+    score: integer('score'),
+  },
+  (t) => [index('filter_actions_filter_idx').on(t.filterId, t.position)],
 );
 
 // Secret keys in public URLs (published feed). Stored as is, so the URL can be shown again.

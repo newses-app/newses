@@ -5,6 +5,7 @@ import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
 import type { BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
 import { FaviconService, IconTokens } from './favicons.ts';
+import { FullTextService } from './fulltext.ts';
 import { HostLimiter } from './host-limiter.ts';
 import { ImageProxy } from './images.ts';
 import type { Fetcher } from './http.ts';
@@ -37,7 +38,9 @@ export function createFeedServices(deps: FeedDeps) {
   // One limiter for feeds, icons, and images, so together they respect each host's limits.
   const hosts = new HostLimiter(PER_HOST_CONCURRENCY, deps.hostGapMs ?? PER_HOST_GAP_MS);
   const ingester = new Ingester(db, deps.realtime, settings);
+  const fullText = new FullTextService({ db, fetcher, hosts, queue: deps.queue, logger });
   const updater = new FeedUpdater({
+    fullText,
     db,
     fetcher,
     ingester,
@@ -55,6 +58,7 @@ export function createFeedServices(deps: FeedDeps) {
     ingester,
     updater,
     favicons: new FaviconService(db, fetcher, blobs, logger, hosts),
+    fullText,
     iconTokens: new IconTokens(deps.keys['feed-icons']),
     images: new ImageProxy({ db, fetcher, blobs, hosts, key: deps.keys['image-url'], logger }),
     purger: new Purger(db, blobs, settings),

@@ -228,7 +228,9 @@ export function greaderEndpoints({ entries: entryServices, feeds, prefs, publicU
       }
       const sortMs = Date.parse(entry.sortAt);
       const published = Math.floor(Date.parse(entry.publishedAt ?? entry.sortAt) / 1000);
-      const content = entry.content ?? '';
+      // Subscriptions opted in to full text get it once extracted.
+      const content =
+        (view?.subscription.fullText ? entry.fullContent : null) ?? entry.content ?? '';
       const link = entry.link ? [{ href: entry.link, type: 'text/html' }] : [];
       return {
         id: longItemId(entry.id),

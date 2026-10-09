@@ -36,6 +36,7 @@ const feed = (
   disabled: false,
   updateIntervalMinutes: null,
   purgeDays: null,
+  fullText: false,
 });
 const counters: Counters = {
   subscriptions: [

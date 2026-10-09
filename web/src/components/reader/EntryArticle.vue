@@ -16,9 +16,12 @@ import {
   mdiStar,
   mdiStarOutline,
   mdiTagOutline,
+  mdiTextBoxOutline,
 } from '@mdi/js';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { api, ApiError } from '../../api.ts';
+import { useSubscriptions } from '../../composables/useFeeds.ts';
 import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
@@ -47,6 +50,49 @@ const link = computed(() => safeUrl(props.entry.link));
 const enclosures = computed(() =>
   (props.entry.enclosures ?? []).filter((enclosure) => safeUrl(enclosure.url)),
 );
+
+// Full text: shown first for subscriptions opted in to it, else on request.
+const subscriptions = useSubscriptions();
+const optedIn = computed(
+  () =>
+    subscriptions.data.value?.find((s) => s.id === props.entry.subscriptionId)?.fullText ?? false,
+);
+const fetched = ref<string | null>(null);
+/** The reader's choice for this article; null follows the subscription. */
+const choice = ref<'full' | 'original' | null>(null);
+const extracting = ref(false);
+const fullContent = computed(() => fetched.value ?? props.entry.fullContent ?? null);
+const showFull = computed(
+  () =>
+    !!fullContent.value && (choice.value === 'full' || (choice.value === null && optedIn.value)),
+);
+const content = computed(() => (showFull.value ? fullContent.value : props.entry.content));
+watch(
+  () => props.entry.id,
+  () => {
+    fetched.value = null;
+    choice.value = null;
+  },
+);
+
+async function toggleFullText() {
+  if (showFull.value) {
+    choice.value = 'original';
+    return;
+  }
+  if (!fullContent.value) {
+    extracting.value = true;
+    try {
+      fetched.value = (await api.entries.fullText(props.entry.id)).content;
+    } catch (error) {
+      ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+      return;
+    } finally {
+      extracting.value = false;
+    }
+  }
+  choice.value = 'full';
+}
 </script>
 
 <template>
@@ -146,6 +192,16 @@ const enclosures = computed(() =>
         <v-btn
           v-if="link"
           size="small"
+          :prepend-icon="mdiTextBoxOutline"
+          :loading="extracting"
+          :aria-pressed="showFull"
+          @click="toggleFullText"
+        >
+          {{ t('entries.fullText') }}
+        </v-btn>
+        <v-btn
+          v-if="link"
+          size="small"
           :prepend-icon="mdiOpenInNew"
           :href="link"
           target="_blank"
@@ -165,10 +221,13 @@ const enclosures = computed(() =>
     >
       {{ entry.note }}
     </v-alert>
+    <p v-if="showFull" class="text-body-small text-medium-emphasis mb-2" data-full-text>
+      {{ t('entries.fullTextShown') }}
+    </p>
     <v-skeleton-loader v-if="entry.content === undefined" type="paragraph@3" />
     <!-- Content is sanitised by the server against an allow-list before storage. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
-    <div v-else-if="entry.content" class="article-content" v-html="entry.content" />
+    <div v-else-if="content" class="article-content" v-html="content" />
     <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
     <v-list v-if="enclosures.length" density="compact" class="mt-4">
       <v-list-subheader>{{ t('entries.attachments') }}</v-list-subheader>

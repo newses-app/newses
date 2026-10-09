@@ -27,7 +27,7 @@
 | Favicons | P1 | Fetched per site, cached, shown in tree and headlines; fallback icon |
 | Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, labelled, or shared entries |
 | HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
-| Per-feed options | Later | Hide from "All articles", pause updates, always show images, auto-fetch full text |
+| Per-feed options | Later | Hide from "All articles", pause updates, always show images |
 | Feed debugger | Later | Dry-run fetch shows raw response, parsed entries, and filter matches |
 | Generated feeds | Later | Secret-key RSS feed for any feed, category, or label |
 | WebSub | Later | Push subscriptions for hubs advertised by feeds |

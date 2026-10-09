@@ -42,6 +42,8 @@ export const subscriptionSchema = z.object({
   /** Overrides of the user's defaults; null inherits. */
   updateIntervalMinutes: z.number().int().nullable(),
   purgeDays: z.number().int().nullable(),
+  /** New entries get their full text extracted, shown before the feed's content. */
+  fullText: z.boolean(),
 });
 
 export const subscribeRequestSchema = z.object({
@@ -70,6 +72,7 @@ export const updateSubscriptionRequestSchema = z.object({
   updateIntervalMinutes: z.number().int().min(15).max(10_080).nullable().optional(),
   /** 0 keeps entries forever; null inherits the user's default. */
   purgeDays: z.number().int().min(0).max(3650).nullable().optional(),
+  fullText: z.boolean().optional(),
 });
 
 export const opmlImportResultSchema = z.object({

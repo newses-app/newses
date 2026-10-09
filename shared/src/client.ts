@@ -17,6 +17,7 @@ import type {
   updateUserRequestSchema,
   User,
 } from './auth.ts';
+import type { Filter, FilterApplyResponse, FilterRequest, FilterTestResponse } from './filters.ts';
 import type {
   BulkEntryStateRequest,
   Counters,
@@ -25,6 +26,7 @@ import type {
   EntryListResponse,
   EntryNoteRequest,
   EntryState,
+  FullTextResponse,
   MarkReadRequest,
   PublishedFeedResponse,
   ShareResponse,
@@ -239,6 +241,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       setNote: (entryId: number, note: EntryNoteRequest['note']) =>
         request<undefined>('PUT', `/entries/${id(entryId)}/note`, { body: { note } }),
       /** Shares the entry at `/public/share/<shareId>`; the same id while it stays shared. */
+      /** The linked page's article, extracted now unless it was before. */
+      fullText: (entryId: number) =>
+        request<FullTextResponse>('POST', `/entries/${id(entryId)}/full-text`),
       share: (entryId: number) => request<ShareResponse>('PUT', `/entries/${id(entryId)}/share`),
       unshare: (entryId: number) => request<undefined>('DELETE', `/entries/${id(entryId)}/share`),
       /** Replaces the entry's tags; resolves to them normalised. */
@@ -257,6 +262,23 @@ export function createApiClient(options: ApiClientOptions = {}) {
       update: (labelId: number, body: UpdateLabelRequest) =>
         request<Label>('PATCH', `/labels/${id(labelId)}`, { body }),
       delete: (labelId: number) => request<undefined>('DELETE', `/labels/${id(labelId)}`),
+    },
+
+    filters: {
+      list: () => request<Filter[]>('GET', '/filters'),
+      create: (body: FilterRequest) => request<Filter>('POST', '/filters', { body }),
+      update: (filterId: number, body: FilterRequest) =>
+        request<Filter>('PUT', `/filters/${id(filterId)}`, { body }),
+      delete: (filterId: number) => request<undefined>('DELETE', `/filters/${id(filterId)}`),
+      reorder: (filterIds: number[]) =>
+        request<Filter[]>('PUT', '/filters/order', { body: { filterIds } }),
+      /** The user's recent entries a filter, saved or not, would match. */
+      test: (body: FilterRequest) => request<FilterTestResponse>('POST', '/filters/test', { body }),
+      /** Runs a saved filter over existing entries; repeat with the cursor until it is null. */
+      apply: (filterId: number, cursor?: string) =>
+        request<FilterApplyResponse>('POST', `/filters/${id(filterId)}/apply`, {
+          body: cursor === undefined ? {} : { cursor },
+        }),
     },
 
     /** The user's shared entries, newest first. */

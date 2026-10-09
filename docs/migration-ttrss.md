@@ -94,26 +94,27 @@ Nothing runs in AWS for an import. The operator runs the rss-reader image on the
 | `ttrss_feed_categories` | `categories` | `parent_cat` → `parent_id`; `order_id` and `collapsed` kept. A title already used under the same parent merges into that category |
 | `ttrss_feeds` | `feed_sources` + `subscriptions` | One feed source per normalised `feed_url` across all users, first fetched within 30 minutes of the import. Per user: title, category, `order_id`, `update_interval` (minutes, held to 15 min–7 days; `-1`, updates off, is noted and the feed is fetched), `purge_interval` (`-1` → never). Feeds with `auth_login` and invalid URLs are skipped; a user's second feed with the same normalised URL is skipped as a duplicate. Options with no equivalent (`hidden`, `cache_images`, `hide_images`, `always_display_enclosures`, `mark_unread_on_update`, `update_on_checksum_change`, `strip_images`, `rtl_content`, `cache_content`, `private`, `include_in_digest` off) are noted |
 | `ttrss_entries` | `entries` | Title, link, author, content (sanitised as fetched items are), `updated` → published time, `date_entered` → fetch time, `lang`. TTRSS keeps a copy per user; copies with the same feed source, title, link, and content become one entry, whose GUID is `ttrss:` and that content hash. Times are read as UTC |
-| `ttrss_user_entries` | `user_entries` | `unread`, `marked` → starred, `published`, `last_read` → read time; sort time is `updated`, at most now. Entries older than their subscription's purge age are skipped unless kept (starred, published, noted, labelled, or shared). Entries of skipped feeds are skipped; those of archived feeds (`orig_feed_id`) are kept without a subscription, under a feed source for the archived feed's URL. Copies of one article for one user merge: read if either was, starred or published if either was. `note` → note (at most 10,000 characters; merged copies' notes joined). `uuid` → share link: kept when it is a UUID, so legacy `public.php?op=share&key=…` links keep working; otherwise replaced by a stable new UUID and noted |
+| `ttrss_user_entries` | `user_entries` | `unread`, `marked` → starred, `published`, `score` (held to ±1,000,000), `last_read` → read time; sort time is `updated`, at most now. Entries older than their subscription's purge age are skipped unless kept (starred, published, noted, labelled, or shared). Entries of skipped feeds are skipped; those of archived feeds (`orig_feed_id`) are kept without a subscription, under a feed source for the archived feed's URL. Copies of one article for one user merge: read if either was, starred or published if either was, the score furthest from zero. `note` → note (at most 10,000 characters; merged copies' notes joined). `uuid` → share link: kept when it is a UUID, so legacy `public.php?op=share&key=…` links keep working; otherwise replaced by a stable new UUID and noted |
 | `ttrss_archived_feeds` | — | Skipped and reported; their entries are imported as above |
 | `ttrss_enclosures` | `enclosures` | URL, type, duration (seconds or `h:m:s`), dimensions |
 | `ttrss_labels2` | `labels` | Caption (at most 100 characters; captions equal ignoring case merge); colours as `#rrggbb` from `#rgb` or `#rrggbb`, others replaced by the default and noted |
 | `ttrss_user_labels2` | `entry_labels` | Joined via the label's owner to that user's `user_entries`; re-runs replace the imported entries' labels |
 | `ttrss_tags` | `entry_tags` | `post_int_id` → `user_entries`; normalised (lower case, single spaces, no commas, at most 64 characters), at most 50 per entry; empty, duplicate, and excess tags skipped and counted; re-runs replace the imported entries' tags |
-| `ttrss_filters2` | `filters` | `title`, `enabled`, `match_any_rule`, `inverse`, `order_id` |
-| `ttrss_filters2_rules` | `filter_rules` | Type title/content/both/link/author/tag mapped; `feed_id`/`cat_id`/`match_on` → scope. PCRE patterns translated to JS regex; untranslatable patterns and date rules import with the filter disabled |
-| `ttrss_filters2_actions` | `filter_actions` | delete, mark read, star, publish, tag, score, label, stop mapped; plugin actions skipped |
+| `ttrss_filters2` | `filters` | `title`, `enabled`, `match_any_rule`, `inverse`, order by `order_id`. A filter with a rule or action that cannot be imported is imported disabled and noted; one left with no rule or no action is skipped. Re-runs replace imported filters |
+| `ttrss_filters2_rules` | `filter_rules` | Types by `ttrss_filter_types.name`: title, content, both (title or content), link, author, tag; date rules have no equivalent. `match_on` (or the older `feed_id`, `cat_id`, `cat_filter`) → scope through the imported feeds and categories. PCRE patterns become RE2: `\Z` → `\z`, `\h` → `[ \t]`, `\R` → a line break; patterns RE2 still cannot compile (lookarounds, backreferences, atomic groups, possessive quantifiers) disable the filter |
+| `ttrss_filters2_actions` | `filter_actions` | By `ttrss_filter_actions.name`: filter → delete, catchup → mark read, mark → star, publish, score, tag (comma-separated, normalised), label (by caption), stop; plugin and other actions have no equivalent |
+| `ttrss_plugin_storage` | `subscriptions.full_text` | `af_readability`'s `enabled_feeds` and `append_feeds` (JSON or PHP-serialised) opt those feeds' subscriptions in to full text |
 | `ttrss_user_prefs2` | `user_prefs` | Default profile only. `FRESH_ARTICLE_MAX_AGE`, `PURGE_OLD_DAYS`, `DEFAULT_UPDATE_INTERVAL`, `COMBINED_DISPLAY_MODE`, `CDM_AUTO_CATCHUP`, `CONFIRM_FEED_CATCHUP`, `HIDE_READ_FEEDS`, `_DEFAULT_VIEW_MODE`, `_DEFAULT_VIEW_ORDER_BY`; values with no equivalent are skipped, other preferences listed in the report |
 | `ttrss_access_keys` | `access_keys` | The Published feed's key (`feed_id` `-2`) kept, so `/public/feeds/<key>` and the legacy `public.php?op=rss&id=-2&key=…` keep working; keys of other generated feeds are skipped |
 
 Not imported:
 - Sessions, app passwords, TOTP, and password hashes (users sign in with their temporary password, then set their own).
-- Plugin data.
+- Other plugin data.
 - Cached images and favicons (re-fetched).
 - Error logs.
 - Feed-browser cache.
 
-The first fetch after an import takes over each imported entry whose link matches a fetched item, so it is not duplicated; the entry gets the feed's GUID and current content, and keeps every user's state.
+The first fetch after an import takes over each imported entry whose link matches a fetched item, so it is not duplicated; the entry gets the feed's GUID and current content, and keeps every user's state. Imported entries do not go through filters; imported filters act on entries fetched afterwards, or on existing ones when applied.
 
 ## Checking an import
 

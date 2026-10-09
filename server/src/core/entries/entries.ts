@@ -103,6 +103,7 @@ export interface HeadlineRow extends Record<string, unknown> {
   share_id: string | null;
   head: string | null;
   content?: string | null;
+  full_content?: string | null;
   /** Keyset sort key as text. */
   k?: string;
 }
@@ -115,7 +116,7 @@ export const headlineColumns = (withContent: boolean) => sql`
   ue.share_id,
   array(SELECT el.label_id FROM entry_labels el WHERE el.user_entry_id = ue.id ORDER BY 1) AS labels,
   array(SELECT et.tag FROM entry_tags et WHERE et.user_entry_id = ue.id ORDER BY 1) AS tags,
-  left(e.content, 4000) AS head${withContent ? sql`, e.content` : sql``}`;
+  left(e.content, 4000) AS head${withContent ? sql`, e.content, e.full_content` : sql``}`;
 
 export const HEADLINE_FROM = sql`user_entries ue
   JOIN entries e ON e.id = ue.entry_id
@@ -142,6 +143,7 @@ export function toEntry(row: HeadlineRow): Entry {
     shareId: row.share_id,
     excerpt: excerpt(row.head),
     ...(row.content !== undefined && { content: row.content }),
+    ...(row.full_content !== undefined && { fullContent: row.full_content }),
   };
 }
 

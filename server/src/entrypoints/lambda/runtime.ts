@@ -73,6 +73,7 @@ export async function createLambdaRuntime(role: string) {
       {
         'feed.fetch': requireEnv('FEED_FETCH_QUEUE_URL'),
         'feed.favicon': requireEnv('FEED_FAVICON_QUEUE_URL'),
+        'entry.extract': requireEnv('ENTRY_EXTRACT_QUEUE_URL'),
       },
       new SQSClient({}),
     ),

@@ -81,6 +81,44 @@ test.describe('organisation', () => {
     await expect(page.getByText(caption)).toHaveCount(0);
   });
 
+  test('creates a filter, tests it, applies it, and deletes it', async ({ page }) => {
+    const title = `e2e filter ${String(Date.now())}`;
+    await page.goto('/all');
+    const first = page.getByRole('list', { name: 'Articles' }).getByRole('link').first();
+    const articleTitle = (await first.locator('.headline-title').innerText()).trim();
+    const word = articleTitle.split(/\s+/).find((w) => /^[A-Za-z]{4,}$/.test(w)) ?? articleTitle;
+
+    await page.goto('/settings/filters');
+    await page.getByRole('button', { name: 'New filter' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Name').fill(title);
+    await dialog.getByLabel('Pattern').fill(word);
+    // Vuetify's field wrapper receives the click for its inner input.
+    await dialog.locator('fieldset[aria-label="Action 1"] .v-select').click();
+    await page.getByRole('option', { name: 'Change score' }).click();
+    await dialog.getByLabel('Score change').fill('0');
+    await dialog.getByRole('button', { name: 'Test' }).click();
+    await expect(dialog.getByText(/of your \d+ most recent articles match/)).toBeVisible();
+    await expect(
+      dialog.getByRole('list', { name: 'Test results' }).getByRole('listitem').first(),
+    ).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+
+    const row = page.locator(`[data-filter="${title}"]`);
+    await expect(row).toBeVisible();
+    await page.getByRole('button', { name: `Apply ${title} to existing articles` }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Apply to existing articles' })
+      .click();
+    await expect(page.getByText(/Checked \d+ articles; [1-9]\d* matched/)).toBeVisible();
+
+    await page.getByRole('button', { name: `Delete filter ${title}` }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+    await expect(row).toHaveCount(0);
+  });
+
   test('tags an article and browses by tag', async ({ page }) => {
     const tag = `e2e tag ${String(Date.now())}`;
     await page.goto('/all');

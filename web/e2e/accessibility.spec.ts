@@ -44,6 +44,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           'shortcuts',
           'feeds',
           'labels',
+          'filters',
           'sharing',
           'account',
           'users',
@@ -98,6 +99,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await page.getByRole('button', { name: 'New label' }).click();
         await expect(dialog.getByLabel('Name')).toBeVisible();
         await expectNoViolations('edit-label');
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/settings/filters');
+        await page.getByRole('button', { name: 'New filter' }).click();
+        await expect(dialog.getByLabel('Pattern')).toBeVisible();
+        await expectNoViolations('edit-filter');
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
 

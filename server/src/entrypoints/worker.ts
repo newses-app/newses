@@ -41,6 +41,7 @@ await deps.queue.work(
 await deps.queue.work('feed.favicon', ({ feedSourceId }) => feeds.favicons.refresh(feedSourceId), {
   concurrency: 2,
 });
+await deps.queue.work('entry.extract', (data) => feeds.fullText.runJob(data), { concurrency: 2 });
 
 const scheduler = new IntervalScheduler(logger);
 scheduler.every('feeds.dispatch', 60, async () => {
