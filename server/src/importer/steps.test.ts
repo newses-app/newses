@@ -197,6 +197,11 @@ describe('TTRSS import steps', () => {
       "UPDATE ttrss_feed_categories SET title = 'Technology' WHERE id = 30",
     );
     await sourceDb.pool.query('UPDATE ttrss_feeds SET cat_id = 30 WHERE id = 5');
+    // A fetch here followed a permanent redirect, moving the source's URL.
+    await db
+      .update(feedSources)
+      .set({ url: 'https://two.example/feed' })
+      .where(eq(feedSources.url, 'https://two.example/rss'));
     try {
       const report = await run();
       expect(report.reconciled).toBe(true);
@@ -208,6 +213,7 @@ describe('TTRSS import steps', () => {
         .select()
         .from(subscriptions)
         .where(eq(subscriptions.feedSourceId, two?.id ?? 0));
+      expect(two?.url).toBe('https://two.example/feed');
       expect(sub?.categoryId).toBe(tech?.id);
     } finally {
       await sourceDb.pool.query("UPDATE ttrss_feed_categories SET title = 'Tech' WHERE id = 30");

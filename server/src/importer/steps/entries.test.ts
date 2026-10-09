@@ -26,7 +26,8 @@ const ago = (interval: string) => `(now() AT TIME ZONE 'UTC') - interval '${inte
 
 /**
  * pat and sam subscribe to one feed; pat also has an HTTP-auth feed (skipped) and an archived
- * feed. Article A is copied for both users, as TTRSS does.
+ * feed, and published a URL that belongs to no feed. Article A is copied for both users, as
+ * TTRSS does.
  */
 const SOURCE_ROWS = `
   INSERT INTO ttrss_users (id, login, pwd_hash) VALUES (2, 'pat', 'x'), (3, 'sam', 'x');
@@ -46,7 +47,8 @@ const SOURCE_ROWS = `
     (7, 'Orphan', 'g7', 'https://nowhere.example/1', ${ago('1 hour')}, '', 'h', ${ago('1 hour')}, ${ago('1 hour')}, ''),
     (8, 'Read', 'g8', 'https://one.example/read', ${ago('10 days')}, '', 'h', ${ago('10 days')}, ${ago('10 days')}, ''),
     (9, 'Future', 'g9', 'https://one.example/future', (now() AT TIME ZONE 'UTC') + interval '3 days', '', 'h', ${ago('1 hour')}, ${ago('1 hour')}, ''),
-    (10, 'Old noted', 'g10', 'https://one.example/old-noted', ${ago('100 days')}, '', 'h', ${ago('100 days')}, ${ago('100 days')}, '');
+    (10, 'Old noted', 'g10', 'https://one.example/old-noted', ${ago('100 days')}, '', 'h', ${ago('100 days')}, ${ago('100 days')}, ''),
+    (11, 'Shared', 'SHA1:g11', 'https://shared.example/post/1', ${ago('300 days')}, '', 'h', ${ago('300 days')}, ${ago('300 days')}, '');
   INSERT INTO ttrss_enclosures (content_url, content_type, title, duration, width, height, post_id) VALUES
     ('https://one.example/a.mp3', 'audio/mpeg', '', '1:02', 0, 0, 1);
   INSERT INTO ttrss_user_entries (int_id, ref_id, uuid, feed_id, orig_feed_id, owner_uid, marked,
@@ -60,7 +62,9 @@ const SOURCE_ROWS = `
     (7, 7, '', NULL, NULL, 2, false, false, '', '', NULL, true, NULL),
     (8, 8, '', 1, NULL, 2, false, true, '', '', ${ago('9 days')}, false, NULL),
     (9, 9, '', 1, NULL, 2, false, false, '', '', NULL, true, NULL),
-    (10, 10, '', 1, NULL, 2, false, false, '', '', NULL, true, 'remember this');`;
+    (10, 10, '', 1, NULL, 2, false, false, '', '', NULL, true, 'remember this'),
+    (11, 11, '', NULL, NULL, 2, false, true, '', '', NULL, false, NULL);
+  INSERT INTO ttrss_tags (tag_name, owner_uid, post_int_id) VALUES ('news', 2, 1);`;
 
 async function run(changes: Partial<ImportOptions> = {}) {
   const source = await TtrssSource.open(sourceDb.url);
@@ -117,6 +121,7 @@ describe('TTRSS entries import', () => {
       'Old noted',
       'Old starred',
       'Read',
+      'Shared',
     ]);
     const a = pat.get('A');
     expect(a?.entry).toMatchObject({
@@ -131,7 +136,7 @@ describe('TTRSS entries import', () => {
     expect(sam.get('A')?.entry.id).toBe(a?.entry.id);
     expect(sam.get('A')?.ue).toMatchObject({ unread: false, starred: true });
     expect(sam.get('A')?.ue.readAt?.getTime()).toBeGreaterThan(Date.now() - 6 * 60_000);
-    expect(await db.select().from(entries)).toHaveLength(6);
+    expect(await db.select().from(entries)).toHaveLength(7);
     expect(await db.select().from(enclosures)).toEqual([
       expect.objectContaining({
         entryId: a?.entry.id,
@@ -150,8 +155,15 @@ describe('TTRSS entries import', () => {
       .from(feedSources)
       .where(eq(feedSources.id, archived?.entry.feedSourceId ?? 0));
     expect(gone?.url).toBe('https://gone.example/rss');
+    const shared = pat.get('Shared');
+    expect(shared?.ue).toMatchObject({ subscriptionId: null, published: true });
+    const [site] = await db
+      .select()
+      .from(feedSources)
+      .where(eq(feedSources.id, shared?.entry.feedSourceId ?? 0));
+    expect(site).toMatchObject({ url: 'https://shared.example/', title: 'shared.example' });
 
-    expect(report.tally('pat', 'entries')).toEqual({ source: 9, imported: 6 });
+    expect(report.tally('pat', 'entries')).toEqual({ source: 10, imported: 7 });
     expect(
       report
         .skipped('pat')
@@ -196,6 +208,22 @@ describe('TTRSS entries import', () => {
     }
   });
 
+  it('re-runs after imported entries were deleted here', async () => {
+    await run();
+    const a = (await entriesOf('pat')).get('A');
+    await db.delete(userEntries).where(eq(userEntries.id, a?.ue.id ?? 0));
+    // A is now older than --since, so the re-run skips it and finds its mapping stale.
+    const report = await run({ since: new Date(Date.now() - 30 * 60_000) });
+    expect(report.reconciled).toBe(true);
+    expect((await entriesOf('pat')).has('A')).toBe(false);
+    expect(
+      await db
+        .select()
+        .from(importMap)
+        .where(eq(importMap.targetId, a?.ue.id ?? 0)),
+    ).toEqual([]);
+  });
+
   it('lets the first fetch take over imported entries instead of duplicating them', async () => {
     await run();
     const a = (await entriesOf('pat')).get('A');
@@ -226,6 +254,49 @@ describe('TTRSS entries import', () => {
     expect(
       (await db.select().from(userEntries)).filter((u) => u.entryId === a?.entry.id),
     ).toHaveLength(2);
+
+    // A re-run keeps the entry the fetch took over rather than importing A again.
+    const counts = async () => [
+      (await db.select().from(entries)).length,
+      (await db.select().from(userEntries)).length,
+    ];
+    const before = await counts();
+    expect((await run({ force: true })).reconciled).toBe(true);
+    expect(await counts()).toEqual(before);
+  });
+
+  it('joins entries a fetch here brought in before the import reached them', async () => {
+    const [one] = await db
+      .insert(feedSources)
+      .values({ url: 'https://one.example/rss' })
+      .returning({ id: feedSources.id });
+    await new Ingester(db, new RecordingRealtime(), {
+      updateIntervalSeconds: 1800,
+      purgeDays: 60,
+      disableAfterFailures: 3,
+    }).ingest(one?.id ?? 0, null, [
+      {
+        guid: 'feed-guid-a',
+        link: 'https://one.example/a',
+        title: 'A',
+        author: null,
+        content: '<p>A, fetched</p>',
+        publishedAt: new Date(Date.now() - 3600_000),
+        updatedAt: null,
+        enclosures: [],
+        categories: [],
+      },
+    ]);
+    expect((await run()).reconciled).toBe(true);
+    const a = (await entriesOf('pat')).get('A');
+    expect(a?.entry.guid).toBe('feed-guid-a');
+    expect((await entriesOf('sam')).get('A')).toMatchObject({
+      entry: { id: a?.entry.id },
+      ue: { unread: false, starred: true },
+    });
+    expect(
+      (await db.select().from(entries)).filter((e) => e.link === 'https://one.example/a'),
+    ).toHaveLength(1);
   });
 
   it('reads TTRSS durations', () => {

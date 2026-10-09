@@ -101,16 +101,29 @@ export const feedsStep: ImportStep = {
               report.skip(login, 'feeds', row.id, err.message);
               continue;
             }
-            const feedSource = await sourceFor(tx, url, row.title, row.site_url || null);
-            const [existing] = await tx
-              .select({ id: subscriptions.id })
-              .from(subscriptions)
-              .where(
-                and(
-                  eq(subscriptions.userId, userId),
-                  eq(subscriptions.feedSourceId, feedSource.id),
-                ),
-              );
+            // A subscription imported before keeps its source, whose URL may have moved since
+            // (a permanent redirect); otherwise the source is the feed's URL.
+            const mappedId = mapped.get(row.id);
+            let [existing] =
+              mappedId === undefined
+                ? []
+                : await tx
+                    .select({ id: subscriptions.id })
+                    .from(subscriptions)
+                    .where(and(eq(subscriptions.id, mappedId), eq(subscriptions.userId, userId)));
+            let feedSourceId: number | undefined;
+            if (!existing) {
+              feedSourceId = (await sourceFor(tx, url, row.title, row.site_url || null)).id;
+              [existing] = await tx
+                .select({ id: subscriptions.id })
+                .from(subscriptions)
+                .where(
+                  and(
+                    eq(subscriptions.userId, userId),
+                    eq(subscriptions.feedSourceId, feedSourceId),
+                  ),
+                );
+            }
             const duplicateOf = [...taken].find(([, id]) => id === existing?.id)?.[0];
             if (duplicateOf !== undefined) {
               report.skip(login, 'feeds', row.id, `same feed as ${String(duplicateOf)}`);
@@ -128,20 +141,14 @@ export const feedsStep: ImportStep = {
                 report.note(login, 'feeds', row.id, text);
               }),
             };
-            // The user's subscription to this source, else the one imported before (its URL changed).
-            let targetId = existing?.id ?? mapped.get(row.id);
-            if (targetId !== undefined) {
-              const [updated] = await tx
-                .update(subscriptions)
-                .set({ feedSourceId: feedSource.id, ...values })
-                .where(and(eq(subscriptions.id, targetId), eq(subscriptions.userId, userId)))
-                .returning({ id: subscriptions.id });
-              targetId = updated?.id;
-            }
-            if (targetId === undefined) {
+            let targetId: number;
+            if (existing) {
+              await tx.update(subscriptions).set(values).where(eq(subscriptions.id, existing.id));
+              targetId = existing.id;
+            } else {
               const [created] = await tx
                 .insert(subscriptions)
-                .values({ userId, feedSourceId: feedSource.id, ...values })
+                .values({ userId, feedSourceId: feedSourceId ?? 0, ...values })
                 .returning({ id: subscriptions.id });
               if (!created) throw new Error('Subscription insert returned no row');
               targetId = created.id;

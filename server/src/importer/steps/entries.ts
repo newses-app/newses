@@ -1,5 +1,5 @@
 import { MAX_SCORE } from '@rss-reader/shared';
-import { sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { DomainError } from '../../core/errors.ts';
 import { IMPORTED_GUID_PREFIX, purgeDaysSql, sha256 } from '../../core/feeds/ingest.ts';
 import { sanitizeContent, sanitizeTitle, stripControlChars } from '../../core/feeds/sanitize.ts';
@@ -131,6 +131,43 @@ async function archivedSources(context: ImportContext, user: ImportedUser) {
   return sources;
 }
 
+/**
+ * A feed source for the site of a kept entry that belongs to no feed (a URL shared to the
+ * published feed, or a starred entry of a removed feed), by origin. Sources nobody subscribes to
+ * are never fetched.
+ */
+async function siteSource(
+  { write }: ImportContext,
+  sites: Map<string, number | undefined>,
+  link: string,
+): Promise<number | undefined> {
+  let site: URL;
+  try {
+    site = new URL(stripControlChars(link));
+  } catch {
+    return undefined;
+  }
+  if (!sites.has(site.origin)) {
+    let url: string;
+    try {
+      url = normalizeFeedUrl(`${site.origin}/`);
+    } catch (err) {
+      if (!(err instanceof DomainError)) throw err;
+      sites.set(site.origin, undefined);
+      return undefined;
+    }
+    const id = await write(async (tx) => {
+      const result = await tx.execute<{ id: number }>(sql`
+        INSERT INTO feed_sources (url, title, site_url) VALUES (${url}, ${site.hostname}, ${url})
+        ON CONFLICT (url) DO UPDATE SET title = coalesce(feed_sources.title, excluded.title)
+        RETURNING id`);
+      return result.rows[0]?.id;
+    });
+    sites.set(site.origin, id);
+  }
+  return sites.get(site.origin);
+}
+
 interface Prepared {
   row: SourceEntryRow;
   feedSourceId: number;
@@ -148,19 +185,60 @@ async function writeBatch(
   batch: Prepared[],
   enclosureRows: SourceEnclosureRow[],
 ) {
+  // Rows imported before keep their entry: a fetch may have taken it over since (its GUID).
+  const mapped = await context.map.targets(
+    USER_ENTRIES,
+    batch.map((p) => p.row.id),
+    tx,
+  );
+  const priorEntries = new Map<number, number>();
+  if (mapped.size > 0) {
+    const prior = await tx
+      .select({ id: userEntries.id, entryId: userEntries.entryId })
+      .from(userEntries)
+      .where(inArray(userEntries.id, [...new Set(mapped.values())]));
+    const entryOfUserEntry = new Map(prior.map((ue) => [ue.id, ue.entryId]));
+    for (const [sourceId, userEntryId] of mapped) {
+      const entryId = entryOfUserEntry.get(userEntryId);
+      if (entryId !== undefined) priorEntries.set(sourceId, entryId);
+    }
+  }
+  // Others that a fetch here already brought in (same source and link) join that entry.
+  const fresh = batch.filter((p) => !priorEntries.has(p.row.id) && p.entry.link);
+  if (fresh.length > 0) {
+    const fetched = await tx.execute<{ id: string; feed_source_id: number; link: string }>(sql`
+      SELECT DISTINCT ON (e.feed_source_id, e.link) e.id, e.feed_source_id, e.link
+      FROM entries e
+      JOIN unnest(${sql.param(fresh.map((p) => p.feedSourceId))}::int[],
+          ${sql.param(fresh.map((p) => p.entry.link))}::text[]) AS n(feed_source_id, link)
+        ON e.feed_source_id = n.feed_source_id AND e.link = n.link
+      WHERE e.guid NOT LIKE ${`${IMPORTED_GUID_PREFIX}%`}
+      ORDER BY e.feed_source_id, e.link, e.id DESC`);
+    const byLink = new Map(
+      fetched.rows.map((e) => [`${String(e.feed_source_id)} ${e.link}`, Number(e.id)]),
+    );
+    for (const p of fresh) {
+      const entryId = byLink.get(`${String(p.feedSourceId)} ${p.entry.link ?? ''}`);
+      if (entryId !== undefined) priorEntries.set(p.row.id, entryId);
+    }
+  }
   const values = new Map<string, Prepared['entry']>();
-  for (const { feedSourceId, entry } of batch)
-    values.set(`${String(feedSourceId)} ${entry.guid}`, entry);
-  const written = await tx
-    .insert(entries)
-    .values([...values.values()])
-    .onConflictDoUpdate({
-      target: [entries.feedSourceId, entries.guid],
-      set: { guid: sql`excluded.guid` },
-    })
-    .returning({ id: entries.id, feedSourceId: entries.feedSourceId, guid: entries.guid });
+  for (const { row, feedSourceId, entry } of batch)
+    if (!priorEntries.has(row.id)) values.set(`${String(feedSourceId)} ${entry.guid}`, entry);
+  const written =
+    values.size === 0
+      ? []
+      : await tx
+          .insert(entries)
+          .values([...values.values()])
+          .onConflictDoUpdate({
+            target: [entries.feedSourceId, entries.guid],
+            set: { guid: sql`excluded.guid` },
+          })
+          .returning({ id: entries.id, feedSourceId: entries.feedSourceId, guid: entries.guid });
   const entryIds = new Map(written.map((e) => [`${String(e.feedSourceId)} ${e.guid}`, e.id]));
-  const entryOf = (p: Prepared) => entryIds.get(`${String(p.feedSourceId)} ${p.entry.guid}`) ?? 0;
+  const entryOf = (p: Prepared) =>
+    priorEntries.get(p.row.id) ?? entryIds.get(`${String(p.feedSourceId)} ${p.entry.guid}`) ?? 0;
 
   const byRef = new Map(batch.map((p) => [p.row.ref_id, entryOf(p)]));
   const files = enclosureRows.flatMap((e) => {
@@ -229,8 +307,10 @@ async function writeBatch(
 /**
  * Entries and article state. TTRSS keeps a copy of an article per user; copies with the same
  * feed source, title, link, and content become one shared entry, with a `ttrss:` GUID that the
- * first fetched item with its link takes over. Entries purge would delete at once, and with
+ * first fetched item with its link takes over; items fetched here first are joined by link
+ * instead. Entries purge would delete at once, and with
  * `--since` older ones, are skipped unless kept (starred, published, noted, labelled, shared).
+ * Entries with no feed are kept under their archived feed or, when kept, their site.
  */
 export const entriesStep: ImportStep = {
   name: 'entries',
@@ -244,6 +324,7 @@ export const entriesStep: ImportStep = {
         archivedSources(context, user),
       ]);
       const skips = new Skips();
+      const sites = new Map<string, number | undefined>();
       const now = Date.now();
       for await (const rows of source.batches<SourceEntryRow>(
         ENTRY_QUERY,
@@ -255,6 +336,7 @@ export const entriesStep: ImportStep = {
         const feedSubs = await map.targets(FEEDS, feedIds);
         const batch: Prepared[] = [];
         for (const row of rows) {
+          const kept = row.marked || row.published || row.marked_otherwise;
           let subscriptionId: number | null = null;
           let feedSourceId: number | undefined;
           if (row.feed_id !== null) {
@@ -267,13 +349,14 @@ export const entriesStep: ImportStep = {
             }
           } else {
             feedSourceId = row.orig_feed_id === null ? undefined : archived.get(row.orig_feed_id);
+            if (feedSourceId === undefined && kept && row.link)
+              feedSourceId = await siteSource(context, sites, row.link);
             if (feedSourceId === undefined) {
               skips.add('it belongs to no feed');
               continue;
             }
           }
           const sortAt = new Date(Math.min(row.updated.getTime(), now));
-          const kept = row.marked || row.published || row.marked_otherwise;
           if (!kept && options.since && sortAt < options.since) {
             skips.add('older than --since');
             continue;
@@ -318,6 +401,14 @@ export const entriesStep: ImportStep = {
         report.count(login, 'entries', { imported: batch.length });
       }
       skips.report(context, login);
+      // Imported entries deleted here since (purged, or unsubscribed from) are forgotten, so
+      // later steps skip them.
+      await write((tx) =>
+        tx.execute(sql`
+          DELETE FROM import_map m
+          WHERE m.source_table = ${USER_ENTRIES} AND m.user_id = ${userId}
+            AND NOT EXISTS (SELECT 1 FROM user_entries ue WHERE ue.id = m.target_id)`),
+      );
     }
   },
 };
