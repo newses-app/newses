@@ -22,7 +22,7 @@ Behaviour:
 - Batched and resumable: each batch commits on its own, and `import_map` records every imported source row, so re-running skips or updates rows already imported.
 - Re-running after the first import applies changes made in TTRSS since then. Source state wins.
 - Refuses to re-import into users who changed anything here since their last import finished (entry state, feeds, categories, labels), unless `--force`. Entries fetched here since then do not count as changes.
-- Ends with a reconciliation report: per user, source vs imported counts of feeds, categories, entries, unread, starred, published, labels, notes, and filters, plus every skipped item and the reason. Counts that do not add up are marked `!`, and the command then exits with status 1.
+- Ends with a reconciliation report: per user, source vs imported counts of feeds, categories, entries, unread, starred, published, labels, notes, and filters, plus every skipped item and the reason, and notes (adopted users, temporary passwords, options not imported). Counts that do not add up are marked `!`, and the command then exits with status 1.
 
 ## Running the import
 
@@ -90,9 +90,9 @@ Nothing runs in AWS for an import. The operator runs the rss-reader image on the
 
 | TTRSS | Imported as | Notes |
 |---|---|---|
-| `ttrss_users` | `users` | `access_level` ≥ 10 → `admin`. Password hashes in supported legacy formats are verified on first login and rehashed to Argon2id; other users get an admin-set temporary password. TOTP is not carried over |
-| `ttrss_feed_categories` | `categories` | `parent_cat` → `parent_id`; `order_id` kept |
-| `ttrss_feeds` | `feed_sources` + `subscriptions` | One feed source per normalised `feed_url` across all users; per-user title, category, `update_interval`, `purge_interval`, `hide_images`/`cache_images` options, `auth_login`/`auth_pass` (re-encrypted) |
+| `ttrss_users` | `users` | `access_level` ≥ 10 → `admin`. A new user gets a temporary password, printed once in the report, which must be changed at first sign-in. A user here with the same login (any case) is adopted, keeping its password and role. Logins not allowed here are skipped. Users already imported are left unchanged on re-runs. TOTP and password hashes are not carried over |
+| `ttrss_feed_categories` | `categories` | `parent_cat` → `parent_id`; `order_id` and `collapsed` kept. A title already used under the same parent merges into that category |
+| `ttrss_feeds` | `feed_sources` + `subscriptions` | One feed source per normalised `feed_url` across all users, first fetched within 30 minutes of the import. Per user: title, category, `order_id`, `update_interval` (minutes, held to 15 min–7 days; `-1`, updates off, is noted and the feed is fetched), `purge_interval` (`-1` → never). Feeds with `auth_login` and invalid URLs are skipped; a user's second feed with the same normalised URL is skipped as a duplicate. Options with no equivalent (`hidden`, `cache_images`, `hide_images`, `always_display_enclosures`, `mark_unread_on_update`, `update_on_checksum_change`, `strip_images`, `rtl_content`, `cache_content`, `private`, `include_in_digest` off) are noted |
 | `ttrss_entries` | `entries` | Title, link, author, content, `content_hash`, `updated`/`date_entered`, `lang`. TTRSS GUIDs are owner-scoped hashes, so entries are deduplicated across users by (feed source, link, content hash) |
 | `ttrss_user_entries` | `user_entries` | `unread`, `marked` → starred, `published`, `score`, `note`, `last_read`, `uuid` → share UUID; `orig_feed_id` → archived feed |
 | `ttrss_archived_feeds` | `archived_feeds` | Title, URLs |
@@ -103,17 +103,28 @@ Nothing runs in AWS for an import. The operator runs the rss-reader image on the
 | `ttrss_filters2` | `filters` | `title`, `enabled`, `match_any_rule`, `inverse`, `order_id` |
 | `ttrss_filters2_rules` | `filter_rules` | Type title/content/both/link/author/tag mapped; `feed_id`/`cat_id`/`match_on` → scope. PCRE patterns translated to JS regex; untranslatable patterns and date rules import with the filter disabled |
 | `ttrss_filters2_actions` | `filter_actions` | delete, mark read, star, publish, tag, score, label, stop mapped; plugin actions skipped |
-| `ttrss_user_prefs2` | `user_prefs` | Prefs with an equivalent setting (update interval, purge age, fresh age, combined mode, auto catch-up, timezone, sort, view mode); others listed in the report |
+| `ttrss_user_prefs2` | `user_prefs` | Default profile only. `FRESH_ARTICLE_MAX_AGE`, `PURGE_OLD_DAYS`, `DEFAULT_UPDATE_INTERVAL`, `COMBINED_DISPLAY_MODE`, `CDM_AUTO_CATCHUP`, `CONFIRM_FEED_CATCHUP`, `HIDE_READ_FEEDS`, `_DEFAULT_VIEW_MODE`, `_DEFAULT_VIEW_ORDER_BY`; values with no equivalent are skipped, other preferences listed in the report |
 | `ttrss_access_keys` | `access_keys` | Published-feed key kept, so existing public feed URLs stay valid. The legacy `public.php?op=rss&id=-2&key=…` URL redirects |
 
 Not imported:
-- Sessions and app passwords (re-create them).
+- Sessions, app passwords, TOTP, and password hashes (users sign in with their temporary password, then set their own).
 - Plugin data.
 - Cached images and favicons (re-fetched).
 - Error logs.
 - Feed-browser cache.
 
 Imported entries are matched to newly fetched items by link, so the first fetch after import does not duplicate them.
+
+## Checking an import
+
+- The report has no `!` rows, and every skip and note is expected. Keep the printed temporary passwords for handing out, then delete any saved copy of the report.
+- Each user signs in with their temporary password, sets their own, and finds their categories, feeds, and preferences as in TTRSS.
+- Per-user counts match the source:
+  ```
+  SELECT u.login, count(f.id) AS feeds FROM ttrss_users u LEFT JOIN ttrss_feeds f ON f.owner_uid = u.id GROUP BY u.login;
+  SELECT u.login, count(s.id) AS feeds FROM users u LEFT JOIN subscriptions s ON s.user_id = u.id GROUP BY u.login;
+  ```
+- A second run reports the same counts and creates nothing.
 
 ## Cut-over
 

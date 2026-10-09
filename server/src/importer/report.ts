@@ -10,10 +10,22 @@ export interface Skipped {
   reason: string;
 }
 
+/** Information about an imported item that does not affect reconciliation. */
+export interface Note {
+  item: string;
+  sourceId: number;
+  text: string;
+}
+
 interface Section {
   tallies: Map<string, Tally>;
   skipped: Skipped[];
+  notes: Note[];
 }
+
+/** An item and its source id; rows without an id (preferences) pass 0. */
+const label = ({ item, sourceId }: { item: string; sourceId: number }) =>
+  sourceId ? `${item} ${String(sourceId)}` : item;
 
 /** Rows not owned by a user (feed sources, entries) are reported under this name. */
 export const SHARED = '(shared)';
@@ -33,7 +45,7 @@ export class ImportReport {
   #section(login: string): Section {
     let section = this.#sections.get(login);
     if (!section) {
-      section = { tallies: new Map(), skipped: [] };
+      section = { tallies: new Map(), skipped: [], notes: [] };
       this.#sections.set(login, section);
     }
     return section;
@@ -50,6 +62,15 @@ export class ImportReport {
 
   skip(login: string, item: string, sourceId: number, reason: string): void {
     this.#section(login).skipped.push({ item, sourceId, reason });
+  }
+
+  /** Records what the import did with an item beyond counting it: adoptions, options left out. */
+  note(login: string, item: string, sourceId: number, text: string): void {
+    this.#section(login).notes.push({ item, sourceId, text });
+  }
+
+  notes(login: string): Note[] {
+    return this.#sections.get(login)?.notes ?? [];
   }
 
   tally(login: string, item: string): Tally {
@@ -72,7 +93,7 @@ export class ImportReport {
   /** Plain-text report; rows whose counts do not reconcile are marked `!`. */
   format(): string {
     const lines = [`TTRSS import report${this.dryRun ? ' (dry run: nothing written)' : ''}`];
-    for (const [login, { tallies, skipped }] of this.#sections) {
+    for (const [login, { tallies, skipped, notes }] of this.#sections) {
       lines.push('', login);
       if (tallies.size > 0) {
         const width = Math.max(4, ...[...tallies.keys()].map((item) => item.length));
@@ -89,7 +110,11 @@ export class ImportReport {
       }
       if (skipped.length > 0) {
         lines.push('  skipped:');
-        for (const s of skipped) lines.push(`    ${s.item} ${String(s.sourceId)}: ${s.reason}`);
+        for (const s of skipped) lines.push(`    ${label(s)}: ${s.reason}`);
+      }
+      if (notes.length > 0) {
+        lines.push('  notes:');
+        for (const n of notes) lines.push(`    ${label(n)}: ${n.text}`);
       }
     }
     return lines.join('\n');
