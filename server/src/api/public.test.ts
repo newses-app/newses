@@ -217,3 +217,22 @@ describe('published feed', () => {
     await services.users.update(alice.id, { disabled: false });
   });
 });
+
+describe('legacy TTRSS public URLs', () => {
+  it('redirect the published feed and share links to their pages here', async () => {
+    const feed = await app.inject({ url: '/public.php?op=rss&id=-2&key=abc_D-1&view-mode=all' });
+    expect(feed.statusCode).toBe(301);
+    expect(feed.headers.location).toBe('/public/feeds/abc_D-1');
+    const uuid = '0F8FAD5B-D9CB-469F-A165-70867728950E';
+    const share = await app.inject({ url: `/public.php?op=share&key=${uuid}` });
+    expect(share.statusCode).toBe(301);
+    expect(share.headers.location).toBe(`/public/share/${uuid.toLowerCase()}`);
+    for (const url of [
+      '/public.php?op=rss&id=12&key=abc',
+      '/public.php?op=share&key=not-a-uuid',
+      '/public.php?op=login',
+      '/public.php',
+    ])
+      expect((await app.inject({ url })).statusCode).toBe(404);
+  });
+});

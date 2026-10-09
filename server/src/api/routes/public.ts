@@ -90,3 +90,33 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
 
   return Promise.resolve();
 };
+
+/**
+ * TTRSS's public URLs, kept working after an import: `public.php?op=rss&id=-2&key=…` (the
+ * published feed) and `public.php?op=share&key=…` (a shared article) redirect to their pages here.
+ */
+export const legacyPublicRoutes: FastifyPluginAsyncZod = (app) => {
+  app.get(
+    '/public.php',
+    {
+      schema: {
+        querystring: z.object({
+          op: z.string().optional(),
+          id: z.string().optional(),
+          key: z.string().max(100).optional(),
+        }),
+        hide: true,
+      },
+    },
+    (request, reply) => {
+      const { op, id, key } = request.query;
+      void reply.header('x-robots-tag', 'noindex');
+      if (key && op === 'rss' && id === '-2')
+        return reply.redirect(`/public/feeds/${encodeURIComponent(key)}`, 301);
+      if (key && op === 'share' && UUID.test(key))
+        return reply.redirect(`/public/share/${key.toLowerCase()}`, 301);
+      return reply.code(404).type('text/plain; charset=utf-8').send('Not found');
+    },
+  );
+  return Promise.resolve();
+};

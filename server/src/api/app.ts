@@ -31,7 +31,7 @@ import { imageRoutes } from './routes/images.ts';
 import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
 import { prefsRoutes } from './routes/prefs.ts';
-import { publicRoutes } from './routes/public.ts';
+import { legacyPublicRoutes, publicRoutes } from './routes/public.ts';
 import { sharingRoutes } from './routes/sharing.ts';
 import {
   registerRequestDiagnostics,
@@ -170,6 +170,7 @@ export function buildApp(deps: AppDeps) {
       images: services.feeds.images,
       publicUrl: deps.publicUrl ?? null,
     });
+    void app.register(legacyPublicRoutes);
     const compat = {
       services: { auth: services.auth, sessions: services.sessions },
       options: { trace: deps.compatTrace ?? false },
