@@ -19,6 +19,8 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 | `pnpm --filter @rss-reader/desktop build:win:signed` | Signed NSIS installer (on Windows), with the values in `desktop/electron-builder.env` |
 | `scripts/windows-signing-setup.sh` | Creates the release pipeline's Azure app registration and signer role on the existing Artifact Signing profile; writes `desktop/electron-builder.env`, and SSM parameters with `--ssm` (`--help`) |
 | `pnpm --filter @rss-reader/mobile build:apk` / `install:apk` | Unsigned debug APK in `mobile/release` (needs JDK 21 and the Android SDK); `install:apk` also installs it with `adb` |
+| `pnpm --filter @rss-reader/mobile build:apk:release` | Release APK in `mobile/release`, signed with the values in `mobile/android-signing.env` (unsigned without them) |
+| `scripts/android-signing-setup.sh --backup DIR` | Generates the Android release keystore in an offline backup folder (or reuses it there); writes `mobile/android-signing.env`, and SSM parameters with `--ssm` (`--help`) |
 | `E2E_BASE_URL=… pnpm --filter @rss-reader/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
 | `pnpm --filter @rss-reader/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first); deployments run through the pipelines |
 

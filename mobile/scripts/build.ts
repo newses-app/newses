@@ -2,6 +2,9 @@
 // the native web build, with the platform bridge (www/bridge.js) loaded ahead of the app.
 // `--apk debug|release` then builds the APK into release/; `--install` also installs it with adb.
 // The version comes from RELEASE_TAG (e.g. v1.2.3); local builds are 0.0.0-dev.
+// Release APKs are signed with the ANDROID_KEYSTORE_* values, from the environment or
+// android-signing.env (scripts/android-signing-setup.sh); without them they are unsigned.
+import { existsSync } from 'node:fs';
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -59,15 +62,21 @@ await writeFile(
 run('pnpm', ['exec', 'cap', 'sync', 'android'], { cwd: root });
 
 if (variant) {
+  const envFile = `${root}android-signing.env`;
+  if (variant === 'release' && !process.env.ANDROID_KEYSTORE_FILE && existsSync(envFile)) {
+    process.loadEnvFile(envFile);
+  }
+  const signed = variant === 'release' && Boolean(process.env.ANDROID_KEYSTORE_FILE);
   const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
   const task = variant === 'debug' ? 'assembleDebug' : 'assembleRelease';
   run(gradlew, [task], {
     cwd: `${root}android`,
     env: { ...process.env, VERSION_NAME: version.name, VERSION_CODE: String(version.code) },
   });
-  const suffix = variant === 'debug' ? '-debug' : '';
-  // Unsigned release builds are named so by Gradle; the signed one (#59) drops the suffix.
-  const built = `${root}android/app/build/outputs/apk/${variant}/app-${variant}.apk`;
+  // Gradle names an unsigned release APK app-release-unsigned.apk.
+  const unsigned = variant === 'release' && !signed ? '-unsigned' : '';
+  const built = `${root}android/app/build/outputs/apk/${variant}/app-${variant}${unsigned}.apk`;
+  const suffix = variant === 'debug' ? '-debug' : unsigned;
   const apk = `${root}release/rss-reader-${version.name}-android${suffix}.apk`;
   await mkdir(`${root}release`, { recursive: true });
   await copyFile(built, apk);

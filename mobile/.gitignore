@@ -1,3 +1,5 @@
 www/
 release/
 assets/
+android-signing.env
+*.jks
