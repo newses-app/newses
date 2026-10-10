@@ -107,7 +107,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 
 ## Desktop app
 
-`desktop/`: Electron for Windows and Linux (x64). esbuild bundles the main process and preload into `out/`, beside the native web build (`out/web`); electron-builder packages a per-user NSIS installer, an AppImage, and a deb.
+`desktop/`: Electron for Windows and Linux (x64). esbuild bundles the main process and preload into `out/`, beside the native web build (`out/web`); electron-builder packages a per-user NSIS installer, a zip of the app (runs without installing; not updated by electron-updater), an AppImage, and a deb.
 
 - The web build is served from `app://rss-reader`, a privileged standard scheme: client-side routes fall back to `index.html`, and responses carry the native CSP as a header. The API sees that origin.
 - The window has context isolation, the sandbox, no Node integration, and no webviews. New windows are denied and navigation away from the app is blocked; http(s) links open in the system browser. Only the notification and clipboard-write permissions are granted.
@@ -399,7 +399,7 @@ A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to
 | Stage | Runs |
 |---|---|
 | Source | The tagged commit, over the GitHub connection. Runs without a tag (creation, a manual release) skip the next stages. |
-| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`). Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`. |
+| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`, zip of the signed app). Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`. |
 | Publish | `release-publish.yml`: checks the full set, writes the feeds, `latest.json`, and `index.html`, uploads to the downloads bucket, HEAD-checks every URL, then tags the prerelease it replaced `superseded=true`. |
 
 - Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@rss-reader/shared/release`), and `index.html` (no-cache).

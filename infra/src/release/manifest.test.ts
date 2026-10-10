@@ -74,17 +74,22 @@ describe('buildManifest', () => {
       prerelease: true,
       published: '2026-10-10T12:00:00.000Z',
       windows: {
-        url: `https://reader-dev.example.com/downloads/${version}/${names.windows}`,
-        size: 0,
-        sha256: 'hash0',
+        installer: {
+          url: `https://reader-dev.example.com/downloads/${version}/${names.windows}`,
+          size: 0,
+          sha256: 'hash0',
+        },
+        zip: expect.objectContaining({ size: 1 }) as unknown,
       },
       linux: {
-        appImage: expect.objectContaining({ size: 1 }) as unknown,
-        deb: expect.objectContaining({ size: 2 }) as unknown,
+        appImage: expect.objectContaining({ size: 2 }) as unknown,
+        deb: expect.objectContaining({ size: 3 }) as unknown,
       },
-      android: expect.objectContaining({ versionCode: 10203, size: 3 }) as unknown,
+      android: expect.objectContaining({ versionCode: 10203, size: 4 }) as unknown,
     });
-    expect(renderIndex(manifest)).toContain(`<a href="${manifest.android.url}">`);
+    const page = renderIndex(manifest);
+    expect(page).toContain(`<a href="${manifest.windows.zip.url}">`);
+    expect(page).toContain(`<a href="${manifest.android.url}">`);
   });
 });
 
@@ -93,6 +98,7 @@ describe('uploadPlan', () => {
     const plan = uploadPlan(version, 'downloads');
     expect(plan.map((u) => u.key)).toEqual([
       `downloads/${version}/${names.windows}`,
+      `downloads/${version}/${names.windowsZip}`,
       `downloads/${version}/${names.appImage}`,
       `downloads/${version}/${names.deb}`,
       `downloads/${version}/${names.android}`,

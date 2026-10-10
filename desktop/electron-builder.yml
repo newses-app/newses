@@ -1,4 +1,4 @@
-# Unsigned builds: `pnpm build:win` (per-user NSIS) and `pnpm build:linux` (AppImage, deb).
+# Unsigned builds: `pnpm build:win` (per-user NSIS, zip) and `pnpm build:linux` (AppImage, deb).
 appId: app.newses
 productName: rss-reader
 copyright: Copyright © Newses contributors
@@ -30,6 +30,10 @@ win:
   target:
     - target: nsis
       arch: [x64]
+    # The unpacked app, to run without installing; not updated by electron-updater.
+    - target: zip
+      arch: [x64]
+  artifactName: rss-reader-${version}-windows-${arch}.${ext}
 
 nsis:
   oneClick: true

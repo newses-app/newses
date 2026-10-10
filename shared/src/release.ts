@@ -34,7 +34,7 @@ export interface ReleaseManifest {
   prerelease: boolean;
   /** ISO 8601 time of publishing. */
   published: string;
-  windows: ReleaseFile;
+  windows: { installer: ReleaseFile; zip: ReleaseFile };
   linux: { appImage: ReleaseFile; deb: ReleaseFile };
   android: ReleaseFile & { versionCode: number };
 }

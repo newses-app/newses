@@ -23,6 +23,7 @@ export interface Upload {
 /** The installers each version ships, by electron-builder's and the mobile build's naming. */
 export const installerNames = (version: string) => ({
   windows: `rss-reader-${version}-windows-setup.exe`,
+  windowsZip: `rss-reader-${version}-windows-x64.zip`,
   appImage: `rss-reader-${version}-linux-x86_64.AppImage`,
   deb: `rss-reader-${version}-linux-amd64.deb`,
   android: `rss-reader-${version}-android.apk`,
@@ -39,6 +40,7 @@ const NO_CACHE = 'no-cache';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.exe': 'application/vnd.microsoft.portable-executable',
+  '.zip': 'application/zip',
   '.AppImage': 'application/vnd.appimage',
   '.deb': 'application/vnd.debian.binary-package',
   '.apk': 'application/vnd.android.package-archive',
@@ -111,7 +113,7 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
     version: input.version,
     prerelease: input.prerelease,
     published: input.published.toISOString(),
-    windows: file(names.windows),
+    windows: { installer: file(names.windows), zip: file(names.windowsZip) },
     linux: { appImage: file(names.appImage), deb: file(names.deb) },
     android: { ...file(names.android), versionCode: input.versionCode },
   };
@@ -131,7 +133,16 @@ const megabytes = (size: number) => `${(size / 1024 / 1024).toFixed(1)} MB`;
 /** The static downloads page for the latest release. */
 export function renderIndex(manifest: ReleaseManifest) {
   const rows: [string, string, ReleaseFile][] = [
-    ['Windows', 'Installer for Windows 10 and 11 (x64), per user', manifest.windows],
+    [
+      'Windows',
+      'Installer for Windows 10 and 11 (x64), per user; updates itself',
+      manifest.windows.installer,
+    ],
+    [
+      'Windows',
+      'Zip of the app (x64), to run without installing; does not update itself',
+      manifest.windows.zip,
+    ],
     ['Linux', 'Debian and Ubuntu package (x64)', manifest.linux.deb],
     [
       'Linux',
