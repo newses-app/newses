@@ -98,7 +98,7 @@ async function toggleFullText() {
 <template>
   <article class="entry-article">
     <header class="mb-4">
-      <h2 class="entry-heading text-headline-small mb-1" tabindex="-1">
+      <h2 class="entry-heading text-headline-small mt-0 mb-1" tabindex="-1">
         <a
           v-if="link"
           :href="link"

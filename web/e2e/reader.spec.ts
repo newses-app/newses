@@ -214,6 +214,15 @@ test.describe('reader', () => {
     await reset;
   });
 
+  test('keeps settings and sign out on screen when the feed list overflows', async ({ page }) => {
+    // Too short for even the special feeds, so the list must scroll.
+    await page.setViewportSize({ width: 1440, height: 300 });
+    await page.goto('/all');
+    const drawer = page.locator('.v-navigation-drawer');
+    await expect(drawer.getByRole('link', { name: 'Settings' })).toBeInViewport({ ratio: 1 });
+    await expect(drawer.getByRole('button', { name: 'Sign out' })).toBeInViewport({ ratio: 1 });
+  });
+
   test('shows one pane at a time on phones @mobile', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'phone layout');
     await page.goto('/all');

@@ -63,6 +63,11 @@ export class CategoryService {
     });
   }
 
+  /** Expands or collapses all of the user's categories. */
+  async setAllCollapsed(userId: number, collapsed: boolean): Promise<void> {
+    await this.#db.update(categories).set({ collapsed }).where(eq(categories.userId, userId));
+  }
+
   /** Deletes a category; its feeds and child categories move up to its parent. */
   async delete(userId: number, id: number): Promise<void> {
     const current = await this.#owned(userId, id);

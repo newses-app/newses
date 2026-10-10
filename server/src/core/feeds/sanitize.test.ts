@@ -29,6 +29,18 @@ describe('sanitizeContent', () => {
     );
   });
 
+  it('keeps commas inside srcset URLs, as image CDNs use them', () => {
+    const small =
+      'https://substackcdn.com/image/fetch/$s_!Kl!,w_424,c_limit,f_webp/https%3A%2F%2Fx.png';
+    const large =
+      'https://substackcdn.com/image/fetch/$s_!Kl!,w_848,c_limit,f_webp/https%3A%2F%2Fx.png';
+    const clean = sanitizeContent(
+      `<picture><source type="image/webp" srcset="${small} 424w, ${large} 848w"><img src="${large}"></picture>`,
+      BASE,
+    );
+    expect(clean).toContain(`srcset="${small} 424w, ${large} 848w"`);
+  });
+
   it('keeps media, tables, and allow-listed embeds', () => {
     const clean = sanitizeContent(
       '<video src="v.mp4"></video><table><tr><td colspan="2">x</td></tr></table><iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe><img src="data:image/png;base64,AAAA">',

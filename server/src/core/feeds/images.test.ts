@@ -62,4 +62,14 @@ describe('ImageProxy', () => {
     ]);
     expect(out).toContain(' 2x');
   });
+
+  it('proxies srcset URLs that contain commas whole', () => {
+    const a = 'https://cdn.example/fetch/w_424,c_limit/a.png';
+    const b = 'https://cdn.example/fetch/w_848,c_limit/a.png';
+    const out = proxy.rewrite(`<img src="${a}" srcset="${a} 424w, ${b} 848w">`);
+    const srcset = /srcset="([^"]*)"/.exec(out)?.[1] ?? '';
+    const candidates = srcset.split(', ').map((c) => c.split(' '));
+    expect(candidates.map(([path = '']) => decode(path))).toEqual([a, b]);
+    expect(candidates.map(([, width]) => width)).toEqual(['424w', '848w']);
+  });
 });

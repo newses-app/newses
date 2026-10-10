@@ -38,6 +38,18 @@ describe('CategoryService', () => {
     expect(renamed).toMatchObject({ title: 'Development', sortOrder: 3, collapsed: true });
   });
 
+  it("expands and collapses all of a user's categories, not other users'", async () => {
+    const [bob] = await db.insert(users).values({ login: 'bob', passwordHash: 'x' }).returning();
+    await service.create(bob?.id ?? 0, 'Bob');
+    const a = await service.create(userId, 'A');
+    await service.create(userId, 'B', a.id);
+    await service.setAllCollapsed(userId, true);
+    expect((await service.list(userId)).map((c) => c.collapsed)).toEqual([true, true]);
+    expect((await service.list(bob?.id ?? 0))[0]?.collapsed).toBe(false);
+    await service.setAllCollapsed(userId, false);
+    expect((await service.list(userId)).map((c) => c.collapsed)).toEqual([false, false]);
+  });
+
   it('rejects duplicate names under the same parent only', async () => {
     const a = await service.create(userId, 'A');
     await service.create(userId, 'Same');

@@ -35,7 +35,7 @@ const schema = z
       ),
     COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
-    FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(60),
+    FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
     ADMIN_LOGIN: z.string().min(1).optional(),
     ADMIN_PASSWORD: passwordSchema.optional(),

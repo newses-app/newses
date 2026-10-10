@@ -81,6 +81,49 @@ test.describe('organisation', () => {
     await expect(page.getByText(caption)).toHaveCount(0);
   });
 
+  test('collapses and expands all categories', async ({ page }) => {
+    const { csrfToken } = (await (await page.request.get('/api/v1/auth/session')).json()) as {
+      csrfToken: string;
+    };
+    const headers = { 'x-csrf-token': csrfToken };
+    const before = (await (await page.request.get('/api/v1/categories')).json()) as {
+      id: number;
+      collapsed: boolean;
+    }[];
+    const title = `e2e-${String(Date.now())}`;
+    const create = async (data: object) =>
+      (
+        (await (await page.request.post('/api/v1/categories', { headers, data })).json()) as {
+          id: number;
+        }
+      ).id;
+    const parentId = await create({ title });
+    const childId = await create({ title: `${title}-child`, parentId });
+
+    try {
+      // Opening the child keeps it in the tree even when read feeds are hidden.
+      await page.goto(`/c${String(childId)}`);
+      const tree = page.getByRole('list', { name: 'Feeds' });
+      const child = tree.getByRole('link', { name: `${title}-child`, exact: true });
+      await expect(child).toBeVisible();
+      await tree.getByRole('button', { name: 'Collapse all categories' }).click();
+      await expect(child).toBeHidden();
+      await page.reload();
+      await expect(tree.getByRole('link', { name: title, exact: true })).toBeVisible();
+      await expect(child).toBeHidden();
+      await tree.getByRole('button', { name: 'Expand all categories' }).click();
+      await expect(child).toBeVisible();
+    } finally {
+      await page.request.delete(`/api/v1/categories/${String(childId)}`, { headers });
+      await page.request.delete(`/api/v1/categories/${String(parentId)}`, { headers });
+      for (const { id, collapsed } of before)
+        await page.request.patch(`/api/v1/categories/${String(id)}`, {
+          headers,
+          data: { collapsed },
+        });
+    }
+  });
+
   test('creates a filter, tests it, applies it, and deletes it', async ({ page }) => {
     const title = `e2e filter ${String(Date.now())}`;
     await page.goto('/all');

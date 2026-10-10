@@ -20,7 +20,7 @@
 |---|---|---|
 | Subscribe by URL | P1 | Accepts a feed URL or a web page URL; page URLs resolve via `<link rel="alternate">` autodiscovery, prompting when several feeds are found |
 | Feed formats | P1 | RSS 0.9x/2.0, RSS 1.0/RDF, Atom 0.3/1.0, JSON Feed 1.x parse into the same entry model, including media/enclosure elements |
-| Categories | P1 | Nested categories; create, rename, delete, reorder, move feeds by drag and drop |
+| Categories | P1 | Nested categories; create, rename, delete, reorder, collapse one or all, move feeds by drag and drop |
 | OPML import/export | P1 | Round-trips feeds and nested categories; imports a TTRSS OPML export without loss of feed URLs or category structure |
 | Background updates | P1 | Per-feed interval (default global setting); conditional GET via ETag/Last-Modified; exponential backoff on failure; honours `Retry-After`/HTTP 429; manual "update now" |
 | Feed errors | P1 | Last error and time shown per feed; "feeds with errors" view; feed auto-disables after a configurable number of consecutive failures |

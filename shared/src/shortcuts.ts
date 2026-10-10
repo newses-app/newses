@@ -27,6 +27,8 @@ export const SHORTCUT_ACTIONS = [
   'reverseOrder',
   'toggleCombined',
   'toggleCategory',
+  'expandAllCategories',
+  'collapseAllCategories',
   'gotoAll',
   'gotoFresh',
   'gotoStarred',

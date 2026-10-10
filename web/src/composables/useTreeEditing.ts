@@ -72,5 +72,12 @@ export function useTreeEditing() {
     await api.categories.update(id, { collapsed }).catch(() => refresh());
   }
 
-  return { moveFeed, moveCategory, setCollapsed };
+  async function setAllCollapsed(collapsed: boolean) {
+    queryClient.setQueryData<Category[]>(CATEGORIES_KEY, (list) =>
+      list?.map((c) => ({ ...c, collapsed })),
+    );
+    await api.categories.updateAll({ collapsed }).catch(() => refresh());
+  }
+
+  return { moveFeed, moveCategory, setCollapsed, setAllCollapsed };
 }

@@ -14,7 +14,7 @@ describe('loadConfig', () => {
       webDir: null,
       publicUrl: null,
       compatTrace: false,
-      feeds: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 20 },
+      feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
       appSecret: APP_SECRET,
       bootstrapAdmin: null,

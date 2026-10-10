@@ -1,5 +1,10 @@
 {
-  "app": { "name": "rss-reader" },
+  "app": {
+    "name": "rss-reader",
+    "waking": "Waking up the server. This can take up to 30 seconds after a period of inactivity.",
+    "unreachable": "Couldn’t reach the server.",
+    "retry": "Try again"
+  },
   "common": {
     "cancel": "Cancel",
     "close": "Close",
@@ -45,6 +50,9 @@
     "unread": "{n} unread",
     "expandNamed": "Expand {category}",
     "collapseNamed": "Collapse {category}",
+    "feeds": "Feeds",
+    "expandAll": "Expand all categories",
+    "collapseAll": "Collapse all categories",
     "uncategorised": "Uncategorised",
     "dropTopLevel": "Drop here to move to the top level",
     "empty": "No subscriptions yet."
@@ -479,6 +487,8 @@
       "reverseOrder": "Reverse order",
       "toggleCombined": "Toggle combined layout",
       "toggleCategory": "Collapse or expand category",
+      "expandAllCategories": "Expand all categories",
+      "collapseAllCategories": "Collapse all categories",
       "gotoAll": "All articles",
       "gotoFresh": "Fresh",
       "gotoStarred": "Starred",

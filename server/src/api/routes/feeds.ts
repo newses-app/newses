@@ -5,6 +5,7 @@ import {
   subscribeRequestSchema,
   subscribeResponseSchema,
   subscriptionSchema,
+  updateAllCategoriesRequestSchema,
   updateCategoryRequestSchema,
   updateSubscriptionRequestSchema,
 } from '@rss-reader/shared';
@@ -37,6 +38,15 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
       const { title, parentId } = request.body;
       const row = await categories.create(requireAuth(request).user.id, title, parentId);
       return reply.code(201).send(toCategory(row));
+    },
+  );
+
+  app.patch(
+    '/categories',
+    { schema: { body: updateAllCategoriesRequestSchema } },
+    async (request, reply) => {
+      await categories.setAllCollapsed(requireAuth(request).user.id, request.body.collapsed);
+      return reply.code(204).send();
     },
   );
 

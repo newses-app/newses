@@ -40,6 +40,7 @@ import type {
   SubscribeRequest,
   SubscribeResponse,
   Subscription,
+  UpdateAllCategoriesRequest,
   UpdateCategoryRequest,
   UpdateSubscriptionRequest,
 } from './feeds.ts';
@@ -205,6 +206,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       create: (body: CreateCategoryRequest) => request<Category>('POST', '/categories', { body }),
       update: (categoryId: number, body: UpdateCategoryRequest) =>
         request<Category>('PATCH', `/categories/${id(categoryId)}`, { body }),
+      /** Applies the changes to every category, e.g. to expand or collapse them all. */
+      updateAll: (body: UpdateAllCategoriesRequest) =>
+        request<undefined>('PATCH', '/categories', { body }),
       delete: (categoryId: number) => request<undefined>('DELETE', `/categories/${id(categoryId)}`),
     },
 

@@ -20,6 +20,8 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
         queryKey: SESSION_KEY,
         queryFn: fetchSession,
         staleTime: Infinity,
+        // A waking server may time out or fail at first.
+        retry: (count, error) => !isUnauthenticated(error) && count < 3,
       });
       const mustChange = session.user.passwordChangeRequired;
       if (mustChange && to.name !== 'change-password') return { name: 'change-password' };

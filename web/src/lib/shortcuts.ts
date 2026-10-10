@@ -22,6 +22,8 @@ export const ACTION_GROUPS: { group: string; actions: ShortcutAction[] }[] = [
       'closeArticle',
       'search',
       'toggleCategory',
+      'expandAllCategories',
+      'collapseAllCategories',
     ],
   },
   {
@@ -75,6 +77,8 @@ export const DEFAULT_BINDINGS: Bindings = {
   closeArticle: ['Escape', 'a q'],
   search: ['/'],
   toggleCategory: ['x'],
+  expandAllCategories: ['c e'],
+  collapseAllCategories: ['c c'],
   toggleStar: ['s'],
   togglePublished: ['S'],
   toggleUnread: ['u'],

@@ -7,6 +7,7 @@ import { sign, verify } from '../crypto.ts';
 import type { Blob, BlobStore, Logger } from '../ports.ts';
 import type { HostLimiter } from './host-limiter.ts';
 import { imageContentType } from './image-type.ts';
+import { mapSrcset } from './srcset.ts';
 import type { Fetcher } from './http.ts';
 import { httpUrl } from './url.ts';
 
@@ -63,14 +64,7 @@ export class ImageProxy {
 
   /** Points image sources in sanitised entry HTML at the proxy, after `origin` when given. */
   rewrite(html: string, origin = ''): string {
-    const srcset = (value: string) =>
-      value
-        .split(',')
-        .map((candidate) => {
-          const [url = '', ...descriptor] = candidate.trim().split(/\s+/);
-          return [this.path(url, origin), ...descriptor].join(' ');
-        })
-        .join(', ');
+    const srcset = (value: string) => mapSrcset(value, (url) => this.path(url, origin));
     return sanitizeHtml(html, {
       // The content was sanitised at ingest; this pass only rewrites image URLs.
       allowedTags: false,

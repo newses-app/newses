@@ -350,6 +350,12 @@ useShortcutHandler((action: ShortcutAction) => {
     case 'toggleCombined':
       update({ layout: combined.value ? 'threePane' : 'combined' });
       return true;
+    case 'expandAllCategories':
+      void editing.setAllCollapsed(false);
+      return true;
+    case 'collapseAllCategories':
+      void editing.setAllCollapsed(true);
+      return true;
     case 'toggleCategory':
       toggleCategory();
       return true;

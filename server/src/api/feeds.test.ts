@@ -56,6 +56,16 @@ describe('feeds API', () => {
     expect(category.statusCode).toBe(201);
     const categoryId = category.json<{ id: number }>().id;
 
+    const collapsed = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/categories',
+      headers,
+      payload: { collapsed: true },
+    });
+    expect(collapsed.statusCode).toBe(204);
+    const categories = await app.inject({ method: 'GET', url: '/api/v1/categories', headers });
+    expect(categories.json()).toMatchObject([{ id: categoryId, collapsed: true }]);
+
     const subscribed = await app.inject({
       method: 'POST',
       url: '/api/v1/subscriptions',

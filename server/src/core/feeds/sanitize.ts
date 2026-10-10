@@ -1,4 +1,5 @@
 import sanitizeHtml from 'sanitize-html';
+import { mapSrcset } from './srcset.ts';
 import { isTrackingPixel } from './trackers.ts';
 
 // C0 controls other than tab, newline, and carriage return; and DEL.
@@ -24,16 +25,6 @@ function resolve(value: string, base: string | null): string {
   } catch {
     return value;
   }
-}
-
-function resolveSrcset(srcset: string, base: string | null): string {
-  return srcset
-    .split(',')
-    .map((candidate) => {
-      const [url = '', ...descriptor] = candidate.trim().split(/\s+/);
-      return [resolve(url, base), ...descriptor].join(' ');
-    })
-    .join(', ');
 }
 
 /**
@@ -79,7 +70,7 @@ export function sanitizeContent(html: string, base: string | null): string {
           const value = attribs[attribute];
           if (value) attribs[attribute] = resolve(value, base);
         }
-        if (attribs.srcset) attribs.srcset = resolveSrcset(attribs.srcset, base);
+        if (attribs.srcset) attribs.srcset = mapSrcset(attribs.srcset, (url) => resolve(url, base));
         if (tagName === 'a') {
           attribs.target = '_blank';
           attribs.rel = 'noopener noreferrer nofollow';

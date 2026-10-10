@@ -9,6 +9,8 @@ import {
   mdiShareVariantOutline,
   mdiStarOutline,
   mdiTagMultipleOutline,
+  mdiUnfoldLessHorizontal,
+  mdiUnfoldMoreHorizontal,
   mdiWhiteBalanceSunny,
 } from '@mdi/js';
 import { computed, provide, ref } from 'vue';
@@ -59,6 +61,9 @@ const special = computed(() => {
     { key: 'read', icon: mdiHistory, unread: 0 },
   ];
 });
+
+const anyExpanded = computed(() => categories.data.value?.some((c) => !c.collapsed) ?? false);
+const anyCollapsed = computed(() => categories.data.value?.some((c) => c.collapsed) ?? false);
 
 const labelItems = computed(() =>
   (labels.data.value ?? []).map((label) => ({
@@ -144,6 +149,29 @@ function dropOnRoot() {
         />
       </div>
       <v-divider class="my-2" role="presentation" />
+      <div v-if="categories.data.value?.length" role="listitem" class="d-flex align-center ps-4">
+        <span class="text-label-medium text-medium-emphasis flex-grow-1">{{
+          t('tree.feeds')
+        }}</span>
+        <v-btn
+          :icon="mdiUnfoldMoreHorizontal"
+          size="x-small"
+          variant="text"
+          :disabled="!anyCollapsed"
+          :aria-label="t('tree.expandAll')"
+          :title="t('tree.expandAll')"
+          @click="editing.setAllCollapsed(false)"
+        />
+        <v-btn
+          :icon="mdiUnfoldLessHorizontal"
+          size="x-small"
+          variant="text"
+          :disabled="!anyExpanded"
+          :aria-label="t('tree.collapseAll')"
+          :title="t('tree.collapseAll')"
+          @click="editing.setAllCollapsed(true)"
+        />
+      </div>
       <FeedTreeCategory v-for="node in tree.categories" :key="node.key" :node="node" :depth="0" />
       <FeedTreeFeed v-for="node in tree.feeds" :key="node.key" :node="node" :depth="0" />
       <div
@@ -166,7 +194,7 @@ function dropOnRoot() {
       </p>
     </v-list>
     <v-divider />
-    <v-list density="compact" nav>
+    <v-list density="compact" nav class="flex-shrink-0">
       <div role="listitem">
         <v-list-item :to="{ name: 'settings' }" :prepend-icon="mdiCog" :title="t('nav.settings')" />
       </div>
@@ -185,6 +213,8 @@ function dropOnRoot() {
 <style scoped>
 .tree {
   --v-list-prepend-gap: 12px;
+  /* Lets the list shrink and scroll so the actions below stay on screen. */
+  min-height: 0;
 }
 .label-swatch {
   width: 14px;

@@ -20,6 +20,11 @@ export const updateCategoryRequestSchema = z.object({
   collapsed: z.boolean().optional(),
 });
 
+/** Changes applied to every category of the user. */
+export const updateAllCategoriesRequestSchema = z.object({
+  collapsed: z.boolean(),
+});
+
 export const subscriptionSchema = z.object({
   id: z.number().int(),
   feedSourceId: z.number().int(),
@@ -88,6 +93,7 @@ export type FeedCandidate = z.infer<typeof feedCandidateSchema>;
 export type UpdateSubscriptionRequest = z.infer<typeof updateSubscriptionRequestSchema>;
 export type CreateCategoryRequest = z.input<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;
+export type UpdateAllCategoriesRequest = z.infer<typeof updateAllCategoriesRequestSchema>;
 export type SubscribeRequest = z.input<typeof subscribeRequestSchema>;
 export type SubscribeResponse = z.infer<typeof subscribeResponseSchema>;
 export type OpmlImportResult = z.infer<typeof opmlImportResultSchema>;
