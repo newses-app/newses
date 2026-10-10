@@ -77,6 +77,8 @@ The server then joins the proxy network and is not published on the host. `TRUST
 
 Forward to the server's port 8080 and pass `X-Forwarded-For` and `X-Forwarded-Proto`. Set `TRUST_PROXY` to the number of proxies in front of the server or to the proxy's address. `true` also trusts `X-Forwarded-For` entries sent by clients, which lets them evade per-IP login throttling.
 
+The desktop and mobile apps need HTTPS. The proxy must forward the `Authorization` and `Origin` headers and `OPTIONS` requests, which carry the apps' bearer tokens and CORS preflights.
+
 `/api/v1/events` is a long-lived event stream. nginx and nginx-proxy need no extra configuration. Other proxies must not buffer its responses and must allow at least 30 s between bytes (the server sends a heartbeat every 25 s).
 
 ## Backups

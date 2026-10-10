@@ -9,7 +9,7 @@
 | P1.6 | Security and accessibility | Image proxy, 2FA, and app passwords in daily use; Accessibility and Security non-functional requirements verified on the AWS `dev` stage |
 | P2 | Power features | Labels, tags, notes, published feed, share links, reading preferences, and remappable shortcuts in daily use |
 | P3 | TTRSS cut-over | All TTRSS users imported; filters, scoring, and full text in daily use; TTRSS and Google Reader clients work against the server; TTRSS retired |
-| P4 | Native apps | Electron builds for Windows/macOS/Linux; Capacitor Android build installed on a device |
+| P4 | Native apps | Signed Electron apps for Windows and Linux and the Capacitor Android app installed from the stage's downloads, used against AWS and Docker servers, and updating themselves |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -114,8 +114,9 @@
 | TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe |
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
-| Desktop app | P4 | Electron app with configurable server URL, secure token storage, native notifications for new entries |
-| Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent |
+| Desktop app | P4 | Electron app for Windows and Linux with configurable server URL, secure token storage, native notifications for new entries, and automatic updates |
+| Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent, and a prompt to install newer versions |
+| macOS desktop app | Later | The desktop app, signed and notarised for macOS |
 | Offline reading | Later | Local store of recent unread/starred entries; queued state changes replayed on reconnect |
 
 ### Migration
@@ -157,3 +158,4 @@
 - Public self-registration
 - Feed directory or recommendations
 - OIDC, SAML, or reverse-proxy header authentication
+- Google Play distribution

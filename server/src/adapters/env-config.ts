@@ -34,6 +34,7 @@ const schema = z
               .filter(Boolean),
       ),
     COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
+    RSS_READER_VERSION: z.string().default('dev'),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
@@ -63,6 +64,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const e = result.data;
   return {
+    version: e.RSS_READER_VERSION,
     databaseUrl: e.DATABASE_URL,
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,

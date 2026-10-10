@@ -48,6 +48,7 @@ const app = buildApp({
   logger,
   trustProxy: config.http.trustProxy,
   webDir: config.webDir,
+  version: config.version,
   publicUrl: config.publicUrl,
   compatTrace: config.compatTrace,
   diagnostics: { snapshot: processSnapshot(pool) },

@@ -218,6 +218,7 @@ Search:
 | Surface | Path | Notes |
 |---|---|---|
 | Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`; typed client in `shared` |
+| Server info | `/api/v1/server` | Product, build, and API version; no session |
 | Events | `/api/v1/events` | SSE: `counters` invalidation events |
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
@@ -227,6 +228,8 @@ Search:
 
 ### Native REST API
 
+- `GET /server` returns the product (`rss-reader`), the server build (`RSS_READER_VERSION`: the commit on AWS, a Docker build argument, else `dev`), and the API version (`API_VERSION` in `shared`). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
+- CORS on `/api/v1/*` allows the app origins `app://rss-reader` (Electron) and `https://localhost` (Capacitor Android): requests with `Authorization` and `Content-Type`, `Retry-After` exposed, preflights cached for a day. Credentials are never allowed, so apps use bearer tokens and cookie sessions stay same-origin. Other origins get no CORS headers. CORS is applied before authentication, so apps can read errors too.
 - Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), a label, a tag, or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
 - Fresh: unread entries with `sort_at` within the user's `freshMaxAgeHours`. Recently read: entries read within the last 7 days, in reading order.
 - Scores are whole numbers within ±1,000,000, set with the entry's flags. Entries scored below the user's `scoreHideBelow` are left out of subscription, category, All, and Fresh lists and unread counts; Starred, Published, label, tag, and Recently read lists show them, and catch-up marks them read.
@@ -345,7 +348,7 @@ flowchart LR
 - Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `Data` because change sets resolve `ssm-secure` references: `db-password`, `admin-password`, and `app-secret` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is two hops (API Gateway appends CloudFront's address after the viewer's).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - Logs go to CloudWatch, kept a month.
-- Web traffic is same-origin through CloudFront. CORS allows Capacitor origins only.
+- Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
 Constraints:
 - The first request after the database pauses waits about 15 s for it to resume.

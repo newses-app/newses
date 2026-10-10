@@ -286,10 +286,11 @@ describe('events stream', () => {
 
     const controller = new AbortController();
     const response = await fetch(`http://127.0.0.1:${String(port)}/api/v1/events`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${token}`, origin: 'app://rss-reader' },
       signal: controller.signal,
     });
     expect(response.headers.get('content-type')).toMatch(/^text\/event-stream/);
+    expect(response.headers.get('access-control-allow-origin')).toBe('app://rss-reader');
     expect(response.headers.get('x-accel-buffering')).toBe('no');
     const reader = (response.body as ReadableStream<Uint8Array>).getReader();
     const decoder = new TextDecoder();

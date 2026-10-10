@@ -46,6 +46,7 @@ import type {
 } from './feeds.ts';
 import type { CreateLabelRequest, Label, UpdateLabelRequest } from './labels.ts';
 import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
+import type { ServerInfo } from './server.ts';
 
 export interface ApiClientOptions {
   /** Server origin, e.g. `https://reader.example`; empty for the page's own origin. */
@@ -138,6 +139,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
     setCsrfToken(token: string | null) {
       csrfToken = token;
     },
+
+    /** Product, build, and API version; needs no session. */
+    serverInfo: () => request<ServerInfo>('GET', '/server'),
 
     auth: {
       /** Opens a session, or returns a challenge to finish with `loginTwoFactor`. */

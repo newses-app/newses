@@ -167,6 +167,75 @@ describe('auth API', () => {
   });
 });
 
+describe('server info', () => {
+  it('names the product and versions without a session', async () => {
+    const res = await app.inject({ url: '/api/v1/server' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      product: 'rss-reader',
+      version: 'dev',
+      apiVersion: { major: 1, minor: 0 },
+    });
+  });
+
+  it('is documented as needing no session', async () => {
+    const spec = (await app.inject({ url: '/api/v1/openapi.json' })).json<{
+      paths: Record<string, { get?: { security?: unknown[] } }>;
+    }>();
+    expect(spec.paths['/api/v1/server']?.get?.security).toEqual([]);
+  });
+});
+
+describe('CORS for apps', () => {
+  const preflight = (origin: string) =>
+    app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/subscriptions',
+      headers: {
+        origin,
+        'access-control-request-method': 'PATCH',
+        'access-control-request-headers': 'authorization, content-type',
+      },
+    });
+
+  it('answers preflights from the app origins', async () => {
+    for (const origin of ['app://rss-reader', 'https://localhost']) {
+      const res = await preflight(origin);
+      expect(res.statusCode).toBe(204);
+      expect(res.headers['access-control-allow-origin']).toBe(origin);
+      expect(res.headers['access-control-allow-methods']).toContain('PATCH');
+      expect(res.headers['access-control-allow-headers']).toBe('authorization, content-type');
+      expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+    }
+  });
+
+  it('refuses other origins', async () => {
+    const res = await preflight('https://evil.example');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    const get = await app.inject({
+      url: '/api/v1/server',
+      headers: { origin: 'https://evil.example' },
+    });
+    expect(get.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('lets apps read responses, errors, and Retry-After', async () => {
+    const headers = { origin: 'https://localhost' };
+    const ok = await app.inject({ url: '/api/v1/server', headers });
+    expect(ok.headers['access-control-allow-origin']).toBe('https://localhost');
+    expect(ok.headers.vary).toContain('Origin');
+    const denied = await app.inject({ url: '/api/v1/subscriptions', headers });
+    expect(denied.statusCode).toBe(401);
+    expect(denied.headers['access-control-allow-origin']).toBe('https://localhost');
+    expect(denied.headers['access-control-expose-headers']).toBe('retry-after');
+  });
+
+  it('applies to the native API only', async () => {
+    const res = await app.inject({ url: '/healthz', headers: { origin: 'app://rss-reader' } });
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+});
+
 describe('session cookie', () => {
   it('uses a __Host- Secure cookie and HSTS over HTTPS', async () => {
     const https = buildApp({

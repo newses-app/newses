@@ -22,6 +22,10 @@ export const eventRoutes: FastifyPluginAsync<EventStreamOptions> = (app, options
     const userId = requireAuth(request).user.id;
     reply.hijack();
     const res = reply.raw;
+    // Headers set before the hijack, such as CORS for the apps.
+    for (const [name, value] of Object.entries(reply.getHeaders())) {
+      if (value !== undefined) res.setHeader(name, value);
+    }
     res.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-store',

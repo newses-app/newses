@@ -92,6 +92,8 @@ export class PipelineStack extends Stack {
             commands: [
               `curl -fsS -o /dev/null https://${stage.domainName}/`,
               `test "$(curl -s -o /dev/null -w '%{http_code}' https://${stage.domainName}/api/v1/subscriptions)" = 401`,
+              // The apps' CORS preflight reaches the API through CloudFront.
+              `curl -fsS -o /dev/null -D - -X OPTIONS -H 'Origin: app://rss-reader' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' https://${stage.domainName}/api/v1/subscriptions | grep -qi '^access-control-allow-origin: app://rss-reader'`,
             ],
           }),
         ],

@@ -1,4 +1,5 @@
 import cookie from '@fastify/cookie';
+import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import Fastify, { type FastifyBaseLogger } from 'fastify';
 import {
@@ -33,6 +34,7 @@ import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
 import { prefsRoutes } from './routes/prefs.ts';
 import { legacyPublicRoutes, publicRoutes } from './routes/public.ts';
+import { serverRoutes } from './routes/server.ts';
 import { sharingRoutes } from './routes/sharing.ts';
 import {
   registerRequestDiagnostics,
@@ -41,6 +43,13 @@ import {
 import { registerWeb } from './web.ts';
 
 export type HealthCheck = () => Promise<void>;
+
+/**
+ * Origins of the desktop (Electron `app://` scheme) and Android (Capacitor) apps, which call
+ * `/api/v1` cross-origin with bearer tokens. No credentials are allowed, so cookie sessions stay
+ * same-origin.
+ */
+export const APP_ORIGINS = ['app://rss-reader', 'https://localhost'];
 
 export interface ApiServices {
   auth: AuthService;
@@ -63,6 +72,8 @@ export interface AppDeps {
   services?: ApiServices;
   /** Event stream settings (tests override timings); false where streams cannot be held open. */
   events?: Omit<EventStreamOptions, 'realtime'> | false;
+  /** Server build reported to apps; defaults to `dev`. */
+  version?: string;
   /** Origin of public links (published feeds); null or omitted uses each request's origin. */
   publicUrl?: string | null;
   /** Log every compatibility-API call, credentials redacted. */
@@ -143,8 +154,17 @@ export function buildApp(deps: AppDeps) {
     });
     void app.register(
       async (api) => {
+        // Before auth, so the apps can read its errors too.
+        await api.register(cors, {
+          origin: APP_ORIGINS,
+          methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+          allowedHeaders: ['authorization', 'content-type'],
+          exposedHeaders: ['retry-after'],
+          maxAge: 86400,
+        });
         registerAuth(api, services.sessions);
         api.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
+        await api.register(serverRoutes, { version: deps.version ?? 'dev' });
         await api.register(authRoutes, { ...services, publicUrl: deps.publicUrl ?? null });
         await api.register(adminUserRoutes, services);
         await api.register(feedRoutes, services.feeds);

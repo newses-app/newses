@@ -9,3 +9,5 @@ export * from './shortcuts.ts';
 export * from './client.ts';
 export * from './filters.ts';
 export * from './filter-options.ts';
+export * from './api-version.ts';
+export * from './server.ts';

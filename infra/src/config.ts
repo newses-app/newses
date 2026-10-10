@@ -14,6 +14,9 @@ export const HOSTED_ZONE = { zoneName: 'example.com', hostedZoneId: 'Z0000000000
 
 export const PROJECT = 'rss-reader';
 
+/** Server build reported to apps: the commit CodeBuild synthesises, else `dev`. */
+export const BUILD_VERSION = process.env.CODEBUILD_RESOLVED_SOURCE_VERSION?.slice(0, 7) ?? 'dev';
+
 export interface StageConfig {
   name: 'dev' | 'prod';
   /** Branch whose pushes deploy this stage. */

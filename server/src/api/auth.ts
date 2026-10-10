@@ -22,6 +22,7 @@ const PASSWORD_CHANGE_ROUTES = new Set([
   '/api/v1/auth/session',
   '/api/v1/auth/password',
   '/api/v1/auth/logout',
+  '/api/v1/server',
 ]);
 
 export interface RequestAuth {

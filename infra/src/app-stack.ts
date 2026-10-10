@@ -14,7 +14,7 @@ import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
-import { REPO_ROOT, resourceName, type StageConfig } from './config.ts';
+import { BUILD_VERSION, REPO_ROOT, resourceName, type StageConfig } from './config.ts';
 import type { ParamsStack } from './params-stack.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
@@ -98,6 +98,7 @@ export class AppStack extends Stack {
           // CloudFront does not forward the viewer's Host, so public links need the domain.
           PUBLIC_URL: `https://${stage.domainName}`,
           COMPAT_TRACE: String(stage.compatTrace),
+          RSS_READER_VERSION: BUILD_VERSION,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,

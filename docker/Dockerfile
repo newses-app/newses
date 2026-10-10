@@ -24,6 +24,9 @@ COPY web ./web
 RUN pnpm --filter @rss-reader/web build
 
 FROM node:${NODE_VERSION}-alpine
+# Reported to the desktop and mobile apps; e.g. --build-arg RSS_READER_VERSION=$(git describe --always).
+ARG RSS_READER_VERSION=dev
+ENV RSS_READER_VERSION=${RSS_READER_VERSION}
 ENV NODE_ENV=production
 ENV WEB_DIR=/app/web/dist
 WORKDIR /app

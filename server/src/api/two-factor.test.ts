@@ -134,7 +134,13 @@ describe('two-factor authentication', () => {
     const code = (recoveryCodes[0] ?? '').toLowerCase();
     const done = await post('/auth/login/2fa', { challenge, code });
     expect(done.statusCode).toBe(200);
-    expect(done.json<{ token: string }>().token).toBeTruthy();
+    expect(done.cookies).toHaveLength(0);
+    const { token } = done.json<{ token: string }>();
+    const session = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(session.statusCode).toBe(200);
 
     const again = (await login()).json<{ challenge: string }>().challenge;
     expect((await post('/auth/login/2fa', { challenge: again, code })).statusCode).toBe(401);

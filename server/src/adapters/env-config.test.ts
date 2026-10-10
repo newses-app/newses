@@ -6,6 +6,7 @@ const APP_SECRET = '0123456789abcdef0123456789abcdef';
 describe('loadConfig', () => {
   it('applies defaults', () => {
     expect(loadConfig({ DATABASE_URL: 'postgres://u:p@db:5432/app', APP_SECRET })).toEqual({
+      version: 'dev',
       databaseUrl: 'postgres://u:p@db:5432/app',
       http: { host: '0.0.0.0', port: 8080, trustProxy: false },
       logLevel: 'info',

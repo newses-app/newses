@@ -10,6 +10,8 @@ export interface FeedSettings {
 }
 
 export interface AppConfig {
+  /** Server build shown to apps (`RSS_READER_VERSION`, set at build), or `dev`. */
+  version: string;
   databaseUrl: string;
   /** `trustProxy` is true, false, a hop count, or comma-separated proxy addresses/CIDRs. */
   http: { host: string; port: number; trustProxy: boolean | number | string };
