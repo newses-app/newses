@@ -496,6 +496,10 @@ export const importMap = pgTable(
     importedAt: tstz('imported_at').notNull().defaultNow(),
     // On `ttrss_users` rows: when that user's last import finished.
     completedAt: tstz('completed_at'),
+    // On `ttrss_users` rows: the earliest start and latest end of runs that have not finished
+    // since; changes in between are the importer's own. A null end means a run was cut short.
+    runStartedAt: tstz('run_started_at'),
+    runEndedAt: tstz('run_ended_at'),
   },
   (t) => [
     primaryKey({ columns: [t.sourceTable, t.sourceId] }),

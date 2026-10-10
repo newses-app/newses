@@ -12,3 +12,5 @@ coverage/
 cdk.out/
 playwright-report/
 test-results/
+# TTRSS import reports hold temporary passwords
+ttrss-import-*.txt

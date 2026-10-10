@@ -188,6 +188,47 @@ describe('TTRSS importer', () => {
     await run({ users: ['admin'] });
   });
 
+  it('lets a plain re-run follow runs that failed partway, but not later use', async () => {
+    await run();
+    const [pat] = await db.select().from(usersTable).where(eq(usersTable.login, 'pat'));
+    const userId = pat?.id ?? 0;
+    let n = 0;
+    // Writes a label for pat, as a labels step would, then loses its connection.
+    const failing: ImportStep = {
+      name: 'failing',
+      async run({ write }) {
+        await write((tx) =>
+          tx.insert(labels).values({
+            userId,
+            caption: `Imported ${String(++n)}`,
+            fgColor: '#000000',
+            bgColor: '#ffffff',
+          }),
+        );
+        throw new Error('connection lost');
+      },
+    };
+    await expect(run({}, [usersStep, failing])).rejects.toThrow('connection lost');
+    await expect(run({}, [usersStep, failing])).rejects.toThrow('connection lost');
+    expect((await run()).reconciled).toBe(true);
+
+    // Use after a failed run still counts.
+    await expect(run({}, [usersStep, failing])).rejects.toThrow('connection lost');
+    await db
+      .insert(labels)
+      .values({ userId, caption: 'Mine', fgColor: '#000000', bgColor: '#ffffff' });
+    await expect(run()).rejects.toThrow(/used this instance since their last import: pat\./);
+    await run({ force: true });
+
+    // A run cut short before recording its end cannot be told apart.
+    await db
+      .update(importMap)
+      .set({ runStartedAt: new Date(Date.now() + 60_000), runEndedAt: null });
+    await expect(run()).rejects.toThrow(/cut short.*: admin, pat\. Pass --force/);
+    await run({ force: true });
+    await run();
+  });
+
   it('reads the source in one read-only snapshot, in batches', async () => {
     await sourceDb.pool.query("INSERT INTO ttrss_users (login, pwd_hash) VALUES ('late', 'x')");
     expect((await source.query('SELECT login FROM ttrss_users')).length).toBe(2);

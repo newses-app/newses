@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { importMap } from '../db/schema.ts';
 
@@ -70,12 +70,36 @@ export class ImportMap {
     return rows;
   }
 
+  /**
+   * Marks a run of the TTRSS users' imports started now. While earlier runs are unfinished, their
+   * start is kept, so the window covers every unfinished run; the end is cleared until `end`.
+   */
+  async start(sourceIds: number[]): Promise<void> {
+    await this.#setOnUsers(sourceIds, {
+      runStartedAt: sql`CASE WHEN ${importMap.runStartedAt} > coalesce(${importMap.completedAt}, '-infinity')
+        THEN ${importMap.runStartedAt} ELSE now() END`,
+      runEndedAt: null,
+    });
+  }
+
+  /** Marks the TTRSS users' current run ended now, finished or not. */
+  async end(sourceIds: number[]): Promise<void> {
+    await this.#setOnUsers(sourceIds, { runEndedAt: sql`now()` });
+  }
+
   /** Marks the TTRSS users' imports finished now. */
   async complete(sourceIds: number[]): Promise<void> {
+    await this.#setOnUsers(sourceIds, { completedAt: sql`now()` });
+  }
+
+  async #setOnUsers(
+    sourceIds: number[],
+    values: Partial<Record<'completedAt' | 'runStartedAt' | 'runEndedAt', SQL | null>>,
+  ): Promise<void> {
     if (sourceIds.length === 0) return;
     await this.#db
       .update(importMap)
-      .set({ completedAt: sql`now()` })
+      .set(values)
       .where(and(eq(importMap.sourceTable, USERS), inArray(importMap.sourceId, sourceIds)));
   }
 }

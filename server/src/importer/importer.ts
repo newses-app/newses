@@ -1,8 +1,8 @@
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { schemaMatches } from '../db/migrate.ts';
 import { ImportError } from './errors.ts';
-import { ImportMap, type Writer } from './import-map.ts';
+import { ImportMap, USERS, type Writer } from './import-map.ts';
 import { ImportReport } from './report.ts';
 import type { TtrssSource } from './source.ts';
 
@@ -80,11 +80,16 @@ export async function importTtrss(deps: ImportDeps, options: ImportOptions): Pro
   const users = await selectUsers(source, options.users);
   const map = new ImportMap(db);
   if (!options.force) {
-    const active = await activeUsers(db, map, users);
-    if (active.length > 0)
+    const { used, interrupted } = await activeUsers(db, map, users);
+    if (used.length > 0)
       throw new ImportError(
-        `These users have used this instance since their last import: ${active.join(', ')}. ` +
+        `These users have used this instance since their last import: ${used.join(', ')}. ` +
           'Re-importing would overwrite their changes; pass --force to do it anyway.',
+      );
+    if (interrupted.length > 0)
+      throw new ImportError(
+        `The last import of these users was cut short, so its changes cannot be told from ` +
+          `theirs: ${interrupted.join(', ')}. Pass --force to re-import anyway.`,
       );
   }
 
@@ -114,8 +119,15 @@ export async function importTtrss(deps: ImportDeps, options: ImportOptions): Pro
     }
     return report;
   }
-  await runSteps(db);
-  await map.complete(users.map((u) => u.id));
+  const ids = users.map((u) => u.id);
+  await map.start(ids);
+  try {
+    await runSteps(db);
+    await map.complete(ids);
+  } finally {
+    // Recorded when a run fails too, so the next run can tell its changes from the users'.
+    await map.end(ids).catch(() => undefined);
+  }
   return report;
 }
 
@@ -130,31 +142,55 @@ async function selectUsers(source: TtrssSource, logins: string[] | undefined) {
   return users;
 }
 
-/** Logins of imported users with changes here since their last import finished. */
-async function activeUsers(db: Db, map: ImportMap, users: SourceUser[]): Promise<string[]> {
+/**
+ * Logins of imported users with changes here since their last import finished (`used`), and of
+ * those whose last run was cut short before recording its end (`interrupted`). Changes made
+ * while runs that did not finish were going are the importer's own and do not count.
+ */
+async function activeUsers(
+  db: Db,
+  map: ImportMap,
+  users: SourceUser[],
+): Promise<{ used: string[]; interrupted: string[] }> {
   const imported = await map.users(users.map((u) => u.id));
-  const active: string[] = [];
+  const used: string[] = [];
+  const interrupted: string[] = [];
   for (const { sourceId, userId, completedAt } of imported) {
     if (!completedAt) continue;
-    if (await usedSince(db, userId, completedAt))
-      active.push(users.find((u) => u.id === sourceId)?.login ?? String(sourceId));
+    const login = users.find((u) => u.id === sourceId)?.login ?? String(sourceId);
+    const state = await usedSince(db, userId, sourceId);
+    if (state.interrupted) interrupted.push(login);
+    else if (state.used) used.push(login);
   }
-  return active;
+  return { used, interrupted };
 }
 
 /**
- * Whether the user changed anything since `since`: entry state (entries delivered by fetching
- * since then do not count), subscriptions, categories, or labels, including deletions.
+ * Whether the user changed anything since their last import finished, outside the window of runs
+ * that did not finish since: entry state (entries delivered by fetching do not count),
+ * subscriptions, categories, or labels, including deletions. Times are compared in the database,
+ * at full precision.
  */
-async function usedSince(db: Db, userId: number, since: Date): Promise<boolean> {
-  const at = since.toISOString();
-  const result = await db.execute<{ used: boolean }>(sql`
-    SELECT EXISTS (SELECT 1 FROM user_entries WHERE user_id = ${userId}
-        AND updated_at > ${at}::timestamptz AND updated_at > created_at)
-      OR EXISTS (SELECT 1 FROM subscriptions WHERE user_id = ${userId} AND updated_at > ${at}::timestamptz)
-      OR EXISTS (SELECT 1 FROM categories WHERE user_id = ${userId} AND updated_at > ${at}::timestamptz)
-      OR EXISTS (SELECT 1 FROM labels WHERE user_id = ${userId} AND updated_at > ${at}::timestamptz)
-      OR EXISTS (SELECT 1 FROM tombstones WHERE user_id = ${userId} AND deleted_at > ${at}::timestamptz
-        AND entity IN ('subscription', 'category', 'label')) AS used`);
-  return result.rows[0]?.used ?? false;
+async function usedSince(
+  db: Db,
+  userId: number,
+  sourceId: number,
+): Promise<{ used: boolean; interrupted: boolean }> {
+  const changed = (table: SQL, column: SQL, extra: SQL = sql``) => sql`
+    EXISTS (SELECT 1 FROM ${table} t WHERE t.user_id = ${userId} AND t.${column} > m.since
+      AND NOT coalesce(t.${column} BETWEEN m.run_from AND m.run_to, false) ${extra})`;
+  const result = await db.execute<{ used: boolean; interrupted: boolean }>(sql`
+    WITH m AS (
+      SELECT completed_at AS since, run_ended_at AS run_to,
+        CASE WHEN run_started_at > completed_at THEN run_started_at END AS run_from
+      FROM import_map WHERE source_table = ${USERS} AND source_id = ${sourceId})
+    SELECT m.run_from IS NOT NULL AND m.run_to IS NULL AS interrupted,
+      ${changed(sql`user_entries`, sql`updated_at`, sql`AND t.updated_at > t.created_at`)}
+      OR ${changed(sql`subscriptions`, sql`updated_at`)}
+      OR ${changed(sql`categories`, sql`updated_at`)}
+      OR ${changed(sql`labels`, sql`updated_at`)}
+      OR ${changed(sql`tombstones`, sql`deleted_at`, sql`AND t.entity IN ('subscription', 'category', 'label')`)}
+        AS used
+    FROM m`);
+  return result.rows[0] ?? { used: false, interrupted: false };
 }
