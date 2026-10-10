@@ -76,6 +76,16 @@ export default defineConfig(
       ],
     },
   },
+  // CommonJS config files outside the TypeScript projects (electron-builder profiles).
+  {
+    files: ['**/*.cjs'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: globals.node,
+      parserOptions: { projectService: false },
+    },
+  },
   ...pluginVue.configs['flat/recommended'],
   // vue-tsc type-checks templates and scripts; type-aware lint rules cover the .ts files.
   { files: ['web/**/*.vue'], ...tseslint.configs.disableTypeChecked },

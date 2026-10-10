@@ -16,6 +16,7 @@
     "start": "node scripts/build.ts && electron .",
     "build:linux": "node scripts/build.ts && electron-builder --linux --publish never",
     "build:win": "node scripts/build.ts && electron-builder --win --publish never",
+    "build:win:signed": "node scripts/build.ts && electron-builder --win --publish never --config electron-builder.signed.cjs",
     "typecheck": "tsc"
   },
   "devDependencies": {
