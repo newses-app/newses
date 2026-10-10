@@ -17,5 +17,6 @@ describe('versionFromTag', () => {
     expect(() => versionFromTag('release-1')).toThrow();
     expect(() => versionFromTag('v1.2')).toThrow();
     expect(() => versionFromTag('v1.100.0')).toThrow();
+    expect(() => versionFromTag('v0.0.0-try.1')).toThrow(/start at 0\.0\.1/);
   });
 });

@@ -15,7 +15,10 @@ export function versionFromTag(tag: string | undefined): AppVersion {
   if (!match) throw new Error(`Not a release tag: ${tag}`);
   const [major, minor, patch] = match.slice(1, 4).map(Number) as [number, number, number];
   if (minor > 99 || patch > 99) throw new Error(`Minor and patch must be below 100: ${tag}`);
-  return { name: tag.replace(/^v/, ''), code: major * 10000 + minor * 100 + patch };
+  const code = major * 10000 + minor * 100 + patch;
+  // Android refuses versionCode 0.
+  if (code === 0) throw new Error(`Release versions start at 0.0.1: ${tag}`);
+  return { name: tag.replace(/^v/, ''), code };
 }
 
 /** A published file: its download URL, size in bytes, and SHA-256 (hex). */

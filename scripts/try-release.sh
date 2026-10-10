@@ -42,6 +42,7 @@ case "$leg" in all | linux | windows | publish) ;; *) die '--leg takes all, linu
 # Dev releases are prereleases; versionCode 0 would be refused, hence 0.0.1.
 [ -n "$tag" ] || tag="v0.0.1-try.$(date +%s)"
 [[ $tag == v*-* ]] || die "dev releases need a prerelease tag (v1.2.3-x): $tag"
+[[ $tag != v0.0.0-* ]] || die "Android refuses versionCode 0; start at v0.0.1: $tag"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"

@@ -66,8 +66,9 @@ export default defineConfig(({ mode }) => ({
             globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
             // Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and
             // feeds, the native and compatibility APIs, and feed icons never get the app shell.
+            // Nor do the app downloads, which CloudFront serves on AWS.
             navigateFallbackDenylist: [
-              /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)/,
+              /^\/(api|public|healthz|accounts|reader|feed-icons|downloads)(\/|$)/,
               /^\/public\.php$/,
             ],
           },
