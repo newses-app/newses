@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { useTheme } from 'vuetify';
 import { slow } from './lib/slow-requests.ts';
-import { NATIVE } from './platform/index.ts';
+import { bridge, NATIVE } from './platform/index.ts';
 import { useUiStore } from './stores/ui.ts';
 
 const { t } = useI18n();
 const ui = useUiStore();
 const router = useRouter();
+const theme = useTheme();
+// System bars and the window frame follow the app's theme.
+watch(
+  () => theme.current.value.dark,
+  (dark) => void bridge.setDarkTheme(dark),
+  { immediate: true },
+);
 const open = computed({
   get: () => ui.notice !== null,
   set: (value) => {

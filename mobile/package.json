@@ -1,0 +1,28 @@
+{
+  "name": "@rss-reader/mobile",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "build:apk": "node scripts/build.ts --apk debug",
+    "install:apk": "node scripts/build.ts --apk debug --install",
+    "assets": "node scripts/assets.ts",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.4",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@rss-reader/shared": "workspace:*",
+    "esbuild": "^0.28.2"
+  }
+}

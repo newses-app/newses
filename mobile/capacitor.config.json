@@ -1,0 +1,20 @@
+{
+  "appId": "app.newses",
+  "appName": "rss-reader",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css"
+    },
+    "CapacitorHttp": {
+      "enabled": false
+    }
+  }
+}

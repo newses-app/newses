@@ -1,0 +1,29 @@
+{
+  "name": "@rss-reader/desktop",
+  "productName": "rss-reader",
+  "desktopName": "rss-reader.desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Self-hosted feed reader",
+  "homepage": "https://github.com/himynameschris/rss-reader",
+  "author": "Newses contributors",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "out/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.ts",
+    "dev": "node scripts/dev.ts",
+    "start": "node scripts/build.ts && electron .",
+    "build:linux": "node scripts/build.ts && electron-builder --linux --publish never",
+    "build:win": "node scripts/build.ts && electron-builder --win --publish never",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@rss-reader/shared": "workspace:*",
+    "dmg-builder": "^26.15.3",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "^26.15.3",
+    "esbuild": "^0.28.2"
+  }
+}

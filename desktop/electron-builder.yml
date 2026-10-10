@@ -1,0 +1,48 @@
+# Unsigned builds: `pnpm build:win` (per-user NSIS) and `pnpm build:linux` (AppImage, deb).
+appId: app.newses
+productName: rss-reader
+copyright: Copyright © Newses contributors
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - '!out/**/*.map'
+  - package.json
+
+asar: true
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: rss-reader-${version}-windows-setup.${ext}
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  category: Network
+  executableName: rss-reader
+  # Links the running window to the .desktop entry (desktopName in package.json).
+  syncDesktopName: true
+  maintainer: Newses contributors
+  synopsis: Self-hosted feed reader
+  artifactName: rss-reader-${version}-linux-${arch}.${ext}

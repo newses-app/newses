@@ -75,3 +75,34 @@
 .skip-link:focus {
   transform: none;
 }
+
+/*
+ * Android draws the app edge to edge, under the system bars. #app is inset by them and, through its
+ * transform, contains Vuetify's fixed layout (app bar, drawer); the page scrolls inside it. The
+ * `--safe-area-inset-*` variables from Capacitor correct older WebViews' `env()` values.
+ */
+html[data-platform='android'] {
+  --inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --inset-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --inset-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  background: rgb(var(--v-theme-background));
+}
+html[data-platform='android'] #app {
+  position: fixed;
+  inset: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left);
+  transform: translateZ(0);
+  overflow: hidden;
+}
+html[data-platform='android'] #app > .v-application {
+  height: 100%;
+  overflow-y: auto;
+}
+html[data-platform='android'] .v-application__wrap {
+  min-height: 100%;
+}
+/* Dialogs and menus are attached to <body>, outside #app. */
+html[data-platform='android'] .v-dialog.v-overlay,
+html[data-platform='android'] .v-menu.v-overlay {
+  inset: var(--inset-top) var(--inset-right) var(--inset-bottom) var(--inset-left);
+}

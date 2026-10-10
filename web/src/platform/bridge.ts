@@ -1,32 +1,6 @@
-/** A file the user is offered to save. */
-export interface SaveFile {
-  name: string;
-  type: string;
-  data: string;
-}
+import type { PlatformBridge, SaveFile } from '@rss-reader/shared';
 
-/**
- * Native features of the desktop and mobile apps. Their shells set `window.rssReaderBridge` before
- * the app's scripts run; the browser gets `webBridge`.
- */
-export interface PlatformBridge {
-  readonly platform: 'web' | 'desktop' | 'android';
-  /** The app's version; empty in a browser. */
-  readonly appVersion: string;
-  /** The server chosen at the connect screen; null until one is. */
-  getServerUrl(): Promise<string | null>;
-  setServerUrl(url: string): Promise<void>;
-  /** The bearer session token from OS secure storage; null when signed out or not kept. */
-  getToken(): Promise<string | null>;
-  setToken(token: string): Promise<void>;
-  clearToken(): Promise<void>;
-  /** Opens an http(s) URL in the system browser. */
-  openExternal(url: string): Promise<void>;
-  /** Offers a file to save; false when the user cancels. */
-  saveFile(file: SaveFile): Promise<boolean>;
-  /** Shows a system notification. */
-  notify(notification: { title: string; body: string }): Promise<void>;
-}
+export type { PlatformBridge, SaveFile };
 
 declare global {
   interface Window {
@@ -61,6 +35,8 @@ export const webBridge: PlatformBridge = {
   },
   saveFile: download,
   notify: () => Promise.resolve(),
+  setDarkTheme: () => Promise.resolve(),
+  onBackButton: () => undefined,
 };
 
 /** The native build outside a shell (development, tests): like the browser, but remembers the server and token until reload. */

@@ -1,3 +1,9 @@
 *.md
 pnpm-lock.yaml
 server/src/db/migrations/
+# Build output and the generated Android project.
+desktop/out/
+desktop/release/
+mobile/www/
+mobile/android/
+mobile/release/

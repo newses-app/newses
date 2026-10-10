@@ -10,7 +10,17 @@ const server = './server/src';
 const layers = (...names: string[]) => names.map((name) => `${server}/${name}`);
 
 export default defineConfig(
-  globalIgnores(['**/dist/', '**/dist-native/', '**/coverage/', '**/cdk.out/']),
+  globalIgnores([
+    '**/dist/',
+    '**/dist-native/',
+    '**/coverage/',
+    '**/cdk.out/',
+    'desktop/out/',
+    'desktop/release/',
+    'mobile/www/',
+    'mobile/android/',
+    'mobile/release/',
+  ]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {

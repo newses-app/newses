@@ -14,6 +14,9 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 | `DATABASE_URL=… pnpm --filter @rss-reader/server db:migrate` | Apply migrations |
 | `pnpm --filter @rss-reader/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
 | `pnpm --filter @rss-reader/web build:native` | Web app for the desktop and mobile apps, in `web/dist-native` |
+| `pnpm --filter @rss-reader/desktop dev` | Desktop app against the web app's dev server, with hot reload |
+| `pnpm --filter @rss-reader/desktop build:linux` / `build:win` | Unsigned desktop packages in `desktop/release` (AppImage and deb; NSIS installer, built on Windows) |
+| `pnpm --filter @rss-reader/mobile build:apk` / `install:apk` | Unsigned debug APK in `mobile/release` (needs JDK 21 and the Android SDK); `install:apk` also installs it with `adb` |
 | `E2E_BASE_URL=… pnpm --filter @rss-reader/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
 | `pnpm --filter @rss-reader/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first); deployments run through the pipelines |
 

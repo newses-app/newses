@@ -16,9 +16,11 @@ function nativeShell(): Plugin {
     name: 'rss-reader-native',
     resolveId: (id) => (id === PWA_REGISTER ? stub : null),
     load: (id) => (id === stub ? 'export const registerSW = () => () => Promise.resolve();' : null),
-    // Not in development, where the dev server's own scripts and websocket need more.
-    transformIndexHtml: (_html, context) =>
-      context.server
+    transformIndexHtml: (html, context) => ({
+      // Android draws the app under the system bars; `env(safe-area-inset-*)` needs this.
+      html: html.replace('initial-scale=1.0"', 'initial-scale=1.0, viewport-fit=cover"'),
+      // Not in development, where the dev server's own scripts and websocket need more.
+      tags: context.server
         ? []
         : [
             {
@@ -27,6 +29,7 @@ function nativeShell(): Plugin {
               injectTo: 'head-prepend',
             },
           ],
+    }),
   };
 }
 

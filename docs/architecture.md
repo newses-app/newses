@@ -14,8 +14,8 @@
 | Auth | `@node-rs/argon2`, `otpauth` |
 | Logging | Pino (JSON) |
 | Web | Vue 3, Vite, Vuetify 3, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
-| Desktop | Electron, electron-vite, electron-builder |
-| Mobile | Capacitor |
+| Desktop | Electron, esbuild, electron-builder |
+| Mobile | Capacitor (Android) |
 | Tests | Vitest, Testcontainers (Postgres), Playwright, axe-core (WCAG 2.2 AA scans in the Playwright suite) |
 | Infrastructure | AWS CDK (TypeScript) |
 | CI/CD | CDK Pipelines (CodePipeline + CodeBuild) defined in `infra/`; no GitHub workflows |
@@ -104,6 +104,29 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - OPML export saves through the bridge. Links to other origins open in the system browser and never navigate the app.
 - Every response carries `X-Content-Type-Options: nosniff`, and HSTS (1 year) when the request arrived over HTTPS; API responses default to `Cache-Control: no-store`. On AWS, CloudFront also adds HSTS to every response and a viewer-response function adds `charset=utf-8` to text responses from S3.
 - In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`. On AWS, CloudFront serves the build from S3 with the same headers, and a viewer-request function maps extensionless paths to `index.html`.
+
+## Desktop app
+
+`desktop/`: Electron for Windows and Linux (x64). esbuild bundles the main process and preload into `out/`, beside the native web build (`out/web`); electron-builder packages a per-user NSIS installer, an AppImage, and a deb.
+
+- The web build is served from `app://rss-reader`, a privileged standard scheme: client-side routes fall back to `index.html`, and responses carry the native CSP as a header. The API sees that origin.
+- The window has context isolation, the sandbox, no Node integration, and no webviews. New windows are denied and navigation away from the app is blocked; http(s) links open in the system browser. Only the notification and clipboard-write permissions are granted.
+- Fuses: no `RunAsNode`, `NODE_OPTIONS`, or inspect arguments; the app loads only from its integrity-checked asar.
+- The preload exposes the bridge; the main process answers only frames on the app origin and validates arguments.
+- `settings.json` in the user data folder (owner-only) holds the server URL, window bounds, and the token encrypted with `safeStorage` (DPAPI on Windows, the keyring on Linux). On Linux without a keyring (`basic_text`) the token is kept in memory only, so each launch signs in.
+- One instance at a time. Window bounds are restored while they are still on a screen. The menu (File, Edit, View) shows on Alt.
+- `pnpm dev` serves `app://rss-reader` from the web app's Vite dev server in native mode, so the origin and bridge match the packaged app.
+
+## Mobile app
+
+`mobile/`: Capacitor for Android, `app.newses`, served from `https://localhost`. `android/` is committed.
+
+- `build` assembles `www/` from the native web build and `bridge.js` (the bridge bundled with the Capacitor plugins), loaded before the app's scripts, then syncs it into `android/`.
+- Bridge: the server URL in Preferences; the token in secure storage (AES-GCM with an Android Keystore key); links in Custom Tabs; files saved to the cache and offered through the share sheet; status and navigation bar icons follow the theme.
+- The back button closes the top dialog or menu, then the drawer, then goes back; at the start of the app's history it exits.
+- The app draws edge to edge (the native build's viewport has `viewport-fit=cover`): `#app` is inset by the safe areas (Capacitor's `--safe-area-inset-*` variables, else `env()`) and contains the layout, which scrolls inside it.
+- HTTPS only (cleartext off), `INTERNET` is the only permission, and app data is not backed up (Keystore keys do not move between devices).
+- `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1) and unsigned.
 
 ## Ingest pipeline
 
