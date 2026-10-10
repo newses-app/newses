@@ -3,7 +3,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { createDb, type Db } from './client.ts';
-import { runMigrations } from './migrate.ts';
+import { runMigrations, schemaMatches } from './migrate.ts';
 import { categories, entries, feedSources, subscriptions, userEntries, users } from './schema.ts';
 
 let database: TestDatabase;
@@ -58,7 +58,9 @@ describe('migrations', () => {
     const empty = await createTestDatabase({ migrate: false });
     const pools = [1, 2, 3].map(() => new pg.Pool({ connectionString: empty.url }));
     try {
+      expect(await schemaMatches(createDb(first(pools)))).toBe(false);
       await Promise.all(pools.map((p) => runMigrations(p)));
+      expect(await schemaMatches(createDb(first(pools)))).toBe(true);
       expect(await appliedMigrations(first(pools))).toBe(await appliedMigrations(pool));
     } finally {
       await Promise.all(pools.map((p) => p.end()));

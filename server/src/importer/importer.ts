@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
+import { schemaMatches } from '../db/migrate.ts';
 import { ImportError } from './errors.ts';
 import { ImportMap, type Writer } from './import-map.ts';
 import { ImportReport } from './report.ts';
@@ -64,6 +65,10 @@ class DryRunRollback extends Error {}
  */
 export async function importTtrss(deps: ImportDeps, options: ImportOptions): Promise<ImportReport> {
   const { db, source, steps } = deps;
+  if (!(await schemaMatches(db)))
+    throw new ImportError(
+      "The target database's schema does not match this build; deploy or check out the matching version",
+    );
   const versions = deps.schemaVersions ?? VERIFIED_SCHEMA_VERSIONS;
   const version = await source.schemaVersion();
   if (version === null) throw new ImportError('The source is not a TTRSS database');

@@ -17,7 +17,7 @@ cli import-ttrss --source <postgres-url> [--users alice,bob] [--since YYYY-MM-DD
 | `--force` | Re-import into users who have used this instance since their last import |
 
 Behaviour:
-- Refuses a source whose `ttrss_version.schema_version` the importer has not been verified against.
+- Refuses a target whose applied migrations differ from the importer's build, and a source whose `ttrss_version.schema_version` the importer has not been verified against.
 - Reads the source in one read-only `REPEATABLE READ` transaction, so the import sees a single consistent snapshot.
 - Batched and resumable: each batch commits on its own, and `import_map` records every imported source row, so re-running skips or updates rows already imported.
 - Re-running after the first import applies changes made in TTRSS since then. Source state wins.
@@ -26,29 +26,31 @@ Behaviour:
 
 ## Running the import
 
-The source is read through a PostgreSQL URL. The official TTRSS compose stack does not publish its database port, so restore a dump (A) or join its network (B).
+1. Dump the TTRSS database on its host, from the TTRSS compose directory, or use the newest file in its `backups` volume:
+   ```
+   docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > ttrss.dump
+   ```
+2. Copy the dump to a machine with this repository checked out and Docker running.
+3. From the repository root, import into the running Docker stack in `docker/`, or into an AWS stage:
+   ```
+   scripts/import-ttrss.sh ttrss.dump
+   scripts/import-ttrss.sh ttrss.dump --aws dev
+   ```
 
-### A. Restore a copy (recommended)
+| Option | Effect |
+|---|---|
+| `--aws dev\|prod` | Import into that stage's Aurora database, with the caller's AWS credentials (`AWS_PROFILE`) for account `123456789012` in `us-east-2` |
+| `--users`, `--since`, `--force` | Passed to the CLI |
+| `--dry-run` | Stop after the dry run |
+| `--yes` | Import without asking |
 
-1. Take a dump on the TTRSS host, or use the newest file in the `backups` volume:
-   ```
-   docker compose exec db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > ttrss.dump
-   ```
-2. On the rss-reader host, restore it into a scratch database beside rss-reader's own:
-   ```
-   docker compose exec db sh -c 'createdb -U "$POSTGRES_USER" ttrss_import'
-   docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d ttrss_import --no-owner' < ttrss.dump
-   ```
-   For a `.sql.gz` backup: `gunzip -c backup.sql.gz | docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d ttrss_import'`.
-3. Import, with a dry run first:
-   ```
-   docker compose exec server sh -c 'rss-reader cli import-ttrss --source "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@db/ttrss_import" --dry-run'
-   docker compose exec server sh -c 'rss-reader cli import-ttrss --source "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@db/ttrss_import"'
-   ```
-   `POSTGRES_USER` and `POSTGRES_PASSWORD` are rss-reader's, from `docker/.env`; the server container has them in `DATABASE_URL`, so `--source "${DATABASE_URL%/*}/ttrss_import"` works too.
-4. Drop `ttrss_import` when finished: `docker compose exec db sh -c 'dropdb -U "$POSTGRES_USER" ttrss_import'`.
+The script:
+- Restores the dump (`pg_dump -Fc`, `.sql`, or `.sql.gz`) into a temporary PostgreSQL container, removed when the script exits.
+- Runs a dry run and prints its report, then asks before importing.
+- Saves the import's report to `ttrss-import-<target>-<time>.txt` (mode 600) in the current directory and prints it with temporary passwords hidden. Hand the passwords out from the file, then delete it.
+- On AWS, builds the image from the checkout and runs it locally against Aurora's public TLS endpoint, with the stage's database password and `APP_SECRET` from SSM; nothing runs in AWS. The checkout must match the deployed version. A paused database takes up to 30 s to resume.
 
-### B. Read the live database
+### Without a dump
 
 When TTRSS runs on the same Docker host, connect rss-reader's server container to TTRSS's network for the import. Both stacks name their database service `db`, so address TTRSS's by its container name:
 
@@ -60,31 +62,6 @@ docker network disconnect <ttrss-project>_default rss-reader-server-1
 ```
 
 Use the values from the TTRSS `.env`. The import only reads, in one read-only transaction.
-
-### AWS
-
-Nothing runs in AWS for an import. The operator runs the rss-reader image on their own machine with Docker. The source is a dump restored into a local Postgres, as in A. The target is the stage's Aurora database, reached over its public TLS endpoint.
-
-1. Restore the dump into a local rss-reader Docker stack's `db` (A, steps 1–2), or into any Postgres the container can reach.
-2. Read the stage's connection details (stage `dev` or `prod`), with AWS credentials for account `123456789012` in `us-east-2`:
-   ```
-   STAGE=dev
-   HOST=$(aws rds describe-db-clusters --db-cluster-identifier rss-reader-$STAGE --query 'DBClusters[0].Endpoint' --output text)
-   DB_PASS=$(aws ssm get-parameter --name /rss-reader/$STAGE/db-password --with-decryption --query Parameter.Value --output text)
-   APP_SECRET=$(aws ssm get-parameter --name /rss-reader/$STAGE/app-secret --with-decryption --query Parameter.Value --output text)
-   curl -fsSo rds-ca.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
-   ```
-3. Import from the directory holding `docker/compose.yaml`, so the container joins the local stack's network and reaches its `db`:
-   ```
-   docker compose run --rm --no-deps -v "$PWD/rds-ca.pem:/rds-ca.pem:ro" \
-     -e NODE_EXTRA_CA_CERTS=/rds-ca.pem -e APP_SECRET="$APP_SECRET" \
-     -e DATABASE_URL="postgres://rss_reader:$(printf %s "$DB_PASS" | jq -sRr @uri)@$HOST:5432/rss_reader?sslmode=verify-full" \
-     server cli import-ttrss --source "postgres://<local user>:<local password>@db/ttrss_import" --dry-run
-   ```
-   Run it again without `--dry-run` to import. The first connection waits up to 30 s while a paused database resumes.
-4. Delete `rds-ca.pem`, and unset `DB_PASS` and `APP_SECRET`.
-
-`APP_SECRET` must be the stage's, so the stage can read anything the import seals.
 
 ## Mapping
 
@@ -118,7 +95,7 @@ The first fetch after an import takes over each imported entry whose link matche
 
 ## Checking an import
 
-- The report has no `!` rows, and every skip and note is expected. Keep the printed temporary passwords for handing out, then delete any saved copy of the report.
+- The report has no `!` rows, and every skip and note is expected.
 - Each user signs in with their temporary password, sets their own, and finds their categories, feeds, and preferences as in TTRSS.
 - Per-user counts match the source:
   ```
@@ -130,6 +107,6 @@ The first fetch after an import takes over each imported entry whose link matche
 ## Cut-over
 
 1. Run the new stack alongside TTRSS.
-2. Import with `--dry-run`, review the report, then import.
+2. Run the import, reviewing the dry run before confirming.
 3. Create app passwords. Point the existing TTRSS mobile app at the new server's `/api/` and verify reading, starring, and labels.
-4. Stop the TTRSS updater, re-run the import to pick up final changes, then shut TTRSS down.
+4. Stop the TTRSS updater, take a fresh dump and run the import again to pick up final changes, then shut TTRSS down.

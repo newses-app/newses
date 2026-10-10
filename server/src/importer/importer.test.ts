@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../db/client.ts';
 import {
@@ -101,6 +101,25 @@ describe('TTRSS importer', () => {
     await expect(
       importTtrss({ db, source, steps: [], purgeDays: 60, schemaVersions: [150] }, options()),
     ).rejects.toThrow(new ImportError('TTRSS schema version 151 is not supported (verified: 150)'));
+  });
+
+  it('refuses targets whose schema does not match this build', async () => {
+    const [last] = (
+      await db.execute<{ id: number; hash: string; created_at: string }>(
+        sql`SELECT id, hash, created_at FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1`,
+      )
+    ).rows;
+    await db.execute(sql`DELETE FROM drizzle.__drizzle_migrations WHERE id = ${last?.id}`);
+    try {
+      await expect(run()).rejects.toThrow(/schema does not match this build/);
+      expect(await imported()).toEqual([]);
+    } finally {
+      await db.execute(
+        sql`INSERT INTO drizzle.__drizzle_migrations (id, hash, created_at)
+          VALUES (${last?.id}, ${last?.hash}, ${last?.created_at})`,
+      );
+    }
+    expect((await run()).reconciled).toBe(true);
   });
 
   it('imports, records each row, and re-runs onto the same rows', async () => {
