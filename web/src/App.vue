@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { AppTheme } from '@rss-reader/shared';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -11,10 +12,13 @@ const { t } = useI18n();
 const ui = useUiStore();
 const router = useRouter();
 const theme = useTheme();
-// System bars and the window frame follow the app's theme.
+// The shells follow the app's theme: the OS's while it is `system`.
 watch(
-  () => theme.current.value.dark,
-  (dark) => void bridge.setDarkTheme(dark),
+  () => ({
+    preference: theme.isSystem.value ? 'system' : theme.current.value.dark ? 'dark' : 'light',
+    dark: theme.current.value.dark,
+  }),
+  (current) => void bridge.setTheme(current as AppTheme),
   { immediate: true },
 );
 const open = computed({

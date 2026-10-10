@@ -35,7 +35,7 @@ export const webBridge: PlatformBridge = {
   },
   saveFile: download,
   notify: () => Promise.resolve(),
-  setDarkTheme: () => Promise.resolve(),
+  setTheme: () => Promise.resolve(),
   onBackButton: () => undefined,
 };
 

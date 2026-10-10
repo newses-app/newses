@@ -113,6 +113,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The window has context isolation, the sandbox, no Node integration, and no webviews. New windows are denied and navigation away from the app is blocked; http(s) links open in the system browser. Only the notification and clipboard-write permissions are granted.
 - Fuses: no `RunAsNode`, `NODE_OPTIONS`, or inspect arguments; the app loads only from its integrity-checked asar.
 - The preload exposes the bridge; the main process answers only frames on the app origin and validates arguments.
+- The app's theme preference sets Electron's theme source: `system` follows the OS (light or dark title bar and `prefers-color-scheme`), light and dark pin it.
 - `settings.json` in the user data folder (owner-only) holds the server URL, window bounds, and the token encrypted with `safeStorage` (DPAPI on Windows, the keyring on Linux). On Linux without a keyring (`basic_text`) the token is kept in memory only, so each launch signs in.
 - One instance at a time. Window bounds are restored while they are still on a screen. The menu (File, Edit, View) shows on Alt.
 - `pnpm dev` serves `app://rss-reader` from the web app's Vite dev server in native mode, so the origin and bridge match the packaged app.

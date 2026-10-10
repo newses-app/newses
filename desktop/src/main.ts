@@ -23,6 +23,7 @@ import {
 import { openSettings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
 import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
+import { themeSource } from './theme.ts';
 import { restoreBounds } from './window-state.ts';
 
 const APP_ID = 'app.newses';
@@ -110,8 +111,9 @@ function registerBridge(settings: SettingsStore) {
     if (!Notification.isSupported()) return;
     new Notification({ title: text(title, 256) ?? '', body: text(body, 1024) ?? '' }).show();
   });
-  handle('setDarkTheme', (dark) => {
-    nativeTheme.themeSource = dark === true ? 'dark' : 'light';
+  // `system` lets Electron follow the OS again; pinning light or dark would stop that for good.
+  handle('setTheme', (theme) => {
+    nativeTheme.themeSource = themeSource(theme);
   });
 }
 

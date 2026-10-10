@@ -7,6 +7,11 @@ export interface SaveFile {
   data: string;
 }
 
+export interface AppTheme {
+  preference: 'system' | 'light' | 'dark';
+  dark: boolean;
+}
+
 /**
  * Native features of the desktop and mobile apps. Their shells set `window.rssReaderBridge` before
  * the web app's scripts run; the browser gets a stand-in.
@@ -28,8 +33,11 @@ export interface PlatformBridge {
   saveFile(file: SaveFile): Promise<boolean>;
   /** Shows a system notification. */
   notify(notification: { title: string; body: string }): Promise<void>;
-  /** Matches system bars and window frames to the app's light or dark theme. */
-  setDarkTheme(dark: boolean): Promise<void>;
+  /**
+   * The app's theme: the reader's preference, and whether it is dark now. Desktop follows the
+   * preference (so `system` keeps tracking the OS); Android colours its system bar icons by `dark`.
+   */
+  setTheme(theme: AppTheme): Promise<void>;
   /**
    * Called on the system back button (Android); the handler returns false when it had nothing to
    * close or go back to, and the app then exits.

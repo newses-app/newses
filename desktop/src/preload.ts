@@ -1,5 +1,5 @@
 // Exposes the platform bridge to the web app; everything runs in the main process over IPC.
-import type { PlatformBridge, SaveFile } from '@rss-reader/shared';
+import type { AppTheme, PlatformBridge, SaveFile } from '@rss-reader/shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
 const invoke = <T>(method: string, ...args: unknown[]) =>
@@ -20,7 +20,7 @@ const bridge: PlatformBridge = {
   saveFile: (file: SaveFile) => invoke<boolean>('saveFile', file),
   notify: (notification: { title: string; body: string }) =>
     invoke<undefined>('notify', notification),
-  setDarkTheme: (dark: boolean) => invoke<undefined>('setDarkTheme', dark),
+  setTheme: (theme: AppTheme) => invoke<undefined>('setTheme', theme),
   // Desktop has no system back button.
   onBackButton: () => undefined,
 };

@@ -50,7 +50,7 @@ const bridge: PlatformBridge = {
   // Android notifications are not part of the app yet.
   notify: () => Promise.resolve(),
   // A dark theme needs light status and navigation bar icons.
-  setDarkTheme: (dark) =>
+  setTheme: ({ dark }) =>
     SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }),
   onBackButton: (handler) => {
     backHandler = handler;
