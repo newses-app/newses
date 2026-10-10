@@ -35,10 +35,17 @@ export const loginRequestSchema = z.object({
   tokenType: z.enum(['cookie', 'bearer']).default('cookie'),
 });
 
+/**
+ * Path of the user's feed icons, `/feed-icons/<signed user segment>`: `<path>/<subscription id>.ico`
+ * needs no session, so the apps can show icons from another origin.
+ */
+const iconsPathSchema = z.string();
+
 export const loggedInResponseSchema = z.object({
   user: userSchema,
   csrfToken: z.string().optional(),
   token: z.string().optional(),
+  iconsPath: iconsPathSchema,
 });
 
 /** The password was right and 2FA is on: send a code with the challenge to `/auth/login/2fa`. */
@@ -105,6 +112,7 @@ export const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.s
 export const currentSessionSchema = z.object({
   user: userSchema,
   csrfToken: z.string().nullable(),
+  iconsPath: iconsPathSchema,
 });
 
 export const sessionSchema = z.object({

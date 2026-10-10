@@ -49,10 +49,16 @@ import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
 import type { ServerInfo } from './server.ts';
 
 export interface ApiClientOptions {
-  /** Server origin, e.g. `https://reader.example`; empty for the page's own origin. */
-  baseUrl?: string;
-  /** Bearer token (desktop and mobile apps). Without one, the browser's session cookie is used. */
-  token?: string;
+  /**
+   * Server origin, e.g. `https://reader.example`; empty for the page's own origin. A function is
+   * read on every request, for apps whose server can change.
+   */
+  baseUrl?: string | (() => string);
+  /**
+   * Bearer token (desktop and mobile apps), or a function returning the current one (null while
+   * signed out). Bearer clients never send cookies; without this option, the session cookie is used.
+   */
+  token?: string | (() => string | null);
   fetch?: typeof fetch;
 }
 
@@ -87,7 +93,11 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /** Typed client for `/api/v1`. Remembers the CSRF token from login and session calls. */
 export function createApiClient(options: ApiClientOptions = {}) {
-  const base = `${(options.baseUrl ?? '').replace(/\/$/, '')}/api/v1`;
+  const { baseUrl = '', token: tokenOption } = options;
+  const base = () =>
+    `${(typeof baseUrl === 'function' ? baseUrl() : baseUrl).replace(/\/$/, '')}/api/v1`;
+  const bearer = tokenOption !== undefined;
+  const currentToken = () => (typeof tokenOption === 'function' ? tokenOption() : tokenOption);
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   let csrfToken: string | null = null;
 
@@ -97,8 +107,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       if (value !== undefined) params.set(key, String(value));
     const search = params.size > 0 ? `?${params.toString()}` : '';
     const headers: Record<string, string> = { accept: 'application/json' };
-    if (options.token) headers.authorization = `Bearer ${options.token}`;
-    else if (csrfToken && !SAFE_METHODS.has(method)) headers['x-csrf-token'] = csrfToken;
+    const token = currentToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+    else if (!bearer && csrfToken && !SAFE_METHODS.has(method)) headers['x-csrf-token'] = csrfToken;
     let body: string | undefined;
     if (opts.rawBody) {
       headers['content-type'] = opts.rawBody.contentType;
@@ -107,11 +118,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
       headers['content-type'] = 'application/json';
       body = JSON.stringify(opts.body);
     }
-    const response = await doFetch(`${base}${path}${search}`, {
+    const response = await doFetch(`${base()}${path}${search}`, {
       method,
       headers,
       ...(body !== undefined && { body }),
-      credentials: options.token ? 'omit' : 'include',
+      credentials: bearer ? 'omit' : 'include',
     });
     if (!response.ok) {
       const error = (await response.json().catch(() => ({}))) as {
@@ -135,7 +146,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
   return {
     /** URL of the server-sent events stream (`counters` events). */
-    eventsUrl: `${base}/events`,
+    get eventsUrl() {
+      return `${base()}/events`;
+    },
     setCsrfToken(token: string | null) {
       csrfToken = token;
     },

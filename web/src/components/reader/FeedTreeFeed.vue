@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { mdiAlertCircleOutline, mdiCancel, mdiRss } from '@mdi/js';
-import { inject, ref } from 'vue';
+import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useIconSrc } from '../../composables/useIconSrc.ts';
 import type { FeedNode } from '../../lib/tree.ts';
 import { TREE_CONTEXT } from './tree-context.ts';
 import UnreadCount from './UnreadCount.vue';
@@ -13,6 +14,8 @@ if (!context) throw new Error('FeedTreeFeed must be inside FeedTree');
 const { dragged, editing, current } = context;
 const over = ref(false);
 const iconFailed = ref(false);
+const iconSrc = useIconSrc();
+const icon = computed(() => iconSrc(props.node.subscription));
 
 function onDragStart(event: DragEvent) {
   dragged.value = { kind: 'feed', id: props.node.subscription.id };
@@ -51,8 +54,8 @@ function onDrop() {
     >
       <template #prepend>
         <img
-          v-if="node.subscription.iconUrl && !iconFailed"
-          :src="node.subscription.iconUrl"
+          v-if="icon && !iconFailed"
+          :src="icon"
           alt=""
           width="16"
           height="16"

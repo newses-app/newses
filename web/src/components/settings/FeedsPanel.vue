@@ -19,10 +19,25 @@ import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
+import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
 const ui = useUiStore();
+
+const exporting = ref(false);
+/** Through the bridge, so the apps save the file where the user chooses. */
+async function exportOpml() {
+  exporting.value = true;
+  try {
+    const data = await api.opml.export();
+    await bridge.saveFile({ name: 'subscriptions.opml', type: 'text/x-opml', data });
+  } catch (error) {
+    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+  } finally {
+    exporting.value = false;
+  }
+}
 const subscriptions = useSubscriptions();
 const categories = useCategories();
 const refreshFeeds = useFeedsRefresh();
@@ -179,12 +194,7 @@ async function importOpml(event: Event) {
         hidden
         @change="importOpml"
       />
-      <v-btn
-        variant="tonal"
-        :prepend-icon="mdiDownload"
-        href="/api/v1/opml"
-        download="subscriptions.opml"
-      >
+      <v-btn variant="tonal" :prepend-icon="mdiDownload" :loading="exporting" @click="exportOpml">
         {{ t('settings.exportOpml') }}
       </v-btn>
     </div>

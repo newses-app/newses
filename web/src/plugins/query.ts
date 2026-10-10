@@ -1,5 +1,6 @@
 import { QueryCache, QueryClient } from '@tanstack/vue-query';
 import { isUnauthenticated } from '../api.ts';
+import { connection } from '../platform/index.ts';
 import { router } from '../router.ts';
 
 export const queryClient = new QueryClient({
@@ -9,6 +10,7 @@ export const queryClient = new QueryClient({
       const current = router.currentRoute.value;
       if (isUnauthenticated(error) && query.queryKey[0] !== 'session' && current.name !== 'login') {
         queryClient.clear();
+        void connection.signedOut();
         void router.push({ name: 'login', query: { redirect: current.fullPath } });
       }
     },

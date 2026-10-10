@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest';
+import { memoryBridge, type PlatformBridge, selectBridge, webBridge } from './bridge.ts';
+
+describe('selectBridge', () => {
+  it('prefers the bridge a shell injected', () => {
+    const injected: PlatformBridge = { ...webBridge, platform: 'desktop', appVersion: '1.2.3' };
+    expect(selectBridge(injected, true)).toBe(injected);
+    expect(selectBridge(injected, false)).toBe(injected);
+  });
+
+  it('uses the browser bridge for the web build', () => {
+    expect(selectBridge(undefined, false)).toBe(webBridge);
+  });
+
+  it('keeps the server and token in memory for the native build outside a shell', async () => {
+    const bridge = selectBridge(undefined, true);
+    expect(bridge).not.toBe(webBridge);
+    await bridge.setServerUrl('https://reader.example');
+    await bridge.setToken('t0k');
+    expect(await bridge.getServerUrl()).toBe('https://reader.example');
+    expect(await bridge.getToken()).toBe('t0k');
+    await bridge.clearToken();
+    expect(await bridge.getToken()).toBeNull();
+  });
+});
+
+describe('webBridge', () => {
+  it('keeps no server or token: the page origin and cookie apply', async () => {
+    await webBridge.setToken('t0k');
+    expect(await webBridge.getToken()).toBeNull();
+    expect(await webBridge.getServerUrl()).toBeNull();
+  });
+});
+
+describe('memoryBridge', () => {
+  it('starts empty each time', async () => {
+    await memoryBridge().setToken('one');
+    expect(await memoryBridge().getToken()).toBeNull();
+  });
+});

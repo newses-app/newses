@@ -25,8 +25,10 @@ import { useSubscriptions } from '../../composables/useFeeds.ts';
 import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
+import { resolveContentUrls } from '../../lib/native-urls.ts';
 import { isHighScore } from '../../lib/score.ts';
 import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
+import { appServer } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
 import ScoreBadge from './ScoreBadge.vue';
@@ -66,7 +68,10 @@ const showFull = computed(
   () =>
     !!fullContent.value && (choice.value === 'full' || (choice.value === null && optedIn.value)),
 );
-const content = computed(() => (showFull.value ? fullContent.value : props.entry.content));
+const content = computed(() => {
+  const html = showFull.value ? fullContent.value : props.entry.content;
+  return html && resolveContentUrls(html, appServer());
+});
 watch(
   () => props.entry.id,
   () => {

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
+import { bridge, connection, NATIVE } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import AppPasswordsSection from './AppPasswordsSection.vue';
 import PasswordForm from './PasswordForm.vue';
@@ -43,6 +44,23 @@ async function revoke(id: number) {
       <v-spacer />
       <v-btn variant="tonal" :prepend-icon="mdiLogout" @click="logout">{{ t('nav.logout') }}</v-btn>
     </div>
+
+    <template v-if="NATIVE">
+      <h2 class="text-title-large mb-2">{{ t('connect.app') }}</h2>
+      <v-list density="compact" class="mb-6">
+        <v-list-item :title="t('connect.server')" :subtitle="connection.state.serverUrl ?? ''">
+          <template #append>
+            <v-btn variant="tonal" size="small" :to="{ name: 'connect' }">
+              {{ t('connect.change') }}
+            </v-btn>
+          </template>
+        </v-list-item>
+        <v-list-item
+          v-if="bridge.appVersion"
+          :title="t('connect.appVersion', { version: bridge.appVersion })"
+        />
+      </v-list>
+    </template>
 
     <h2 class="text-title-large mb-4">{{ t('account.changePassword') }}</h2>
     <PasswordForm @changed="passwordChanged" />

@@ -1,6 +1,6 @@
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
-import { WEB_CSP } from './web-csp.ts';
+import { WEB_CSP } from '@rss-reader/shared/web-csp';
 
 /** API, compatibility-API, and public paths, which never fall back to the app; the service worker's `navigateFallbackDenylist` in web/vite.config.ts must match. */
 const NOT_SPA = /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)|^\/public\.php$/;

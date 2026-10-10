@@ -1,46 +1,76 @@
+import { NATIVE_CSP } from '@rss-reader/shared/web-csp';
 import vue from '@vitejs/plugin-vue';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import vuetify from 'vite-plugin-vuetify';
 
-export default defineConfig({
+const PWA_REGISTER = 'virtual:pwa-register';
+
+/**
+ * The apps' build: no service worker (the shells bundle the app, so there is nothing to cache or
+ * update), and the native CSP in a `<meta>`, since nothing serves headers with the bundled files.
+ */
+function nativeShell(): Plugin {
+  const stub = `\0${PWA_REGISTER}`;
+  return {
+    name: 'rss-reader-native',
+    resolveId: (id) => (id === PWA_REGISTER ? stub : null),
+    load: (id) => (id === stub ? 'export const registerSW = () => () => Promise.resolve();' : null),
+    // Not in development, where the dev server's own scripts and websocket need more.
+    transformIndexHtml: (_html, context) =>
+      context.server
+        ? []
+        : [
+            {
+              tag: 'meta',
+              attrs: { 'http-equiv': 'Content-Security-Policy', content: NATIVE_CSP },
+              injectTo: 'head-prepend',
+            },
+          ],
+  };
+}
+
+export default defineConfig(({ mode }) => ({
+  build: { outDir: mode === 'native' ? 'dist-native' : 'dist' },
   plugins: [
     vue(),
     vuetify({ autoImport: true }),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'rss-reader',
-        short_name: 'Reader',
-        description: 'Self-hosted feed reader',
-        theme_color: '#e8710a',
-        background_color: '#ffffff',
-        display: 'standalone',
-        icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          {
-            src: 'icon-maskable-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
+    mode === 'native'
+      ? nativeShell()
+      : VitePWA({
+          registerType: 'autoUpdate',
+          includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+          manifest: {
+            name: 'rss-reader',
+            short_name: 'Reader',
+            description: 'Self-hosted feed reader',
+            theme_color: '#e8710a',
+            background_color: '#ffffff',
+            display: 'standalone',
+            icons: [
+              { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+              { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+              {
+                src: 'icon-maskable-512.png',
+                sizes: '512x512',
+                type: 'image/png',
+                purpose: 'maskable',
+              },
+            ],
           },
-        ],
-      },
-      workbox: {
-        // The app shell only: API responses are never cached (online-first).
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and
-        // feeds, the native and compatibility APIs, and feed icons never get the app shell.
-        navigateFallbackDenylist: [
-          /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)/,
-          /^\/public\.php$/,
-        ],
-      },
-    }),
+          workbox: {
+            // The app shell only: API responses are never cached (online-first).
+            globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+            // Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and
+            // feeds, the native and compatibility APIs, and feed icons never get the app shell.
+            navigateFallbackDenylist: [
+              /^\/(api|public|healthz|accounts|reader|feed-icons)(\/|$)/,
+              /^\/public\.php$/,
+            ],
+          },
+        }),
   ],
   server: {
     proxy: { '/api': 'http://localhost:8080' },
   },
-});
+}));

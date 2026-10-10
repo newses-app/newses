@@ -167,6 +167,30 @@ describe('auth API', () => {
   });
 });
 
+describe('feed icon path', () => {
+  it('is given at login and with the session, and serves icons without a session', async () => {
+    const iris = await services.users.create('iris', 'iris password');
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'iris', password: 'iris password', tokenType: 'bearer' },
+    });
+    expect(login.statusCode, login.body).toBe(200);
+    const { token, iconsPath } = login.json<{ token: string; iconsPath: string }>();
+    expect(iconsPath).toMatch(/^\/feed-icons\/\d+\.[\w-]+$/);
+    const session = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(session.json<{ iconsPath: string }>().iconsPath).toBe(iconsPath);
+    // No such subscription, but the signed path is accepted without a session.
+    const icon = await app.inject({ url: `${iconsPath}/999999.ico` });
+    expect(icon.statusCode).toBe(404);
+    expect(icon.body).toBe('Not found\n');
+    await services.users.delete(iris.id);
+  });
+});
+
 describe('server info', () => {
   it('names the product and versions without a session', async () => {
     const res = await app.inject({ url: '/api/v1/server' });

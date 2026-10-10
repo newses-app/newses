@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { slow } from './lib/slow-requests.ts';
+import { NATIVE } from './platform/index.ts';
 import { useUiStore } from './stores/ui.ts';
 
 const { t } = useI18n();
@@ -31,6 +32,12 @@ router.isReady().then(
 function reload() {
   window.location.reload();
 }
+
+/** The apps may have the wrong server, or one that is gone. */
+function changeServer() {
+  failed.value = false;
+  void router.push({ name: 'connect' });
+}
 </script>
 
 <template>
@@ -49,6 +56,7 @@ function reload() {
       <template v-if="failed">
         <p class="text-body-medium">{{ t('app.unreachable') }}</p>
         <v-btn color="primary" variant="flat" @click="reload">{{ t('app.retry') }}</v-btn>
+        <v-btn v-if="NATIVE" variant="text" @click="changeServer">{{ t('connect.change') }}</v-btn>
       </template>
       <template v-else>
         <v-progress-circular indeterminate color="primary" :aria-label="t('common.loading')" />

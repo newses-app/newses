@@ -6,7 +6,7 @@ import { DomainError, ThrottledError } from '../../core/errors.ts';
 import type { FeedServices } from '../../core/feeds/index.ts';
 import type { SubscriptionView } from '../../core/feeds/subscriptions.ts';
 import type { PrefsService } from '../../core/prefs.ts';
-import { sendIcon } from '../icons.ts';
+import { ICONS_PATH, sendIcon } from '../icons.ts';
 import { logUnsupported } from './common.ts';
 import {
   sessionOf,
@@ -47,7 +47,6 @@ const SUBSCRIBE_CODES: Partial<Record<DomainError['code'], number>> = {
   feed_not_found: 3,
   fetch_failed: 5,
 };
-const ICONS_PATH = 'feed-icons';
 
 // Clients send numbers and booleans as JSON values or as strings.
 function intParam(params: TtrssParams, name: string): number | undefined {

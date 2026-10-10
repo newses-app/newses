@@ -165,7 +165,11 @@ export function buildApp(deps: AppDeps) {
         registerAuth(api, services.sessions);
         api.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
         await api.register(serverRoutes, { version: deps.version ?? 'dev' });
-        await api.register(authRoutes, { ...services, publicUrl: deps.publicUrl ?? null });
+        await api.register(authRoutes, {
+          ...services,
+          iconTokens: services.feeds.iconTokens,
+          publicUrl: deps.publicUrl ?? null,
+        });
         await api.register(adminUserRoutes, services);
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {

@@ -79,9 +79,10 @@ Rules:
 | `components` | Reader (tree, headlines, combined list, article), dialogs, settings panels |
 | `composables` | Server state (TanStack Query), live counters, shortcuts, session |
 | `lib` | Pure logic: stream keys, tree building, shortcut matching, reordering, cache patches |
+| `platform` | Platform bridge and the apps' server and token |
 | `stores` | Pinia store for UI state only (drawer, dialogs, notices) |
 
-- Routes: `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`, `t<tag>` (URL-encoded); search is `?q=`.
+- Routes: `/connect` (apps only), `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`, `t<tag>` (URL-encoded); search is `?q=`.
 - Server data lives in the TanStack Query cache. State changes patch every cached copy, then save; a failure restores the previous flags. Headline lists are not refetched when entries change state, so read entries stay in place until the list is reloaded.
 - Entries scored above the user's `scoreHighlightAbove` get a highlight bar and a bold score.
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
@@ -91,6 +92,16 @@ Rules:
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - The `shortcutBindings` preference holds only changed actions; each replaces that action's defaults, and `[]` unbinds it. A key cannot be bound alone while it starts a chord.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
+
+Native build (`build:native`, `web/dist-native`), bundled by the desktop and mobile apps:
+- No service worker. `NATIVE_CSP` (`shared/src/web-csp.ts`) is in a `<meta>`: `WEB_CSP` with `connect-src https:`, because the server is chosen at runtime.
+- The shells set `window.rssReaderBridge` (`web/src/platform/bridge.ts`) before the app's scripts run: server URL, bearer token in secure storage, open in the system browser, save a file, notify, app version. The web build uses a browser stand-in; the native build outside a shell keeps the server and token in memory.
+- The connect screen opens on first run and from "Change server" (sign-in page, settings, unreachable server). It takes an HTTPS origin and checks `GET /api/v1/server`: another product or API major is refused, an older minor warned about. Changing server revokes the old session first.
+- Sign-in asks for a bearer token, which the bridge keeps. Any 401 forgets it and returns to sign-in; signing out revokes the session, then forgets it.
+- Feed icons load from the user's `iconsPath` (login and session responses; the signed `/feed-icons` path), since an `<img>` cannot send the token.
+- Server-relative URLs in entry content (proxied images, links) are made absolute against the server; public page links use the server's origin.
+- The counters stream is read with `fetch`, which can send the token; 204 or an error falls back to polling, and an ended stream reconnects after 5 s.
+- OPML export saves through the bridge. Links to other origins open in the system browser and never navigate the app.
 - Every response carries `X-Content-Type-Options: nosniff`, and HSTS (1 year) when the request arrived over HTTPS; API responses default to `Cache-Control: no-store`. On AWS, CloudFront also adds HSTS to every response and a viewer-response function adds `charset=utf-8` to text responses from S3.
 - In the Docker image the server serves the build from `WEB_DIR`, with a CSP (scripts from self only, frames from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and immutable caching of fingerprinted assets. Unknown non-API GETs return `index.html`. On AWS, CloudFront serves the build from S3 with the same headers, and a viewer-request function maps extensionless paths to `index.html`.
 
@@ -223,7 +234,7 @@ Search:
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
 | TTRSS-compatible | `/api/`, `/api/index.php` (POST, `op`) | See below |
-| TTRSS feed icons | `/feed-icons/<user segment>/<id>.ico` | Signed per-user path, no session; see below |
+| Feed icons | `/feed-icons/<user segment>/<id>.ico` | Signed per-user path, no session, for TTRSS clients and the apps (`iconsPath`); see below |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*`; also under `/api/greader.php` | See below |
 
 ### Native REST API

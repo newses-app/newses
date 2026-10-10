@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { WEB_CSP } from '@rss-reader/server/web-csp';
+import { WEB_CSP } from '@rss-reader/shared/web-csp';
 import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';

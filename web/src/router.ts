@@ -5,6 +5,12 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: '/connect',
+      name: 'connect',
+      component: () => import('./views/ConnectView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('./views/LoginView.vue'),

@@ -1,11 +1,21 @@
 import { ApiError, createApiClient } from '@rss-reader/shared/client';
 import { trackSlow } from './lib/slow-requests.ts';
+import { connection, NATIVE } from './platform/index.ts';
+
+const fetch = trackSlow(globalThis.fetch.bind(globalThis));
 
 /**
- * Same-origin client; the session cookie authenticates and the CSRF token is kept by the client.
- * Slow requests are tracked, so the app can say when the server is waking up.
+ * In the browser, a same-origin client: the session cookie authenticates and the client keeps the
+ * CSRF token. In the apps, the chosen server with the bearer token. Slow requests are tracked, so
+ * the app can say when the server is waking up.
  */
-export const api = createApiClient({ fetch: trackSlow(globalThis.fetch.bind(globalThis)) });
+export const api = NATIVE
+  ? createApiClient({
+      baseUrl: () => connection.state.serverUrl ?? '',
+      token: () => connection.state.token,
+      fetch,
+    })
+  : createApiClient({ fetch });
 
 export const isUnauthenticated = (error: unknown) =>
   error instanceof ApiError && error.status === 401;

@@ -24,9 +24,11 @@ import type { AuthService, LoggedIn } from '../../core/auth/auth-service.ts';
 import type { AppPasswordService } from '../../core/auth/app-passwords.ts';
 import type { SessionService } from '../../core/auth/sessions.ts';
 import type { TwoFactorService } from '../../core/auth/two-factor.ts';
+import type { IconTokens } from '../../core/feeds/favicons.ts';
 import { DomainError } from '../../core/errors.ts';
 import { clearSessionCookie, requireAuth, requireUser, setSessionCookie } from '../auth.ts';
 import { toAppPassword, toSession, toUser } from '../dto.ts';
+import { iconsPath } from '../icons.ts';
 import { logSecurity, type SecurityEvent } from '../security-log.ts';
 
 export interface AuthRoutesOptions {
@@ -34,6 +36,7 @@ export interface AuthRoutesOptions {
   sessions: SessionService;
   twoFactor: TwoFactorService;
   appPasswords: AppPasswordService;
+  iconTokens: IconTokens;
   /** Origin shown to apps; null uses each request's origin. */
   publicUrl: string | null;
 }
@@ -62,20 +65,21 @@ async function logFailure<T>(
 async function sessionResponse(
   request: FastifyRequest,
   reply: FastifyReply,
-  sessions: SessionService,
+  { sessions, iconTokens }: Pick<AuthRoutesOptions, 'sessions' | 'iconTokens'>,
   result: LoggedIn,
 ) {
   const { token, session, user } = result;
   if (request.auth) await sessions.revoke(request.auth.user.id, request.auth.session.id);
   logSecurity(request, 'login', { userId: user.id, kind: session.kind });
-  if (session.kind === 'bearer') return { user: toUser(user), token };
+  const icons = iconsPath(iconTokens, user.id);
+  if (session.kind === 'bearer') return { user: toUser(user), token, iconsPath: icons };
   setSessionCookie(reply, token);
-  return { user: toUser(user), csrfToken: session.csrfToken ?? undefined };
+  return { user: toUser(user), csrfToken: session.csrfToken ?? undefined, iconsPath: icons };
 }
 
 export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
   app,
-  { auth, sessions, twoFactor, appPasswords, publicUrl },
+  { auth, sessions, twoFactor, appPasswords, iconTokens, publicUrl },
 ) => {
   const client = (request: FastifyRequest) => ({
     ip: request.ip,
@@ -97,7 +101,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
         logSecurity(request, 'login_second_factor_required', { userId: result.user.id });
         return { twoFactorRequired: true as const, challenge: result.challenge };
       }
-      return sessionResponse(request, reply, sessions, result);
+      return sessionResponse(request, reply, { sessions, iconTokens }, result);
     },
   );
 
@@ -108,7 +112,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
       const result = await logFailure(request, 'two_factor_failed', () =>
         auth.completeLogin({ ...request.body, ...client(request) }),
       );
-      return sessionResponse(request, reply, sessions, result);
+      return sessionResponse(request, reply, { sessions, iconTokens }, result);
     },
   );
 
@@ -125,7 +129,11 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
     { preHandler: requireUser, schema: { response: { 200: currentSessionSchema } } },
     async (request) => {
       const { user, session } = requireAuth(request);
-      return Promise.resolve({ user: toUser(user), csrfToken: session.csrfToken });
+      return Promise.resolve({
+        user: toUser(user),
+        csrfToken: session.csrfToken,
+        iconsPath: iconsPath(iconTokens, user.id),
+      });
     },
   );
 

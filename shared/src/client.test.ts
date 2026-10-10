@@ -50,6 +50,25 @@ describe('createApiClient', () => {
     expect(calls[0]?.init.credentials).toBe('omit');
   });
 
+  it('reads a changing server and token on each request, never sending cookies', async () => {
+    const { calls, fetch } = fakeFetch([json({ all: 0 }), json({ all: 0 }), json({})]);
+    let server = 'https://one.example';
+    let token: string | null = null;
+    const api = createApiClient({ baseUrl: () => server, token: () => token, fetch });
+    await api.counters();
+    server = 'https://two.example/';
+    token = 't1';
+    await api.counters();
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://one.example/api/v1/counters',
+      'https://two.example/api/v1/counters',
+    ]);
+    expect(header(calls[0], 'authorization')).toBeUndefined();
+    expect(header(calls[1], 'authorization')).toBe('Bearer t1');
+    expect(calls.map((c) => c.init.credentials)).toEqual(['omit', 'omit']);
+    expect(api.eventsUrl).toBe('https://two.example/api/v1/events');
+  });
+
   it('raises ApiError with the API error code and Retry-After', async () => {
     const { fetch } = fakeFetch([
       new Response(JSON.stringify({ error: 'throttled', message: 'Wait' }), {

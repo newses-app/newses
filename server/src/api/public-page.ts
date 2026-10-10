@@ -1,5 +1,5 @@
 import type { Entry } from '@rss-reader/shared';
-import { VIDEO_FRAME_SOURCES } from './web-csp.ts';
+import { VIDEO_FRAME_SOURCES } from '@rss-reader/shared/web-csp';
 
 /**
  * Policy for public pages: no scripts at all, the entry's images, media, and embedded videos,

@@ -3,6 +3,7 @@ import { type QueryClient, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { Router } from 'vue-router';
 import { useRouter } from 'vue-router';
 import { api, isUnauthenticated } from '../api.ts';
+import { connection, NATIVE } from '../platform/index.ts';
 
 export const SESSION_KEY = ['session'] as const;
 
@@ -10,11 +11,17 @@ const fetchSession = () => api.auth.session();
 
 /**
  * Redirects to the login page when the session is missing or expired, and to the password change
- * when the server requires one before anything else.
+ * when the server requires one before anything else. The apps start at the connect screen until a
+ * server is chosen.
  */
 export function installAuthGuard(router: Router, queryClient: QueryClient): void {
   router.beforeEach(async (to) => {
+    if (to.name === 'connect') return NATIVE || '/all';
+    if (NATIVE && !connection.state.serverUrl) return { name: 'connect' };
     if (to.meta.public) return true;
+    if (NATIVE && !connection.state.token) {
+      return { name: 'login', query: { redirect: to.fullPath } };
+    }
     try {
       const session = await queryClient.query({
         queryKey: SESSION_KEY,
@@ -28,7 +35,10 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
       if (!mustChange && to.name === 'change-password') return '/all';
       return true;
     } catch (error) {
-      if (isUnauthenticated(error)) return { name: 'login', query: { redirect: to.fullPath } };
+      if (isUnauthenticated(error)) {
+        await connection.signedOut();
+        return { name: 'login', query: { redirect: to.fullPath } };
+      }
       throw error;
     }
   });
@@ -39,29 +49,38 @@ export function useSession() {
   const router = useRouter();
   const query = useQuery({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: Infinity });
 
-  function signedIn(result: LoggedInResponse): void {
+  async function signedIn(result: LoggedInResponse): Promise<void> {
+    if (result.token) await connection.signedIn(result.token);
     queryClient.setQueryData<CurrentSession>(SESSION_KEY, {
       user: result.user,
       csrfToken: result.csrfToken ?? null,
+      iconsPath: result.iconsPath,
     });
   }
 
   /** Signs in, or returns the challenge to pass to `completeLogin` with a 2FA code. */
   async function login(login: string, password: string): Promise<string | null> {
-    const result = await api.auth.login({ login, password });
+    // The apps' token is kept in secure storage; the browser's session is its cookie.
+    const result = await api.auth.login({
+      login,
+      password,
+      tokenType: NATIVE ? 'bearer' : 'cookie',
+    });
     if ('challenge' in result) return result.challenge;
-    signedIn(result);
+    await signedIn(result);
     return null;
   }
 
   async function completeLogin(challenge: string, code: string): Promise<void> {
-    signedIn(await api.auth.loginTwoFactor({ challenge, code }));
+    await signedIn(await api.auth.loginTwoFactor({ challenge, code }));
   }
 
+  /** Revokes the session on the server, then forgets it here, even when the server is unreachable. */
   async function logout(): Promise<void> {
     try {
       await api.auth.logout();
     } finally {
+      await connection.signedOut();
       queryClient.clear();
       await router.push({ name: 'login' });
     }

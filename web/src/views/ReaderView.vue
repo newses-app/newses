@@ -23,6 +23,7 @@ import CombinedList from '../components/reader/CombinedList.vue';
 import HeadlineList from '../components/reader/HeadlineList.vue';
 import { useCounters } from '../composables/useCounters.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
+import { useIconSrc } from '../composables/useIconSrc.ts';
 import { ENTRIES_KEY, useEntry, useEntryActions, useEntryList } from '../composables/useEntries.ts';
 import { useCategories, useSubscriptions } from '../composables/useFeeds.ts';
 import { useLabels } from '../composables/useLabels.ts';
@@ -33,6 +34,7 @@ import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { safeUrl } from '../lib/format.ts';
 import { labelKey, parseStream, SPECIAL_FEEDS, type StreamKey } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
+import { bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 
 const { t } = useI18n();
@@ -78,12 +80,14 @@ const fromList = computed(() => entries.value.find((e) => e.id === entryId.value
 const opened = useEntry(() => (fromList.value ? null : entryId.value));
 const current = computed<Entry | undefined>(() => fromList.value ?? opened.data.value);
 
+const iconSrc = useIconSrc();
 const icons = computed(
   () =>
     new Map(
-      (subscriptions.data.value ?? []).flatMap((s) =>
-        s.iconUrl ? [[s.id, s.iconUrl] as const] : [],
-      ),
+      (subscriptions.data.value ?? []).flatMap((s) => {
+        const src = iconSrc(s);
+        return src ? [[s.id, src] as const] : [];
+      }),
     ),
 );
 
@@ -323,7 +327,7 @@ useShortcutHandler((action: ShortcutAction) => {
       return true;
     case 'openOriginal': {
       const link = safeUrl(entry?.link);
-      if (link) window.open(link, '_blank', 'noopener,noreferrer');
+      if (link) void bridge.openExternal(link);
       return true;
     }
     case 'closeArticle':

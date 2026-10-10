@@ -1,16 +1,29 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue';
+import { useQuery } from '@tanstack/vue-query';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import { ApiError } from '../api.ts';
+import { api, ApiError } from '../api.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSession } from '../composables/useSession.ts';
+import { connection, NATIVE } from '../platform/index.ts';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { login, completeLogin } = useSession();
 useDocumentTitle(() => t('login.submit'));
+
+// The apps show which server they sign in to.
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  enabled: NATIVE,
+  staleTime: Infinity,
+});
+const serverHost = computed(() =>
+  connection.state.serverUrl ? new URL(connection.state.serverUrl).host : '',
+);
 
 const name = ref('');
 const password = ref('');
@@ -74,6 +87,21 @@ async function submit() {
           <div class="d-flex align-center ga-3">
             <img src="/favicon.svg" alt="" width="40" height="40" />
             <v-card-title tag="h1" class="pa-0">{{ t('app.name') }}</v-card-title>
+          </div>
+          <div v-if="NATIVE" class="d-flex align-center flex-wrap ga-2 mt-3">
+            <span class="text-body-medium text-medium-emphasis">
+              {{
+                serverInfo.data.value
+                  ? t('connect.serverVersion', {
+                      host: serverHost,
+                      version: serverInfo.data.value.version,
+                    })
+                  : serverHost
+              }}
+            </span>
+            <v-btn variant="text" size="small" :to="{ name: 'connect' }">
+              {{ t('connect.change') }}
+            </v-btn>
           </div>
         </v-card-item>
         <v-form @submit.prevent="submit">

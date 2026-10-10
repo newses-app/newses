@@ -1,5 +1,13 @@
 import type { FastifyReply } from 'fastify';
+import type { IconTokens } from '../core/feeds/favicons.ts';
 import type { Blob } from '../core/ports.ts';
+
+/** Feed icons without a session: `/feed-icons/<user segment>/<subscription id>.ico`. */
+export const ICONS_PATH = 'feed-icons';
+
+/** The user's icon path, as the native API gives it. */
+export const iconsPath = (tokens: IconTokens, userId: number) =>
+  `/${ICONS_PATH}/${tokens.issue(userId)}`;
 
 /** Sends a stored feed icon, sandboxed: icons may be SVG, which must never run script here. */
 export function sendIcon(reply: FastifyReply, icon: Blob) {

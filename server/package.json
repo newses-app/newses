@@ -4,8 +4,7 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./web-csp": "./src/api/web-csp.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "typecheck": "tsc",
