@@ -35,6 +35,8 @@ await build({
   logLevel: 'warning',
 });
 
-// The window icon, and electron-builder's source for the installers' icons.
+// The window icon, and electron-builder's source for the Linux icons. Windows uses the committed
+// resources/icon.ico; regenerate it when the icon changes:
+//   convert web/public/icon-512.png -define icon:auto-resize=256,128,64,48,32,16 desktop/resources/icon.ico
 await cp(`${web}public/icon-512.png`, `${out}/icon.png`);
 await cp(`${web}public/icon-512.png`, `${root}build/icon.png`);

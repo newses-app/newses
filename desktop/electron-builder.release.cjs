@@ -10,4 +10,7 @@ const base =
 module.exports = {
   ...base,
   publish: { provider: 'generic', url: process.env.DOWNLOADS_URL },
+  // Each stage has its own feed, so prerelease versions (1.2.3-rc.1) keep latest*.yml rather
+  // than a channel's (rc-linux.yml).
+  detectUpdateChannel: false,
 };

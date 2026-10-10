@@ -24,6 +24,9 @@ electronFuses:
   grantFileProtocolExtraPrivileges: false
 
 win:
+  # Prebuilt: electron-builder's PNG converter needs more memory than the CodeBuild Windows
+  # container allows.
+  icon: resources/icon.ico
   target:
     - target: nsis
       arch: [x64]
