@@ -21,6 +21,8 @@ export interface StageConfig {
   name: 'dev' | 'prod';
   /** Branch whose pushes deploy this stage. */
   branch: string;
+  /** Tags that release the apps to this stage, as CodePipeline trigger globs. */
+  releaseTags: { tagsIncludes: string[]; tagsExcludes?: string[] };
   domainName: string;
   /** Production keeps its data when stacks are deleted. */
   retainData: boolean;
@@ -33,6 +35,8 @@ export const STAGES: StageConfig[] = [
   {
     name: 'dev',
     branch: 'dev',
+    // A hyphen marks a prerelease; the two stages partition `v*`.
+    releaseTags: { tagsIncludes: ['v*-*'] },
     domainName: 'reader-dev.example.com',
     retainData: false,
     backupDays: 1,
@@ -41,6 +45,7 @@ export const STAGES: StageConfig[] = [
   {
     name: 'prod',
     branch: 'main',
+    releaseTags: { tagsIncludes: ['v*'], tagsExcludes: ['v*-*'] },
     domainName: 'reader.example.com',
     retainData: true,
     backupDays: 14,
@@ -54,3 +59,16 @@ export const STAGES: StageConfig[] = [
  */
 export const resourceName = (stage: StageConfig, ...parts: string[]) =>
   [PROJECT, stage.name, ...parts].join('-');
+
+/** Where the app downloads live, in the downloads bucket and under the stage's domain. */
+export const DOWNLOADS_PREFIX = 'downloads';
+
+/**
+ * The stage's downloads bucket, named so the release pipeline can be granted it without a
+ * cross-stack reference.
+ */
+export const downloadsBucketName = (stage: StageConfig) =>
+  `${resourceName(stage, 'downloads')}-${ACCOUNT}`;
+
+/** SecureString parameters with the signing material, shared by both stages' release pipelines. */
+export const SIGNING_PARAMETERS = '/rss-reader/release';

@@ -1,3 +1,5 @@
+// App versions and the release manifest (no Zod, so build tools and the apps can import it).
+
 /** The app version from a release tag (`v1.2.3`, `v1.2.3-rc.1`); local builds get `0.0.0-dev`. */
 export interface AppVersion {
   name: string;
@@ -14,4 +16,22 @@ export function versionFromTag(tag: string | undefined): AppVersion {
   const [major, minor, patch] = match.slice(1, 4).map(Number) as [number, number, number];
   if (minor > 99 || patch > 99) throw new Error(`Minor and patch must be below 100: ${tag}`);
   return { name: tag.replace(/^v/, ''), code: major * 10000 + minor * 100 + patch };
+}
+
+/** A published file: its download URL, size in bytes, and SHA-256 (hex). */
+export interface ReleaseFile {
+  url: string;
+  size: number;
+  sha256: string;
+}
+
+/** `/downloads/latest.json`: the latest release on a stage, for the download page and the Android update prompt. */
+export interface ReleaseManifest {
+  version: string;
+  prerelease: boolean;
+  /** ISO 8601 time of publishing. */
+  published: string;
+  windows: ReleaseFile;
+  linux: { appImage: ReleaseFile; deb: ReleaseFile };
+  android: ReleaseFile & { versionCode: number };
 }

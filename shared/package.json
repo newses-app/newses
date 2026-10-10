@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client-entry.ts",
+    "./release": "./src/release.ts",
     "./web-csp": "./src/web-csp.ts"
   },
   "scripts": {

@@ -85,6 +85,10 @@ export default defineConfig(
       globals: globals.node,
       parserOptions: { projectService: false },
     },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   },
   ...pluginVue.configs['flat/recommended'],
   // vue-tsc type-checks templates and scripts; type-aware lint rules cover the .ts files.

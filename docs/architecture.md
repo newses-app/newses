@@ -31,7 +31,7 @@ Workspace packages exist only where runtime or toolchain differs.
 | `desktop/` | Electron shell around the web build |
 | `mobile/` | Capacitor shell around the web build |
 | `shared/` | Zod schemas, API types, typed API client (browser and Node) |
-| `infra/` | CDK app: stage stacks and per-stage pipelines |
+| `infra/` | CDK app: stage stacks, per-stage deploy and release pipelines, release buildspecs |
 | `docker/` | Dockerfile, `compose.yaml`, `.env.example`, reverse-proxy examples |
 
 `server/src` layers. ESLint enforces the allowed imports.
@@ -127,7 +127,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The back button closes the top dialog or menu, then the drawer, then goes back; at the start of the app's history it exits.
 - The app draws edge to edge (the native build's viewport has `viewport-fit=cover`): `#app` is inset by the safe areas (Capacitor's `--safe-area-inset-*` variables, else `env()`) and contains the layout, which scrolls inside it.
 - HTTPS only (cleartext off), `INTERNET` is the only permission, and app data is not backed up (Keystore keys do not move between devices).
-- `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1) and unsigned.
+- `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1). Release APKs are signed with the release keystore when `ANDROID_KEYSTORE_*` is set, else unsigned.
 
 ## Ingest pipeline
 
@@ -363,6 +363,7 @@ The settings page shows apps' connection details from `/api/v1/auth/app-password
 flowchart LR
   U[Browser / apps] --> CF[CloudFront]
   CF -- default --> S3W[(S3: SPA)]
+  CF -- "/downloads, /downloads/*" --> S3D[(S3: downloads)]
   CF -- "/api, /api/*, /reader/*, /accounts/*, /feed-icons/*, /public/*, /public.php" --> API[HTTP API] --> FA[λ api]
   EB[EventBridge Scheduler] --> FT[λ tick]
   FT --> QF[[SQS fetch]] --> FF[λ fetch]
@@ -373,8 +374,8 @@ flowchart LR
   FA & FF & FI & FX --> NET((Internet feeds))
 ```
 
-- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA bucket, DNS records), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
-- Names: stacks are `rss-reader-<stage>-{params,data,app,edge,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
+- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
+- Names: stacks are `rss-reader-<stage>-{params,data,app,edge,release,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name, except `rss-reader-<stage>-downloads-<account>`, which the release pipeline is granted by name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
 - Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
 - CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
@@ -382,6 +383,7 @@ flowchart LR
 - `/api/v1/images/*` is cached at the edge (managed CachingOptimized policy: no cookies or viewer headers in the key, TTL from the API's `Cache-Control`); other API paths are not cached.
 - Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `Data` because change sets resolve `ssm-secure` references: `db-password`, `admin-password`, and `app-secret` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is two hops (API Gateway appends CloudFront's address after the viewer's).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
+- The downloads bucket is private behind its own Origin Access Control, written only by the release pipeline (kept with the stack when the stage retains data). `/downloads` redirects to `/downloads/`, and folder paths serve `index.html`; the page has its own CSP (no scripts).
 - Logs go to CloudWatch, kept a month.
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
@@ -390,7 +392,24 @@ Constraints:
 - Responses are capped at 6 MB; list pages with content end early past 2 M content characters.
 - No SSE; clients poll counters every 60 s.
 
+#### Releases
+
+A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to dev, other `v*` tags to prod. The version comes from the tag only.
+
+| Stage | Runs |
+|---|---|
+| Source | The tagged commit, over the GitHub connection. Runs without a tag (creation, a manual release) skip the next stages. |
+| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`). Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`. |
+| Publish | `release-publish.yml`: checks the full set, writes the feeds, `latest.json`, and `index.html`, uploads to the downloads bucket, HEAD-checks every URL, then tags the prerelease it replaced `superseded=true`. |
+
+- Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@rss-reader/shared/release`), and `index.html` (no-cache).
+- Superseded prereleases expire 30 days after upload; prod releases are kept.
+- Desktop release builds embed the stage's `/downloads` URL as their generic update feed (`electron-builder.release.cjs`).
+- Signing material is SecureString parameters under `/rss-reader/release/windows-signing/` and `/rss-reader/release/android-signing/`, shared by both stages and written by `scripts/windows-signing-setup.sh` and `scripts/android-signing-setup.sh`. Each build project reads only its own platform's parameters, as project environment variables; only the publish project writes the downloads bucket, and only its stage's.
+- `scripts/try-release.sh` runs the dev legs on the working tree under a made-up prerelease tag, with a dry-run publish unless `--publish`.
+
 Operator setup, once per account:
 - `pnpm --filter @rss-reader/infra cdk bootstrap aws://123456789012/us-east-2`
-- `pnpm --filter @rss-reader/infra cdk deploy rss-reader-dev-pipeline` (and `rss-reader-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it.
+- `pnpm --filter @rss-reader/infra cdk deploy rss-reader-dev-pipeline` (and `rss-reader-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it, release stacks included.
+- The signing parameters, before the first release: `scripts/windows-signing-setup.sh --ssm` and `scripts/android-signing-setup.sh --backup DIR --ssm`.
 - The first admin is `admin`, with a generated password in the SSM SecureString `/rss-reader/<stage>/admin-password` that must be changed at first sign-in. Create a personal admin, then disable or delete `admin`.

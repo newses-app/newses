@@ -6,6 +6,7 @@ import { DataStack } from './data-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { ManagedLogGroups } from './managed-log-groups.ts';
 import { ParamsStack } from './params-stack.ts';
+import { ReleaseStack } from './release-stack.ts';
 
 export interface RssReaderStageProps extends StageProps {
   stage: StageConfig;
@@ -13,12 +14,16 @@ export interface RssReaderStageProps extends StageProps {
   webDir?: string;
 }
 
-/** One deployment of the reader: credentials, data, Lambdas, and CloudFront on the stage's domain. */
+/**
+ * One deployment of the reader: credentials, data, Lambdas, CloudFront on the stage's domain,
+ * and the pipeline that releases the apps to it.
+ */
 export class RssReaderStage extends Stage {
   readonly params: ParamsStack;
   readonly data: DataStack;
   readonly app: AppStack;
   readonly edge: EdgeStack;
+  readonly release: ReleaseStack;
 
   constructor(scope: Construct, id: string, props: RssReaderStageProps) {
     super(scope, id, props);
@@ -57,5 +62,12 @@ export class RssReaderStage extends Stage {
       originHeader: this.params.originHeader,
       ...(props.webDir !== undefined && { webDir: props.webDir }),
     });
+    // Publishes into the Edge stack's downloads bucket, which it names rather than references.
+    this.release = new ReleaseStack(this, 'Release', {
+      env,
+      stackName: resourceName(stage, 'release'),
+      stage,
+    });
+    this.release.addStackDependency(this.edge);
   }
 }

@@ -1,0 +1,83 @@
+# The release pipeline's Windows leg (infra/src/release-stack.ts): the signed NSIS installer,
+# its block map and latest.yml, handed to the publish leg under releases/<tag>/.
+# RELEASE_TAG comes from the pipeline or scripts/try-release.sh; the rest from the project.
+#
+# Each command is one PowerShell block in `& { }`: CodeBuild replays a command's session
+# variables before the next, and a leaked $ErrorActionPreference = 'Stop' fails it. PATH
+# changes do not carry between commands, so each block prepends Node itself.
+# Commands must be ASCII: CodeBuild writes them without a BOM and PowerShell 5.1 reads them as
+# Windows-1252 (scripts/try-release.sh checks).
+
+version: 0.2
+
+phases:
+  install:
+    commands:
+      # Node 24 by direct download, at a fixed path.
+      - |
+        & {
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          $ver = 'v24.14.0'
+          Invoke-WebRequest "https://nodejs.org/dist/$ver/node-$ver-win-x64.zip" -OutFile C:\node.zip
+          Expand-Archive C:\node.zip -DestinationPath C:\ -Force
+          Rename-Item "C:\node-$ver-win-x64" C:\node24
+          $env:PATH = "C:\node24;$env:PATH"
+          if ((node --version) -notmatch '^v24\.') { throw "expected Node 24, got $(node --version)" }
+        }
+      # The .NET runtime and VC++ redistributable the signing client loads. electron-builder's
+      # azureSignOptions fetches SignTool itself, so only the installer's exit code counts.
+      - |
+        & {
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://download.microsoft.com/download/70ad2c3b-761f-4aa9-a9de-e7405aa2b4c1/ArtifactSigningClientTools.msi" -OutFile C:\ascp.msi
+          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList "/I C:\ascp.msi /quiet /norestart /l*v C:\ascp.log"
+          if ($p.ExitCode -notin 0, 3010) { Get-Content C:\ascp.log -Tail 30; throw "ArtifactSigningClientTools.msi failed: exit $($p.ExitCode)" }
+        }
+      - |
+        & {
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "C:\node24;$env:PATH"
+          $env:COREPACK_ENABLE_DOWNLOAD_PROMPT = '0'
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { throw "corepack enable failed" }
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw "pnpm install failed" }
+        }
+
+  build:
+    commands:
+      - |
+        & {
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "C:\node24;$env:PATH"
+          $tag = $env:RELEASE_TAG
+          if (-not $tag) { throw "RELEASE_TAG not set; expected from the pipeline or try-release.sh" }
+          if (-not $env:DOWNLOADS_URL) { throw "DOWNLOADS_URL not set; expected from the project" }
+          $version = $tag.TrimStart('v')
+          Write-Host "tag=$tag version=$version feed=$($env:DOWNLOADS_URL)"
+          # 7-Zip's default -mx=9 takes minutes here; level 3 is seconds for a larger installer.
+          $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '3'
+
+          # electron-builder takes the version from package.json; never committed.
+          Push-Location desktop
+          npm pkg set version="$version"
+          if ($LASTEXITCODE -ne 0) { throw "npm pkg set failed" }
+          Pop-Location
+          pnpm --filter @rss-reader/desktop build:win:release
+          if ($LASTEXITCODE -ne 0) { throw "signed Windows build failed" }
+
+          # Exactly these, so a failed or misnamed build stops here.
+          $files = @(
+            "desktop\release\rss-reader-$version-windows-setup.exe",
+            "desktop\release\rss-reader-$version-windows-setup.exe.blockmap",
+            "desktop\release\latest.yml"
+          )
+          foreach ($file in $files) {
+            if (-not (Test-Path $file)) { throw "missing $file" }
+            aws s3 cp --only-show-errors $file "s3://$($env:ARTIFACT_BUCKET)/releases/$tag/"
+            if ($LASTEXITCODE -ne 0) { throw "upload failed: $file" }
+          }
+          Write-Host "Handed over $($files.Count) files"
+        }

@@ -21,6 +21,7 @@ const params = Template.fromStack(stage.params);
 const data = Template.fromStack(stage.data);
 const app = Template.fromStack(stage.app);
 const edge = Template.fromStack(stage.edge);
+const release = Template.fromStack(stage.release);
 
 describe('RssReaderStage', () => {
   it('keeps generated credentials in SSM parameters rather than Secrets Manager', () => {
@@ -38,11 +39,14 @@ describe('RssReaderStage', () => {
   });
 
   it('names and tags resources with the project and stage', () => {
-    expect([stage.params, stage.data, stage.app, stage.edge].map((s) => s.stackName)).toEqual([
+    expect(
+      [stage.params, stage.data, stage.app, stage.edge, stage.release].map((s) => s.stackName),
+    ).toEqual([
       'rss-reader-dev-params',
       'rss-reader-dev-data',
       'rss-reader-dev-app',
       'rss-reader-dev-edge',
+      'rss-reader-dev-release',
     ]);
     const functions = Object.values(
       app.findResources('AWS::Lambda::Function', {
@@ -147,12 +151,14 @@ describe('App', () => {
 
 describe('Edge', () => {
   it('serves the SPA from a private bucket and the API paths from the HTTP API', () => {
-    edge.resourceCountIs('AWS::CloudFront::OriginAccessControl', 1);
+    edge.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
     edge.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: Match.objectLike({
         Aliases: [dev.domainName],
         ViewerCertificate: Match.objectLike({ AcmCertificateArn: CERTIFICATE_ARN }),
         CacheBehaviors: [
+          Match.objectLike({ PathPattern: '/downloads' }),
+          Match.objectLike({ PathPattern: '/downloads/*', AllowedMethods: ['GET', 'HEAD'] }),
           // Managed CachingOptimized policy.
           Match.objectLike({
             PathPattern: '/api/v1/images/*',
@@ -166,6 +172,91 @@ describe('Edge', () => {
       Name: `${dev.domainName}.`,
       Type: 'A',
     });
+  });
+});
+
+describe('Downloads', () => {
+  it('keeps downloads in their own named bucket, where superseded prereleases expire', () => {
+    edge.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: `rss-reader-dev-downloads-${ACCOUNT}`,
+      LifecycleConfiguration: {
+        Rules: [
+          Match.objectLike({
+            TagFilters: [{ Key: 'superseded', Value: 'true' }],
+            ExpirationInDays: 30,
+          }),
+        ],
+      },
+    });
+    edge.hasResourceProperties('AWS::CloudFront::Function', {
+      Name: 'rss-reader-dev-downloads-index',
+    });
+  });
+});
+
+describe('Release', () => {
+  it('releases from prerelease tags to dev, and other version tags to prod', () => {
+    for (const config of STAGES) {
+      const template = Template.fromStack(
+        new RssReaderStage(newApp(), 'Test', { stage: config, webDir }).release,
+      );
+      template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: `rss-reader-${config.name}-release`,
+        Triggers: [
+          Match.objectLike({
+            GitConfiguration: Match.objectLike({
+              Push: [
+                {
+                  Tags:
+                    config.name === 'prod'
+                      ? { Includes: ['v*'], Excludes: ['v*-*'] }
+                      : { Includes: ['v*-*'] },
+                },
+              ],
+            }),
+          }),
+        ],
+      });
+    }
+  });
+
+  it('builds and publishes only for a tag', () => {
+    release.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+      Stages: [
+        Match.objectLike({ Name: 'Source' }),
+        Match.objectLike({
+          Name: 'Build',
+          BeforeEntry: Match.anyValue(),
+          Actions: [
+            Match.objectLike({ Name: 'LinuxAndroid' }),
+            Match.objectLike({ Name: 'Windows' }),
+          ],
+        }),
+        Match.objectLike({ Name: 'Publish', BeforeEntry: Match.anyValue() }),
+      ],
+    });
+  });
+
+  it("gives each leg only its own signing parameters, and only publish the stage's downloads", () => {
+    const policies = Object.entries(release.findResources('AWS::IAM::Policy')).map(
+      ([id, policy]) => [id, JSON.stringify(policy)] as const,
+    );
+    const policy = (role: string) => {
+      const found = policies.find(([id]) => id.startsWith(role));
+      if (!found) throw new Error(`No policy for ${role}`);
+      return found[1];
+    };
+    expect(policy('LinuxRole')).toContain('/rss-reader/release/android-signing/keystore');
+    expect(policy('LinuxRole')).not.toContain('windows-signing');
+    expect(policy('WindowsRole')).toContain('/rss-reader/release/windows-signing/client-secret');
+    expect(policy('WindowsRole')).not.toContain('android-signing');
+    expect(policy('PublishRole')).not.toContain('-signing');
+    for (const [id, document] of policies) {
+      expect(document.includes(`rss-reader-dev-downloads-${ACCOUNT}`)).toBe(
+        id.startsWith('PublishRole'),
+      );
+      expect(document).not.toContain('rss-reader-prod');
+    }
   });
 });
 
@@ -226,7 +317,7 @@ describe('PipelineStack', () => {
       .filter((c): c is Stack => Stack.isStack(c))
       .map((s) => s.stackName);
     expect(stackNames.sort()).toEqual(
-      ['app', 'data', 'edge', 'params', 'pipeline'].map(
+      ['app', 'data', 'edge', 'params', 'pipeline', 'release'].map(
         (part) => `rss-reader-${config.name}-${part}`,
       ),
     );

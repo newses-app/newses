@@ -13,6 +13,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 import {
   CERTIFICATE_ARN,
+  downloadsBucketName,
   HOSTED_ZONE,
   REPO_ROOT,
   resourceName,
@@ -40,6 +41,29 @@ const SPA_ROUTES = `function handler(event) {
   return request;
 }`;
 
+/** `/downloads` and its folders serve their index page. */
+const DOWNLOADS_INDEX = `function handler(event) {
+  var request = event.request;
+  if (request.uri === '/downloads') {
+    return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: '/downloads/' } } };
+  }
+  if (request.uri.endsWith('/')) request.uri += 'index.html';
+  return request;
+}`;
+
+/** The downloads page is static HTML with inline styles and no scripts. */
+const DOWNLOADS_CSP = [
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+/** Superseded prereleases are tagged by the release pipeline and expire. */
+export const SUPERSEDED_TAG = { key: 'superseded', value: 'true' };
+
 /** S3 stores text files without a charset; browsers must not guess one. */
 const UTF8_CHARSET = `function handler(event) {
   var response = event.response;
@@ -63,9 +87,13 @@ export interface EdgeStackProps extends StackProps {
   webDir?: string;
 }
 
-/** CloudFront serving the SPA from S3 and the API paths from the HTTP API, on the stage's domain. */
+/**
+ * CloudFront serving the SPA from S3, the API paths from the HTTP API, and the app downloads
+ * from their own bucket, on the stage's domain.
+ */
 export class EdgeStack extends Stack {
   readonly distribution: cloudfront.Distribution;
+  readonly downloads: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
     super(scope, id, props);
@@ -77,6 +105,23 @@ export class EdgeStack extends Stack {
       enforceSSL: true,
       removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+    });
+
+    // Written only by the release pipeline, so web deployments never touch it.
+    this.downloads = new s3.Bucket(this, 'Downloads', {
+      bucketName: downloadsBucketName(stage),
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: stage.retainData ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      autoDeleteObjects: !stage.retainData,
+      lifecycleRules: [
+        {
+          id: 'superseded-prereleases',
+          tagFilters: { [SUPERSEDED_TAG.key]: SUPERSEDED_TAG.value },
+          expiration: Duration.days(30),
+        },
+      ],
     });
 
     const headers = new cloudfront.ResponseHeadersPolicy(this, 'SiteHeaders', {
@@ -111,6 +156,30 @@ export class EdgeStack extends Stack {
       },
     });
 
+    const downloadsHeaders = new cloudfront.ResponseHeadersPolicy(this, 'DownloadsHeaders', {
+      responseHeadersPolicyName: resourceName(stage, 'downloads-headers'),
+      securityHeadersBehavior: {
+        contentSecurityPolicy: { contentSecurityPolicy: DOWNLOADS_CSP, override: true },
+        contentTypeOptions: { override: true },
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+        referrerPolicy: {
+          referrerPolicy: cloudfront.HeadersReferrerPolicy.NO_REFERRER,
+          override: true,
+        },
+        strictTransportSecurity: {
+          accessControlMaxAge: Duration.days(365),
+          includeSubdomains: false,
+          override: true,
+        },
+      },
+    });
+
+    const utf8Charset = new cloudfront.Function(this, 'Utf8Charset', {
+      functionName: resourceName(stage, 'utf8-charset'),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromInline(UTF8_CHARSET),
+    });
+
     const apiOrigin = new origins.HttpOrigin(
       `${props.api.apiId}.execute-api.${this.region}.amazonaws.com`,
       {
@@ -141,6 +210,31 @@ export class EdgeStack extends Stack {
       responseHeadersPolicy: apiHeaders,
     };
 
+    // Versioned files are immutable and the rest no-cache (set by the publisher), so the
+    // managed CachingOptimized policy follows their Cache-Control.
+    const downloadsBehavior: cloudfront.BehaviorOptions = {
+      origin: origins.S3BucketOrigin.withOriginAccessControl(this.downloads, {
+        originAccessControl: new cloudfront.S3OriginAccessControl(this, 'DownloadsAccess', {
+          originAccessControlName: resourceName(stage, 'downloads'),
+        }),
+      }),
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      responseHeadersPolicy: downloadsHeaders,
+      functionAssociations: [
+        {
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          function: new cloudfront.Function(this, 'DownloadsIndex', {
+            functionName: resourceName(stage, 'downloads-index'),
+            runtime: cloudfront.FunctionRuntime.JS_2_0,
+            code: cloudfront.FunctionCode.fromInline(DOWNLOADS_INDEX),
+          }),
+        },
+        { eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE, function: utf8Charset },
+      ],
+    };
+
     this.distribution = new cloudfront.Distribution(this, 'Cdn', {
       comment: `${resourceName(stage)} (${stage.domainName})`,
       domainNames: [stage.domainName],
@@ -166,18 +260,13 @@ export class EdgeStack extends Stack {
               code: cloudfront.FunctionCode.fromInline(SPA_ROUTES),
             }),
           },
-          {
-            eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE,
-            function: new cloudfront.Function(this, 'Utf8Charset', {
-              functionName: resourceName(stage, 'utf8-charset'),
-              runtime: cloudfront.FunctionRuntime.JS_2_0,
-              code: cloudfront.FunctionCode.fromInline(UTF8_CHARSET),
-            }),
-          },
+          { eventType: cloudfront.FunctionEventType.VIEWER_RESPONSE, function: utf8Charset },
         ],
       },
       // Listed first: CloudFront matches behaviours in order, and `/api/*` would also match.
       additionalBehaviors: {
+        '/downloads': downloadsBehavior,
+        '/downloads/*': downloadsBehavior,
         '/api/v1/images/*': imageBehavior,
         ...Object.fromEntries(API_PATHS.map((path) => [path, apiBehavior])),
       },

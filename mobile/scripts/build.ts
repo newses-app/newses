@@ -4,13 +4,13 @@
 // The version comes from RELEASE_TAG (e.g. v1.2.3); local builds are 0.0.0-dev.
 // Release APKs are signed with the ANDROID_KEYSTORE_* values, from the environment or
 // android-signing.env (scripts/android-signing-setup.sh); without them they are unsigned.
-import { existsSync } from 'node:fs';
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { versionFromTag } from '@rss-reader/shared/release';
 import { build } from 'esbuild';
-import { versionFromTag } from '../src/version.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const web = fileURLToPath(new URL('../../web/', import.meta.url));

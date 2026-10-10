@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { versionFromTag } from './version.ts';
+import { versionFromTag } from './release.ts';
 
 describe('versionFromTag', () => {
   it('derives the version name and code from a release tag', () => {
