@@ -2,6 +2,8 @@
 export interface Tally {
   source: number;
   imported: number;
+  /** Rows kept in the cold-storage archive rather than imported; absent when none were. */
+  archived?: number;
 }
 
 export interface Skipped {
@@ -28,6 +30,8 @@ interface Section {
 /** An item and its source id; rows without an id (preferences) pass 0. */
 const label = ({ item, sourceId }: { item: string; sourceId: number }) =>
   sourceId ? `${item} ${String(sourceId)}` : item;
+
+const adds = (t: Tally, skips: number) => t.source === t.imported + (t.archived ?? 0) + skips;
 
 const skippedCount = (skipped: Skipped[], item: string) =>
   skipped.filter((s) => s.item === item).reduce((sum, s) => sum + s.count, 0);
@@ -62,6 +66,7 @@ export class ImportReport {
     const tally = tallies.get(item) ?? { source: 0, imported: 0 };
     tally.source += counts.source ?? 0;
     tally.imported += counts.imported ?? 0;
+    if (counts.archived) tally.archived = (tally.archived ?? 0) + counts.archived;
     tallies.set(item, tally);
   }
 
@@ -86,10 +91,10 @@ export class ImportReport {
     return this.#sections.get(login)?.skipped ?? [];
   }
 
-  /** Whether every counted item was imported or skipped with a reason. */
+  /** Whether every counted item was imported, archived, or skipped with a reason. */
   get reconciled(): boolean {
     return [...this.#sections.values()].every(({ tallies, skipped }) =>
-      [...tallies].every(([item, t]) => t.source === t.imported + skippedCount(skipped, item)),
+      [...tallies].every(([item, t]) => adds(t, skippedCount(skipped, item))),
     );
   }
 
@@ -100,14 +105,15 @@ export class ImportReport {
       lines.push('', login);
       if (tallies.size > 0) {
         const width = Math.max(4, ...[...tallies.keys()].map((item) => item.length));
+        const archived = [...tallies.values()].some((t) => t.archived !== undefined);
+        const column = (value: string | number) => `  ${String(value).padStart(8)}`;
         lines.push(
-          `    ${'item'.padEnd(width)}  ${'source'.padStart(8)}  ${'imported'.padStart(8)}`,
+          `    ${'item'.padEnd(width)}${column('source')}${column('imported')}${archived ? column('archived') : ''}`,
         );
         for (const [item, t] of tallies) {
-          const skips = skippedCount(skipped, item);
-          const mark = t.source === t.imported + skips ? ' ' : '!';
+          const mark = adds(t, skippedCount(skipped, item)) ? ' ' : '!';
           lines.push(
-            `  ${mark} ${item.padEnd(width)}  ${String(t.source).padStart(8)}  ${String(t.imported).padStart(8)}`,
+            `  ${mark} ${item.padEnd(width)}${column(t.source)}${column(t.imported)}${archived ? column(t.archived ?? 0) : ''}`,
           );
         }
       }

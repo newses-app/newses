@@ -27,4 +27,24 @@ describe('import report', () => {
     expect(report.reconciled).toBe(false);
     expect(report.format()).toContain('  ! labels');
   });
+
+  it('counts archived rows towards reconciliation, in a column of their own', () => {
+    const report = new ImportReport(false);
+    report.count('pat', 'feeds', { source: 1, imported: 1 });
+    report.count('pat', 'entries', { source: 5, imported: 3, archived: 1 });
+    report.skip('pat', 'entries', 0, 'its feed was not imported');
+    expect(report.reconciled).toBe(true);
+    expect(report.format()).toBe(
+      [
+        'TTRSS import report',
+        '',
+        'pat',
+        '    item       source  imported  archived',
+        '    feeds           1         1         0',
+        '    entries         5         3         1',
+        '  skipped:',
+        '    entries: its feed was not imported',
+      ].join('\n'),
+    );
+  });
 });

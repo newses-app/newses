@@ -1,9 +1,11 @@
 import { MAX_SCORE } from '@rss-reader/shared';
 import { inArray, sql } from 'drizzle-orm';
+import { plainText } from '../../core/entries/text.ts';
 import { DomainError } from '../../core/errors.ts';
 import { IMPORTED_GUID_PREFIX, purgeDaysSql, sha256 } from '../../core/feeds/ingest.ts';
 import { sanitizeContent, sanitizeTitle, stripControlChars } from '../../core/feeds/sanitize.ts';
 import { normalizeFeedUrl } from '../../core/feeds/url.ts';
+import type { ArchivedEnclosure, ArchiveRow } from '../../core/ports.ts';
 import { enclosures, entries, userEntries } from '../../db/schema.ts';
 import type { ImportContext, ImportStep } from '../importer.ts';
 import type { Writer } from '../import-map.ts';
@@ -11,8 +13,12 @@ import { type ImportedUser, importedUsers } from './common.ts';
 import { FEEDS } from './feeds.ts';
 
 export const USER_ENTRIES = 'ttrss_user_entries';
+/** Articles (`ttrss_entries`) written to the archive, so re-runs skip them; the target is 0. */
+export const ARCHIVED_ENTRIES = 'ttrss_entries:archived';
 /** User entries read and written per batch; content makes rows large. */
 const BATCH = 500;
+/** Archive rows gathered before they are written as files. */
+const ARCHIVE_BATCH = 5000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface SourceEntryRow {
@@ -85,9 +91,16 @@ class Skips {
 
 /** The user's subscriptions here: their feed source and purge age (0 never purges). */
 async function subscriptionsOf(context: ImportContext, userId: number) {
-  const result = await context.db.execute<{ id: number; feed_source_id: number; days: number }>(sql`
-    SELECT s.id, s.feed_source_id, ${purgeDaysSql(context.purgeDays)} AS days
-    FROM subscriptions s WHERE s.user_id = ${userId}`);
+  const result = await context.db.execute<{
+    id: number;
+    feed_source_id: number;
+    url: string;
+    title: string | null;
+    days: number;
+  }>(sql`
+    SELECT s.id, s.feed_source_id, fs.url, fs.title, ${purgeDaysSql(context.purgeDays)} AS days
+    FROM subscriptions s JOIN feed_sources fs ON fs.id = s.feed_source_id
+    WHERE s.user_id = ${userId}`);
   return new Map(result.rows.map((row) => [row.id, row]));
 }
 
@@ -168,6 +181,125 @@ async function siteSource(
   return sites.get(site.origin);
 }
 
+/** The shared entry for a TTRSS article, sanitised as ingest stores fetched items. */
+function sharedEntry(row: SourceEntryRow, feedSourceId: number): Prepared['entry'] {
+  const title = sanitizeTitle(row.title);
+  const link = row.link ? stripControlChars(row.link) : null;
+  const content = row.content ? sanitizeContent(row.content, link) || null : null;
+  // The same recipe as ingest's content hash; as the GUID, it merges identical copies.
+  const contentHash = sha256(`${title ?? ''}\n${link ?? ''}\n${content ?? ''}`);
+  return {
+    feedSourceId,
+    guid: `${IMPORTED_GUID_PREFIX}${contentHash}`,
+    link,
+    title,
+    author: row.author ? sanitizeTitle(row.author) : null,
+    content,
+    contentHash,
+    lang: row.lang || null,
+    publishedAt: row.updated,
+    sourceUpdatedAt: row.date_updated,
+    fetchedAt: row.date_entered,
+  };
+}
+
+const enclosureOf = (e: SourceEnclosureRow): ArchivedEnclosure => ({
+  url: e.content_url.slice(0, 4000),
+  mimeType: e.content_type || null,
+  length: null,
+  width: e.width || null,
+  height: e.height || null,
+  durationSeconds: durationSeconds(e.duration),
+});
+
+/** A user's article older than its purge age, bound for the archive. */
+interface Aged {
+  row: SourceEntryRow;
+  feed: { url: string; title: string | null; feedSourceId: number };
+  sortAt: Date;
+}
+
+/**
+ * Writes articles older than their purge age to the archive, unless an earlier run (by
+ * `ttrss_entries` id) or this one (by feed and GUID, for other users' copies) already did. Each
+ * write is recorded after the files are stored, so a crash can only archive an article twice. A
+ * dry run writes no files.
+ */
+class Archiver {
+  readonly #context: ImportContext;
+  readonly #archive: NonNullable<ImportContext['archive']>;
+  /** Feed URL and GUID of the articles this run archived. */
+  readonly #seen = new Set<string>();
+  #rows: ArchiveRow[] = [];
+  #refs: number[] = [];
+
+  constructor(context: ImportContext, archive: NonNullable<ImportContext['archive']>) {
+    this.#context = context;
+    this.#archive = archive;
+  }
+
+  async add(aged: Aged[]): Promise<void> {
+    if (aged.length === 0) return;
+    const { source, map } = this.#context;
+    const done = await map.targets(
+      ARCHIVED_ENTRIES,
+      aged.map((a) => a.row.ref_id),
+    );
+    const fresh = aged.filter((a) => !done.has(a.row.ref_id));
+    const files =
+      fresh.length === 0
+        ? []
+        : await source.query<SourceEnclosureRow>(
+            `SELECT post_id, content_url, content_type, duration, width, height
+             FROM ttrss_enclosures WHERE post_id = ANY($1) ORDER BY id`,
+            [fresh.map((a) => a.row.ref_id)],
+          );
+    const archivedAt = new Date();
+    for (const { row, feed, sortAt } of fresh) {
+      this.#refs.push(row.ref_id);
+      const entry = sharedEntry(row, feed.feedSourceId);
+      const key = `${feed.url}\n${entry.guid}`;
+      if (this.#seen.has(key)) continue;
+      this.#seen.add(key);
+      this.#rows.push({
+        id: null,
+        feedUrl: feed.url,
+        feedTitle: feed.title,
+        guid: entry.guid,
+        link: entry.link ?? null,
+        title: entry.title ?? null,
+        author: entry.author ?? null,
+        content: entry.content ?? null,
+        text: plainText(entry.content ?? null),
+        lang: entry.lang ?? null,
+        publishedAt: row.updated,
+        sourceUpdatedAt: row.date_updated,
+        fetchedAt: row.date_entered,
+        sortAt,
+        archivedAt,
+        enclosures: files.filter((e) => e.post_id === row.ref_id && e.content_url).map(enclosureOf),
+      });
+    }
+    if (this.#rows.length >= ARCHIVE_BATCH) await this.flush();
+  }
+
+  async flush(): Promise<void> {
+    const rows = this.#rows;
+    const refs = this.#refs;
+    this.#rows = [];
+    this.#refs = [];
+    if (rows.length > 0 && !this.#context.options.dryRun) await this.#archive.write(rows);
+    if (refs.length > 0)
+      await this.#context.write((tx) =>
+        this.#context.map.record(
+          tx,
+          ARCHIVED_ENTRIES,
+          refs.map((sourceId) => ({ sourceId, targetId: 0, userId: null })),
+        ),
+      );
+  }
+}
+
 interface Prepared {
   row: SourceEntryRow;
   feedSourceId: number;
@@ -243,18 +375,9 @@ async function writeBatch(
   const byRef = new Map(batch.map((p) => [p.row.ref_id, entryOf(p)]));
   const files = enclosureRows.flatMap((e) => {
     const entryId = byRef.get(e.post_id);
-    return entryId && e.content_url
-      ? [
-          {
-            entryId,
-            url: e.content_url.slice(0, 4000),
-            mimeType: e.content_type || null,
-            width: e.width || null,
-            height: e.height || null,
-            durationSeconds: durationSeconds(e.duration),
-          },
-        ]
-      : [];
+    if (!entryId || !e.content_url) return [];
+    const { url, mimeType, width, height, durationSeconds } = enclosureOf(e);
+    return [{ entryId, url, mimeType, width, height, durationSeconds }];
   });
   if (files.length > 0) await tx.insert(enclosures).values(files).onConflictDoNothing();
 
@@ -308,14 +431,16 @@ async function writeBatch(
  * Entries and article state. TTRSS keeps a copy of an article per user; copies with the same
  * feed source, title, link, and content become one shared entry, with a `ttrss:` GUID that the
  * first fetched item with its link takes over; items fetched here first are joined by link
- * instead. Entries purge would delete at once, and with
- * `--since` older ones, are skipped unless kept (starred, published, noted, labelled, shared).
+ * instead. Entries purge would delete at once go to the archive when it is on, and are skipped
+ * otherwise; with `--since`, older ones are skipped. Kept entries (starred, published, noted,
+ * labelled, shared) are always imported.
  * Entries with no feed are kept under their archived feed or, when kept, their site.
  */
 export const entriesStep: ImportStep = {
   name: 'entries',
   async run(context) {
     const { source, map, report, write, options } = context;
+    const archiver = context.archive ? new Archiver(context, context.archive) : null;
     for (const user of await importedUsers(context)) {
       const { login } = user.source;
       const userId = user.userId;
@@ -326,6 +451,7 @@ export const entriesStep: ImportStep = {
       const skips = new Skips();
       const sites = new Map<string, number | undefined>();
       const now = Date.now();
+      let aged = 0;
       for await (const rows of source.batches<SourceEntryRow>(
         ENTRY_QUERY,
         [user.source.id],
@@ -335,6 +461,7 @@ export const entriesStep: ImportStep = {
         const feedIds = [...new Set(rows.flatMap((r) => (r.feed_id === null ? [] : [r.feed_id])))];
         const feedSubs = await map.targets(FEEDS, feedIds);
         const batch: Prepared[] = [];
+        const old: Aged[] = [];
         for (const row of rows) {
           const kept = row.marked || row.published || row.marked_otherwise;
           let subscriptionId: number | null = null;
@@ -361,35 +488,25 @@ export const entriesStep: ImportStep = {
             skips.add('older than --since');
             continue;
           }
-          const days = subscriptionId === null ? 0 : (subs.get(subscriptionId)?.days ?? 0);
-          if (!kept && days > 0 && sortAt.getTime() < now - days * DAY_MS) {
-            skips.add('older than its purge age');
+          const sub = subscriptionId === null ? undefined : subs.get(subscriptionId);
+          if (!kept && sub && sub.days > 0 && sortAt.getTime() < now - sub.days * DAY_MS) {
+            aged++;
+            if (archiver)
+              old.push({ row, sortAt, feed: { url: sub.url, title: sub.title, feedSourceId } });
+            else skips.add('older than its purge age');
             continue;
           }
-          const title = sanitizeTitle(row.title);
-          const link = row.link ? stripControlChars(row.link) : null;
-          const content = row.content ? sanitizeContent(row.content, link) || null : null;
-          // The same recipe as ingest's content hash; as the GUID, it merges identical copies.
-          const contentHash = sha256(`${title ?? ''}\n${link ?? ''}\n${content ?? ''}`);
           batch.push({
             row,
             feedSourceId,
             subscriptionId,
             sortAt,
-            entry: {
-              feedSourceId,
-              guid: `${IMPORTED_GUID_PREFIX}${contentHash}`,
-              link,
-              title,
-              author: row.author ? sanitizeTitle(row.author) : null,
-              content,
-              contentHash,
-              lang: row.lang || null,
-              publishedAt: row.updated,
-              sourceUpdatedAt: row.date_updated,
-              fetchedAt: row.date_entered,
-            },
+            entry: sharedEntry(row, feedSourceId),
           });
+        }
+        if (archiver) {
+          await archiver.add(old);
+          report.count(login, 'entries', { archived: old.length });
         }
         if (batch.length === 0) continue;
         const enclosureRows = await source.query<SourceEnclosureRow>(
@@ -400,7 +517,15 @@ export const entriesStep: ImportStep = {
         await write((tx) => writeBatch(context, tx, userId, batch, enclosureRows));
         report.count(login, 'entries', { imported: batch.length });
       }
+      await archiver?.flush();
       skips.report(context, login);
+      if (!archiver && aged > 0)
+        report.note(
+          login,
+          'entries',
+          0,
+          `${String(aged)} older than their purge age would be kept in the archive with ARCHIVE_ENABLED`,
+        );
       // Imported entries deleted here since (purged, or unsubscribed from) are forgotten, so
       // later steps skip them.
       await write((tx) =>

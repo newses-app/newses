@@ -1,4 +1,5 @@
 import { type SQL, sql } from 'drizzle-orm';
+import type { ArchiveWriter } from '../core/ports.ts';
 import type { Db } from '../db/client.ts';
 import { schemaMatches } from '../db/migrate.ts';
 import { ImportError } from './errors.ts';
@@ -36,6 +37,8 @@ export interface ImportContext {
   db: Writer;
   /** The instance's default purge age in days; 0 never purges. */
   purgeDays: number;
+  /** Where entries older than their purge age go; null skips them. */
+  archive: ArchiveWriter | null;
   /** Runs one batch of writes in its own transaction (a savepoint within a dry run). */
   write: <T>(work: (tx: Writer) => Promise<T>) => Promise<T>;
 }
@@ -52,6 +55,8 @@ export interface ImportDeps {
   steps: readonly ImportStep[];
   /** The instance's default purge age in days (`FEED_PURGE_DAYS`); 0 never purges. */
   purgeDays: number;
+  /** The cold-storage archive (`ARCHIVE_ENABLED`); null or omitted skips old entries instead. */
+  archive?: ArchiveWriter | null;
   /** Defaults to `VERIFIED_SCHEMA_VERSIONS`. */
   schemaVersions?: readonly number[];
 }
@@ -104,6 +109,7 @@ export async function importTtrss(deps: ImportDeps, options: ImportOptions): Pro
       users,
       db: base,
       purgeDays: deps.purgeDays,
+      archive: deps.archive ?? null,
       write: (work) => base.transaction((tx) => work(tx)),
     };
     for (const step of steps) await step.run(context);

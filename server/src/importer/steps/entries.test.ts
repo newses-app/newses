@@ -11,12 +11,12 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { RecordingRealtime } from '../../test/fakes.ts';
+import { MemoryArchiveWriter, RecordingRealtime } from '../../test/fakes.ts';
 import { createTtrssSource } from '../../test/ttrss-source.ts';
 import { type ImportOptions, importTtrss } from '../importer.ts';
 import { TtrssSource } from '../source.ts';
 import { IMPORT_STEPS } from '../steps.ts';
-import { durationSeconds } from './entries.ts';
+import { ARCHIVED_ENTRIES, durationSeconds } from './entries.ts';
 
 let target: TestDatabase;
 let sourceDb: TestDatabase;
@@ -66,11 +66,14 @@ const SOURCE_ROWS = `
     (11, 11, '', NULL, NULL, 2, false, true, '', '', NULL, false, NULL);
   INSERT INTO ttrss_tags (tag_name, owner_uid, post_int_id) VALUES ('news', 2, 1);`;
 
-async function run(changes: Partial<ImportOptions> = {}) {
+async function run(
+  changes: Partial<ImportOptions> = {},
+  archive: MemoryArchiveWriter | null = null,
+) {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
-      { db, source, steps: IMPORT_STEPS, purgeDays: 60 },
+      { db, source, steps: IMPORT_STEPS, purgeDays: 60, archive },
       { dryRun: false, force: false, ...changes },
     );
   } finally {
@@ -182,6 +185,97 @@ describe('TTRSS entries import', () => {
         ['entries', 'older than its purge age', 1],
       ].sort(),
     );
+    expect(report.notes('pat')).toContainEqual(
+      expect.objectContaining({
+        text: '1 older than their purge age would be kept in the archive with ARCHIVE_ENABLED',
+      }),
+    );
+  });
+
+  describe('with the archive on', () => {
+    // A copy of "Old" for sam, as TTRSS keeps one per user.
+    const SAM_OLD = `
+      INSERT INTO ttrss_entries (id, title, guid, link, updated, content, content_hash,
+          date_entered, date_updated, author) VALUES
+        (12, 'Old', 'g12', 'https://one.example/old', ${ago('100 days')}, '', 'h', ${ago('100 days')}, ${ago('100 days')}, '');
+      INSERT INTO ttrss_enclosures (content_url, content_type, title, duration, width, height, post_id) VALUES
+        ('https://one.example/old.mp3', 'audio/mpeg', '', '61', 0, 0, 3),
+        ('https://one.example/old.mp3', 'audio/mpeg', '', '61', 0, 0, 12);
+      INSERT INTO ttrss_user_entries (int_id, ref_id, uuid, feed_id, orig_feed_id, owner_uid,
+          marked, published, tag_cache, label_cache, last_read, unread, note) VALUES
+        (12, 12, '', 2, NULL, 3, false, false, '', '', NULL, true, NULL);`;
+
+    beforeAll(async () => {
+      await sourceDb.pool.query(SAM_OLD);
+    });
+
+    afterAll(async () => {
+      await sourceDb.pool.query(`
+        DELETE FROM ttrss_user_entries WHERE int_id = 12;
+        DELETE FROM ttrss_enclosures WHERE post_id IN (3, 12);
+        DELETE FROM ttrss_entries WHERE id = 12;`);
+    });
+
+    it('archives entries older than their purge age, copies shared by users once', async () => {
+      const archive = new MemoryArchiveWriter();
+      const report = await run({}, archive);
+      expect(report.reconciled).toBe(true);
+      expect(report.tally('pat', 'entries')).toEqual({ source: 10, imported: 7, archived: 1 });
+      expect(report.tally('sam', 'entries')).toEqual({ source: 2, imported: 1, archived: 1 });
+      expect(report.skipped('pat').map((s) => s.reason)).not.toContain('older than its purge age');
+      expect(
+        report
+          .notes('pat')
+          .map((n) => n.text)
+          .join(),
+      ).not.toContain('ARCHIVE_ENABLED');
+      expect(report.format()).toMatch(/item +source +imported +archived/);
+
+      expect(archive.rows).toHaveLength(1);
+      expect(archive.rows[0]).toMatchObject({
+        id: null,
+        feedUrl: 'https://one.example/rss',
+        guid: expect.stringMatching(/^ttrss:[0-9a-f]{64}$/) as string,
+        title: 'Old',
+        link: 'https://one.example/old',
+        content: null,
+        enclosures: [
+          {
+            url: 'https://one.example/old.mp3',
+            mimeType: 'audio/mpeg',
+            length: null,
+            width: null,
+            height: null,
+            durationSeconds: 61,
+          },
+        ],
+      });
+      expect(archive.rows[0]?.sortAt.getTime()).toBeLessThan(Date.now() - 99 * 24 * 3600_000);
+      expect((await entriesOf('pat')).has('Old')).toBe(false);
+      expect(
+        (await db.select().from(importMap).where(eq(importMap.sourceTable, ARCHIVED_ENTRIES)))
+          .map((m) => m.sourceId)
+          .sort((a, b) => a - b),
+      ).toEqual([3, 12]);
+    });
+
+    it('re-runs without archiving anything again', async () => {
+      const archive = new MemoryArchiveWriter();
+      await run({}, archive);
+      const report = await run({}, archive);
+      expect(report.reconciled).toBe(true);
+      expect(report.tally('pat', 'entries').archived).toBe(1);
+      expect(archive.rows).toHaveLength(1);
+    });
+
+    it('counts what a dry run would archive, writing nothing', async () => {
+      const archive = new MemoryArchiveWriter();
+      const report = await run({ dryRun: true }, archive);
+      expect(report.reconciled).toBe(true);
+      expect(report.tally('pat', 'entries').archived).toBe(1);
+      expect(archive.rows).toEqual([]);
+      expect(await db.select().from(importMap)).toEqual([]);
+    });
   });
 
   it('skips entries older than --since unless they are kept', async () => {

@@ -114,6 +114,23 @@ else
     --with-decryption --query Parameter.Value --output text)
   app_secret=$(aws ssm get-parameter --name "/rss-reader/$stage/app-secret" \
     --with-decryption --query Parameter.Value --output text)
+  # Articles past retention go to the stage's archive in its blob bucket, when the stage has it on.
+  archive=$(aws lambda get-function-configuration --function-name "rss-reader-$stage-tick" \
+    --query 'Environment.Variables.ARCHIVE_ENABLED' --output text)
+  [ "$archive" = true ] || archive=false
+  blob_bucket=$(aws cloudformation describe-stacks --stack-name "rss-reader-$stage-data" \
+    --query "Stacks[0].Outputs[?OutputKey=='BlobBucket'].OutputValue" --output text)
+  [ "$blob_bucket" != None ] || blob_bucket=''
+  if $archive; then
+    [ -n "$blob_bucket" ] || die "the $stage data stack has no BlobBucket output; deploy it first"
+    echo "Archive: on, in $blob_bucket"
+  else
+    echo "Archive: off; entries past retention are skipped"
+  fi
+  # The import writes the archive with your credentials; temporary ones must outlast it.
+  credentials=$(aws configure export-credentials --format env) ||
+    die 'cannot export your AWS credentials (needs AWS CLI v2)'
+  eval "$credentials"
   curl -fsSo "$tmp/rds-ca.pem" https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
   echo "Connecting to $host (a paused database takes up to 30 s to resume)..."
   run_import() {
@@ -121,6 +138,8 @@ else
     PGPASSWORD=$db_password APP_SECRET=$app_secret docker run --rm --network "$name" \
       -v "$tmp/rds-ca.pem:/rds-ca.pem:ro" -e NODE_EXTRA_CA_CERTS=/rds-ca.pem \
       -e PGPASSWORD -e APP_SECRET \
+      -e ARCHIVE_ENABLED="$archive" -e BLOB_BUCKET="$blob_bucket" -e AWS_REGION \
+      -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
       -e DATABASE_URL="postgres://rss_reader@$host:5432/rss_reader?sslmode=verify-full" \
       "$image" cli import-ttrss --source "$source_url" "$@"
   }

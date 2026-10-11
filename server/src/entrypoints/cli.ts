@@ -5,6 +5,7 @@ import { importTtrss } from '../importer/importer.ts';
 import { TtrssSource } from '../importer/source.ts';
 import { IMPORT_STEPS } from '../importer/steps.ts';
 import { runCli } from './cli-commands.ts';
+import { createArchiveWriter, createBlobStore } from './feed-deps.ts';
 import { createRuntime } from './runtime.ts';
 
 async function readStdinLine(): Promise<string> {
@@ -23,7 +24,13 @@ try {
       const source = await TtrssSource.open(url);
       try {
         return await importTtrss(
-          { db, source, steps: IMPORT_STEPS, purgeDays: config.feeds.purgeDays },
+          {
+            db,
+            source,
+            steps: IMPORT_STEPS,
+            purgeDays: config.feeds.purgeDays,
+            archive: createArchiveWriter(config, createBlobStore(config)),
+          },
           options,
         );
       } finally {
