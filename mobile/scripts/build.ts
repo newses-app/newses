@@ -43,7 +43,11 @@ await build({
   bundle: true,
   format: 'iife',
   target: 'chrome120',
-  define: { APP_VERSION: JSON.stringify(version.name) },
+  define: {
+    APP_VERSION: JSON.stringify(version.name),
+    // Set by the release pipeline to the stage's downloads; local builds never update.
+    DOWNLOADS_URL: JSON.stringify(process.env.DOWNLOADS_URL?.replace(/\/$/, '') ?? ''),
+  },
   minify: true,
   logLevel: 'warning',
 });

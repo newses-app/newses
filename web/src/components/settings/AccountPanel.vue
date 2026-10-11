@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { mdiLogout } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
-import { bridge, connection, NATIVE } from '../../platform/index.ts';
+import { bridge, connection, NATIVE, updates } from '../../platform/index.ts';
+import { updateSummary } from '../../platform/updates.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import AppPasswordsSection from './AppPasswordsSection.vue';
 import PasswordForm from './PasswordForm.vue';
@@ -16,6 +18,12 @@ const ui = useUiStore();
 const queryClient = useQueryClient();
 const { session, logout } = useSession();
 const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.auth.sessions() });
+const update = computed(() => updateSummary(updates.status.value));
+const checking = computed(() => updates.status.value.state === 'checking');
+
+function updateAction() {
+  void (update.value.action === 'check' ? updates.check() : updates.install());
+}
 
 async function passwordChanged() {
   ui.notify(t('account.passwordChanged'));
@@ -58,7 +66,14 @@ async function revoke(id: number) {
         <v-list-item
           v-if="bridge.appVersion"
           :title="t('connect.appVersion', { version: bridge.appVersion })"
-        />
+          :subtitle="update.message ? t(`updates.${update.message}`, update.params) : ''"
+        >
+          <template v-if="update.action" #append>
+            <v-btn variant="tonal" size="small" :loading="checking" @click="updateAction">
+              {{ t(`updates.${update.action}`) }}
+            </v-btn>
+          </template>
+        </v-list-item>
       </v-list>
     </template>
 

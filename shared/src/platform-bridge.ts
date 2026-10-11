@@ -13,6 +13,21 @@ export interface AppTheme {
 }
 
 /**
+ * Whether a newer app is published on the stage's downloads. `ready` installs on restart (desktop
+ * installs that update themselves); `available` is downloaded by the user (Linux deb, Windows zip,
+ * Android). `unsupported`: the browser, and builds without an update feed.
+ */
+export type UpdateStatus =
+  | { state: 'unsupported' }
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'current' }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string }
+  | { state: 'available'; version: string }
+  | { state: 'failed' };
+
+/**
  * Native features of the desktop and mobile apps. Their shells set `window.rssReaderBridge` before
  * the web app's scripts run; the browser gets a stand-in.
  */
@@ -43,4 +58,10 @@ export interface PlatformBridge {
    * close or go back to, and the app then exits.
    */
   onBackButton(handler: () => boolean): void;
+  /** Update status changes; the listener is called with the current status straight away. */
+  onUpdateStatus(listener: (status: UpdateStatus) => void): void;
+  /** Checks the stage's downloads for a newer app now. */
+  checkForUpdates(): Promise<void>;
+  /** `ready`: restarts into the update; `available`: opens its download in the system browser. */
+  installUpdate(): Promise<void>;
 }

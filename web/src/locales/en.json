@@ -46,6 +46,21 @@
     "app": "App",
     "appVersion": "App version {version}"
   },
+  "updates": {
+    "title": "Update available",
+    "readyPrompt": "rss-reader {version} is ready. Restart the app to update.",
+    "availablePrompt": "rss-reader {version} is available. Download and install it to update.",
+    "later": "Later",
+    "check": "Check for updates",
+    "restart": "Restart to update",
+    "download": "Download",
+    "checking": "Checking for updates…",
+    "current": "Up to date",
+    "failed": "Couldn’t check for updates.",
+    "downloading": "Downloading version {version} ({percent}%)",
+    "ready": "Version {version} is ready to install.",
+    "available": "Version {version} is available."
+  },
   "login": {
     "name": "User name",
     "password": "Password",

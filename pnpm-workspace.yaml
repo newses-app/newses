@@ -13,7 +13,6 @@ allowBuilds:
   electron-winstaller: false
   esbuild: false
   protobufjs: false
-  sharp: set this to true or false
   ssh2: false
   unrs-resolver: false
   vue-demi: false

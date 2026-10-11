@@ -1,5 +1,5 @@
 // Exposes the platform bridge to the web app; everything runs in the main process over IPC.
-import type { AppTheme, PlatformBridge, SaveFile } from '@rss-reader/shared';
+import type { AppTheme, PlatformBridge, SaveFile, UpdateStatus } from '@rss-reader/shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
 const invoke = <T>(method: string, ...args: unknown[]) =>
@@ -23,6 +23,14 @@ const bridge: PlatformBridge = {
   setTheme: (theme: AppTheme) => invoke<undefined>('setTheme', theme),
   // Desktop has no system back button.
   onBackButton: () => undefined,
+  onUpdateStatus: (listener) => {
+    ipcRenderer.on('bridge:updateStatus', (_event, status: UpdateStatus) => {
+      listener(status);
+    });
+    void invoke<UpdateStatus>('getUpdateStatus').then(listener);
+  },
+  checkForUpdates: () => invoke<undefined>('checkForUpdates'),
+  installUpdate: () => invoke<undefined>('installUpdate'),
 };
 
 contextBridge.exposeInMainWorld('rssReaderBridge', bridge);

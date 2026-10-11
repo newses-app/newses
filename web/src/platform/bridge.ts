@@ -37,6 +37,12 @@ export const webBridge: PlatformBridge = {
   notify: () => Promise.resolve(),
   setTheme: () => Promise.resolve(),
   onBackButton: () => undefined,
+  // The browser loads the current web app; only the apps update.
+  onUpdateStatus: (listener) => {
+    listener({ state: 'unsupported' });
+  },
+  checkForUpdates: () => Promise.resolve(),
+  installUpdate: () => Promise.resolve(),
 };
 
 /** The native build outside a shell (development, tests): like the browser, but remembers the server and token until reload. */

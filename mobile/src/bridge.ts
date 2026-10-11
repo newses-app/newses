@@ -2,17 +2,21 @@
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { SystemBars, SystemBarsStyle } from '@capacitor/core';
+import { CapacitorHttp, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
-import type { PlatformBridge, SaveFile } from '@rss-reader/shared';
+import type { PlatformBridge, SaveFile, UpdateStatus } from '@rss-reader/shared';
+import { type AndroidUpdate, androidUpdate, checkDue, parseCheckRecord } from './updates.ts';
 
 declare const APP_VERSION: string;
+/** The stage's downloads, from the release build; empty in local builds, which never update. */
+declare const DOWNLOADS_URL: string;
 
 const SERVER_KEY = 'serverUrl';
 /** In Android Keystore-backed storage, not Preferences. */
 const TOKEN_KEY = 'token';
+const UPDATE_CHECK_KEY = 'updateCheck';
 
 let backHandler: (() => boolean) | null = null;
 void App.addListener('backButton', () => {
@@ -36,6 +40,56 @@ async function saveFile(file: SaveFile): Promise<boolean> {
   }
 }
 
+let updateStatus: UpdateStatus = { state: DOWNLOADS_URL ? 'idle' : 'unsupported' };
+let update: AndroidUpdate | null = null;
+const updateListeners: ((status: UpdateStatus) => void)[] = [];
+
+function setUpdate(found: AndroidUpdate | null) {
+  update = found;
+  setUpdateStatus(found ? { state: 'available', version: found.version } : { state: 'current' });
+}
+
+function setUpdateStatus(status: UpdateStatus) {
+  updateStatus = status;
+  for (const listener of updateListeners) listener(status);
+}
+
+/** Fetched natively, so the downloads need no CORS for the app's origin. */
+async function checkForUpdates() {
+  if (!DOWNLOADS_URL) return;
+  setUpdateStatus({ state: 'checking' });
+  try {
+    const response = await CapacitorHttp.get({
+      url: `${DOWNLOADS_URL}/latest.json`,
+      responseType: 'json',
+    });
+    if (response.status !== 200) throw new Error(`HTTP ${String(response.status)}`);
+    const { build } = await App.getInfo();
+    const found = androidUpdate(response.data, Number(build), DOWNLOADS_URL);
+    await Preferences.set({
+      key: UPDATE_CHECK_KEY,
+      value: JSON.stringify({ checkedAt: Date.now(), update: found }),
+    });
+    setUpdate(found);
+  } catch {
+    setUpdateStatus({ state: 'failed' });
+  }
+}
+
+/** At launch at most daily; in between, the last check's result while it is still newer. */
+async function checkAtLaunch() {
+  if (!DOWNLOADS_URL) return;
+  const record = parseCheckRecord((await Preferences.get({ key: UPDATE_CHECK_KEY })).value);
+  if (checkDue(record, Date.now())) {
+    await checkForUpdates();
+    return;
+  }
+  const { build } = await App.getInfo();
+  const stored = record?.update;
+  setUpdate(stored && stored.versionCode > Number(build) ? stored : null);
+}
+void checkAtLaunch();
+
 const bridge: PlatformBridge = {
   platform: 'android',
   appVersion: APP_VERSION,
@@ -54,6 +108,15 @@ const bridge: PlatformBridge = {
     SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }),
   onBackButton: (handler) => {
     backHandler = handler;
+  },
+  onUpdateStatus: (listener) => {
+    updateListeners.push(listener);
+    listener(updateStatus);
+  },
+  checkForUpdates,
+  // The browser downloads the APK and hands it to the package installer.
+  installUpdate: async () => {
+    if (update) await Browser.open({ url: update.url });
   },
 };
 

@@ -24,6 +24,7 @@ import { openSettings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
 import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
 import { themeSource } from './theme.ts';
+import { startUpdater, type Updater } from './updater.ts';
 import { restoreBounds } from './window-state.ts';
 
 const APP_ID = 'app.newses';
@@ -45,6 +46,7 @@ protocol.registerSchemesAsPrivileged([
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 
 let window: BrowserWindow | null = null;
+let updater: Updater | null = null;
 
 async function serveApp(request: Request): Promise<Response> {
   if (DEV_SERVER) {
@@ -115,6 +117,9 @@ function registerBridge(settings: SettingsStore) {
   handle('setTheme', (theme) => {
     nativeTheme.themeSource = themeSource(theme);
   });
+  handle('getUpdateStatus', () => updater?.status() ?? { state: 'unsupported' });
+  handle('checkForUpdates', () => updater?.check());
+  handle('installUpdate', () => updater?.install());
 }
 
 function buildMenu() {
@@ -222,6 +227,9 @@ if (!app.requestSingleInstanceLock()) {
     registerBridge(settings);
     buildMenu();
     window = createWindow(settings);
+    updater = startUpdater((status) => {
+      window?.webContents.send('bridge:updateStatus', status);
+    });
   });
 
   app.on('window-all-closed', () => {

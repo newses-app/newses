@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { slow } from './lib/slow-requests.ts';
+import UpdatePrompt from './components/UpdatePrompt.vue';
 import { bridge, NATIVE } from './platform/index.ts';
 import { useUiStore } from './stores/ui.ts';
 
@@ -76,6 +77,7 @@ function changeServer() {
       </template>
     </div>
     <router-view />
+    <UpdatePrompt v-if="NATIVE" />
     <v-snackbar :model-value="slow && !starting" location="top" timeout="-1">
       {{ t('app.waking') }}
     </v-snackbar>

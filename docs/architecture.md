@@ -95,7 +95,7 @@ Rules:
 
 Native build (`build:native`, `web/dist-native`), bundled by the desktop and mobile apps:
 - No service worker. `NATIVE_CSP` (`shared/src/web-csp.ts`) is in a `<meta>`: `WEB_CSP` with `connect-src https:`, because the server is chosen at runtime.
-- The shells set `window.rssReaderBridge` (`web/src/platform/bridge.ts`) before the app's scripts run: server URL, bearer token in secure storage, open in the system browser, save a file, notify, app version. The web build uses a browser stand-in; the native build outside a shell keeps the server and token in memory.
+- The shells set `window.rssReaderBridge` (`web/src/platform/bridge.ts`) before the app's scripts run: server URL, bearer token in secure storage, open in the system browser, save a file, notify, app version, update status. An update that is ready or available prompts once per version per launch; settings shows the version, the update status, and Check for updates. The web build uses a browser stand-in; the native build outside a shell keeps the server and token in memory.
 - The connect screen opens on first run and from "Change server" (sign-in page, settings, unreachable server). It takes an HTTPS origin and checks `GET /api/v1/server`: another product or API major is refused, an older minor warned about. Changing server revokes the old session first.
 - Sign-in asks for a bearer token, which the bridge keeps. Any 401 forgets it and returns to sign-in; signing out revokes the session, then forgets it.
 - Feed icons load from the user's `iconsPath` (login and session responses; the signed `/feed-icons` path), since an `<img>` cannot send the token.
@@ -116,6 +116,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The app's theme preference sets Electron's theme source: `system` follows the OS (light or dark title bar and `prefers-color-scheme`), light and dark pin it.
 - `settings.json` in the user data folder (owner-only) holds the server URL, window bounds, and the token encrypted with `safeStorage` (DPAPI on Windows, the keyring on Linux). On Linux without a keyring (`basic_text`) the token is kept in memory only, so each launch signs in.
 - One instance at a time. Window bounds are restored while they are still on a screen. The menu (File, Edit, View) shows on Alt.
+- Updates (release builds only; electron-updater on the stage's `/downloads` feed): checked at launch and every 6 h. AppImages and signed NSIS installs (uninstaller beside the exe, publisher in the feed config) download in the background and install on restart or quit; updates must carry the same Windows publisher. A deb or the Windows zip gets a link to the downloads page instead. Prereleases update to newer prereleases (semver order).
 - `pnpm dev` serves `app://rss-reader` from the web app's Vite dev server in native mode, so the origin and bridge match the packaged app.
 
 ## Mobile app
@@ -127,6 +128,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The back button closes the top dialog or menu, then the drawer, then goes back; at the start of the app's history it exits.
 - The app draws edge to edge (the native build's viewport has `viewport-fit=cover`): `#app` is inset by the safe areas (Capacitor's `--safe-area-inset-*` variables, else `env()`) and contains the layout, which scrolls inside it.
 - HTTPS only (cleartext off), `INTERNET` is the only permission, and app data is not backed up (Keystore keys do not move between devices).
+- Updates (release builds only): at launch, at most daily, the bridge fetches the stage's `/downloads/latest.json` natively (no CORS) and compares its `versionCode`; a newer APK opens in the browser, which hands it to the package installer. The last result is kept between launches.
 - `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1). Release APKs are signed with the release keystore when `ANDROID_KEYSTORE_*` is set, else unsigned.
 
 ## Ingest pipeline
@@ -404,7 +406,7 @@ A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to
 
 - Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@rss-reader/shared/release`), and `index.html` (no-cache).
 - Superseded prereleases expire 30 days after upload; prod releases are kept.
-- Desktop release builds embed the stage's `/downloads` URL as their generic update feed (`electron-builder.release.cjs`).
+- Release builds embed the stage's `/downloads` URL: desktop as electron-updater's generic feed (`electron-builder.release.cjs`, no update channels), Android as `DOWNLOADS_URL` in the bridge.
 - Signing material is SecureString parameters under `/rss-reader/release/windows-signing/` and `/rss-reader/release/android-signing/`, shared by both stages and written by `scripts/windows-signing-setup.sh` and `scripts/android-signing-setup.sh`. Each build project reads only its own platform's parameters, as project environment variables; only the publish project writes the downloads bucket, and only its stage's.
 - `scripts/try-release.sh` runs the dev legs on the working tree under a made-up prerelease tag, with a dry-run publish unless `--publish`.
 
