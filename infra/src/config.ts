@@ -29,6 +29,8 @@ export interface StageConfig {
   backupDays: number;
   /** Log every compatibility-API call (credentials redacted) to capture client behaviour. */
   compatTrace: boolean;
+  /** Purge writes entries to the cold-storage archive before deleting them. */
+  archive: boolean;
 }
 
 export const STAGES: StageConfig[] = [
@@ -41,6 +43,7 @@ export const STAGES: StageConfig[] = [
     retainData: false,
     backupDays: 1,
     compatTrace: true,
+    archive: true,
   },
   {
     name: 'prod',
@@ -50,6 +53,7 @@ export const STAGES: StageConfig[] = [
     retainData: true,
     backupDays: 14,
     compatTrace: false,
+    archive: true,
   },
 ];
 

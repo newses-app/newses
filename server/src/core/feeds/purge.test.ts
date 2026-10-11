@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import {
+  enclosures,
   entries,
   entryLabels,
   feedSources,
@@ -11,7 +12,8 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { MemoryBlobStore } from '../../test/fakes.ts';
+import { MemoryArchiveWriter, MemoryBlobStore } from '../../test/fakes.ts';
+import type { ArchiveRow } from '../ports.ts';
 import { faviconKey } from './favicons.ts';
 import { Purger } from './purge.ts';
 
@@ -20,6 +22,8 @@ let db: Db;
 let blobs: MemoryBlobStore;
 let purger: Purger;
 let userId: number;
+
+const SETTINGS = { updateIntervalSeconds: 1800, purgeDays: 30, disableAfterFailures: 3 };
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -32,11 +36,7 @@ beforeEach(async () => {
   await db.delete(users);
   await db.delete(feedSources);
   blobs = new MemoryBlobStore();
-  purger = new Purger(db, blobs, {
-    updateIntervalSeconds: 1800,
-    purgeDays: 30,
-    disableAfterFailures: 3,
-  });
+  purger = new Purger(db, blobs, SETTINGS);
   const [user] = await db.insert(users).values({ login: 'alice', passwordHash: 'x' }).returning();
   userId = user?.id ?? 0;
 });
@@ -157,5 +157,115 @@ describe('Purger', () => {
     const remaining = (await db.select().from(feedSources)).map((s) => s.id);
     expect(remaining).toEqual([kept.source?.id]);
     expect(blobs.blobs.size).toBe(0);
+  });
+
+  describe('with an archive', () => {
+    const PUBLISHED = new Date('2024-05-06T07:08:09.123Z');
+    let archive: MemoryArchiveWriter;
+
+    beforeEach(() => {
+      archive = new MemoryArchiveWriter();
+      purger = new Purger(db, blobs, SETTINGS, { archive });
+    });
+
+    /** An entry no user holds, last seen `seenDaysAgo` days ago. */
+    async function orphan(feedSourceId: number, guid: string, seenDaysAgo: number) {
+      const [entry] = await db
+        .insert(entries)
+        .values({
+          feedSourceId,
+          guid,
+          contentHash: 'h',
+          title: guid,
+          content: '<p>Hello &amp; welcome</p>',
+          publishedAt: PUBLISHED,
+          fetchedAt: new Date(PUBLISHED.getTime() + 60_000),
+          lastSeenAt: daysAgo(seenDaysAgo),
+        })
+        .returning();
+      return entry?.id ?? 0;
+    }
+
+    it('archives unreferenced entries, with their feed and enclosures, before deleting them', async () => {
+      const { source } = await feedWith(null, [{ guid: 'kept', age: 400, starred: true }]);
+      const sourceId = source?.id ?? 0;
+      const gone = await orphan(sourceId, 'gone', 8);
+      await orphan(sourceId, 'still-in-feed', 1);
+      await db
+        .insert(enclosures)
+        .values({ entryId: gone, url: 'https://cdn.example/a.mp3', length: 5 });
+
+      const result = await purger.purge();
+      expect(result).toMatchObject({ entries: 1, archived: 1 });
+      expect(archive.rows).toHaveLength(1);
+      expect(archive.rows[0]).toMatchObject<Partial<ArchiveRow>>({
+        id: gone,
+        feedUrl: source?.url ?? '',
+        guid: 'gone',
+        title: 'gone',
+        text: 'Hello & welcome',
+        publishedAt: PUBLISHED,
+        sortAt: PUBLISHED,
+        enclosures: [
+          {
+            url: 'https://cdn.example/a.mp3',
+            mimeType: null,
+            length: 5,
+            width: null,
+            height: null,
+            durationSeconds: null,
+          },
+        ],
+      });
+      expect((await db.select().from(entries)).map((e) => e.guid).sort()).toEqual([
+        'kept',
+        'still-in-feed',
+      ]);
+    });
+
+    it('keeps entries when the archive cannot be written', async () => {
+      const { source } = await feedWith(null, []);
+      await orphan(source?.id ?? 0, 'gone', 8);
+      archive.fail = true;
+      await expect(purger.purge()).rejects.toThrow('archive unavailable');
+      expect(await db.select().from(entries)).toHaveLength(1);
+    });
+
+    it('keeps entries that came back into use while being archived', async () => {
+      const { source, sub } = await feedWith(null, []);
+      const entryId = await orphan(source?.id ?? 0, 'revived', 8);
+      const writer = {
+        write: async (rows: ArchiveRow[]) => {
+          await db
+            .insert(userEntries)
+            .values({ userId, entryId, subscriptionId: sub?.id ?? 0, sortAt: new Date() });
+          await archive.write(rows);
+        },
+      };
+      purger = new Purger(db, blobs, SETTINGS, { archive: writer });
+      expect(await purger.purge()).toMatchObject({ entries: 0, archived: 1 });
+      expect(await db.select().from(entries)).toHaveLength(1);
+    });
+
+    it('archives the entries of abandoned sources first, whenever they were seen', async () => {
+      const { source } = await feedWith(null, []);
+      await orphan(source?.id ?? 0, 'recent', 0);
+      await db.delete(subscriptions);
+
+      expect(await purger.purge()).toMatchObject({ entries: 1, archived: 1, feedSources: 1 });
+      expect(archive.rows.map((r) => r.guid)).toEqual(['recent']);
+      expect(await db.select().from(feedSources)).toHaveLength(0);
+    });
+
+    it('leaves what it has no time to archive for the next run', async () => {
+      const { source } = await feedWith(null, []);
+      await orphan(source?.id ?? 0, 'gone', 8);
+      await db.delete(subscriptions);
+      purger = new Purger(db, blobs, SETTINGS, { archive, archiveBudgetMs: 0 });
+
+      expect(await purger.purge()).toMatchObject({ entries: 0, archived: 0, feedSources: 0 });
+      expect(await db.select().from(entries)).toHaveLength(1);
+      expect(await db.select().from(feedSources)).toHaveLength(1);
+    });
   });
 });

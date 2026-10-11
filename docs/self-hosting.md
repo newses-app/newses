@@ -25,6 +25,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `TRUST_PROXY` | `false` | `true`, the number of proxy hops, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
 | `FEED_UPDATE_INTERVAL_MINUTES` | `30` | Default minutes between fetches of a feed (5–1440) |
 | `FEED_PURGE_DAYS` | `180` | Default age in days after which entries are deleted unless starred, published, noted, labelled, or shared; `0` keeps everything |
+| `ARCHIVE_ENABLED` | `true` | Keeps entries that purge deletes in a cold-storage archive in the `blobs` volume; `false` deletes them for good |
 | `FEED_DISABLE_AFTER_FAILURES` | `20` | Consecutive failed fetches after which a feed is disabled until refreshed |
 | `FETCH_ALLOW_PRIVATE_NETWORKS` | unset | Feeds on private or loopback addresses are blocked; set `true` or comma-separated CIDRs (e.g. `192.168.1.0/24`) to allow LAN feeds |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created |
@@ -39,7 +40,7 @@ Application variables, set in `compose.yaml`:
 |---|---|---|
 | `DATABASE_URL` | — | PostgreSQL connection URL |
 | `HOST`, `PORT` | `0.0.0.0`, `8080` | Server bind address inside the container |
-| `BLOB_DIR` | `/data/blobs` | Favicon and image cache (`blobs` volume) |
+| `BLOB_DIR` | `/data/blobs` | Favicon and image cache, and the archive (`blobs` volume) |
 
 ## Users
 
@@ -89,7 +90,7 @@ Install the desktop and Android apps from `https://reader.example.com/downloads/
 
 - Enable nightly dumps with `C --profile backup up -d`. Dumps go to the `backups` volume as `rss-reader-YYYYMMDD-HHMMSS.dump` and are pruned after `BACKUP_RETENTION_DAYS`.
 - Take an ad-hoc dump with `C exec db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > rss-reader.dump`.
-- Back up the `blobs` volume too, or let favicons and cached images re-fetch.
+- Back up the `blobs` volume too. Favicons and cached images re-fetch, but the archive (`archive/` in the volume) is not in the dumps and cannot be re-fetched.
 
 ## Restore
 

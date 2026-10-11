@@ -61,10 +61,50 @@ export interface Blob {
 }
 
 export interface BlobStore {
-  /** Keys are `/`-separated segments of letters, digits, `.`, `_`, `-`, not starting with `.`. */
+  /**
+   * Keys are `/`-separated segments of letters, digits, `.`, `_`, `-`, `=`, not starting with `.`
+   * or `=`.
+   */
   put(key: string, blob: Blob): Promise<void>;
   get(key: string): Promise<Blob | null>;
   delete(key: string): Promise<void>;
+}
+
+export interface ArchivedEnclosure {
+  url: string;
+  mimeType: string | null;
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+}
+
+/** An article kept in cold storage once purge (or the TTRSS importer) would otherwise lose it. */
+export interface ArchiveRow {
+  /** The `entries` id it had; null for articles imported straight into the archive. */
+  id: number | null;
+  feedUrl: string;
+  feedTitle: string | null;
+  guid: string;
+  link: string | null;
+  title: string | null;
+  author: string | null;
+  /** Sanitised HTML. */
+  content: string | null;
+  /** Plain text of `content`, for search. */
+  text: string | null;
+  lang: string | null;
+  publishedAt: Date | null;
+  sourceUpdatedAt: Date | null;
+  fetchedAt: Date;
+  sortAt: Date;
+  archivedAt: Date;
+  enclosures: ArchivedEnclosure[];
+}
+
+export interface ArchiveWriter {
+  /** The rows are durable once this resolves. */
+  write(rows: ArchiveRow[]): Promise<void>;
 }
 
 /** Events are invalidation signals; clients refetch the data they describe. */

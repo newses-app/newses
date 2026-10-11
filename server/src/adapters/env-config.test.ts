@@ -15,6 +15,7 @@ describe('loadConfig', () => {
       webDir: null,
       publicUrl: null,
       compatTrace: false,
+      archiveEnabled: true,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
       appSecret: APP_SECRET,
@@ -34,6 +35,12 @@ describe('loadConfig', () => {
     const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
     expect(loadConfig({ ...base, COMPAT_TRACE: 'true' }).compatTrace).toBe(true);
     expect(() => loadConfig({ ...base, COMPAT_TRACE: 'yes' })).toThrow(ConfigError);
+  });
+
+  it('turns off the archive only for false', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig({ ...base, ARCHIVE_ENABLED: 'false' }).archiveEnabled).toBe(false);
+    expect(() => loadConfig({ ...base, ARCHIVE_ENABLED: 'yes' })).toThrow(ConfigError);
   });
 
   it('parses overrides', () => {

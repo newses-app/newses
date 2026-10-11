@@ -66,7 +66,8 @@ Rules:
 |---|---|---|---|
 | `JobQueue` | Enqueue and consume jobs with retries; optional dedupe by key | pg-boss | SQS (no dedupe), consumed by Lambda |
 | `Scheduler` | Periodically dispatch due feeds and purges | In-process timer in worker | EventBridge Scheduler |
-| `BlobStore` | Favicons, cached images | Local volume | S3 |
+| `BlobStore` | Favicons, cached images, archive files | Local volume | S3 |
+| `ArchiveWriter` | Write entries to the cold-storage archive | Parquet through `BlobStore` | Parquet through `BlobStore`, catalogued in Glue for Athena |
 | `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
@@ -174,6 +175,12 @@ Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, noted, labelled, or shared) are never purged.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
 - Deletes feed sources with no subscriptions and no kept entries, and their favicons.
+- With `ARCHIVE_ENABLED`, entries go to the archive before they are deleted, in batches of 1,000, for up to 3 minutes per run: unreferenced entries past the grace period, then every entry of a feed source about to be deleted. Each batch's delete re-checks its conditions, so an entry used again meanwhile stays (and is also archived). A source is deleted only once its entries are; the rest waits for the next run.
+
+Archive:
+- Parquet files under the blob root, `archive/entries/month=YYYY-MM/<uuid>.parquet`, one month of `sort_at` per folder, rows sorted by feed URL and `sort_at`, snappy-compressed; files are only added. Layout: `server/src/adapters/archive-format.ts`.
+- Columns: the entry's id (null for imported rows), feed URL and title, GUID, link, title, author, content, its plain text, language, published, source-updated, fetched, sort, and archived times, and enclosures.
+- AWS: the Glue table `archive_entries` in database `rss_reader_<stage>` projects partitions from the month folders; objects move to Intelligent-Tiering.
 - Deletes proxied images and remembered failures fetched more than 30 days ago.
 - Deletes tombstones older than 30 days, and expired host pauses.
 
@@ -380,7 +387,7 @@ flowchart LR
   FA & FF & FI & FX --> NET((Internet feeds))
 ```
 
-- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
+- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket, archive catalog), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
 - Names: stacks are `rss-reader-<stage>-{params,data,app,edge,release,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name, except `rss-reader-<stage>-downloads-<account>`, which the release pipeline is granted by name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
 - Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.

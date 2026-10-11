@@ -98,6 +98,7 @@ export class AppStack extends Stack {
           // CloudFront does not forward the viewer's Host, so public links need the domain.
           PUBLIC_URL: `https://${stage.domainName}`,
           COMPAT_TRACE: String(stage.compatTrace),
+          ARCHIVE_ENABLED: String(stage.archive),
           RSS_READER_VERSION: BUILD_VERSION,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,

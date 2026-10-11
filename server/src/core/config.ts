@@ -23,6 +23,8 @@ export interface AppConfig {
   publicUrl: string | null;
   /** Log every compatibility-API call, credentials redacted, to capture client behaviour. */
   compatTrace: boolean;
+  /** Purge writes what it deletes to the cold-storage archive under the blob root. */
+  archiveEnabled: boolean;
   /** Built web app to serve, or null when it is hosted elsewhere. */
   webDir: string | null;
   feeds: FeedSettings;

@@ -10,7 +10,7 @@ import { HttpFetcher } from '../../core/feeds/http.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createDb } from '../../db/client.ts';
-import { createBlobStore } from '../feed-deps.ts';
+import { createArchiveWriter, createBlobStore } from '../feed-deps.ts';
 import { createLogger, createPool } from '../runtime.ts';
 
 const ssm = new SSMClient({});
@@ -66,6 +66,7 @@ export async function createLambdaRuntime(role: string) {
     connectionTimeoutMillis: 30_000,
   });
   const db = createDb(pool);
+  const blobs = createBlobStore(config);
   const feedDeps: FeedDeps = {
     db,
     fetcher: new HttpFetcher({ allowPrivateNetworks: config.fetchAllowPrivateNetworks }),
@@ -78,7 +79,8 @@ export async function createLambdaRuntime(role: string) {
       new SQSClient({}),
     ),
     realtime: new NoopRealtime(),
-    blobs: createBlobStore(config),
+    blobs,
+    archive: createArchiveWriter(config, blobs),
     settings: config.feeds,
     keys: deriveKeys(config.appSecret),
     logger,

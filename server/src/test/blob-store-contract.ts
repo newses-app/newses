@@ -32,7 +32,12 @@ export function describeBlobStore(name: string, store: () => BlobStore) {
       await store().delete('never-existed');
     });
 
-    it.each(['', '../escape', 'a/../b', '.meta/a', 'a//b', '/abs', 'a/'])(
+    it('accepts partition-style segments', async () => {
+      await store().put('archive/month=2024-05/a.parquet', blob('x'));
+      expect(await store().get('archive/month=2024-05/a.parquet')).not.toBeNull();
+    });
+
+    it.each(['', '../escape', 'a/../b', '.meta/a', 'a//b', '/abs', 'a/', '=a'])(
       'rejects key %j',
       async (key) => {
         await expect(store().put(key, blob('x'))).rejects.toThrow(/Invalid blob key/);

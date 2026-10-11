@@ -3,7 +3,7 @@ import { CategoryService } from '../categories.ts';
 import type { Keys } from '../crypto.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
-import type { BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
+import type { ArchiveWriter, BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
 import { FaviconService, IconTokens } from './favicons.ts';
 import { FullTextService } from './fulltext.ts';
 import { HostLimiter } from './host-limiter.ts';
@@ -21,6 +21,8 @@ export interface FeedDeps {
   queue: JobQueue<Jobs>;
   realtime: Realtime;
   blobs: BlobStore;
+  /** Where purge writes entries before deleting them; null when the archive is off. */
+  archive: ArchiveWriter | null;
   settings: FeedSettings;
   logger: Logger;
   /** Keys derived from APP_SECRET. */
@@ -61,7 +63,7 @@ export function createFeedServices(deps: FeedDeps) {
     fullText,
     iconTokens: new IconTokens(deps.keys['feed-icons']),
     images: new ImageProxy({ db, fetcher, blobs, hosts, key: deps.keys['image-url'], logger }),
-    purger: new Purger(db, blobs, settings),
+    purger: new Purger(db, blobs, settings, { archive: deps.archive }),
   };
 }
 

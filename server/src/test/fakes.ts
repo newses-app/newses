@@ -4,6 +4,8 @@ import type { FeedDeps } from '../core/feeds/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import type { Jobs } from '../core/jobs.ts';
 import type {
+  ArchiveRow,
+  ArchiveWriter,
   Blob,
   BlobStore,
   EnqueueOptions,
@@ -66,6 +68,18 @@ export class RecordingQueue implements JobQueue<Jobs> {
   }
 }
 
+/** Keeps written rows; `fail` makes the next writes throw, as an unreachable store would. */
+export class MemoryArchiveWriter implements ArchiveWriter {
+  readonly rows: ArchiveRow[] = [];
+  fail = false;
+
+  write(rows: ArchiveRow[]): Promise<void> {
+    if (this.fail) return Promise.reject(new Error('archive unavailable'));
+    this.rows.push(...rows);
+    return Promise.resolve();
+  }
+}
+
 export class MemoryBlobStore implements BlobStore {
   readonly blobs = new Map<string, Blob>();
 
@@ -95,6 +109,7 @@ export function testFeedDeps(
     queue: new RecordingQueue(),
     realtime: new RecordingRealtime(),
     blobs: new MemoryBlobStore(),
+    archive: null,
     settings: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 3 },
     logger: silentLogger,
     keys: deriveKeys(TEST_APP_SECRET),

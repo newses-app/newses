@@ -34,6 +34,7 @@ const schema = z
               .filter(Boolean),
       ),
     COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
+    ARCHIVE_ENABLED: z.enum(['true', 'false']).default('true'),
     RSS_READER_VERSION: z.string().default('dev'),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
@@ -73,6 +74,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     webDir: e.WEB_DIR ?? null,
     publicUrl: e.PUBLIC_URL ?? null,
     compatTrace: e.COMPAT_TRACE === 'true',
+    archiveEnabled: e.ARCHIVE_ENABLED === 'true',
     feeds: {
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
       purgeDays: e.FEED_PURGE_DAYS,

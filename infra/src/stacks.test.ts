@@ -150,6 +150,48 @@ describe('App', () => {
 });
 
 describe('Edge', () => {
+  it('archives in the blob bucket, catalogued for Athena by month, on both stages', () => {
+    data.hasResourceProperties('AWS::S3::Bucket', {
+      LifecycleConfiguration: {
+        Rules: Match.arrayWith([
+          Match.objectLike({
+            Prefix: 'archive/entries/',
+            Transitions: [{ StorageClass: 'INTELLIGENT_TIERING', TransitionInDays: 0 }],
+          }),
+        ]),
+      },
+    });
+    data.hasOutput('BlobBucket', {});
+    data.hasResourceProperties('AWS::Glue::Database', {
+      DatabaseInput: { Name: 'rss_reader_dev' },
+    });
+    data.hasResourceProperties('AWS::Glue::Table', {
+      TableInput: Match.objectLike({
+        Name: 'archive_entries',
+        PartitionKeys: [{ Name: 'month', Type: 'string' }],
+        Parameters: Match.objectLike({
+          'projection.month.type': 'date',
+          'projection.month.format': 'yyyy-MM',
+        }),
+        StorageDescriptor: Match.objectLike({
+          Columns: Match.arrayWith([
+            { Name: 'id', Type: 'bigint' },
+            { Name: 'sort_at', Type: 'timestamp' },
+            {
+              Name: 'enclosures',
+              Type: 'array<struct<url:string,mime_type:string,length:bigint,width:int,height:int,duration_seconds:int>>',
+            },
+          ]),
+        }),
+      }),
+    });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-tick',
+      Environment: { Variables: Match.objectLike({ ARCHIVE_ENABLED: 'true' }) },
+    });
+    expect(prod.archive).toBe(true);
+  });
+
   it('serves the SPA from a private bucket and the API paths from the HTTP API', () => {
     edge.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
     edge.hasResourceProperties('AWS::CloudFront::Distribution', {
