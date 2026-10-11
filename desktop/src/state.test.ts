@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openSettings } from './settings.ts';
 import { canKeepToken, createTokenStore, type Encryption } from './token.ts';
-import { restoreBounds } from './window-state.ts';
+import { centered, onScreen, restoreBounds } from './window-state.ts';
 
 let dir = '';
 beforeEach(async () => {
@@ -83,5 +83,29 @@ describe('restoreBounds', () => {
     expect(restoreBounds({ ...saved, x: 1900 }, [screen])).toBeNull();
     expect(restoreBounds({ ...saved, width: 0 }, [screen])).toBeNull();
     expect(restoreBounds(undefined, [screen])).toBeNull();
+  });
+
+  it('forgets the spot WSLg parks a minimized window at', () => {
+    const parked = { ...saved, x: -32730, y: -32709 };
+    expect(onScreen(parked, [screen])).toBe(false);
+    expect(restoreBounds(parked, [screen])).toBeNull();
+  });
+});
+
+describe('centered', () => {
+  it('centres a window on a screen, shrinking it to fit', () => {
+    const size = { width: 1200, height: 800 };
+    expect(centered(size, { x: 1920, y: 40, width: 2560, height: 1400 })).toEqual({
+      x: 2600,
+      y: 340,
+      width: 1200,
+      height: 800,
+    });
+    expect(centered(size, { x: 0, y: 0, width: 1024, height: 700 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 1024,
+      height: 700,
+    });
   });
 });

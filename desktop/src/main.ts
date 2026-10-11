@@ -28,7 +28,7 @@ import { createTokenStore } from './token.ts';
 import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
 import { themeSource } from './theme.ts';
 import { startUpdater, type Updater } from './updater.ts';
-import { restoreBounds } from './window-state.ts';
+import { centered, onScreen, restoreBounds } from './window-state.ts';
 
 const APP_ID = 'app.newses';
 const WEB_DIR = join(__dirname, 'web');
@@ -56,6 +56,10 @@ let quitting = false;
 const notifications = new Set<Notification>();
 
 const options = (settings: SettingsStore) => ({ ...DEFAULT_OPTIONS, ...settings.get().options });
+
+const DEFAULT_SIZE = { width: 1200, height: 800 };
+const workAreas = () => screen.getAllDisplays().map((display) => display.workArea);
+const defaultBounds = () => centered(DEFAULT_SIZE, screen.getPrimaryDisplay().workArea);
 
 function showWindow() {
   if (!window) return;
@@ -191,12 +195,9 @@ function openExternally(url: string) {
 
 function createWindow(settings: SettingsStore, hidden: boolean) {
   const saved = settings.get().window;
-  const bounds = restoreBounds(
-    saved,
-    screen.getAllDisplays().map((display) => display.workArea),
-  );
+  const bounds = restoreBounds(saved, workAreas());
   const win = new BrowserWindow({
-    ...(bounds ?? { width: 1200, height: 800 }),
+    ...(bounds ?? defaultBounds()),
     minWidth: 360,
     minHeight: 480,
     show: false,
@@ -218,7 +219,10 @@ function createWindow(settings: SettingsStore, hidden: boolean) {
     if (!hidden) win.show();
   });
   win.on('close', (event) => {
-    void settings.update({ window: { ...win.getNormalBounds(), maximized: win.isMaximized() } });
+    // A minimized window, or one parked off-screen (WSLg), keeps the last bounds on a screen.
+    const normal = win.getNormalBounds();
+    if (!win.isMinimized() && onScreen(normal, workAreas()))
+      void settings.update({ window: { ...normal, maximized: win.isMaximized() } });
     // The app keeps running, and checking for new entries, in the tray.
     if (!quitting && options(settings).closeToTray) {
       event.preventDefault();
