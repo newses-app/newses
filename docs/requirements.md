@@ -114,7 +114,7 @@
 | TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe |
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
-| Desktop app | P4 | Electron app for Windows and Linux with configurable server URL, secure token storage, native notifications for new entries, and automatic updates |
+| Desktop app | P4 | Electron app for Windows (installer, zip) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent, and a prompt to install newer versions |
 | macOS desktop app | Later | The desktop app, signed and notarised for macOS |
 | Offline reading | Later | Local store of recent unread/starred entries; queued state changes replayed on reconnect |

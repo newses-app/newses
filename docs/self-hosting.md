@@ -81,6 +81,10 @@ The desktop and mobile apps need HTTPS. The proxy must forward the `Authorizatio
 
 `/api/v1/events` is a long-lived event stream. nginx and nginx-proxy need no extra configuration. Other proxies must not buffer its responses and must allow at least 30 s between bytes (the server sends a heartbeat every 25 s).
 
+## Apps
+
+Install the desktop and Android apps from `https://reader.example.com/downloads/` and enter the server's HTTPS address at first launch; they update themselves from there. The proxy needs the headers above.
+
 ## Backups
 
 - Enable nightly dumps with `C --profile backup up -d`. Dumps go to the `backups` volume as `rss-reader-YYYYMMDD-HHMMSS.dump` and are pruned after `BACKUP_RETENTION_DAYS`.
