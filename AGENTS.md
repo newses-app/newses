@@ -24,6 +24,7 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 | `E2E_BASE_URL=… pnpm --filter @rss-reader/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
 | `pnpm --filter @rss-reader/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first); deployments run through the pipelines |
 | `git tag v1.2.3-rc.1 && git push origin v1.2.3-rc.1` | Release the apps to rrdev (prerelease tags) or, with `v1.2.3`, to rr; the stage's release pipeline builds, signs, and publishes to `/downloads/`. Number prereleases `-rc.N` (semver orders `rc10` before `rc9`); Android's versionCode ignores the prerelease part, so an update reaches Android only with a higher major.minor.patch |
+| `scripts/reset-stage.sh dev\|prod` | Empties an AWS stage: drops the database schema, re-runs `migrate` (admin from SSM `admin-password`), empties the blob bucket, purges the queues; keeps SSM parameters and downloads; snapshots prod first (`--help`) |
 | `scripts/try-release.sh` | Run the dev release legs on the working tree without a tag; the publish is a dry run unless `--publish` (`--help`) |
 
 ## Code conventions
