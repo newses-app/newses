@@ -48,5 +48,8 @@ bridge.onBackButton(() =>
   }),
 );
 
+// A clicked notification opens its feed or category.
+bridge.onNavigate((target) => void router.push(target));
+
 // A no-op in the native build, which has no service worker.
 registerSW({ immediate: true });

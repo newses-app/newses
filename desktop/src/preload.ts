@@ -1,11 +1,28 @@
 // Exposes the platform bridge to the web app; everything runs in the main process over IPC.
-import type { AppTheme, PlatformBridge, SaveFile, UpdateStatus } from '@rss-reader/shared';
+import type {
+  AppNotification,
+  AppTheme,
+  DesktopOptions,
+  PlatformBridge,
+  SaveFile,
+  UpdateStatus,
+} from '@rss-reader/shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
 const invoke = <T>(method: string, ...args: unknown[]) =>
   ipcRenderer.invoke(`bridge:${method}`, ...args) as Promise<T>;
 
 const VERSION_ARG = '--rss-reader-version=';
+
+// Single handlers, replaced by later registrations.
+let navigate: (target: string) => void = () => undefined;
+let refresh: () => void = () => undefined;
+ipcRenderer.on('bridge:navigate', (_event, target: string) => {
+  navigate(target);
+});
+ipcRenderer.on('bridge:refresh', () => {
+  refresh();
+});
 
 const bridge: PlatformBridge = {
   platform: 'desktop',
@@ -18,8 +35,17 @@ const bridge: PlatformBridge = {
   clearToken: () => invoke<undefined>('clearToken'),
   openExternal: (url: string) => invoke<undefined>('openExternal', url),
   saveFile: (file: SaveFile) => invoke<boolean>('saveFile', file),
-  notify: (notification: { title: string; body: string }) =>
-    invoke<undefined>('notify', notification),
+  notify: (notification: AppNotification) => invoke<undefined>('notify', notification),
+  onNavigate: (handler) => {
+    navigate = handler;
+  },
+  onRefresh: (handler) => {
+    refresh = handler;
+  },
+  getDesktopOptions: () => invoke<DesktopOptions>('getDesktopOptions'),
+  setDesktopOptions: (options) => invoke<undefined>('setDesktopOptions', options),
+  // Sharing to the app is Android's.
+  onShare: () => undefined,
   setTheme: (theme: AppTheme) => invoke<undefined>('setTheme', theme),
   // Desktop has no system back button.
   onBackButton: () => undefined,

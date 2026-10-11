@@ -116,6 +116,8 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The app's theme preference sets Electron's theme source: `system` follows the OS (light or dark title bar and `prefers-color-scheme`), light and dark pin it.
 - `settings.json` in the user data folder (owner-only) holds the server URL, window bounds, and the token encrypted with `safeStorage` (DPAPI on Windows, the keyring on Linux). On Linux without a keyring (`basic_text`) the token is kept in memory only, so each launch signs in.
 - One instance at a time. Window bounds are restored while they are still on a screen. The menu (File, Edit, View) shows on Alt.
+- New entries: while the window is hidden or unfocused, each counters refresh that finds more unread entries in existing subscriptions shows one notification from the main process ("12 new entries": the categories, most first); clicking it opens the feed or category, or All. Hidden windows poll counters every 30 min (the AWS dispatch interval) instead of pausing; resume, unlock, and the tray's Check now refresh at once. Notifications can be turned off.
+- Optional, in settings: keep running in the tray when the window closes (Open, Check now, Quit), and start at login (`--hidden`, straight to the tray when it is on; a login item on Windows, an XDG autostart entry on Linux). Desktop options live in `settings.json`.
 - Updates (release builds only; electron-updater on the stage's `/downloads` feed): checked at launch and every 6 h. AppImages and signed NSIS installs (uninstaller beside the exe, publisher in the feed config) download in the background and install on restart or quit; updates must carry the same Windows publisher. A deb or the Windows zip gets a link to the downloads page instead. Prereleases update to newer prereleases (semver order).
 - `pnpm dev` serves `app://rss-reader` from the web app's Vite dev server in native mode, so the origin and bridge match the packaged app.
 
@@ -128,6 +130,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The back button closes the top dialog or menu, then the drawer, then goes back; at the start of the app's history it exits.
 - The app draws edge to edge (the native build's viewport has `viewport-fit=cover`): `#app` is inset by the safe areas (Capacitor's `--safe-area-inset-*` variables, else `env()`) and contains the layout, which scrolls inside it.
 - HTTPS only (cleartext off), `INTERNET` is the only permission, and app data is not backed up (Keystore keys do not move between devices).
+- Share to subscribe: an `ACTION_SEND` `text/plain` filter on the `singleTask` activity; the app's `ShareTarget` plugin passes the text to the bridge (also for a share that launches the app), and the first http(s) URL opens the subscribe dialog filled in, after sign-in when signed out.
 - Updates (release builds only): at launch, at most daily, the bridge fetches the stage's `/downloads/latest.json` natively (no CORS) and compares its `versionCode`; a newer APK opens in the browser, which hands it to the package installer. The last result is kept between launches.
 - `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1). Release APKs are signed with the release keystore when `ANDROID_KEYSTORE_*` is set, else unsigned.
 
@@ -392,7 +395,7 @@ flowchart LR
 Constraints:
 - The first request after the database pauses waits about 15 s for it to resume.
 - Responses are capped at 6 MB; list pages with content end early past 2 M content characters.
-- No SSE; clients poll counters every 60 s.
+- No SSE; clients poll counters every 60 s while visible (hidden desktop apps with notifications on: every 30 min).
 
 #### Releases
 

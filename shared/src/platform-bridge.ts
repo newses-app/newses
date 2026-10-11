@@ -7,6 +7,23 @@ export interface SaveFile {
   data: string;
 }
 
+/** A system notification; clicking it opens `target` (an app path, e.g. a feed's stream). */
+export interface AppNotification {
+  title: string;
+  body: string;
+  target?: string;
+}
+
+/** Desktop-only behaviour, kept by the shell. */
+export interface DesktopOptions {
+  /** Notify about new entries while the window is in the background. */
+  notifications: boolean;
+  /** Closing the window keeps the app in the tray. */
+  closeToTray: boolean;
+  /** Starts with the user's session (in the tray when `closeToTray`). */
+  launchAtLogin: boolean;
+}
+
 export interface AppTheme {
   preference: 'system' | 'light' | 'dark';
   dark: boolean;
@@ -47,7 +64,22 @@ export interface PlatformBridge {
   /** Offers a file to save; false when the user cancels. */
   saveFile(file: SaveFile): Promise<boolean>;
   /** Shows a system notification. */
-  notify(notification: { title: string; body: string }): Promise<void>;
+  notify(notification: AppNotification): Promise<void>;
+  /** Called with a clicked notification's target (desktop); replaces the previous handler. */
+  onNavigate(handler: (target: string) => void): void;
+  /**
+   * Called when counters should be refreshed now: after the computer resumes or unlocks, or from
+   * the tray (desktop); replaces the previous handler.
+   */
+  onRefresh(handler: () => void): void;
+  /** Null outside the desktop app. */
+  getDesktopOptions(): Promise<DesktopOptions | null>;
+  setDesktopOptions(options: Partial<DesktopOptions>): Promise<void>;
+  /**
+   * Called with text shared to the app from another app (Android's share sheet), including a share
+   * that launched it; replaces the previous handler.
+   */
+  onShare(handler: (text: string) => void): void;
   /**
    * The app's theme: the reader's preference, and whether it is dark now. Desktop follows the
    * preference (so `system` keeps tracking the OS); Android colours its system bar icons by `dark`.

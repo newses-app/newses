@@ -14,12 +14,15 @@ import {
   nativeTheme,
   net,
   Notification,
+  powerMonitor,
   protocol,
   safeStorage,
   screen,
   session,
   shell,
 } from 'electron';
+import { setLaunchAtLogin, setTray } from './background.ts';
+import { DEFAULT_OPTIONS, HIDDEN_ARG, notificationTarget, parseOptions } from './options.ts';
 import { openSettings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
 import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
@@ -47,6 +50,26 @@ if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 
 let window: BrowserWindow | null = null;
 let updater: Updater | null = null;
+/** Set once quitting starts, so closing to the tray does not stop it. */
+let quitting = false;
+/** Shown notifications, kept until they close: one that is garbage collected loses its click. */
+const notifications = new Set<Notification>();
+
+const options = (settings: SettingsStore) => ({ ...DEFAULT_OPTIONS, ...settings.get().options });
+
+function showWindow() {
+  if (!window) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+
+/** Asks the app to refresh its counters now. */
+const refresh = () => window?.webContents.send('bridge:refresh');
+
+function applyBackground(settings: SettingsStore) {
+  setTray(options(settings).closeToTray, { open: showWindow, checkNow: refresh });
+}
 
 async function serveApp(request: Request): Promise<Response> {
   if (DEV_SERVER) {
@@ -108,10 +131,29 @@ function registerBridge(settings: SettingsStore) {
     await writeFile(result.filePath, contents);
     return true;
   });
-  handle('notify', (notification) => {
-    const { title, body } = (notification ?? {}) as { title?: unknown; body?: unknown };
+  handle('notify', (value) => {
+    const { title, body, target } = (value ?? {}) as Record<string, unknown>;
     if (!Notification.isSupported()) return;
-    new Notification({ title: text(title, 256) ?? '', body: text(body, 1024) ?? '' }).show();
+    const path = notificationTarget(target);
+    const notification = new Notification({
+      title: text(title, 256) ?? '',
+      body: text(body, 1024) ?? '',
+    });
+    notifications.add(notification);
+    notification.on('click', () => {
+      showWindow();
+      if (path) window?.webContents.send('bridge:navigate', path);
+    });
+    notification.on('close', () => notifications.delete(notification));
+    notification.show();
+  });
+  handle('getDesktopOptions', () => options(settings));
+  handle('setDesktopOptions', async (value) => {
+    const changes = parseOptions(value);
+    if (!changes) throw new Error('Invalid options');
+    await settings.update({ options: { ...settings.get().options, ...changes } });
+    applyBackground(settings);
+    if (changes.launchAtLogin !== undefined) await setLaunchAtLogin(changes.launchAtLogin);
   });
   // `system` lets Electron follow the OS again; pinning light or dark would stop that for good.
   handle('setTheme', (theme) => {
@@ -147,7 +189,7 @@ function openExternally(url: string) {
   if (target) void shell.openExternal(target);
 }
 
-function createWindow(settings: SettingsStore) {
+function createWindow(settings: SettingsStore, hidden: boolean) {
   const saved = settings.get().window;
   const bounds = restoreBounds(
     saved,
@@ -173,10 +215,15 @@ function createWindow(settings: SettingsStore) {
   });
   if (bounds && saved?.maximized) win.maximize();
   win.once('ready-to-show', () => {
-    win.show();
+    if (!hidden) win.show();
   });
-  win.on('close', () => {
+  win.on('close', (event) => {
     void settings.update({ window: { ...win.getNormalBounds(), maximized: win.isMaximized() } });
+    // The app keeps running, and checking for new entries, in the tray.
+    if (!quitting && options(settings).closeToTray) {
+      event.preventDefault();
+      win.hide();
+    }
   });
   win.on('closed', () => {
     window = null;
@@ -203,10 +250,9 @@ function createWindow(settings: SettingsStore) {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    if (!window) return;
-    if (window.isMinimized()) window.restore();
-    window.focus();
+  app.on('second-instance', showWindow);
+  app.on('before-quit', () => {
+    quitting = true;
   });
 
   app.on('web-contents-created', (_event, contents) => {
@@ -226,7 +272,14 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle(APP_SCHEME, serveApp);
     registerBridge(settings);
     buildMenu();
-    window = createWindow(settings);
+    // Started at login: straight to the tray, when there is one.
+    const hidden = process.argv.includes(HIDDEN_ARG) && options(settings).closeToTray;
+    window = createWindow(settings, hidden);
+    applyBackground(settings);
+    // Re-registered, so a moved AppImage or a reinstall still starts at login.
+    if (options(settings).launchAtLogin) void setLaunchAtLogin(true);
+    powerMonitor.on('resume', refresh);
+    powerMonitor.on('unlock-screen', refresh);
     updater = startUpdater((status) => {
       window?.webContents.send('bridge:updateStatus', status);
     });

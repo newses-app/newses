@@ -23,15 +23,18 @@ const busy = ref(false);
 const error = ref<string | null>(null);
 const restoreFocus = useReturnFocus(() => ui.subscribeOpen);
 
+// Opening starts afresh; a URL shared to the app fills in the address, also while open.
 watch(
-  () => ui.subscribeOpen,
-  (open) => {
-    if (!open) return;
-    url.value = '';
+  () => [ui.subscribeOpen, ui.subscribeUrl] as const,
+  ([open, shared], previous) => {
+    if (!open || (previous?.[0] && !shared)) return;
+    url.value = shared ?? '';
+    ui.subscribeUrl = null;
     candidates.value = [];
     chosen.value = null;
     error.value = null;
   },
+  { immediate: true },
 );
 
 async function submit() {

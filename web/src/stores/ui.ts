@@ -15,6 +15,8 @@ export const useUiStore = defineStore('ui', () => {
   const drawer = ref<boolean | null>(null);
   const helpOpen = ref(false);
   const subscribeOpen = ref(false);
+  /** Fills in the subscribe dialog's address when it opens (a URL shared to the app). */
+  const subscribeUrl = ref<string | null>(null);
   const editSubscriptionId = ref<number | null>(null);
   /** The entry whose note is being edited. */
   const noteEntry = ref<Entry | null>(null);
@@ -53,6 +55,7 @@ export const useUiStore = defineStore('ui', () => {
     drawer,
     helpOpen,
     subscribeOpen,
+    subscribeUrl,
     editSubscriptionId,
     noteEntry,
     scoreEntry,

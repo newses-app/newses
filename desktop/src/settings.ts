@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import type { DesktopOptions } from '@rss-reader/shared';
 
 export interface WindowState {
   x: number;
@@ -15,6 +16,8 @@ export interface Settings {
   /** The session token, encrypted with the OS key store (base64). */
   token?: string | undefined;
   window?: WindowState | undefined;
+  /** Changed from the defaults in settings (options.ts). */
+  options?: Partial<DesktopOptions> | undefined;
 }
 
 /** Settings in a JSON file, read once and written whole on each change. */

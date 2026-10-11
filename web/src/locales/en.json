@@ -46,6 +46,15 @@
     "app": "App",
     "appVersion": "App version {version}"
   },
+  "desktop": {
+    "notifications": "Notify me about new entries while the app is in the background",
+    "closeToTray": "Keep running in the tray when the window is closed",
+    "launchAtLogin": "Start when I sign in to my computer"
+  },
+  "notifications": {
+    "title": "{n} new entry | {n} new entries",
+    "more": "{places} and {n} more"
+  },
   "updates": {
     "title": "Update available",
     "readyPrompt": "rss-reader {version} is ready. Restart the app to update.",

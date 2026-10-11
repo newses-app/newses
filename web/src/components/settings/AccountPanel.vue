@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { mdiLogout } from '@mdi/js';
+import type { DesktopOptions } from '@rss-reader/shared';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
-import { bridge, connection, NATIVE, updates } from '../../platform/index.ts';
+import { bridge, connection, desktop, NATIVE, updates } from '../../platform/index.ts';
 import { updateSummary } from '../../platform/updates.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import AppPasswordsSection from './AppPasswordsSection.vue';
@@ -20,6 +21,13 @@ const { session, logout } = useSession();
 const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.auth.sessions() });
 const update = computed(() => updateSummary(updates.status.value));
 const checking = computed(() => updates.status.value.state === 'checking');
+
+const desktopOptions = computed(() => desktop.options.value);
+const DESKTOP_OPTIONS: (keyof DesktopOptions)[] = ['notifications', 'closeToTray', 'launchAtLogin'];
+
+function setOption(key: keyof DesktopOptions, value: boolean | null) {
+  void desktop.set({ [key]: value === true });
+}
 
 function updateAction() {
   void (update.value.action === 'check' ? updates.check() : updates.install());
@@ -63,18 +71,38 @@ async function revoke(id: number) {
             </v-btn>
           </template>
         </v-list-item>
-        <v-list-item
-          v-if="bridge.appVersion"
-          :title="t('connect.appVersion', { version: bridge.appVersion })"
-          :subtitle="update.message ? t(`updates.${update.message}`, update.params) : ''"
-        >
-          <template v-if="update.action" #append>
-            <v-btn variant="tonal" size="small" :loading="checking" @click="updateAction">
-              {{ t(`updates.${update.action}`) }}
-            </v-btn>
-          </template>
+        <!-- The action sits below the text, so narrow screens never cover the version. -->
+        <v-list-item v-if="bridge.appVersion">
+          <v-list-item-title class="text-wrap">
+            {{ t('connect.appVersion', { version: bridge.appVersion }) }}
+          </v-list-item-title>
+          <v-list-item-subtitle v-if="update.message" class="text-wrap">
+            {{ t(`updates.${update.message}`, update.params) }}
+          </v-list-item-subtitle>
+          <v-btn
+            v-if="update.action"
+            class="mt-2"
+            variant="tonal"
+            size="small"
+            :loading="checking"
+            @click="updateAction"
+          >
+            {{ t(`updates.${update.action}`) }}
+          </v-btn>
         </v-list-item>
       </v-list>
+      <div v-if="desktopOptions" class="mb-6">
+        <v-switch
+          v-for="key in DESKTOP_OPTIONS"
+          :key="key"
+          :model-value="desktopOptions[key]"
+          :label="t(`desktop.${key}`)"
+          color="primary"
+          density="compact"
+          hide-details
+          @update:model-value="setOption(key, $event)"
+        />
+      </div>
     </template>
 
     <h2 class="text-title-large mb-4">{{ t('account.changePassword') }}</h2>

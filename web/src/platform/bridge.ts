@@ -35,6 +35,11 @@ export const webBridge: PlatformBridge = {
   },
   saveFile: download,
   notify: () => Promise.resolve(),
+  onNavigate: () => undefined,
+  onRefresh: () => undefined,
+  getDesktopOptions: () => Promise.resolve(null),
+  setDesktopOptions: () => Promise.resolve(),
+  onShare: () => undefined,
   setTheme: () => Promise.resolve(),
   onBackButton: () => undefined,
   // The browser loads the current web app; only the apps update.

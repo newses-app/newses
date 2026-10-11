@@ -2,7 +2,13 @@
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
-import { CapacitorHttp, SystemBars, SystemBarsStyle } from '@capacitor/core';
+import {
+  CapacitorHttp,
+  type PluginListenerHandle,
+  registerPlugin,
+  SystemBars,
+  SystemBarsStyle,
+} from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
@@ -17,6 +23,22 @@ const SERVER_KEY = 'serverUrl';
 /** In Android Keystore-backed storage, not Preferences. */
 const TOKEN_KEY = 'token';
 const UPDATE_CHECK_KEY = 'updateCheck';
+
+/** The app's own plugin (android/…/ShareTargetPlugin.java): text from the share sheet. */
+const ShareTarget = registerPlugin<{
+  addListener(
+    event: 'share',
+    listener: (data: { text: string }) => void,
+  ): Promise<PluginListenerHandle>;
+}>('ShareTarget');
+
+/** Shares wait here until the web app sets its handler. */
+let shareHandler: ((text: string) => void) | null = null;
+const sharedTexts: string[] = [];
+void ShareTarget.addListener('share', ({ text }) => {
+  if (shareHandler) shareHandler(text);
+  else sharedTexts.push(text);
+});
 
 let backHandler: (() => boolean) | null = null;
 void App.addListener('backButton', () => {
@@ -103,6 +125,14 @@ const bridge: PlatformBridge = {
   saveFile,
   // Android notifications are not part of the app yet.
   notify: () => Promise.resolve(),
+  onNavigate: () => undefined,
+  onRefresh: () => undefined,
+  getDesktopOptions: () => Promise.resolve(null),
+  setDesktopOptions: () => Promise.resolve(),
+  onShare: (handler) => {
+    shareHandler = handler;
+    for (const text of sharedTexts.splice(0)) handler(text);
+  },
   // A dark theme needs light status and navigation bar icons.
   setTheme: ({ dark }) =>
     SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }),

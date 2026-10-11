@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watchEffect } from 'vue';
+import { watch, watchEffect } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
@@ -15,9 +15,11 @@ import TagsDialog from '../components/dialogs/TagsDialog.vue';
 import SubscribeDialog from '../components/dialogs/SubscribeDialog.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
 import { useLiveCounters } from '../composables/useCounters.ts';
+import { useEntryNotifications } from '../composables/useEntryNotifications.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
 import { readingStyle } from '../lib/reading.ts';
+import { shares } from '../platform/index.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -36,6 +38,18 @@ watchEffect(() => {
 });
 
 useLiveCounters();
+useEntryNotifications();
+
+// A URL shared to the app, now or before signing in, opens the subscribe dialog filled in.
+watch(
+  shares.pending,
+  (url) => {
+    if (!url) return;
+    ui.subscribeUrl = shares.take();
+    ui.subscribeOpen = true;
+  },
+  { immediate: true },
+);
 
 function skipToMain() {
   document.getElementById('main')?.focus();
