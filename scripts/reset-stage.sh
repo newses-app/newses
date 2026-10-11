@@ -6,13 +6,14 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/reset-stage.sh <dev|prod> [--yes]
+Usage: scripts/reset-stage.sh <dev|prod> [--dry-run] [--yes]
 
   Deletes every user, subscription, entry, cached image, favicon, and archived entry in the
   stage, then recreates the admin with the password in SSM (changed at first sign-in).
   prod is snapshotted first (rss-reader-prod-pre-reset-<time>).
 
-  --yes   dev only: reset without asking
+  --dry-run  Look everything up and show what would be deleted, then stop
+  --yes      dev only: reset without asking
 EOF
 }
 
@@ -21,9 +22,10 @@ die() {
   exit 2
 }
 
-stage='' yes=false
+stage='' dry_run=false yes=false
 while [ $# -gt 0 ]; do
   case "$1" in
+    --dry-run) dry_run=true; shift ;;
     --yes) yes=true; shift ;;
     -h | --help) usage; exit 0 ;;
     -*) usage >&2; die "unknown option $1" ;;
@@ -67,16 +69,35 @@ psql() {
 echo "Connecting to $host (a paused database takes up to 30 s to resume)..."
 counts=$(psql -At -c "SELECT (SELECT count(*) FROM users) || ' users, ' ||
   (SELECT count(*) FROM subscriptions) || ' subscriptions, ' ||
-  (SELECT count(*) FROM entries) || ' entries'" 2>/dev/null) || counts='no readable tables'
+  (SELECT count(*) FROM entries) || ' entries'") || counts='unreadable (above)'
 objects=$(aws s3 ls "s3://$blob_bucket" --recursive --summarize |
   sed -n 's/^ *Total Objects: //p')
+aws lambda get-function --function-name "$name-migrate" >/dev/null ||
+  die "no $name-migrate function; deploy the app stack first"
+# Resolved before anything is deleted, so a missing queue stops the reset early.
+queues=() messages=0
+for queue in feed-fetch feed-favicon entry-extract; do
+  for suffix in '' -dlq; do
+    url=$(aws sqs get-queue-url --queue-name "$name-$queue$suffix" --query QueueUrl --output text)
+    queues+=("$url")
+    count=$(aws sqs get-queue-attributes --queue-url "$url" \
+      --attribute-names ApproximateNumberOfMessages \
+      --query Attributes.ApproximateNumberOfMessages --output text)
+    messages=$((messages + count))
+  done
+done
 
 echo
 echo "Reset AWS stage $stage ($domain):"
 echo "  database: $counts"
 echo "  blob bucket $blob_bucket: ${objects:-0} objects"
-echo "  job queues: purged"
+echo "  ${#queues[@]} job queues: about $messages messages"
 echo "Kept: SSM parameters, the downloads bucket."
+[ "$stage" != prod ] || echo "The cluster is snapshotted first."
+if $dry_run; then
+  echo 'Dry run: nothing reset.'
+  exit 0
+fi
 if ! $yes; then
   [ -t 0 ] || die 'not a terminal: run it interactively'
   read -r -p "Type $domain to delete all of this: " answer
@@ -108,11 +129,8 @@ aws s3 rm "s3://$blob_bucket" --recursive --only-show-errors
 
 # Last, so jobs enqueued by a dispatch tick during the reset go too.
 echo "Purging the job queues..."
-for queue in feed-fetch feed-favicon entry-extract; do
-  for suffix in '' -dlq; do
-    url=$(aws sqs get-queue-url --queue-name "$name-$queue$suffix" --query QueueUrl --output text)
-    aws sqs purge-queue --queue-url "$url"
-  done
+for url in "${queues[@]}"; do
+  aws sqs purge-queue --queue-url "$url"
 done
 
 echo
