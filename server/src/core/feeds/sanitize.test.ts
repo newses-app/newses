@@ -41,6 +41,14 @@ describe('sanitizeContent', () => {
     expect(clean).toContain(`srcset="${small} 424w, ${large} 848w"`);
   });
 
+  it('keeps srcset candidates whose URLs contain unencoded spaces', () => {
+    const clean = sanitizeContent(
+      '<img src="https://x.example/a b.jpg" srcset="https://x.example/a b.jpg 300w">',
+      BASE,
+    );
+    expect(clean).toContain('srcset="https://x.example/a%20b.jpg 300w"');
+  });
+
   it('keeps media, tables, and allow-listed embeds', () => {
     const clean = sanitizeContent(
       '<video src="v.mp4"></video><table><tr><td colspan="2">x</td></tr></table><iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe><img src="data:image/png;base64,AAAA">',

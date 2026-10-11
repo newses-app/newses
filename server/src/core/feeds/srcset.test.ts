@@ -22,4 +22,13 @@ describe('mapSrcset', () => {
     expect(mapSrcset('  a.png 1x ,, , ', upper)).toBe('A.PNG 1x');
     expect(mapSrcset('', upper)).toBe('');
   });
+
+  it('rejoins unencoded spaces in URLs as %20', () => {
+    expect(mapSrcset('https://x.example/el-ni%C3%B1o alters life/a.jpg?w=300 300w', upper)).toBe(
+      'HTTPS://X.EXAMPLE/EL-NI%C3%B1O%20ALTERS%20LIFE/A.JPG?W=300 300w',
+    );
+    expect(mapSrcset('a b.png', upper)).toBe('A%20B.PNG');
+    expect(mapSrcset('a b.png 1x, c.png 2x', upper)).toBe('A%20B.PNG 1x, C.PNG 2x');
+    expect(mapSrcset('a.png 100w 1.5x', upper)).toBe('A.PNG 100w 1.5x');
+  });
 });
