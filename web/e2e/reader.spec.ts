@@ -232,4 +232,44 @@ test.describe('reader', () => {
     await page.getByRole('button', { name: 'Back to list' }).click();
     await expect(page.getByRole('list', { name: 'Articles' })).toBeVisible();
   });
+
+  test('keeps combined articles with wide images and code within a phone screen @mobile', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'phone layout');
+    await page.goto('/all');
+    // The menu offers the other layout only; the layout is a saved preference.
+    const layout = async (name: string) => {
+      await page.getByRole('button', { name: 'More actions' }).click();
+      const item = page.getByRole('menuitem', { name });
+      if ((await item.count()) > 0) await item.click();
+      else await page.keyboard.press('Escape');
+    };
+    await layout('Combined (expanded articles)');
+    const card = page.locator('.combined-card').first();
+    await expect(card.locator('.article-content')).toBeVisible();
+    try {
+      // A wide loaded image and a long line of code, whatever the feed's own content is.
+      await card.locator('.article-content').evaluate(async (content) => {
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1000"/>';
+        const image = Object.assign(document.createElement('img'), {
+          src: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+          width: 2000,
+          height: 1000,
+        });
+        const code = Object.assign(document.createElement('pre'), { textContent: 'x'.repeat(500) });
+        content.prepend(image, code);
+        await image.decode();
+      });
+      const width = page.viewportSize()?.width ?? 0;
+      const box = await card.boundingBox();
+      expect(box && box.x + box.width).toBeLessThanOrEqual(width);
+      expect(await page.evaluate(() => document.scrollingElement?.scrollWidth)).toBeLessThanOrEqual(
+        width,
+      );
+    } finally {
+      await layout('Three panes');
+    }
+  });
 });

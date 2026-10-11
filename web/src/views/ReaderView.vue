@@ -553,7 +553,7 @@ const showArticle = computed(
       <div
         v-if="showList"
         :class="combined || singlePane ? 'flex-grow-1' : 'headlines-pane'"
-        class="fill-height"
+        class="fill-height list-pane"
       >
         <CombinedList
           v-if="combined"
@@ -600,6 +600,8 @@ const showArticle = computed(
   flex-shrink: 0;
   border-inline-end: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
+/* Panes shrink to the screen rather than grow to fit wide images or code in articles. */
+.list-pane,
 .article-pane {
   min-width: 0;
 }
