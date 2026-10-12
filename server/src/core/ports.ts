@@ -144,3 +144,19 @@ export interface Realtime {
   /** Returns an unsubscribe function. */
   subscribe(userId: number, listener: (event: RealtimeEvent) => void): () => void;
 }
+
+/** An ops alert that opened or resolved during a check. */
+export interface AlertNotice {
+  change: 'opened' | 'resolved';
+  rule: string;
+  /** What the alert is about: a host, a job, or `all`. */
+  subject: string;
+  severity: 'warning' | 'critical';
+  /** Readable one-line description. */
+  summary: string;
+}
+
+/** Tells operators about alert changes, e.g. by email. */
+export interface Notifier {
+  notify(notices: AlertNotice[]): Promise<void>;
+}

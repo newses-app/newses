@@ -20,6 +20,19 @@ x-app: &app
     FEED_DISABLE_AFTER_FAILURES: ${FEED_DISABLE_AFTER_FAILURES:-20}
     ADMIN_LOGIN: ${ADMIN_LOGIN:-}
     ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    OPS_RETENTION_DAYS: ${OPS_RETENTION_DAYS:-90}
+    AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-365}
+    OPS_HOST_HOURLY_BUDGET: ${OPS_HOST_HOURLY_BUDGET:-200}
+    SMTP_URL: ${SMTP_URL:-}
+    ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+    ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+    # OpenTelemetry export is off unless an endpoint is set (e.g. http://lgtm:4318).
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+    OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-1}
+    OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15000}
+    OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=${DEPLOYMENT_ENVIRONMENT:-self-hosted}
 
 services:
   db:
@@ -97,7 +110,22 @@ services:
       db:
         condition: service_healthy
 
+  # Grafana with Tempo, Loki, and Prometheus for traces, logs, and metrics, on 127.0.0.1 only.
+  # Enable with: docker compose --profile observability up -d, and set
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318 in docker/.env.
+  lgtm:
+    image: grafana/otel-lgtm:0.33.1
+    profiles: [observability]
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${GRAFANA_PORT:-3000}:3000'
+    volumes:
+      - lgtm:/data
+      - ./observability/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/rss-reader.yaml:ro
+      - ./observability/dashboards:/otel-lgtm/rss-reader-dashboards:ro
+
 volumes:
   db:
   blobs:
   backups:
+  lgtm:

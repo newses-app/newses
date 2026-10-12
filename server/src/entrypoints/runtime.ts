@@ -4,6 +4,7 @@ import pino from 'pino';
 import { loadConfig } from '../adapters/env-config.ts';
 import type { AppConfig } from '../core/config.ts';
 import type { Logger } from '../core/ports.ts';
+import { logTraceFields, shutdownTelemetry } from '../telemetry/index.ts';
 
 /** Config, logger, and pool shared by every entrypoint, plus ordered graceful shutdown. */
 export function createRuntime(role: string) {
@@ -29,6 +30,7 @@ export function createRuntime(role: string) {
     }
     await pool.end();
     logger.info('Stopped');
+    await shutdownTelemetry();
   }
 
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
@@ -61,7 +63,8 @@ const REDACT = [
 ];
 
 export function createLogger(config: AppConfig, role: string): pino.Logger {
-  return pino({ level: config.logLevel, base: { role }, redact: REDACT });
+  // Trace ids tie log lines to the trace of the request or job that wrote them.
+  return pino({ level: config.logLevel, base: { role }, redact: REDACT, mixin: logTraceFields });
 }
 
 /** The database pool every role uses; `api` adds request-sized statement and lock limits. */

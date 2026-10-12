@@ -1,5 +1,6 @@
 import { SendMessageCommand, type SQSClient } from '@aws-sdk/client-sqs';
 import type { EnqueueOptions, JobMap, JobQueue } from '../core/ports.ts';
+import { injectTraceContext } from '../telemetry/index.ts';
 
 /** SQS caps message delays at 15 minutes. */
 const MAX_DELAY_SECONDS = 900;
@@ -23,10 +24,15 @@ export class SqsJobQueue<J extends JobMap> implements JobQueue<J> {
     data: J[N],
     options: EnqueueOptions = {},
   ): Promise<boolean> {
+    // The consumer continues the trace that queued the job, when one is being recorded.
+    const { traceparent } = injectTraceContext();
     await this.#client.send(
       new SendMessageCommand({
         QueueUrl: this.#queueUrls[name],
         MessageBody: JSON.stringify(data),
+        ...(traceparent && {
+          MessageAttributes: { traceparent: { DataType: 'String', StringValue: traceparent } },
+        }),
         ...(options.delaySeconds !== undefined && {
           DelaySeconds: Math.min(MAX_DELAY_SECONDS, Math.ceil(options.delaySeconds)),
         }),

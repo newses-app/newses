@@ -109,7 +109,11 @@ export class FullTextService {
       const link = entry.link;
       const page = await this.#hosts
         .run(new URL(link).host, () =>
-          this.#fetcher.fetch(link, { accept: 'text/html', maxBytes: MAX_PAGE_BYTES }),
+          this.#fetcher.fetch(link, {
+            purpose: 'fulltext',
+            accept: 'text/html',
+            maxBytes: MAX_PAGE_BYTES,
+          }),
         )
         .catch((err: unknown) => {
           throw err instanceof FetchError ? new DomainError('fetch_failed', err.message) : err;

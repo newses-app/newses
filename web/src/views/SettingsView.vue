@@ -6,6 +6,7 @@ import AccountPanel from '../components/settings/AccountPanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
 import FiltersPanel from '../components/settings/FiltersPanel.vue';
 import LabelsPanel from '../components/settings/LabelsPanel.vue';
+import OperationsPanel from '../components/settings/OperationsPanel.vue';
 import PrefsPanel from '../components/settings/PrefsPanel.vue';
 import SharingPanel from '../components/settings/SharingPanel.vue';
 import ShortcutsPanel from '../components/settings/ShortcutsPanel.vue';
@@ -28,7 +29,7 @@ const tabs = computed(() => [
   'filters',
   'sharing',
   'account',
-  ...(isAdmin.value ? ['users'] : []),
+  ...(isAdmin.value ? ['users', 'operations'] : []),
 ]);
 const tab = computed(
   () => (typeof route.params.tab === 'string' && route.params.tab) || 'preferences',
@@ -65,6 +66,7 @@ useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings
       <SharingPanel v-else-if="tab === 'sharing'" />
       <AccountPanel v-else-if="tab === 'account'" />
       <UsersPanel v-else-if="tab === 'users' && isAdmin" />
+      <OperationsPanel v-else-if="tab === 'operations' && isAdmin" />
     </v-container>
   </v-main>
 </template>

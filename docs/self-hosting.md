@@ -30,6 +30,18 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `FETCH_ALLOW_PRIVATE_NETWORKS` | unset | Feeds on private or loopback addresses are blocked; set `true` or comma-separated CIDRs (e.g. `192.168.1.0/24`) to allow LAN feeds |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of nightly dumps kept by the `backup` service |
+| `OPS_RETENTION_DAYS` | `90` | Days of activity, request, site, and job statistics, and resolved alerts, kept for the Operations page |
+| `AUDIT_RETENTION_DAYS` | `365` | Days of audit events kept |
+| `OPS_HOST_HOURLY_BUDGET` | `200` | Requests to one site in an hour above which an alert opens |
+| `SMTP_URL` | unset | Mail server for alert emails, e.g. `smtps://user:password@mail.example.com:465` |
+| `ALERT_EMAIL_TO` | unset | Address alerts are emailed to; needs `SMTP_URL`. Unset keeps alerts on the Operations page only |
+| `ALERT_EMAIL_FROM` | `rss-reader <rss-reader@localhost>` | Sender of alert emails |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP/HTTP endpoint for traces, metrics, and logs, e.g. `http://lgtm:4318` for the `observability` profile; unset turns OpenTelemetry off |
+| `OTEL_EXPORTER_OTLP_HEADERS` | unset | Headers for the endpoint, e.g. `authorization=Bearer …` |
+| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on`, `1` | Trace sampling, e.g. `parentbased_traceidratio` and `0.1` |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Milliseconds between metric exports |
+| `DEPLOYMENT_ENVIRONMENT` | `self-hosted` | `deployment.environment.name` on all telemetry |
+| `GRAFANA_PORT` | `3000` | Port of Grafana on `127.0.0.1` (`observability` profile) |
 | `RSS_READER_IMAGE` | `rss-reader:latest` | Image tag to build or run |
 | `VIRTUAL_HOST`, `LETSENCRYPT_HOST` | unset | Public hostname for nginx-proxy and acme-companion (`compose.nginx-proxy.yaml`) |
 | `NGINX_PROXY_NETWORK` | `nginx-proxy` | Existing Docker network of nginx-proxy |
@@ -60,6 +72,30 @@ Admins manage users through the admin API (`/api/v1/admin/users`). From the host
 | `Client closed the connection before the response was sent` | The browser or proxy gave up waiting |
 
 Both include `pool` (`waiting` > 0: requests queued for a database connection) and `eventLoopDelayMaxMs` (high: the server was blocked). Neither high points at the database or at password hashing.
+
+With OpenTelemetry on, log lines inside a request or job carry `trace_id` and `span_id`.
+
+## Monitoring
+
+Admins open Settings > Operations:
+
+| Tab | Shows |
+|---|---|
+| Alerts | Open alerts and those resolved in the last 7 days; a banner when the worker's checks stopped |
+| Sites | Requests to each site in 24 hours or 7 days: outcomes, share answered "not modified", busiest hour against the budget, Retry-After pauses |
+| Jobs | Runs, failures, and durations of feed fetches, favicons, full text, and the scheduled tasks |
+| Users | Last seen, requests by app, and articles read over 7 and 30 days |
+| Audit log | Sign-ins, failed sign-ins, password, 2FA, app-password, and user changes |
+
+The worker checks for problems every 5 minutes and emails changes to `ALERT_EMAIL_TO` when `SMTP_URL` is set.
+
+Traces, metrics, and logs:
+
+1. Set `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` in `docker/.env`.
+2. `C --profile observability up -d`
+3. Open `http://127.0.0.1:3000` (on the Docker host; tunnel with `ssh -L 3000:127.0.0.1:3000` from elsewhere). Grafana allows anonymous admin access, so keep it off public interfaces. The `rss-reader` folder has dashboards for the overview, API, jobs, remote sites, and runtime; Explore searches traces (Tempo) and logs (Loki).
+
+Any OTLP/HTTP backend works instead of the bundled one. Telemetry carries route patterns and host names, never credentials, feed URLs, or article content.
 
 ## Upgrade
 

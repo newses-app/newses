@@ -118,7 +118,11 @@ export class ImageProxy {
     let image: Blob | null = null;
     try {
       const response = await this.#hosts.run(host, () =>
-        this.#fetcher.fetch(url, { accept: 'image/*', maxBytes: MAX_IMAGE_BYTES }),
+        this.#fetcher.fetch(url, {
+          purpose: 'image',
+          accept: 'image/*',
+          maxBytes: MAX_IMAGE_BYTES,
+        }),
       );
       const contentType = imageContentType(response.body, response.contentType);
       if (contentType && response.body.byteLength > 0) {

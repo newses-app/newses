@@ -42,6 +42,15 @@ describe('createApiClient', () => {
     expect(calls[2]?.init.credentials).toBe('include');
   });
 
+  it('names the calling app, when given one', async () => {
+    const { calls, fetch } = fakeFetch([json([]), json([])]);
+    await createApiClient({ client: 'desktop', fetch }).admin.ops.alerts();
+    await createApiClient({ fetch }).admin.ops.alerts();
+    expect(calls[0]?.url).toBe('/api/v1/admin/ops/alerts');
+    expect(header(calls[0], 'x-rss-client')).toBe('desktop');
+    expect(header(calls[1], 'x-rss-client')).toBeUndefined();
+  });
+
   it('uses a bearer token when given one', async () => {
     const { calls, fetch } = fakeFetch([json({ all: 0 })]);
     await createApiClient({ token: 't0k', fetch }).counters();

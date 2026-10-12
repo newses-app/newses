@@ -6,9 +6,9 @@ import { createAuthServices } from '../../core/auth/index.ts';
 import { createEntryServices } from '../../core/entries/index.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
-import { createLambdaRuntime, readParameter } from './runtime.ts';
+import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
 
-const { config, logger, pool, db, feedDeps, archive } = await createLambdaRuntime('api');
+const { config, logger, pool, db, feedDeps, ops, archive } = await createLambdaRuntime('api');
 
 const app = buildApp({
   logger,
@@ -24,6 +24,7 @@ const app = buildApp({
     entries: createEntryServices(db, feedDeps.realtime, archive),
     prefs: new PrefsService(db),
     realtime: feedDeps.realtime,
+    ops,
   },
   healthChecks: {
     db: async () => {
@@ -48,5 +49,17 @@ function fromCloudFront(event: APIGatewayProxyEventV2): boolean {
   return given.length === originSecret.length && timingSafeEqual(given, originSecret);
 }
 
-export const handler = async (event: APIGatewayProxyEventV2, context: Context) =>
-  fromCloudFront(event) ? proxy(event, context) : { statusCode: 403, body: '' };
+const database = trackPoolUse(pool);
+
+export const handler = async (event: APIGatewayProxyEventV2, context: Context) => {
+  if (!fromCloudFront(event)) return { statusCode: 403, body: '' };
+  const response = await proxy(event, context);
+  // The container may be frozen once the response returns, so statistics and audit are written
+  // now, but only when the request used the database: writing must never wake a paused Aurora.
+  // Until then the counts wait in memory.
+  if (database.used()) {
+    await Promise.all([ops.recorder.flush(), ops.audit.settle()]);
+    database.reset();
+  }
+  return response;
+};

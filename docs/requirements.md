@@ -11,6 +11,7 @@
 | P3 | TTRSS cut-over | All TTRSS users imported; filters, scoring, and full text in daily use; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Signed Electron apps for Windows and Linux and the Capacitor Android app installed from the stage's downloads, used against AWS and Docker servers, and updating themselves |
 | P5 | Cold-storage archive | Articles purge deletes and the TTRSS import drops are kept; users browse, search, and restore them on Docker and AWS |
+| Observability | Operations insight | On a Docker deployment, admins follow user activity, load on remote sites, job health, and security events on the Operations page, get alert emails, and trace requests and jobs in Grafana |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -136,7 +137,10 @@
 | Health endpoint | P1 | `/healthz` reports DB and queue status |
 | Runtime portability | P1 | Queue, scheduler, blob storage, and realtime are swappable adapters; no local-disk state outside blob storage |
 | AWS deployment | P1.5 | Serverless, with no running instances: Lambda, SQS, EventBridge Scheduler, Aurora Serverless v2 scaling to zero, SPA on S3 + CloudFront. One CDK pipeline (CodePipeline + CodeBuild) per stage runs `pnpm check`, builds the SPA, bundles the Lambdas, and deploys: branch `dev` → `dev`, `main` → `prod` |
-| Admin log and metrics | Later | System log view; fetch statistics; Prometheus endpoint |
+| Operations page | Observability | Admins see, per user, last activity, requests by app, and articles read; per site, requests by outcome, busiest hour, and pauses; job runs, failures, and durations; on Docker and AWS |
+| Audit log | Observability | Sign-ins, failed sign-ins, password, 2FA, app-password, and user-management events kept a year and browsable by admins |
+| Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured, and resolve on their own |
+| Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime |
 | Plugin API | Later | Third-party modules register content and lifecycle hooks |
 
 ## Non-functional requirements
@@ -146,7 +150,7 @@
 | Scale | ~1,000 feeds and several million entries per instance; ~10 users |
 | Performance | Headline list p95 < 200 ms; article open p95 < 150 ms; ingest of a 100-entry feed < 2 s |
 | Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
-| Privacy | No telemetry or third-party calls beyond feed, icon, and article fetches |
+| Privacy | No calls to third parties beyond feed, icon, and article fetches; telemetry goes only to endpoints the operator configures, never carries credentials, feed URLs, or article content, and no trace context is sent to remote hosts |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
 | Dependencies | High and critical advisories in production dependencies fail the pipeline (`pnpm audit`) and are fixed before the next deployment, at most 7 days after disclosure; moderate ones within 30 days; other dependency updates at least every 90 days |
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls; single-key shortcuts can be turned off; every drag action has a non-drag alternative |

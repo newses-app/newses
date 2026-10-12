@@ -371,7 +371,8 @@
       "filters": "Filters",
       "sharing": "Sharing",
       "account": "Account",
-      "users": "Users"
+      "users": "Users",
+      "operations": "Operations"
     },
     "reading": "Reading",
     "appearance": "Appearance",
@@ -566,5 +567,75 @@
       "gotoSettings": "Settings",
       "gotoTags": "Browse tags"
     }
+  },
+  "ops": {
+    "checked": "Checked {when}",
+    "stale": "Monitoring last ran {when}. Check that the worker (Docker) or the dispatch schedule (AWS) is running.",
+    "neverChecked": "Monitoring has not run yet. Check that the worker (Docker) or the dispatch schedule (AWS) is running.",
+    "openAlerts": "Open alerts",
+    "activeUsers": "Active users",
+    "apiRequests": "API requests",
+    "serverErrors": "{count} server error | {count} server errors",
+    "hostRequests": "Requests to sites",
+    "hostRequestsDetail": "{hosts} site, {notModified} unchanged | {hosts} sites, {notModified} unchanged",
+    "last24h": "Last 24 hours.",
+    "sections": {
+      "alerts": "Alerts",
+      "hosts": "Sites",
+      "jobs": "Jobs",
+      "users": "Users",
+      "audit": "Audit log"
+    },
+    "window": {
+      "label": "Period",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days"
+    },
+    "noOpenAlerts": "No open alerts.",
+    "severity": {
+      "warning": "Warning",
+      "critical": "Critical"
+    },
+    "since": "since {when}",
+    "resolvedRecently": "Resolved in the last 7 days",
+    "resolvedAt": "resolved {when}",
+    "hostsHint": "Requests to each site, busiest first. More than {budget} requests to one site in an hour raises an alert.",
+    "hostTrend": "Requests per hour (top) and failed or rate-limited requests (bottom).",
+    "host": "Site",
+    "requests": "Requests",
+    "peakHour": "Busiest hour",
+    "notModified": "Unchanged",
+    "errors": "Errors",
+    "rateLimited": "Rate limited",
+    "downloaded": "Downloaded",
+    "average": "Average",
+    "paused": "Paused",
+    "jobTrend": "Runs per hour (top) and failures (bottom).",
+    "job": "Job",
+    "runs": "Runs",
+    "failures": "Failures",
+    "longest": "Longest",
+    "lastSeen": "Last seen",
+    "requests7d": "Requests (7 days)",
+    "requests30d": "Requests (30 days)",
+    "clients": "Apps (30 days)",
+    "client": {
+      "web": "Web",
+      "desktop": "Desktop",
+      "mobile": "Mobile",
+      "greader": "Google Reader API",
+      "ttrss": "TTRSS API",
+      "other": "Other"
+    },
+    "read7d": "Read (7 days)",
+    "read30d": "Read (30 days)",
+    "disabled": "Disabled",
+    "allEvents": "All events",
+    "event": "Event",
+    "when": "When",
+    "account": "Account",
+    "by": "By",
+    "address": "Address",
+    "more": "Load more"
   }
 }

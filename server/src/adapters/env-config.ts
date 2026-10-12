@@ -41,12 +41,22 @@ const schema = z
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
+    OPS_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+    AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    OPS_HOST_HOURLY_BUDGET: z.coerce.number().int().min(1).default(200),
+    SMTP_URL: z.url({ protocol: /^smtps?$/ }).optional(),
+    ALERT_EMAIL_TO: z.string().min(3).optional(),
+    ALERT_EMAIL_FROM: z.string().min(3).default('rss-reader <rss-reader@localhost>'),
     ADMIN_LOGIN: z.string().min(1).optional(),
     ADMIN_PASSWORD: passwordSchema.optional(),
   })
   .refine((e) => (e.ADMIN_LOGIN === undefined) === (e.ADMIN_PASSWORD === undefined), {
     message: 'ADMIN_LOGIN and ADMIN_PASSWORD must be set together',
     path: ['ADMIN_PASSWORD'],
+  })
+  .refine((e) => e.ALERT_EMAIL_TO === undefined || e.SMTP_URL !== undefined, {
+    message: 'ALERT_EMAIL_TO needs SMTP_URL',
+    path: ['SMTP_URL'],
   })
   .refine(
     (e) => (e.ARCHIVE_ATHENA_WORKGROUP === undefined) === (e.ARCHIVE_ATHENA_DATABASE === undefined),
@@ -92,6 +102,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
       purgeDays: e.FEED_PURGE_DAYS,
       disableAfterFailures: e.FEED_DISABLE_AFTER_FAILURES,
+    },
+    ops: {
+      retentionDays: e.OPS_RETENTION_DAYS,
+      auditRetentionDays: e.AUDIT_RETENTION_DAYS,
+      hostHourlyBudget: e.OPS_HOST_HOURLY_BUDGET,
+      alertEmail:
+        e.SMTP_URL && e.ALERT_EMAIL_TO
+          ? { smtpUrl: e.SMTP_URL, to: e.ALERT_EMAIL_TO, from: e.ALERT_EMAIL_FROM }
+          : null,
     },
     fetchAllowPrivateNetworks:
       e.FETCH_ALLOW_PRIVATE_NETWORKS === true || e.FETCH_ALLOW_PRIVATE_NETWORKS.length > 0

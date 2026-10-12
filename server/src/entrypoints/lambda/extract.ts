@@ -2,9 +2,9 @@ import { createFeedServices } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createLambdaRuntime, sqsHandler } from './runtime.ts';
 
-const { logger, feedDeps } = await createLambdaRuntime('extract');
-const feeds = createFeedServices(feedDeps);
+const runtime = await createLambdaRuntime('extract');
+const feeds = createFeedServices(runtime.feedDeps);
 
-export const handler = sqsHandler(logger, (data: Jobs['entry.extract']) =>
+export const handler = sqsHandler(runtime, 'entry.extract', (data: Jobs['entry.extract']) =>
   feeds.fullText.runJob(data),
 );

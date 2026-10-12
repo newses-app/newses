@@ -9,6 +9,17 @@ export interface FeedSettings {
   disableAfterFailures: number;
 }
 
+export interface OpsSettings {
+  /** Days of activity, request, fetch, and job statistics, and resolved alerts, to keep. */
+  retentionDays: number;
+  /** Days of audit events to keep. */
+  auditRetentionDays: number;
+  /** Requests to one host in an hour above which the ops check raises an alert. */
+  hostHourlyBudget: number;
+  /** Where alert emails go; null leaves alerts in the app only. */
+  alertEmail: { smtpUrl: string; to: string; from: string } | null;
+}
+
 export interface AppConfig {
   /** Server build shown to apps (`RSS_READER_VERSION`, set at build), or `dev`. */
   version: string;
@@ -30,6 +41,7 @@ export interface AppConfig {
   /** Built web app to serve, or null when it is hosted elsewhere. */
   webDir: string | null;
   feeds: FeedSettings;
+  ops: OpsSettings;
   /** Private addresses feeds may be fetched from: true for all, or CIDRs. Blocked by default. */
   fetchAllowPrivateNetworks: boolean | string[];
   /** Root of the keys that encrypt stored secrets and sign tokens; changing it voids them. */

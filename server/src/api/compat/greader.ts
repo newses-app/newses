@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { newToken } from '../../core/auth/tokens.ts';
 import { DomainError, ThrottledError } from '../../core/errors.ts';
+import { attributeUser } from '../ops-tracking.ts';
 import {
   type CompatAuth,
   type CompatOptions,
@@ -116,6 +117,7 @@ export const greaderRoutes: FastifyPluginAsync<GreaderRoutesOptions> = (
           return text(reply, 403, 'Change your password in the web app first\n');
         if (!session) return text(reply, 401, 'Unauthorized\n');
         request.reader = session;
+        attributeUser(request, session.user.id);
         return undefined;
       });
 

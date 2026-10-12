@@ -12,6 +12,7 @@ Self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: Node server
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
 | `pnpm --filter @rss-reader/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @rss-reader/server db:migrate` | Apply migrations |
+| `docker compose -f docker/compose.yaml --profile observability up -d` | Local stack with Grafana, Tempo, Loki, and Prometheus on `127.0.0.1:3000`; set `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` in `docker/.env` |
 | `pnpm --filter @rss-reader/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
 | `pnpm --filter @rss-reader/web build:native` | Web app for the desktop and mobile apps, in `web/dist-native` |
 | `pnpm --filter @rss-reader/desktop dev` | Desktop app against the web app's dev server, with hot reload |

@@ -46,7 +46,11 @@ export default defineConfig(
           zones: [
             {
               target: `${server}/core`,
-              from: layers('adapters', 'api', 'entrypoints', 'importer'),
+              from: layers('adapters', 'api', 'entrypoints', 'importer', 'telemetry'),
+            },
+            {
+              target: `${server}/telemetry`,
+              from: layers('core', 'db', 'adapters', 'api', 'entrypoints', 'importer'),
             },
             {
               target: `${server}/db`,

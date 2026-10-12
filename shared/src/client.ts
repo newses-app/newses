@@ -47,6 +47,16 @@ import type {
 } from './feeds.ts';
 import type { CreateLabelRequest, Label, UpdateLabelRequest } from './labels.ts';
 import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
+import type {
+  AuditPage,
+  AuditQuery,
+  OpsAlert,
+  OpsHostsResponse,
+  OpsJobsResponse,
+  OpsSummary,
+  OpsUser,
+  OpsWindow,
+} from './ops.ts';
 import type { ServerInfo } from './server.ts';
 
 export interface ApiClientOptions {
@@ -60,6 +70,8 @@ export interface ApiClientOptions {
    * signed out). Bearer clients never send cookies; without this option, the session cookie is used.
    */
   token?: string | (() => string | null);
+  /** Sent as `X-RSS-Client` (`web`, `desktop`, or `mobile`), for the server's activity statistics. */
+  client?: string;
   fetch?: typeof fetch;
 }
 
@@ -109,6 +121,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     const search = params.size > 0 ? `?${params.toString()}` : '';
     const headers: Record<string, string> = { accept: 'application/json' };
     const token = currentToken();
+    if (options.client) headers['x-rss-client'] = options.client;
     if (token) headers.authorization = `Bearer ${token}`;
     else if (!bearer && csrfToken && !SAFE_METHODS.has(method)) headers['x-csrf-token'] = csrfToken;
     let body: string | undefined;
@@ -217,6 +230,16 @@ export function createApiClient(options: ApiClientOptions = {}) {
       deleteUser: (userId: number) => request<undefined>('DELETE', `/admin/users/${id(userId)}`),
       resetTwoFactor: (userId: number) =>
         request<undefined>('POST', `/admin/users/${id(userId)}/2fa/reset`),
+      ops: {
+        summary: () => request<OpsSummary>('GET', '/admin/ops/summary'),
+        hosts: (window: OpsWindow = '24h') =>
+          request<OpsHostsResponse>('GET', '/admin/ops/hosts', { query: { window } }),
+        jobs: (window: OpsWindow = '24h') =>
+          request<OpsJobsResponse>('GET', '/admin/ops/jobs', { query: { window } }),
+        users: () => request<OpsUser[]>('GET', '/admin/ops/users'),
+        alerts: () => request<OpsAlert[]>('GET', '/admin/ops/alerts'),
+        audit: (query: AuditQuery = {}) => request<AuditPage>('GET', '/admin/ops/audit', { query }),
+      },
     },
 
     categories: {

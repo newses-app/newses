@@ -149,7 +149,7 @@ export class SubscriptionService {
   async #resolve(url: string, allowDiscovery: boolean): Promise<Resolved> {
     let response;
     try {
-      response = await this.#fetcher.fetch(url);
+      response = await this.#fetcher.fetch(url, { purpose: 'subscribe' });
     } catch (err) {
       throw fetchFailure(url, err);
     }

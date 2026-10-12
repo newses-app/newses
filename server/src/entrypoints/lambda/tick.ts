@@ -1,9 +1,10 @@
 import { createAuthServices } from '../../core/auth/index.ts';
 import { SyncService } from '../../core/entries/sync.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
+import { trackRun } from '../tracking.ts';
 import { createLambdaRuntime } from './runtime.ts';
 
-const { config, logger, db, feedDeps, archive } = await createLambdaRuntime('tick');
+const { config, logger, db, feedDeps, ops, archive } = await createLambdaRuntime('tick');
 const feeds = createFeedServices(feedDeps);
 const { sessions, throttle } = createAuthServices(db, config.appSecret);
 const sync = new SyncService(db);
@@ -15,17 +16,36 @@ export type TickEvent =
 /** Compaction stops starting months after this, within the function's 5-minute timeout. */
 const ARCHIVE_COMPACT_BUDGET_MS = 3 * 60 * 1000;
 
+const TASK_NAMES = {
+  dispatch: 'feeds.dispatch',
+  purge: 'feeds.purge',
+  'auth.prune': 'auth.prune',
+  'archive.compact': 'archive.compact',
+} as const;
+
 export async function handler(event: TickEvent): Promise<void> {
+  try {
+    await trackRun(ops.recorder, TASK_NAMES[event.task], () => run(event), { kind: 'task' });
+  } finally {
+    await ops.recorder.flush();
+  }
+}
+
+async function run(event: TickEvent): Promise<void> {
   switch (event.task) {
     case 'dispatch': {
       const dispatched = await feeds.updater.dispatchDue();
       logger.info({ dispatched }, 'Dispatched feed fetches');
+      // Rides the dispatch schedule, so checking never wakes a paused database on its own.
+      await ops.recorder.flush();
+      await trackRun(ops.recorder, 'ops.check', () => ops.checker.run(), { kind: 'task' });
       return;
     }
     case 'purge':
       logger.info(await feeds.purger.purge(), 'Purged old entries');
       logger.info({ images: await feeds.images.purge() }, 'Purged cached images');
       await sync.pruneTombstones();
+      logger.info(await ops.prune(), 'Pruned operations data');
       return;
     case 'auth.prune':
       await sessions.pruneExpired();

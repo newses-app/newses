@@ -228,7 +228,9 @@ describe('CORS for apps', () => {
       expect(res.statusCode).toBe(204);
       expect(res.headers['access-control-allow-origin']).toBe(origin);
       expect(res.headers['access-control-allow-methods']).toContain('PATCH');
-      expect(res.headers['access-control-allow-headers']).toBe('authorization, content-type');
+      expect(res.headers['access-control-allow-headers']).toBe(
+        'authorization, content-type, x-rss-client',
+      );
       expect(res.headers['access-control-allow-credentials']).toBeUndefined();
     }
   });

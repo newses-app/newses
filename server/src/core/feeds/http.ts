@@ -30,7 +30,11 @@ export class FetchError extends Error {
   }
 }
 
+/** Why a remote host is asked, for per-host statistics. */
+export type FetchPurpose = 'feed' | 'favicon' | 'image' | 'fulltext' | 'subscribe';
+
 export interface FetchRequest {
+  purpose?: FetchPurpose;
   etag?: string | null;
   lastModified?: string | null;
   accept?: string;

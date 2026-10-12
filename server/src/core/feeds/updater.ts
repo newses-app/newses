@@ -185,6 +185,7 @@ export class FeedUpdater {
       }
       try {
         const response = await this.#fetcher.fetch(source.url, {
+          purpose: 'feed',
           etag: source.etag,
           lastModified: source.lastModified,
         });

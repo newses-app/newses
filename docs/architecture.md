@@ -12,7 +12,8 @@
 | Feed parsing | `feedsmith` (RSS, Atom, RDF, JSON Feed, OPML); `htmlparser2` for feed autodiscovery |
 | Content | sanitize-html; `@mozilla/readability` + linkedom |
 | Auth | `@node-rs/argon2`, `otpauth` |
-| Logging | Pino (JSON) |
+| Logging | Pino (JSON), with the active trace's ids |
+| Observability | OpenTelemetry API and Node SDK (OTLP); `@fastify/otel`, pg-boss's built-in tracing, pg and Node runtime instrumentation; nodemailer for alert email |
 | Web | Vue 3, Vite, Vuetify 3, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
 | Desktop | Electron, esbuild, electron-builder |
 | Mobile | Capacitor (Android) |
@@ -40,8 +41,9 @@ Workspace packages exist only where runtime or toolchain differs.
 |---|---|---|
 | `core` | Domain services (feeds, entries, filters, search, auth) and port interfaces; no framework or cloud SDK imports | `db`, `shared` |
 | `db` | Drizzle schema and migrations | `shared` |
-| `adapters` | Port implementations (pg-boss, local FS, S3, SSE, …) | `core`, `db`, `shared` |
-| `api` | Native REST, TTRSS-compatible and Google Reader routes, SSE endpoint | `core`, `db`, `shared` |
+| `adapters` | Port implementations (pg-boss, local FS, S3, SSE, SMTP, instrumented fetcher, …) | `core`, `db`, `shared`, `telemetry` |
+| `api` | Native REST, TTRSS-compatible and Google Reader routes, SSE endpoint | `core`, `db`, `shared`, `telemetry` |
+| `telemetry` | OpenTelemetry helpers, instruments, SDK preload, Fastify tracing | `shared` |
 | `importer` | TTRSS importer | `core`, `db`, `shared` |
 | `entrypoints` | `server`, `worker`, `migrate`, `cli`, and `lambda/` handlers — wire adapters into core | anything |
 
@@ -72,6 +74,7 @@ Rules:
 | `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
+| `Notifier` | Tell operators when alerts open or resolve | Email over SMTP, when configured | None: alerts only on the Operations page |
 
 ## Web app
 
@@ -208,6 +211,44 @@ Full text:
 - `POST /api/v1/entries/:id/full-text` extracts on demand, retrying earlier failures, and returns the stored text when there is one.
 - Readers see the full text first for subscriptions opted in to it, with a toggle back to the feed's content, and on request for others. TTRSS and Google Reader clients get it in place of the content for opted-in subscriptions. The original content is always kept, and search indexes it only.
 
+## Observability
+
+| Signal | Recorded | Where |
+|---|---|---|
+| Traces | Requests (span per route), jobs and scheduled tasks, pg-boss send/process, database queries inside a request or job, requests to remote hosts | OTLP, when `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
+| Metrics | `http.server.request.duration` by route and status; `rss.outbound.requests`/`.duration` by purpose and outcome; `rss.jobs.duration`/`.failures` by job; `rss.ops.alerts.active`; pg-boss queue depth; pg pool; Node event loop, heap, GC | OTLP |
+| Logs | Pino lines carry `trace_id` and `span_id` | stdout; also OTLP |
+| Operations data | Rollups and audit events below | Postgres; admin Operations page |
+
+- The Docker image preloads `server/src/telemetry/register.ts`; without an OTLP endpoint no SDK module loads. The standard `OTEL_*` variables (sampler, export interval, per-signal exporters) apply. Service names are `rss-reader-<role>`.
+- Telemetry never carries credentials, cookies, raw request URLs, feed URLs, or article content: request spans keep the route pattern, outbound spans the host. Database spans keep parameterised statements, never values. Remote hosts never receive trace headers.
+- Jobs continue the trace that queued them: pg-boss stores the W3C trace context on the job (no baggage); SQS carries it as a `traceparent` message attribute.
+
+Operations data (`OpsRecorder` counts in memory and adds to the tables every minute on Docker; on AWS at the end of each invocation that used the database, so the `api` function holds counts from database-free requests until its next such invocation and never wakes a paused database to write them):
+
+| Table | Grain | Feeds |
+|---|---|---|
+| `user_activity_daily` | User, day, client (`web`, `desktop`, `mobile` from `X-RSS-Client`; `greader`, `ttrss`, `public`, `other` by path) | Users tab; articles read come from `user_entries.read_at` |
+| `request_stats_hourly` | Hour, client, status class | Summary, `api.errors` |
+| `host_fetch_stats_hourly` | Hour, host, purpose (`feed`, `favicon`, `image`, `fulltext`, `subscribe`), outcome | Sites tab, host rules |
+| `job_stats_hourly` | Hour, job or task | Jobs tab, `jobs.failing` |
+| `audit_events` | One security event (the `logSecurity` events) | Audit tab |
+| `ops_alerts`, `ops_state` | One alert episode per rule and subject; the last check | Alerts tab, stale-monitoring banner |
+
+Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events after `AUDIT_RETENTION_DAYS`, with the 6-hourly purge.
+
+`ops.check` (worker every 5 minutes; after each dispatch on AWS) evaluates the rules, opens and resolves alerts, and notifies on changes:
+
+| Rule | Subject | Severity | Fires when |
+|---|---|---|---|
+| `host.rate_limited` | Host | Warning | A 429, or 503 with `Retry-After`, in the current or previous hour |
+| `host.over_budget` | Host | Warning | More than `OPS_HOST_HOURLY_BUDGET` requests to the host in one hour |
+| `host.failing` | Host | Warning | Half or more of ≥ 10 requests failed in 6 hours |
+| `jobs.failing` | Job | Critical | More than 20% of ≥ 5 runs failed in the current or previous hour |
+| `jobs.backlog` | Queue | Warning | 100 or more jobs ready and waiting (pg-boss) |
+| `ingest.stale` | `all` | Critical | Subscribed, enabled feeds overdue by more than 2 hours |
+| `api.errors` | `all` | Critical | More than 5% of ≥ 20 API requests answered 5xx in the current or previous hour |
+
 ## Data model
 
 Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, labels, and user entries as tombstones for incremental sync. Assigning or removing a label or tag touches the user entry, so sync carries its label ids and tags; tags copied at fan-out do not.
@@ -261,7 +302,7 @@ Search:
 - Cookie-session requests other than GET/HEAD/OPTIONS must send the session's CSRF token in `X-CSRF-Token`. Login accepts JSON only, so cross-site form posts cannot log a browser in.
 - Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes. A wrong current password when changing it counts against the account. A lockout only delays further password, code, and app-password checks for that account or IP; signed-in sessions keep working, so an attacker can at worst hold off new sign-ins 15 minutes at a time.
 - Passwords are 8–1,024 characters and not on the bundled common-password list (the 10,000 most frequent of 8+ characters, `shared/src/common-passwords.ts`).
-- Logins, failures, lockouts, CSRF rejections, password changes, session revocations, and admin user changes are logged with a `security` field naming the event. The logger redacts credentials and auth headers.
+- Logins, failures, lockouts, CSRF rejections, password changes, session revocations, and admin user changes are logged with a `security` field naming the event, and kept in `audit_events` with the account concerned, the acting admin, address, and user agent. The logger redacts credentials and auth headers.
 - TOTP (RFC 6238: SHA-1, 6 digits, 30 s, ±1 step) is optional per user. With it on, a correct password returns a signed 5-minute challenge instead of a session; `POST /auth/login/2fa` exchanges it with a TOTP code or one of 10 single-use recovery codes. A code from a time step at or before the last accepted one is refused. Code failures count against the account and IP like password failures.
 - Starting enrolment and turning 2FA off re-check the password; turning off and regenerating recovery codes need a code. Enabling 2FA signs out the user's other sessions. Admins (`POST /admin/users/:id/2fa/reset`) and `cli user reset-2fa` turn it off and sign the user out everywhere.
 - App passwords are 160-bit random values shown once (`xxxx-xxxx-…`; case and dashes ignored), stored as SHA-256 hashes, at most 50 per user. Creating one re-checks the account password. `AuthService.authenticateAppPassword` is the only check that accepts them: it skips TOTP, refuses account passwords, shares the login throttle, and records last use at most hourly. `/auth/login` never accepts them. An admin password reset revokes them; a disabled user's are refused.
@@ -377,6 +418,7 @@ The settings page shows apps' connection details from `/api/v1/auth/app-password
 | `server` | app image, `server` | Serves API and SPA; behind the user's reverse proxy for TLS; `/healthz` checks database and queue |
 | `worker` | app image, `worker` | Jobs and scheduler |
 | `backup` (`backup` profile) | `postgres:18-alpine` | Nightly `pg_dump` to a volume |
+| `lgtm` (`observability` profile) | `grafana/otel-lgtm` | OTLP collector, Tempo, Loki, Prometheus, and Grafana on `127.0.0.1:3000`, with the dashboards in `docker/observability/dashboards` |
 
 ### AWS
 
@@ -406,7 +448,7 @@ flowchart LR
 - Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `Data` because change sets resolve `ssm-secure` references: `db-password`, `admin-password`, and `app-secret` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is two hops (API Gateway appends CloudFront's address after the viewer's).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - The downloads bucket is private behind its own Origin Access Control, written only by the release pipeline (kept with the stack when the stage retains data). `/downloads` redirects to `/downloads/`, and folder paths serve `index.html`; the page has its own CSP (no scripts).
-- Logs go to CloudWatch, kept a month.
+- Logs go to CloudWatch, kept a month. No OpenTelemetry export is set up; the functions record operations data and `ops.check` runs after each dispatch, without notifications.
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
 Constraints:

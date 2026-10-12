@@ -15,6 +15,7 @@ import type { TwoFactorService } from '../core/auth/two-factor.ts';
 import type { UserService } from '../core/auth/users.ts';
 import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
+import type { OpsServices } from '../core/ops/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
 import { INSECURE_SESSION_COOKIE, registerAuth, SESSION_COOKIE } from './auth.ts';
@@ -22,7 +23,10 @@ import { greaderRoutes } from './compat/greader.ts';
 import { greaderEndpoints } from './compat/greader-ops.ts';
 import { ttrssRoutes } from './compat/ttrss.ts';
 import { feedIconRoutes, ttrssConfig, ttrssOps } from './compat/ttrss-ops.ts';
+import { telemetryEnabled } from '../telemetry/index.ts';
 import { errorHandler } from './errors.ts';
+import { registerOpsTracking } from './ops-tracking.ts';
+import { adminOpsRoutes } from './routes/admin-ops.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { archiveRoutes } from './routes/archive.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -62,6 +66,7 @@ export interface ApiServices {
   entries: EntryServices;
   prefs: PrefsService;
   realtime: Realtime;
+  ops: OpsServices;
 }
 
 export interface AppDeps {
@@ -83,6 +88,8 @@ export interface AppDeps {
   webDir?: string | null;
   /** Logging of slow and abandoned requests; defaults to 2 s without a state snapshot. */
   diagnostics?: Partial<RequestDiagnosticsOptions>;
+  /** Trace requests; defaults to on when OpenTelemetry export is configured. */
+  tracing?: boolean;
 }
 
 /** A hop count trusts that many proxies in front of the server, nearest first. */
@@ -97,6 +104,13 @@ export function buildApp(deps: AppDeps) {
     routerOptions: { maxParamLength: 8192 },
     trustProxy: trustProxy(deps.trustProxy ?? false),
   }).withTypeProvider<ZodTypeProvider>();
+  // First, so every route is traced.
+  if (deps.tracing ?? telemetryEnabled())
+    void app.register(
+      import('../telemetry/fastify.ts').then((m) => ({ default: m.fastifyTracing() })),
+    );
+  app.decorate('audit', deps.services?.ops.audit ?? null);
+  registerOpsTracking(app, deps.services?.ops.recorder ?? null);
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(errorHandler);
@@ -159,7 +173,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(cors, {
           origin: APP_ORIGINS,
           methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
-          allowedHeaders: ['authorization', 'content-type'],
+          allowedHeaders: ['authorization', 'content-type', 'x-rss-client'],
           exposedHeaders: ['retry-after'],
           maxAge: 86400,
         });
@@ -172,6 +186,7 @@ export function buildApp(deps: AppDeps) {
           publicUrl: deps.publicUrl ?? null,
         });
         await api.register(adminUserRoutes, services);
+        await api.register(adminOpsRoutes, { ops: services.ops });
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {
           ...services.entries,

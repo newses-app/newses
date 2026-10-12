@@ -18,6 +18,7 @@ describe('loadConfig', () => {
       archiveEnabled: true,
       archiveAthena: null,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
+      ops: { retentionDays: 90, auditRetentionDays: 365, hostHourlyBudget: 200, alertEmail: null },
       fetchAllowPrivateNetworks: false,
       appSecret: APP_SECRET,
       bootstrapAdmin: null,
@@ -47,6 +48,21 @@ describe('loadConfig', () => {
         .archiveAthena,
     ).toEqual({ workgroup: 'wg', database: 'db' });
     expect(() => loadConfig({ ...base, ARCHIVE_ATHENA_WORKGROUP: 'wg' })).toThrow(ConfigError);
+  });
+
+  it('sends alert email only with an SMTP server', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(
+      loadConfig({ ...base, SMTP_URL: 'smtp://mail:25', ALERT_EMAIL_TO: 'ops@example.com' }).ops
+        .alertEmail,
+    ).toEqual({
+      smtpUrl: 'smtp://mail:25',
+      to: 'ops@example.com',
+      from: 'rss-reader <rss-reader@localhost>',
+    });
+    expect(loadConfig({ ...base, SMTP_URL: 'smtp://mail:25' }).ops.alertEmail).toBeNull();
+    expect(() => loadConfig({ ...base, ALERT_EMAIL_TO: 'ops@example.com' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, SMTP_URL: 'http://mail' })).toThrow(ConfigError);
   });
 
   it('parses overrides', () => {

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { DomainError } from '../../core/errors.ts';
+import { attributeUser } from '../ops-tracking.ts';
 import {
   type CompatAuth,
   type CompatOptions,
@@ -172,6 +173,7 @@ export const ttrssRoutes: FastifyPluginAsync<TtrssRoutesOptions> = (
         if (session === 'password_change_required') throw new TtrssError('API_DISABLED');
         if (!session) throw new TtrssError('NOT_LOGGED_IN');
         auth = session;
+        attributeUser(request, session.user.id);
       }
       return { seq, status: 0, content: await op.run({ request, params, auth }) };
     } catch (err) {

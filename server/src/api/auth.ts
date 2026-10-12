@@ -7,6 +7,7 @@ import {
   type UserRow,
 } from '../core/auth/sessions.ts';
 import { HttpError } from './errors.ts';
+import { attributeUser } from './ops-tracking.ts';
 import { logSecurity } from './security-log.ts';
 
 /** Over HTTPS the `__Host-` prefix pins the cookie to this host, Secure, and path `/`. */
@@ -99,6 +100,7 @@ export function registerAuth(app: FastifyInstance, sessions: SessionService): vo
       throw new HttpError(403, 'password_change_required', 'Change your password first');
     }
     request.auth = { user: result.user, session: result.session };
+    attributeUser(request, result.user.id);
   });
 }
 

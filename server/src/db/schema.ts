@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -506,3 +507,121 @@ export const importMap = pgTable(
     index('import_map_user_idx').on(t.userId),
   ],
 );
+
+// Operations reporting for the admin Operations page and alert rules. Rollup counters are added to
+// per bucket; rows older than OPS_RETENTION_DAYS are pruned.
+
+// Security-relevant actions, kept AUDIT_RETENTION_DAYS.
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    at: tstz('at').notNull().defaultNow(),
+    event: text('event').notNull(),
+    // The account the event concerns; null for unknown logins and deleted users.
+    userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+    // The signed-in user who acted, when that is someone else (an admin).
+    actorUserId: integer('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    details: jsonb('details').notNull().default({}),
+  },
+  (t) => [
+    index('audit_events_at_idx').on(t.at),
+    index('audit_events_user_idx').on(t.userId, t.id.desc()),
+  ],
+);
+
+// Authenticated API requests per user, day (UTC), and client.
+export const userActivityDaily = pgTable(
+  'user_activity_daily',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    client: text('client').notNull(),
+    requests: integer('requests').notNull().default(0),
+    lastSeenAt: tstz('last_seen_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.day, t.client] }),
+    index('user_activity_daily_day_idx').on(t.day),
+  ],
+);
+
+// API requests per hour, client, and status class (`2xx`, `5xx`, ...).
+export const requestStatsHourly = pgTable(
+  'request_stats_hourly',
+  {
+    hour: tstz('hour').notNull(),
+    client: text('client').notNull(),
+    statusClass: text('status_class').notNull(),
+    requests: integer('requests').notNull().default(0),
+    // Requests that took 2 s or longer.
+    slow: integer('slow').notNull().default(0),
+    totalMs: bigint('total_ms', { mode: 'number' }).notNull().default(0),
+    maxMs: integer('max_ms').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.hour, t.client, t.statusClass] })],
+);
+
+// Requests to remote hosts per hour, host, purpose (feed, favicon, ...), and outcome.
+export const hostFetchStatsHourly = pgTable(
+  'host_fetch_stats_hourly',
+  {
+    hour: tstz('hour').notNull(),
+    host: text('host').notNull(),
+    purpose: text('purpose').notNull(),
+    outcome: text('outcome').notNull(),
+    requests: integer('requests').notNull().default(0),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+    totalMs: bigint('total_ms', { mode: 'number' }).notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.hour, t.host, t.purpose, t.outcome] }),
+    index('host_fetch_stats_hourly_host_idx').on(t.host, t.hour),
+  ],
+);
+
+// Background job and scheduled task runs per hour.
+export const jobStatsHourly = pgTable(
+  'job_stats_hourly',
+  {
+    hour: tstz('hour').notNull(),
+    job: text('job').notNull(),
+    runs: integer('runs').notNull().default(0),
+    failures: integer('failures').notNull().default(0),
+    totalMs: bigint('total_ms', { mode: 'number' }).notNull().default(0),
+    maxMs: integer('max_ms').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.hour, t.job] })],
+);
+
+// Alerts raised by the ops check; at most one open alert per rule and subject (e.g. a host).
+export const opsAlerts = pgTable(
+  'ops_alerts',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    rule: text('rule').notNull(),
+    subject: text('subject').notNull(),
+    severity: text('severity').notNull(),
+    openedAt: tstz('opened_at').notNull().defaultNow(),
+    lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
+    resolvedAt: tstz('resolved_at'),
+    details: jsonb('details').notNull().default({}),
+  },
+  (t) => [
+    uniqueIndex('ops_alerts_open_key')
+      .on(t.rule, t.subject)
+      .where(sql`${t.resolvedAt} IS NULL`),
+    index('ops_alerts_opened_at_idx').on(t.openedAt),
+  ],
+);
+
+// Small operational facts, such as when the ops check last ran.
+export const opsState = pgTable('ops_state', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});

@@ -4,19 +4,25 @@ import { buildApp } from '../api/app.ts';
 import { createAuthServices } from '../core/auth/index.ts';
 import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
+import { createOpsServices } from '../core/ops/index.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
-import { createArchiveReader, createFeedDeps } from './feed-deps.ts';
+import { createArchiveReader, createFeedDeps, PG_BOSS_TELEMETRY } from './feed-deps.ts';
 import { createRuntime, processSnapshot } from './runtime.ts';
+import { scheduleOpsFlush } from './tracking.ts';
 
 const { config, logger, pool, onShutdown } = createRuntime('server');
 const db = createDb(pool);
+const ops = createOpsServices({ db, logger, settings: config.ops });
+// Registered first, so the last statistics are written after the server stops taking requests.
+scheduleOpsFlush(ops.recorder, onShutdown);
 
 // The server only enqueues jobs; the worker runs pg-boss maintenance and scheduling.
 const boss = new PgBoss({
   connectionString: config.databaseUrl,
   supervise: false,
   schedule: false,
+  openTelemetry: PG_BOSS_TELEMETRY,
 });
 boss.on('error', (err) => {
   logger.error({ err }, 'Job queue error');
@@ -28,7 +34,7 @@ const realtime = new PgNotifyRealtime(pool, logger);
 await realtime.start();
 onShutdown(() => realtime.stop());
 
-const feedDeps = createFeedDeps({ config, db, boss, realtime, logger });
+const feedDeps = createFeedDeps({ config, db, boss, realtime, logger, ops: ops.recorder });
 onShutdown(() => feedDeps.fetcher.close());
 const services = {
   ...createAuthServices(db, config.appSecret),
@@ -36,6 +42,7 @@ const services = {
   entries: createEntryServices(db, realtime, createArchiveReader(config, feedDeps.blobs)),
   prefs: new PrefsService(db),
   realtime,
+  ops,
 };
 if (config.bootstrapAdmin) {
   const { login, password } = config.bootstrapAdmin;

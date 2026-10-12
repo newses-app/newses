@@ -89,7 +89,9 @@ export class FaviconService {
   }
 
   #fetch(url: string, request: FetchRequest): Promise<FetchResult> {
-    return this.#hosts.run(new URL(url).host, () => this.#fetcher.fetch(url, request));
+    return this.#hosts.run(new URL(url).host, () =>
+      this.#fetcher.fetch(url, { ...request, purpose: 'favicon' }),
+    );
   }
 
   async #download(feedSourceId: number, siteUrl: string): Promise<Blob | null> {
