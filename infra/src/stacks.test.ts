@@ -34,7 +34,7 @@ describe('RssReaderStage', () => {
     for (const template of [data, app, edge]) {
       template.resourceCountIs('Custom::GeneratedParameter', 0);
     }
-    expect(stage.data.dependencies).toContain(stage.params);
+    expect(stage.app.dependencies).toContain(stage.params);
   });
 
   it('names and tags resources with the project and stage', () => {

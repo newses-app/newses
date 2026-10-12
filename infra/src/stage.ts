@@ -42,10 +42,7 @@ export class RssReaderStage extends Stage {
       env,
       stackName: resourceName(stage, 'data'),
       stage,
-      dbPassword: this.params.dbPassword,
     });
-    // Parameter names are literals, so the order is not implied by a reference.
-    this.data.addStackDependency(this.params);
     this.app = new AppStack(this, 'App', {
       env,
       stackName: resourceName(stage, 'app'),
@@ -54,6 +51,8 @@ export class RssReaderStage extends Stage {
       blobs: this.data.blobs,
       archive: this.data.archive,
     });
+    // Migrate reads the generated passwords; their names are literals, so no reference orders it.
+    this.app.addStackDependency(this.params);
     this.edge = new EdgeStack(this, 'Edge', {
       env,
       stackName: resourceName(stage, 'edge'),
