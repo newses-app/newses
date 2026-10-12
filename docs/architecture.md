@@ -421,10 +421,10 @@ A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to
 | Stage | Runs |
 |---|---|
 | Source | The tagged commit, over the GitHub connection. Runs without a tag (creation, a manual release) skip the next stages. |
-| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`, zip of the signed app). Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`. |
-| Publish | `release-publish.yml`: checks the full set, writes the feeds, `latest.json`, and `index.html`, uploads to the downloads bucket, HEAD-checks every URL, then tags the prerelease it replaced `superseded=true`. |
+| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK, desktop and mobile SBOMs; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`, zip of the signed app). Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`. |
+| Publish | `release-publish.yml`: checks the full set, adds the installers' URLs and hashes to the SBOMs, writes `SHA256SUMS`, the feeds, `latest.json`, and `index.html`, uploads to the downloads bucket, HEAD-checks every URL, then tags the prerelease it replaced `superseded=true`. |
 
-- Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@rss-reader/shared/release`), and `index.html` (no-cache).
+- Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`, SBOMs `rss-reader-<version>-{desktop,mobile}.cdx.json` inline as `application/vnd.cyclonedx+json`, each naming the installers it describes by URL and SHA-256, and `SHA256SUMS` for every versioned file); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@rss-reader/shared/release`), and `index.html` (no-cache; per file its SHA-256 and commands to download, check, and install it, as no scripts run on the page).
 - Superseded prereleases expire 30 days after upload; prod releases are kept.
 - Release builds embed the stage's `/downloads` URL: desktop as electron-updater's generic feed (`electron-builder.release.cjs`, no update channels), Android as `DOWNLOADS_URL` in the bridge.
 - Signing material is SecureString parameters under `/rss-reader/release/windows-signing/` and `/rss-reader/release/android-signing/`, shared by both stages and written by `scripts/windows-signing-setup.sh` and `scripts/android-signing-setup.sh`. Each build project reads only its own platform's parameters, as project environment variables; only the publish project writes the downloads bucket, and only its stage's.
@@ -435,3 +435,19 @@ Operator setup, once per account:
 - `pnpm --filter @rss-reader/infra cdk deploy rss-reader-dev-pipeline` (and `rss-reader-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it, release stacks included.
 - The signing parameters, before the first release: `scripts/windows-signing-setup.sh --ssm` and `scripts/android-signing-setup.sh --backup DIR --ssm`.
 - The first admin is `admin`, with a generated password in the SSM SecureString `/rss-reader/<stage>/admin-password` that must be changed at first sign-in. Create a personal admin, then disable or delete `admin`.
+
+### SBOMs
+
+CycloneDX 1.6, one per deliverable, composed by `infra/src/release/build-sbom.ts` (`scripts/sbom.sh` locally) as `rss-reader-<version>-<deliverable>.cdx.json`:
+
+| Deliverable | Contents | Source |
+|---|---|---|
+| `server` | Server `dependencies` (Lambdas and Docker) | `pnpm sbom --prod` |
+| `image` | Docker image: Alpine packages, Node, `node_modules` | syft on the built image; local only |
+| `web` | Web app `dependencies` | `pnpm sbom --prod` |
+| `desktop` | Web app, Electron, `electron-updater` and its dependencies | `pnpm sbom`, selected (the main process is bundled, so all are devDependencies) |
+| `mobile` | Web app, Capacitor packages, the APK's release runtime classpath | `pnpm sbom --prod`, CycloneDX Gradle plugin (`:app:cyclonedxDirectBom`) |
+
+- Workspace packages and Gradle projects are first party and left out; the root component is `rss-reader-<deliverable>`.
+- The release pipeline publishes the desktop and mobile SBOMs; the others are made locally.
+- Dependency-Track is an external server; uploads run locally (`PUT /api/v1/bom`, auto-creating the project). Project `rss-reader-<deliverable>`, version the release's or, untagged, the branch's; tags `rss-reader` and `prod` (release), `dev` (prerelease), or `local` (untagged); tagged uploads become the latest version. The API key needs `BOM_UPLOAD`, `PROJECT_CREATION_UPLOAD`, and `VIEW_PORTFOLIO`.

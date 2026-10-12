@@ -1,5 +1,6 @@
 # The release pipeline's Linux leg (infra/src/release-stack.ts): the AppImage and deb with
-# latest-linux.yml, and the signed APK, handed to the publish leg under releases/<tag>/.
+# latest-linux.yml, the signed APK, and both apps' SBOMs, handed to the publish leg under
+# releases/<tag>/.
 # RELEASE_TAG comes from the pipeline or scripts/try-release.sh; the rest from the project.
 
 version: 0.2
@@ -48,12 +49,19 @@ phases:
         chmod +x mobile/android/gradlew
         pnpm --filter @rss-reader/mobile build:apk:release
 
+        # Desktop's SBOM serves the Windows leg's build too: the same packages on every platform.
+        for deliverable in desktop mobile; do
+          node infra/src/release/build-sbom.ts --deliverable "$deliverable" --tag "$RELEASE_TAG" --out sbom
+        done
+
         # Exactly these, so a failed or misnamed build stops here.
         files=(
           "desktop/release/rss-reader-$version-linux-x86_64.AppImage"
           "desktop/release/rss-reader-$version-linux-amd64.deb"
           desktop/release/latest-linux.yml
           "mobile/release/rss-reader-$version-android.apk"
+          "sbom/rss-reader-$version-desktop.cdx.json"
+          "sbom/rss-reader-$version-mobile.cdx.json"
         )
         for file in "${files[@]}"; do
           aws s3 cp --only-show-errors "$file" "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/"

@@ -5,10 +5,13 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
+        // CycloneDX SBOM of the app's dependencies (infra/src/release/sbom.ts).
+        classpath 'org.cyclonedx.bom:org.cyclonedx.bom.gradle.plugin:3.4.1'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

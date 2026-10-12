@@ -69,3 +69,10 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+// The SBOM lists what the release APK ships: its runtime classpath, Capacitor and plugins included.
+apply plugin: 'org.cyclonedx.bom'
+tasks.named('cyclonedxDirectBom') {
+    includeConfigs = ['releaseRuntimeClasspath']
+    xmlOutput.unsetConvention()
+}

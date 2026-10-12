@@ -15,3 +15,6 @@ playwright-report/
 test-results/
 # TTRSS import reports hold temporary passwords
 ttrss-import-*.txt
+# scripts/sbom.sh output, and the Dependency-Track API key it uploads with
+/sbom/
+/dtrack.env
