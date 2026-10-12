@@ -4,6 +4,7 @@ import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import type pg from 'pg';
 import { loadConfig } from '../../adapters/env-config.ts';
 import { NoopRealtime } from '../../adapters/noop-realtime.ts';
+import { SnsNotifier } from '../../adapters/sns-notifier.ts';
 import { SqsJobQueue } from '../../adapters/sqs-job-queue.ts';
 import { deriveKeys } from '../../core/crypto.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
@@ -11,7 +12,7 @@ import type { Jobs } from '../../core/jobs.ts';
 import { createOpsServices, type OpsServices } from '../../core/ops/index.ts';
 import type { Logger } from '../../core/ports.ts';
 import { createDb } from '../../db/client.ts';
-import { extractTraceContext } from '../../telemetry/index.ts';
+import { linkToProducer } from '../../telemetry/index.ts';
 import {
   createArchiveReader,
   createArchiveWriter,
@@ -75,8 +76,16 @@ export async function createLambdaRuntime(role: string) {
   });
   const db = createDb(pool);
   const blobs = createBlobStore(config);
-  // Alerts stay on the Operations page; AWS notification is not set up.
-  const ops = createOpsServices({ db, logger, settings: config.ops });
+  // Set on the function that checks alerts; without it alerts stay on the Operations page.
+  const alertTopicArn = process.env.ALERT_TOPIC_ARN;
+  const ops = createOpsServices({
+    db,
+    logger,
+    settings: config.ops,
+    notifier: alertTopicArn
+      ? new SnsNotifier({ topicArn: alertTopicArn, publicUrl: config.publicUrl })
+      : undefined,
+  });
   const feedDeps: FeedDeps = {
     db,
     fetcher: createFetcher(config, ops.recorder),
@@ -125,8 +134,8 @@ export function trackPoolUse(pool: pg.Pool): { used(): boolean; reset(): void } 
 
 /**
  * SQS batch handler: failed messages are reported back for redelivery, the rest are deleted. Each
- * message's job continues the trace that queued it, and the ops statistics are written before the
- * invocation ends.
+ * message's job is traced within the invocation, linked to the trace that queued it, and the ops
+ * statistics are written before the invocation ends.
  */
 export function sqsHandler(
   runtime: { logger: Logger; ops: OpsServices },
@@ -141,7 +150,7 @@ export function sqsHandler(
       const traceparent = record.messageAttributes.traceparent?.stringValue;
       try {
         await trackRun(ops.recorder, job, () => handle(JSON.parse(record.body) as never), {
-          parent: extractTraceContext(traceparent ? { traceparent } : undefined),
+          links: linkToProducer(traceparent ? { traceparent } : undefined),
         });
       } catch (err) {
         logger.error({ err, messageId: record.messageId }, 'Job failed');

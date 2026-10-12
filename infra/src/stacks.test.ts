@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
+import { ACCOUNT, ADOT_LAYER_ARN, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
 import { API_PATHS } from './edge-stack.ts';
 import { PipelineStack } from './pipeline-stack.ts';
 import { RssReaderStage } from './stage.ts';
@@ -145,6 +145,94 @@ describe('App', () => {
     app.resourceCountIs('AWS::Scheduler::Schedule', 4);
     app.hasResourceProperties('AWS::Scheduler::Schedule', {
       ScheduleExpression: 'cron(0/30 * * * ? *)',
+    });
+  });
+
+  it('traces every function through the ADOT layer at the stage rate, without active tracing', () => {
+    const functions = Object.values(
+      app.findResources('AWS::Lambda::Function', {
+        Properties: {
+          Environment: { Variables: Match.objectLike({ DB_PASSWORD_PARAMETER: Match.anyValue() }) },
+        },
+      }),
+    ) as {
+      Properties: {
+        Layers?: string[];
+        TracingConfig?: unknown;
+        Environment: { Variables: Record<string, string> };
+      };
+    }[];
+    for (const { Properties } of functions) {
+      expect(Properties.Layers).toEqual([ADOT_LAYER_ARN]);
+      expect(Properties.TracingConfig).toBeUndefined();
+      expect(Properties.Environment.Variables).toMatchObject({
+        AWS_LAMBDA_EXEC_WRAPPER: '/opt/otel-instrument',
+        OTEL_TRACES_SAMPLER: 'traceidratio',
+        OTEL_TRACES_SAMPLER_ARG: String(dev.traceSampling),
+        OTEL_AWS_APPLICATION_SIGNALS_ENABLED: 'false',
+        OTEL_NODE_DISABLED_INSTRUMENTATIONS: 'http',
+      });
+    }
+    app.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Action: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'] }),
+        ]),
+      },
+    });
+
+    const untraced = Template.fromStack(
+      new RssReaderStage(newApp(), 'Test', { stage: { ...dev, traceSampling: 0 }, webDir }).app,
+    );
+    for (const fn of Object.values(untraced.findResources('AWS::Lambda::Function'))) {
+      expect(JSON.stringify(fn)).not.toContain('otel-instrument');
+    }
+  });
+
+  it('publishes operations alerts from tick to the stage topic', () => {
+    app.hasResourceProperties('AWS::SNS::Topic', { TopicName: 'rss-reader-dev-alerts' });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-tick',
+      Environment: { Variables: Match.objectLike({ ALERT_TOPIC_ARN: Match.anyValue() }) },
+    });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-api',
+      Environment: {
+        Variables: Match.not(Match.objectLike({ ALERT_TOPIC_ARN: Match.anyValue() })),
+      },
+    });
+  });
+
+  it('keeps one project budget, owned by the stage that sets its limit', () => {
+    expect(dev.budgetUsd).toBeUndefined();
+    app.resourceCountIs('AWS::Budgets::Budget', 0);
+    const owner = Template.fromStack(
+      new RssReaderStage(newApp(), 'Test', { stage: prod, webDir }).app,
+    );
+    owner.hasResourceProperties('AWS::Budgets::Budget', {
+      Budget: Match.objectLike({
+        BudgetName: 'rss-reader',
+        BudgetLimit: { Amount: prod.budgetUsd, Unit: 'USD' },
+        FilterExpression: {
+          Tags: { Key: 'project', Values: ['rss-reader'], MatchOptions: ['EQUALS'] },
+        },
+      }),
+      NotificationsWithSubscribers: [
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 80 }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 100 }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'FORECASTED', Threshold: 100 }),
+        }),
+      ],
+    });
+    owner.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: {
+        Statement: [Match.objectLike({ Principal: { Service: 'budgets.amazonaws.com' } })],
+      },
     });
   });
 

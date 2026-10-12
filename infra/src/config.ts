@@ -14,6 +14,13 @@ export const HOSTED_ZONE = { zoneName: 'example.com', hostedZoneId: 'Z0000000000
 
 export const PROJECT = 'rss-reader';
 
+/**
+ * AWS Distro for OpenTelemetry (JavaScript) Lambda layer; ARNs are regional and versioned, listed at
+ * https://aws-otel.github.io/docs/getting-started/lambda.
+ */
+export const ADOT_LAYER_ARN =
+  'arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:16';
+
 /** Server build reported to apps: the commit CodeBuild synthesises, else `dev`. */
 export const BUILD_VERSION = process.env.CODEBUILD_RESOLVED_SOURCE_VERSION?.slice(0, 7) ?? 'dev';
 
@@ -31,6 +38,10 @@ export interface StageConfig {
   compatTrace: boolean;
   /** Purge writes entries to the cold-storage archive before deleting them. */
   archive: boolean;
+  /** Share of Lambda invocations traced to X-Ray, 0 to 1; 0 leaves the tracing layer off. */
+  traceSampling: number;
+  /** Monthly cost budget in USD for the whole project; the stage that sets it owns the budget. */
+  budgetUsd?: number;
 }
 
 export const STAGES: StageConfig[] = [
@@ -44,6 +55,7 @@ export const STAGES: StageConfig[] = [
     backupDays: 1,
     compatTrace: true,
     archive: true,
+    traceSampling: 1,
   },
   {
     name: 'prod',
@@ -54,6 +66,8 @@ export const STAGES: StageConfig[] = [
     backupDays: 14,
     compatTrace: false,
     archive: true,
+    traceSampling: 1,
+    budgetUsd: 10,
   },
 ];
 

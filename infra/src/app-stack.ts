@@ -12,10 +12,18 @@ import type * as rds from 'aws-cdk-lib/aws-rds';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
-import { BUILD_VERSION, REPO_ROOT, resourceName, type StageConfig } from './config.ts';
+import { ProjectBudget } from './budget.ts';
+import {
+  ADOT_LAYER_ARN,
+  BUILD_VERSION,
+  REPO_ROOT,
+  resourceName,
+  type StageConfig,
+} from './config.ts';
 import type { ParamsStack } from './params-stack.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
@@ -36,9 +44,30 @@ export interface AppStackProps extends StackProps {
   archive: { database: string; workgroup: string };
 }
 
+/**
+ * ADOT settings: our spans and AWS SDK calls, sampled by trace id at the stage's rate and sent to
+ * X-Ray through Lambda's local endpoint, which works without active tracing. Lambda's `Sampled=0`
+ * header without active tracing would drop every span under a parent-based sampler. undici is never
+ * instrumented, so feed requests carry no trace headers; `http` would only duplicate the AWS SDK
+ * spans. Application Signals stays off, as it bills per signal and creates metrics.
+ */
+const tracingEnvironment = (stage: StageConfig, name: string) => ({
+  AWS_LAMBDA_EXEC_WRAPPER: '/opt/otel-instrument',
+  OTEL_TRACES_SAMPLER: 'traceidratio',
+  OTEL_TRACES_SAMPLER_ARG: String(stage.traceSampling),
+  OTEL_AWS_APPLICATION_SIGNALS_ENABLED: 'false',
+  // The wrapper always appends `http` to the enabled list, so it is disabled explicitly.
+  OTEL_NODE_ENABLED_INSTRUMENTATIONS: 'aws-lambda,aws-sdk',
+  OTEL_NODE_DISABLED_INSTRUMENTATIONS: 'http',
+  OTEL_SERVICE_NAME: `rss-reader-${name}`,
+  OTEL_RESOURCE_ATTRIBUTES: `deployment.environment.name=${stage.name},service.version=${BUILD_VERSION}`,
+});
+
 /** Lambdas behind an HTTP API, SQS job queues, and the schedules that dispatch feeds. */
 export class AppStack extends Stack {
   readonly api: apigw.HttpApi;
+  /** Operations alerts and budget notifications; subscribe an email address to receive them. */
+  readonly alerts: sns.Topic;
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
@@ -73,6 +102,11 @@ export class AppStack extends Stack {
       visibilityTimeout: Duration.minutes(20),
       deadLetterQueue: { queue: extractDlq, maxReceiveCount: 2 },
     });
+
+    const adotLayer =
+      stage.traceSampling > 0
+        ? lambda.LayerVersion.fromLayerVersionArn(this, 'AdotLayer', ADOT_LAYER_ARN)
+        : undefined;
 
     const fn = (name: string, options: { timeout: Duration; memorySize?: number }) => {
       const functionName = resourceName(stage, name);
@@ -111,7 +145,9 @@ export class AppStack extends Stack {
           // The Lambda runtime's CA bundle includes the RDS certificate authorities.
           NODE_EXTRA_CA_CERTS: '/var/runtime/ca-cert.pem',
           NODE_OPTIONS: '--enable-source-maps',
+          ...(adotLayer && tracingEnvironment(stage, name)),
         },
+        ...(adotLayer && { layers: [adotLayer] }),
         bundling: {
           format: nodejs.OutputFormat.ESM,
           target: 'node24',
@@ -140,6 +176,14 @@ export class AppStack extends Stack {
       fetchQueue.grantSendMessages(handler);
       faviconQueue.grantSendMessages(handler);
       extractQueue.grantSendMessages(handler);
+      if (adotLayer) {
+        handler.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+            resources: ['*'],
+          }),
+        );
+      }
       return handler;
     };
 
@@ -154,7 +198,15 @@ export class AppStack extends Stack {
       defaultIntegration: new HttpLambdaIntegration('Api', api),
     });
 
+    this.alerts = new sns.Topic(this, 'Alerts', { topicName: resourceName(stage, 'alerts') });
+    if (stage.budgetUsd !== undefined) {
+      new ProjectBudget(this, 'Budget', { limitUsd: stage.budgetUsd, topic: this.alerts });
+    }
+
     const tick = fn('tick', { timeout: Duration.minutes(5) });
+    // Operations alerts are checked after each dispatch.
+    tick.addEnvironment('ALERT_TOPIC_ARN', this.alerts.topicArn);
+    this.alerts.grantPublish(tick);
     const tickSchedule = (name: string, expression: string, task: string) =>
       new scheduler.Schedule(this, `${name}Schedule`, {
         scheduleName: resourceName(stage, task.replace('.', '-')),

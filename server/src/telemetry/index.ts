@@ -1,11 +1,11 @@
 // OpenTelemetry API helpers. Without a registered SDK every call here is a cheap no-op.
 import {
   type Attributes,
-  type Context,
   context,
   type Counter,
   type Histogram,
   isSpanContextValid,
+  type Link,
   metrics,
   type ObservableGauge,
   propagation,
@@ -18,12 +18,15 @@ import {
 
 const SCOPE = 'rss-reader';
 
-/** Export is on when an OTLP endpoint is configured and the SDK is not disabled. */
+/**
+ * Export is on when an OTLP endpoint is configured, or on Lambda when the ADOT layer's wrapper
+ * starts its SDK, and the SDK is not disabled.
+ */
 export function telemetryEnabled(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(
-    (env.OTEL_EXPORTER_OTLP_ENDPOINT ?? env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT) &&
-    env.OTEL_SDK_DISABLED !== 'true',
-  );
+  const exporting =
+    [env.OTEL_EXPORTER_OTLP_ENDPOINT, env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT].some(Boolean) ||
+    env.AWS_LAMBDA_EXEC_WRAPPER === '/opt/otel-instrument';
+  return exporting && env.OTEL_SDK_DISABLED !== 'true';
 }
 
 export const tracer = () => trace.getTracer(SCOPE);
@@ -31,25 +34,19 @@ export const tracer = () => trace.getTracer(SCOPE);
 /** Runs `fn` in a new active span, recording a thrown error on it. */
 export function withSpan<T>(
   name: string,
-  options: SpanOptions & { parent?: Context },
+  options: SpanOptions,
   fn: (span: Span) => Promise<T>,
 ): Promise<T> {
-  const { parent, ...spanOptions } = options;
-  return tracer().startActiveSpan(
-    name,
-    spanOptions,
-    parent ?? context.active(),
-    async (span): Promise<T> => {
-      try {
-        return await fn(span);
-      } catch (err) {
-        recordError(span, err);
-        throw err;
-      } finally {
-        span.end();
-      }
-    },
-  );
+  return tracer().startActiveSpan(name, options, async (span): Promise<T> => {
+    try {
+      return await fn(span);
+    } catch (err) {
+      recordError(span, err);
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 export function recordError(span: Span, err: unknown): void {
@@ -76,9 +73,11 @@ export function injectTraceContext(): Record<string, string> {
   return carrier;
 }
 
-/** The context a producer injected, or the root context. */
-export function extractTraceContext(carrier: Record<string, string> | undefined): Context {
-  return carrier ? propagation.extract(ROOT_CONTEXT, carrier) : ROOT_CONTEXT;
+/** A link to the span that injected `carrier`, for a consumer that records its own trace. */
+export function linkToProducer(carrier: Record<string, string> | undefined): Link[] {
+  if (!carrier) return [];
+  const spanContext = trace.getSpanContext(propagation.extract(ROOT_CONTEXT, carrier));
+  return spanContext && isSpanContextValid(spanContext) ? [{ context: spanContext }] : [];
 }
 
 /** Low-cardinality instruments; per-host and per-user detail lives in the ops tables instead. */

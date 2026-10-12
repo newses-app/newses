@@ -1,25 +1,25 @@
-import { type Context, SpanKind } from '@opentelemetry/api';
+import { type Link, SpanKind } from '@opentelemetry/api';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
 import { getInstruments, withSpan } from '../telemetry/index.ts';
 
 /**
  * Runs a job or scheduled task in a span, counting its duration and outcome in the ops statistics
- * and metrics. `parent` continues the trace of whatever enqueued the job.
+ * and metrics. `links` point to the span that enqueued the job.
  */
 export function trackRun<T>(
   ops: OpsRecorder,
   name: string,
   run: () => Promise<T>,
-  options: { kind?: 'job' | 'task'; parent?: Context } = {},
+  options: { kind?: 'job' | 'task'; links?: Link[] } = {},
 ): Promise<T> {
   const kind = options.kind ?? 'job';
   return withSpan(
     `${kind} ${name}`,
     {
-      // With a parent the span consumes a message; under pg-boss's own consumer span it is internal.
-      kind: options.parent ? SpanKind.CONSUMER : SpanKind.INTERNAL,
+      // With links the span consumes a message; under pg-boss's own consumer span it is internal.
+      kind: options.links ? SpanKind.CONSUMER : SpanKind.INTERNAL,
       attributes: { 'rss.job': name },
-      ...(options.parent && { parent: options.parent }),
+      ...(options.links && { links: options.links }),
     },
     async () => {
       const started = performance.now();

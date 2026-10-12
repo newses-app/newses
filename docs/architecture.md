@@ -13,7 +13,7 @@
 | Content | sanitize-html; `@mozilla/readability` + linkedom |
 | Auth | `@node-rs/argon2`, `otpauth` |
 | Logging | Pino (JSON), with the active trace's ids |
-| Observability | OpenTelemetry API and Node SDK (OTLP); `@fastify/otel`, pg-boss's built-in tracing, pg and Node runtime instrumentation; nodemailer for alert email |
+| Observability | OpenTelemetry API and Node SDK (OTLP); `@fastify/otel`, pg-boss's built-in tracing, pg and Node runtime instrumentation; nodemailer for alert email. AWS: ADOT Lambda layer to X-Ray, SNS, AWS Budgets |
 | Web | Vue 3, Vite, Vuetify 3, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
 | Desktop | Electron, esbuild, electron-builder |
 | Mobile | Capacitor (Android) |
@@ -74,7 +74,7 @@ Rules:
 | `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
-| `Notifier` | Tell operators when alerts open or resolve | Email over SMTP, when configured | None: alerts only on the Operations page |
+| `Notifier` | Tell operators when alerts open or resolve | Email over SMTP, when configured | The stage's SNS alert topic |
 
 ## Web app
 
@@ -215,14 +215,14 @@ Full text:
 
 | Signal | Recorded | Where |
 |---|---|---|
-| Traces | Requests (span per route), jobs and scheduled tasks, pg-boss send/process, database queries inside a request or job, requests to remote hosts | OTLP, when `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
+| Traces | Requests (span per route), jobs and scheduled tasks, pg-boss send/process, database queries inside a request or job, requests to remote hosts | Docker: OTLP, when `OTEL_EXPORTER_OTLP_ENDPOINT` is set. AWS: X-Ray |
 | Metrics | `http.server.request.duration` by route and status; `rss.outbound.requests`/`.duration` by purpose and outcome; `rss.jobs.duration`/`.failures` by job; `rss.ops.alerts.active`; pg-boss queue depth; pg pool; Node event loop, heap, GC | OTLP |
 | Logs | Pino lines carry `trace_id` and `span_id` | stdout; also OTLP |
 | Operations data | Rollups and audit events below | Postgres; admin Operations page |
 
 - The Docker image preloads `server/src/telemetry/register.ts`; without an OTLP endpoint no SDK module loads. The standard `OTEL_*` variables (sampler, export interval, per-signal exporters) apply. Service names are `rss-reader-<role>`.
 - Telemetry never carries credentials, cookies, raw request URLs, feed URLs, or article content: request spans keep the route pattern, outbound spans the host. Database spans keep parameterised statements, never values. Remote hosts never receive trace headers.
-- Jobs continue the trace that queued them: pg-boss stores the W3C trace context on the job (no baggage); SQS carries it as a `traceparent` message attribute.
+- pg-boss jobs continue the trace that queued them: pg-boss stores the W3C trace context on the job (no baggage). SQS carries it as a `traceparent` message attribute, and each Lambda invocation keeps its own trace, its job span linked to the queuing span.
 
 Operations data (`OpsRecorder` counts in memory and adds to the tables every minute on Docker; on AWS at the end of each invocation that used the database, so the `api` function holds counts from database-free requests until its next such invocation and never wakes a paused database to write them):
 
@@ -438,7 +438,7 @@ flowchart LR
   FA & FF & FI & FX --> NET((Internet feeds))
 ```
 
-- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket, archive catalog), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
+- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket, archive catalog), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger, alert topic, budget), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
 - Names: stacks are `rss-reader-<stage>-{params,data,app,edge,release,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name, except `rss-reader-<stage>-downloads-<account>`, which the release pipeline is granted by name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
 - Dispatch runs every 30 minutes; purge (every 6 h), auth prune (hourly), and archive compaction (daily, 04:00 UTC) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
@@ -448,7 +448,10 @@ flowchart LR
 - Generated credentials are Standard SSM parameters under `/rss-reader/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `Data` because change sets resolve `ssm-secure` references: `db-password`, `admin-password`, and `app-secret` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is two hops (API Gateway appends CloudFront's address after the viewer's).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - The downloads bucket is private behind its own Origin Access Control, written only by the release pipeline (kept with the stack when the stage retains data). `/downloads` redirects to `/downloads/`, and folder paths serve `index.html`; the page has its own CSP (no scripts).
-- Logs go to CloudWatch, kept a month. No OpenTelemetry export is set up; the functions record operations data and `ops.check` runs after each dispatch, without notifications.
+- Logs go to CloudWatch, kept a month. No CloudWatch metrics, alarms, or dashboards; the Operations page reports, and `ops.check` runs after each dispatch.
+- Tracing: functions run the ADOT layer (`ADOT_LAYER_ARN` in `infra/src/config.ts`) when the stage's `traceSampling` is above 0. The SDK samples that share of traces by trace id (`traceidratio`) and sends spans to X-Ray through Lambda's local endpoint; Lambda active tracing (not needed for these spans), Application Signals, and X-Ray Transaction Search are off. Only the `aws-lambda` and `aws-sdk` instrumentations run; undici is never instrumented, so feed requests carry no trace headers. Only our spans and AWS SDK calls are recorded: functions are bundled, so `pg` is not instrumented. Service names are `rss-reader-<function>`.
+- Alerts: `tick` publishes alert changes to the SNS topic `rss-reader-<stage>-alerts`; email subscriptions are added outside the stack (see `AGENTS.md`), so addresses stay out of the repository.
+- Budget: the stage whose config sets `budgetUsd` (prod, $10) owns one monthly AWS Budget over everything tagged `project=rss-reader`, both stages and pipelines. It notifies its stage's alert topic at 80% and 100% of actual spend and 100% of forecast. A custom resource activates the `project` cost-allocation tag. Untaggable charges (X-Ray, tax) fall outside it.
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
 Constraints:

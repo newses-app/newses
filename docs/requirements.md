@@ -11,7 +11,7 @@
 | P3 | TTRSS cut-over | All TTRSS users imported; filters, scoring, and full text in daily use; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Signed Electron apps for Windows and Linux and the Capacitor Android app installed from the stage's downloads, used against AWS and Docker servers, and updating themselves |
 | P5 | Cold-storage archive | Articles purge deletes and the TTRSS import drops are kept; users browse, search, and restore them on Docker and AWS |
-| Observability | Operations insight | On a Docker deployment, admins follow user activity, load on remote sites, job health, and security events on the Operations page, get alert emails, and trace requests and jobs in Grafana |
+| Observability | Operations insight | Admins follow user activity, load on remote sites, job health, and security events on the Operations page and get alert emails; on Docker they trace requests and jobs in Grafana, on AWS in X-Ray, with a monthly cost budget |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -139,8 +139,9 @@
 | AWS deployment | P1.5 | Serverless, with no running instances: Lambda, SQS, EventBridge Scheduler, Aurora Serverless v2 scaling to zero, SPA on S3 + CloudFront. One CDK pipeline (CodePipeline + CodeBuild) per stage runs `pnpm check`, builds the SPA, bundles the Lambdas, and deploys: branch `dev` → `dev`, `main` → `prod` |
 | Operations page | Observability | Admins see, per user, last activity, requests by app, and articles read; per site, requests by outcome, busiest hour, and pauses; job runs, failures, and durations; on Docker and AWS |
 | Audit log | Observability | Sign-ins, failed sign-ins, password, 2FA, app-password, and user-management events kept a year and browsable by admins |
-| Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured, and resolve on their own |
-| Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime |
+| Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured (Docker) or an address subscribes to the stage's alert topic (AWS), and resolve on their own |
+| Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime. On AWS, traces go to X-Ray at a sampling rate set per stage, without CloudWatch metrics or dashboards |
+| Cost budget | Observability | On AWS, one monthly budget over the project (limit set in the stage config, $10 to start) emails the alert subscribers as spend nears or is forecast past it |
 | Plugin API | Later | Third-party modules register content and lifecycle hooks |
 
 ## Non-functional requirements
