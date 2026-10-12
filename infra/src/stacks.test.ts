@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { ACCOUNT, ADOT_LAYER_ARN, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
+import { ACCOUNT, ADOT_LAYER_ARN, BUDGET_USD, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
 import { API_PATHS } from './edge-stack.ts';
 import { PipelineStack } from './pipeline-stack.ts';
 import { RssReaderStage } from './stage.ts';
@@ -199,39 +199,6 @@ describe('App', () => {
       FunctionName: 'rss-reader-dev-api',
       Environment: {
         Variables: Match.not(Match.objectLike({ ALERT_TOPIC_ARN: Match.anyValue() })),
-      },
-    });
-  });
-
-  it('keeps one project budget, owned by the stage that sets its limit', () => {
-    expect(dev.budgetUsd).toBeUndefined();
-    app.resourceCountIs('AWS::Budgets::Budget', 0);
-    const owner = Template.fromStack(
-      new RssReaderStage(newApp(), 'Test', { stage: prod, webDir }).app,
-    );
-    owner.hasResourceProperties('AWS::Budgets::Budget', {
-      Budget: Match.objectLike({
-        BudgetName: 'rss-reader',
-        BudgetLimit: { Amount: prod.budgetUsd, Unit: 'USD' },
-        FilterExpression: {
-          Tags: { Key: 'project', Values: ['rss-reader'], MatchOptions: ['EQUALS'] },
-        },
-      }),
-      NotificationsWithSubscribers: [
-        Match.objectLike({
-          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 80 }),
-        }),
-        Match.objectLike({
-          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 100 }),
-        }),
-        Match.objectLike({
-          Notification: Match.objectLike({ NotificationType: 'FORECASTED', Threshold: 100 }),
-        }),
-      ],
-    });
-    owner.hasResourceProperties('AWS::SNS::TopicPolicy', {
-      PolicyDocument: {
-        Statement: [Match.objectLike({ Principal: { Service: 'budgets.amazonaws.com' } })],
       },
     });
   });
@@ -474,9 +441,66 @@ describe('PipelineStack', () => {
       .filter((c): c is Stack => Stack.isStack(c))
       .map((s) => s.stackName);
     expect(stackNames.sort()).toEqual(
-      ['app', 'data', 'edge', 'params', 'pipeline', 'release'].map(
-        (part) => `rss-reader-${config.name}-${part}`,
-      ),
+      [
+        'rss-reader-budget',
+        ...['app', 'data', 'edge', 'params', 'pipeline', 'release'].map(
+          (part) => `rss-reader-${config.name}-${part}`,
+        ),
+      ].sort(),
     );
+  });
+});
+
+describe('Budget', () => {
+  const budgetStacks = STAGES.map((config) => {
+    const root = newApp();
+    new PipelineStack(root, `rss-reader-${config.name}-pipeline`, {
+      env: { account: ACCOUNT, region: REGION },
+      stage: config,
+      webDir,
+    });
+    const stack = root.node
+      .findAll()
+      .find((c): c is Stack => Stack.isStack(c) && c.stackName === 'rss-reader-budget');
+    if (!stack) throw new Error(`No budget stack in the ${config.name} pipeline`);
+    return Template.fromStack(stack);
+  });
+
+  it('deploys the same project budget from both pipelines, notifying its own topic', () => {
+    app.resourceCountIs('AWS::Budgets::Budget', 0);
+    const [fromDev, fromProd] = budgetStacks;
+    expect(fromDev?.toJSON()).toEqual(fromProd?.toJSON());
+    const budget = budgetStacks[0];
+    if (!budget) throw new Error('budget stack');
+    budget.hasResourceProperties('AWS::Budgets::Budget', {
+      Budget: Match.objectLike({
+        BudgetName: 'rss-reader',
+        BudgetLimit: { Amount: BUDGET_USD, Unit: 'USD' },
+        FilterExpression: {
+          Tags: { Key: 'project', Values: ['rss-reader'], MatchOptions: ['EQUALS'] },
+        },
+      }),
+      NotificationsWithSubscribers: [
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 80 }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'ACTUAL', Threshold: 100 }),
+        }),
+        Match.objectLike({
+          Notification: Match.objectLike({ NotificationType: 'FORECASTED', Threshold: 100 }),
+        }),
+      ],
+    });
+    budget.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: {
+        Statement: [Match.objectLike({ Principal: { Service: 'budgets.amazonaws.com' } })],
+      },
+    });
+    // Tagged with the project only, so neither stage claims it.
+    budget.hasResourceProperties('AWS::SNS::Topic', {
+      TopicName: 'rss-reader-budget',
+      Tags: [{ Key: 'project', Value: 'rss-reader' }],
+    });
   });
 });

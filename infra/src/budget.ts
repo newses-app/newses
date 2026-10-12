@@ -1,19 +1,32 @@
+import {
+  Aspects,
+  RemovalPolicy,
+  Stack,
+  type StackProps,
+  Stage,
+  type StageProps,
+  Tags,
+} from 'aws-cdk-lib';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import type * as sns from 'aws-cdk-lib/aws-sns';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cr from 'aws-cdk-lib/custom-resources';
-import { Construct } from 'constructs';
-import { PROJECT } from './config.ts';
+import type { Construct } from 'constructs';
+import { ACCOUNT, PROJECT, REGION } from './config.ts';
+import { ManagedLogGroups } from './managed-log-groups.ts';
 
 /**
  * Monthly cost budget over everything tagged with the project, both stages and their pipelines,
- * notifying a topic as actual spend nears the limit or the forecast passes it. Untaggable charges,
- * such as X-Ray traces and tax, fall outside it.
+ * notifying its own topic as actual spend nears the limit or the forecast passes it. Untaggable
+ * charges, such as X-Ray traces and tax, fall outside it.
  */
-export class ProjectBudget extends Construct {
-  constructor(scope: Construct, id: string, props: { limitUsd: number; topic: sns.Topic }) {
-    super(scope, id);
-    const { limitUsd, topic } = props;
+export class BudgetStack extends Stack {
+  /** Budget notifications; subscribe an email address to receive them. */
+  readonly alerts: sns.Topic;
+
+  constructor(scope: Construct, id: string, props: StackProps & { limitUsd: number }) {
+    super(scope, id, props);
 
     // Budgets filter on cost-allocation tags, which count only once activated.
     const activation = new cr.AwsCustomResource(this, 'ActivateTag', {
@@ -32,13 +45,19 @@ export class ProjectBudget extends Construct {
         }),
       ]),
       installLatestAwsSdk: false,
+      // Created here rather than by `ManagedLogGroups`, whose ids depend on the deploying pipeline.
+      logGroup: new logs.LogGroup(this, 'ActivateTagLogs', {
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
     });
 
-    const { policyDependable } = topic.addToResourcePolicy(
+    this.alerts = new sns.Topic(this, 'Alerts', { topicName: `${PROJECT}-budget` });
+    const { policyDependable } = this.alerts.addToResourcePolicy(
       new iam.PolicyStatement({
         actions: ['sns:Publish'],
         principals: [new iam.ServicePrincipal('budgets.amazonaws.com')],
-        resources: [topic.topicArn],
+        resources: [this.alerts.topicArn],
       }),
     );
     const notify = (notificationType: 'ACTUAL' | 'FORECASTED', threshold: number) => ({
@@ -48,14 +67,14 @@ export class ProjectBudget extends Construct {
         threshold,
         thresholdType: 'PERCENTAGE',
       },
-      subscribers: [{ subscriptionType: 'SNS', address: topic.topicArn }],
+      subscribers: [{ subscriptionType: 'SNS', address: this.alerts.topicArn }],
     });
     const budget = new budgets.CfnBudget(this, 'Budget', {
       budget: {
         budgetName: PROJECT,
         budgetType: 'COST',
         timeUnit: 'MONTHLY',
-        budgetLimit: { amount: limitUsd, unit: 'USD' },
+        budgetLimit: { amount: props.limitUsd, unit: 'USD' },
         filterExpression: {
           tags: { key: 'project', values: [PROJECT], matchOptions: ['EQUALS'] },
         },
@@ -69,5 +88,24 @@ export class ProjectBudget extends Construct {
     budget.node.addDependency(activation);
     // Budgets checks that it may publish when the budget is created.
     if (policyDependable) budget.node.addDependency(policyDependable);
+  }
+}
+
+/**
+ * The project budget, outside any stage: both pipelines deploy it, so it exists after either
+ * stage's first deployment and survives either stage's removal.
+ */
+export class BudgetStage extends Stage {
+  readonly budget: BudgetStack;
+
+  constructor(scope: Construct, id: string, props: StageProps & { limitUsd: number }) {
+    super(scope, id, props);
+    Tags.of(this).add('project', PROJECT);
+    Aspects.of(this).add(new ManagedLogGroups());
+    this.budget = new BudgetStack(this, 'Budget', {
+      env: { account: ACCOUNT, region: REGION },
+      stackName: `${PROJECT}-budget`,
+      limitUsd: props.limitUsd,
+    });
   }
 }

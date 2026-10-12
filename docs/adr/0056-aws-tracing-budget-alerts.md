@@ -1,6 +1,6 @@
 # 0056. AWS tracing, budget, and alert notifications
 
-- Status: Accepted
+- Status: Superseded by 0057
 - Date: 2026-10-12
 
 ## Context

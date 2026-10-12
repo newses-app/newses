@@ -141,7 +141,7 @@
 | Audit log | Observability | Sign-ins, failed sign-ins, password, 2FA, app-password, and user-management events kept a year and browsable by admins |
 | Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured (Docker) or an address subscribes to the stage's alert topic (AWS), and resolve on their own |
 | Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime. On AWS, traces go to X-Ray at a sampling rate set per stage, without CloudWatch metrics or dashboards |
-| Cost budget | Observability | On AWS, one monthly budget over the project (limit set in the stage config, $10 to start) emails the alert subscribers as spend nears or is forecast past it |
+| Cost budget | Observability | On AWS, one monthly budget over the project (limit set in the infra config, $10 to start) emails its subscribers as spend nears or is forecast past it |
 | Plugin API | Later | Third-party modules register content and lifecycle hooks |
 
 ## Non-functional requirements

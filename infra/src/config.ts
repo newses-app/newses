@@ -24,6 +24,12 @@ export const ADOT_LAYER_ARN =
 /** Server build reported to apps: the commit CodeBuild synthesises, else `dev`. */
 export const BUILD_VERSION = process.env.CODEBUILD_RESOLVED_SOURCE_VERSION?.slice(0, 7) ?? 'dev';
 
+/**
+ * Monthly cost budget in USD for the whole project. Both pipelines deploy it, so a change takes
+ * effect on `dev` and holds once merged to `main`.
+ */
+export const BUDGET_USD = 10;
+
 export interface StageConfig {
   name: 'dev' | 'prod';
   /** Branch whose pushes deploy this stage. */
@@ -40,8 +46,6 @@ export interface StageConfig {
   archive: boolean;
   /** Share of Lambda invocations traced to X-Ray, 0 to 1; 0 leaves the tracing layer off. */
   traceSampling: number;
-  /** Monthly cost budget in USD for the whole project; the stage that sets it owns the budget. */
-  budgetUsd?: number;
 }
 
 export const STAGES: StageConfig[] = [
@@ -67,7 +71,6 @@ export const STAGES: StageConfig[] = [
     compatTrace: false,
     archive: true,
     traceSampling: 1,
-    budgetUsd: 10,
   },
 ];
 

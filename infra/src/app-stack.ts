@@ -16,7 +16,6 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
-import { ProjectBudget } from './budget.ts';
 import {
   ADOT_LAYER_ARN,
   BUILD_VERSION,
@@ -66,7 +65,7 @@ const tracingEnvironment = (stage: StageConfig, name: string) => ({
 /** Lambdas behind an HTTP API, SQS job queues, and the schedules that dispatch feeds. */
 export class AppStack extends Stack {
   readonly api: apigw.HttpApi;
-  /** Operations alerts and budget notifications; subscribe an email address to receive them. */
+  /** Operations alerts; subscribe an email address to receive them. */
   readonly alerts: sns.Topic;
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
@@ -199,9 +198,6 @@ export class AppStack extends Stack {
     });
 
     this.alerts = new sns.Topic(this, 'Alerts', { topicName: resourceName(stage, 'alerts') });
-    if (stage.budgetUsd !== undefined) {
-      new ProjectBudget(this, 'Budget', { limitUsd: stage.budgetUsd, topic: this.alerts });
-    }
 
     const tick = fn('tick', { timeout: Duration.minutes(5) });
     // Operations alerts are checked after each dispatch.

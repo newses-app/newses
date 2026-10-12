@@ -4,7 +4,9 @@ import { PipelineType } from 'aws-cdk-lib/aws-codepipeline';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as pipelines from 'aws-cdk-lib/pipelines';
 import type { Construct } from 'constructs';
+import { BudgetStage } from './budget.ts';
 import {
+  BUDGET_USD,
   GITHUB_CONNECTION_ARN,
   GITHUB_REPO,
   PROJECT,
@@ -17,7 +19,7 @@ const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_
 
 /**
  * Self-mutating pipeline: each push to the stage's branch runs `pnpm check`, builds the SPA,
- * bundles the Lambdas, deploys the stage, and smoke-tests it.
+ * bundles the Lambdas, deploys the stage, smoke-tests it, and deploys the shared project budget.
  */
 export class PipelineStack extends Stack {
   constructor(
@@ -99,5 +101,8 @@ export class PipelineStack extends Stack {
         ],
       },
     );
+    // Shared by both pipelines; deploying it after the stage keeps a clash between them (the
+    // stack busy with the other pipeline's update) from holding up the stage. A retry clears it.
+    pipeline.addStage(new BudgetStage(this, `${PROJECT}-budget`, { limitUsd: BUDGET_USD }));
   }
 }
