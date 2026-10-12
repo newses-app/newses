@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { Entry, EntryState } from '@rss-reader/shared';
 import {
+  mdiArchiveOutline,
+  mdiArchiveSearchOutline,
   mdiArrowLeft,
   mdiCheckAll,
   mdiDotsVertical,
@@ -32,7 +34,13 @@ import { useShortcutHandler } from '../composables/useShortcuts.ts';
 import { useTreeEditing } from '../composables/useTreeEditing.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { safeUrl } from '../lib/format.ts';
-import { labelKey, parseStream, SPECIAL_FEEDS, type StreamKey } from '../lib/streams.ts';
+import {
+  labelKey,
+  parseStream,
+  SPECIAL_FEEDS,
+  type StreamKey,
+  subscriptionKey,
+} from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
 import { bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -105,6 +113,22 @@ const title = computed(() => {
   if (categoryId === 0) return t('tree.uncategorised');
   return categories.data.value?.find((c) => c.id === categoryId)?.title ?? '';
 });
+/** The archive this stream browses: the subscription's, or every feed's from All articles. */
+const archiveStream = computed(() =>
+  subscription.value
+    ? subscriptionKey(subscription.value.id)
+    : streamKey.value === 'all'
+      ? 'all'
+      : null,
+);
+function browseArchive(withSearch = false) {
+  void router.push({
+    name: 'archive',
+    params: { stream: archiveStream.value ?? 'all' },
+    query: withSearch && q.value ? { q: q.value } : {},
+  });
+}
+
 const unread = computed(() => {
   const data = counters.data.value;
   const { special, subscriptionId, categoryId, labelId } = stream.value;
@@ -414,6 +438,13 @@ const showArticle = computed(
       :title="t('search.label')"
       @click="openSearch"
     />
+    <v-btn
+      v-if="q !== null"
+      :icon="mdiArchiveSearchOutline"
+      :aria-label="t('archive.searchFor', { q })"
+      :title="t('archive.searchFor', { q })"
+      @click="browseArchive(true)"
+    />
     <template v-if="!compact">
       <v-menu>
         <template #activator="{ props: menu }">
@@ -495,6 +526,13 @@ const showArticle = computed(
         @click="refresh"
       />
       <v-btn
+        v-if="archiveStream"
+        :icon="mdiArchiveOutline"
+        :aria-label="t('archive.browse')"
+        :title="t('archive.browse')"
+        @click="browseArchive()"
+      />
+      <v-btn
         v-if="subscription"
         :icon="mdiPencil"
         :aria-label="t('feeds.edit')"
@@ -538,6 +576,12 @@ const showArticle = computed(
           @click="update({ layout: combined ? 'threePane' : 'combined' })"
         />
         <v-list-item role="menuitem" :title="t('feeds.refresh')" @click="refresh" />
+        <v-list-item
+          v-if="archiveStream"
+          role="menuitem"
+          :title="t('archive.browse')"
+          @click="browseArchive()"
+        />
         <v-list-item
           v-if="subscription"
           role="menuitem"

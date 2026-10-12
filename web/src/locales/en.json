@@ -280,6 +280,19 @@
     "label": "Search articles",
     "placeholder": "Search"
   },
+  "archive": {
+    "browse": "Browse archive",
+    "search": "Search the archive",
+    "searchFor": "Search the archive for “{q}”",
+    "title": "Archive: {feed}",
+    "allFeeds": "all feeds",
+    "back": "Back",
+    "listLabel": "Past articles",
+    "empty": "No past articles.",
+    "selectPrompt": "Select a past article to read it.",
+    "hint": "A past article. Star, publish, label, or note it to bring it back to its feed.",
+    "restored": "Brought back to {feed}"
+  },
   "view": {
     "label": "Show",
     "adaptive": "Unread, or all when none",

@@ -77,14 +77,15 @@ Rules:
 
 | Folder (`web/src`) | Contents |
 |---|---|
-| `views` | Route pages: login, signed-in layout (feed tree drawer, dialogs), reader, settings |
+| `views` | Route pages: login, signed-in layout (feed tree drawer, dialogs), reader, archive, settings |
 | `components` | Reader (tree, headlines, combined list, article), dialogs, settings panels |
 | `composables` | Server state (TanStack Query), live counters, shortcuts, session |
 | `lib` | Pure logic: stream keys, tree building, shortcut matching, reordering, cache patches |
 | `platform` | Platform bridge and the apps' server and token |
 | `stores` | Pinia store for UI state only (drawer, dialogs, notices) |
 
-- Routes: `/connect` (apps only), `/login`, `/settings/:tab`, `/:stream/:entry?`. Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`, `t<tag>` (URL-encoded); search is `?q=`.
+- Routes: `/connect` (apps only), `/login`, `/settings/:tab`, `/:stream/:entry?`, `/:stream/archive/:key?` (`all` or a subscription). Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`, `t<tag>` (URL-encoded); search is `?q=`.
+- The archive view lists past articles read-only. Star, Publish, Labels, and Add note restore the article (the last two read, then open their dialog on it) and open it in its feed. It is reached from a subscription's or All articles' toolbar, and from a search, which it repeats over the archive.
 - Server data lives in the TanStack Query cache. State changes patch every cached copy, then save; a failure restores the previous flags. Headline lists are not refetched when entries change state, so read entries stay in place until the list is reloaded.
 - Entries scored above the user's `scoreHighlightAbove` get a highlight bar and a bold score.
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.

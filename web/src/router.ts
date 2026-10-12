@@ -32,6 +32,11 @@ export const router = createRouter({
           component: () => import('./views/SettingsView.vue'),
         },
         {
+          path: ':stream(all|f\\d+)/archive/:key?',
+          name: 'archive',
+          component: () => import('./views/ArchiveView.vue'),
+        },
+        {
           path: `:stream(${STREAM_PATTERN})/:entry(\\d+)?`,
           name: 'reader',
           component: () => import('./views/ReaderView.vue'),
