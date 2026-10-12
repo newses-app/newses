@@ -13,7 +13,7 @@ import {
 
 /** API level reported to clients, which enable features by it. */
 export const TTRSS_API_LEVEL = 20;
-export const TTRSS_VERSION = '1.0 (rss-reader)';
+export const TTRSS_VERSION = '1.0 (newses)';
 
 export type TtrssErrorCode =
   | 'NOT_LOGGED_IN'

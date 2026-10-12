@@ -1,5 +1,5 @@
-import type { Filter, FilterAction, FilterRequest } from '@rss-reader/shared';
-import { filterRequestSchema, normaliseTag } from '@rss-reader/shared';
+import type { Filter, FilterAction, FilterRequest } from '@newses/shared';
+import { filterRequestSchema, normaliseTag } from '@newses/shared';
 import { and, asc, eq, inArray, max, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { filterActions, filterRules, filters, labels } from '../../db/schema.ts';

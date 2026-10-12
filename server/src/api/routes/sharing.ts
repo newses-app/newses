@@ -1,4 +1,4 @@
-import { entrySchema, publishedFeedResponseSchema, shareResponseSchema } from '@rss-reader/shared';
+import { entrySchema, publishedFeedResponseSchema, shareResponseSchema } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { AccessKeyService } from '../../core/entries/access-keys.ts';

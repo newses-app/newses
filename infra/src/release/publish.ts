@@ -9,7 +9,7 @@ import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { versionFromTag } from '@rss-reader/shared/release';
+import { versionFromTag } from '@newses/shared/release';
 import { DOWNLOADS_PREFIX } from '../config.ts';
 import {
   type BuiltFile,

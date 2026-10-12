@@ -1,4 +1,4 @@
-import type { Category, Counters, Subscription } from '@rss-reader/shared';
+import type { Category, Counters, Subscription } from '@newses/shared';
 import { describe, expect, it } from 'vitest';
 import { newEntries } from './new-entries.ts';
 

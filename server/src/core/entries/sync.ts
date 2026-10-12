@@ -1,4 +1,4 @@
-import type { Entry } from '@rss-reader/shared';
+import type { Entry } from '@newses/shared';
 import { and, eq, gte, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client.ts';

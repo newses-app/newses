@@ -58,7 +58,7 @@ describe('HttpFetcher', () => {
     const fresh = await fetcher.fetch(`${base}/feed`);
     expect(fresh).toMatchObject({ status: 200, etag: '"v1"', contentType: 'application/rss+xml' });
     expect(new TextDecoder().decode(fresh.body)).toBe('<rss/>');
-    expect(seenHeaders.at(-1)?.['user-agent']).toMatch(/rss-reader/);
+    expect(seenHeaders.at(-1)?.['user-agent']).toMatch(/^Newses \(\+https:\/\/newses\.app\)$/);
     expect(await fetcher.fetch(`${base}/feed`, { etag: '"v1"' })).toMatchObject({
       notModified: true,
       status: 304,

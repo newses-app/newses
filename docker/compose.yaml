@@ -1,7 +1,7 @@
-name: rss-reader
+name: newses
 
 x-app: &app
-  image: ${RSS_READER_IMAGE:-rss-reader:latest}
+  image: ${NEWSES_IMAGE:-newses:latest}
   build:
     context: ..
     dockerfile: docker/Dockerfile
@@ -102,7 +102,7 @@ services:
       - -c
       - |
         while true; do
-          pg_dump -Fc -f "/backups/rss-reader-$$(date +%Y%m%d-%H%M%S).dump" && echo "Backup written"
+          pg_dump -Fc -f "/backups/newses-$$(date +%Y%m%d-%H%M%S).dump" && echo "Backup written"
           find /backups -name '*.dump' -mtime +"$$RETENTION_DAYS" -delete
           sleep 86400
         done
@@ -121,8 +121,8 @@ services:
       - '127.0.0.1:${GRAFANA_PORT:-3000}:3000'
     volumes:
       - lgtm:/data
-      - ./observability/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/rss-reader.yaml:ro
-      - ./observability/dashboards:/otel-lgtm/rss-reader-dashboards:ro
+      - ./observability/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/newses.yaml:ro
+      - ./observability/dashboards:/otel-lgtm/newses-dashboards:ro
 
 volumes:
   db:

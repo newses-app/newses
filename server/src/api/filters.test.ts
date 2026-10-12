@@ -1,4 +1,4 @@
-import type { Filter, FilterRequest } from '@rss-reader/shared';
+import type { Filter, FilterRequest } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db/client.ts';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Entry, EntryState } from '@rss-reader/shared';
+import type { Entry, EntryState } from '@newses/shared';
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePrefs } from '../../composables/usePrefs.ts';

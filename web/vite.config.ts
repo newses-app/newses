@@ -1,4 +1,4 @@
-import { NATIVE_CSP } from '@rss-reader/shared/web-csp';
+import { NATIVE_CSP } from '@newses/shared/web-csp';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -13,7 +13,7 @@ const PWA_REGISTER = 'virtual:pwa-register';
 function nativeShell(): Plugin {
   const stub = `\0${PWA_REGISTER}`;
   return {
-    name: 'rss-reader-native',
+    name: 'newses-native',
     resolveId: (id) => (id === PWA_REGISTER ? stub : null),
     load: (id) => (id === stub ? 'export const registerSW = () => () => Promise.resolve();' : null),
     transformIndexHtml: (html, context) => ({
@@ -44,8 +44,8 @@ export default defineConfig(({ mode }) => ({
           registerType: 'autoUpdate',
           includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
           manifest: {
-            name: 'rss-reader',
-            short_name: 'Reader',
+            name: 'Newses',
+            short_name: 'Newses',
             description: 'Self-hosted feed reader',
             theme_color: '#e8710a',
             background_color: '#ffffff',

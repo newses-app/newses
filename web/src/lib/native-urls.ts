@@ -1,4 +1,4 @@
-import type { Subscription } from '@rss-reader/shared';
+import type { Subscription } from '@newses/shared';
 
 /*
  * The API gives server-relative URLs (icons, proxied images). The apps run on their own origin, so

@@ -8,7 +8,7 @@ import {
   updateAllCategoriesRequestSchema,
   updateCategoryRequestSchema,
   updateSubscriptionRequestSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { FeedServices } from '../../core/feeds/index.ts';

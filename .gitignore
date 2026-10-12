@@ -18,3 +18,5 @@ ttrss-import-*.txt
 # scripts/sbom.sh output, and the Dependency-Track API key it uploads with
 /sbom/
 /dtrack.env
+# AWS deployment values (infra/deploy.config.example.json shows the shape)
+/infra/deploy.config.json

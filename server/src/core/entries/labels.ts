@@ -1,4 +1,4 @@
-import type { CreateLabelRequest, UpdateLabelRequest } from '@rss-reader/shared';
+import type { CreateLabelRequest, UpdateLabelRequest } from '@newses/shared';
 import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { entryLabels, labels, userEntries } from '../../db/schema.ts';

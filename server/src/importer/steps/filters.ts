@@ -1,4 +1,4 @@
-import { type FilterAction, type FilterField, MAX_SCORE, normaliseTag } from '@rss-reader/shared';
+import { type FilterAction, type FilterField, MAX_SCORE, normaliseTag } from '@newses/shared';
 import { and, eq } from 'drizzle-orm';
 import { DomainError } from '../../core/errors.ts';
 import { compilePattern } from '../../core/filters/engine.ts';

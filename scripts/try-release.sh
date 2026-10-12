@@ -11,7 +11,7 @@ Usage: scripts/try-release.sh [--leg all|linux|windows|publish] [--tag TAG] [--p
   --leg LEG   Run one leg (default: all, i.e. linux and windows in parallel, then publish)
   --tag TAG   Release tag to build as (default: v0.0.1-try.<time>); a later --leg publish run
               with the same tag reuses the build legs' files
-  --publish   Really publish to reader-dev.example.com/downloads/ (default: a dry run)
+  --publish   Really publish to the dev stage's downloads (default: a dry run)
 
 Checks the buildspecs first: bash syntax for the Linux legs, ASCII for the Windows leg.
 Always targets the dev stage. Needs AWS CLI credentials, git, zip, and python3 with PyYAML.
@@ -23,8 +23,6 @@ die() {
   exit 2
 }
 
-region=us-east-2
-stack=rss-reader-dev-release
 leg=all tag='' dry_run=true
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -45,6 +43,10 @@ case "$leg" in all | linux | windows | publish) ;; *) die '--leg takes all, linu
 [[ $tag != v0.0.0-* ]] || die "Android refuses versionCode 0; start at v0.0.1: $tag"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=lib/deploy-config.sh
+. "$root/scripts/lib/deploy-config.sh"
+region=$(deploy_region)
+stack=$(deploy_prefix)-dev-release
 cd "$root"
 
 # A failed build costs minutes; a syntax error or a non-ASCII byte is found here for free.

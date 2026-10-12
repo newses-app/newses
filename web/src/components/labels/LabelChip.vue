@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Label } from '@rss-reader/shared';
+import type { Label } from '@newses/shared';
 
 defineProps<{ label: Label; to?: string | undefined }>();
 </script>

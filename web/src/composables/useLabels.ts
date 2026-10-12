@@ -1,4 +1,4 @@
-import type { CreateLabelRequest, Label, UpdateLabelRequest } from '@rss-reader/shared';
+import type { CreateLabelRequest, Label, UpdateLabelRequest } from '@newses/shared';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api } from '../api.ts';
 import { COUNTERS_KEY } from './useCounters.ts';

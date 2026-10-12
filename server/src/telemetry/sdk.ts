@@ -24,8 +24,8 @@ export function startTelemetry(): void {
 
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({
-      [ATTR_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME ?? `rss-reader-${role()}`,
-      [ATTR_SERVICE_VERSION]: process.env.RSS_READER_VERSION ?? 'dev',
+      [ATTR_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME ?? `newses-${role()}`,
+      [ATTR_SERVICE_VERSION]: process.env.NEWSES_VERSION ?? 'dev',
     }),
     instrumentations: [
       // Only queries inside a traced request or job: pg-boss polls the database constantly.

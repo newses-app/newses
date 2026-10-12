@@ -1,4 +1,4 @@
-import { DEFAULT_PREFS, type Stream } from '@rss-reader/shared';
+import { DEFAULT_PREFS, type Stream } from '@newses/shared';
 import { type SQL, sql } from 'drizzle-orm';
 import { userPrefInt } from '../prefs.ts';
 

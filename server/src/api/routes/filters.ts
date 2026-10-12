@@ -5,7 +5,7 @@ import {
   filterRequestSchema,
   filterSchema,
   filterTestResponseSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { EntryService } from '../../core/entries/entries.ts';

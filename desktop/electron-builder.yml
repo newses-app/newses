@@ -1,6 +1,6 @@
 # Unsigned builds: `pnpm build:win` (per-user NSIS, zip) and `pnpm build:linux` (AppImage, deb).
 appId: app.newses
-productName: rss-reader
+productName: Newses
 copyright: Copyright © Newses contributors
 
 directories:
@@ -33,12 +33,12 @@ win:
     # The unpacked app, to run without installing; not updated by electron-updater.
     - target: zip
       arch: [x64]
-  artifactName: rss-reader-${version}-windows-${arch}.${ext}
+  artifactName: newses-${version}-windows-${arch}.${ext}
 
 nsis:
   oneClick: true
   perMachine: false
-  artifactName: rss-reader-${version}-windows-setup.${ext}
+  artifactName: newses-${version}-windows-setup.${ext}
 
 linux:
   target:
@@ -47,9 +47,9 @@ linux:
     - target: deb
       arch: [x64]
   category: Network
-  executableName: rss-reader
+  executableName: newses
   # Links the running window to the .desktop entry (desktopName in package.json).
   syncDesktopName: true
   maintainer: Newses contributors
   synopsis: Self-hosted feed reader
-  artifactName: rss-reader-${version}-linux-${arch}.${ext}
+  artifactName: newses-${version}-linux-${arch}.${ext}

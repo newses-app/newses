@@ -16,17 +16,16 @@ import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
+import { BUILD_VERSION, REPO_ROOT, type StageConfig } from './config.ts';
 import {
   ADOT_LAYER_ARN,
-  BUILD_VERSION,
   DB_ENDPOINT_PARAMETER,
   DB_MASTER_PASSWORD_PARAMETER,
   DB_MASTER_USER,
   dbName,
-  REPO_ROOT,
+  PROJECT,
   resourceName,
-  type StageConfig,
-} from './config.ts';
+} from './deploy-config.ts';
 import type { ParamsStack } from './params-stack.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
@@ -61,7 +60,7 @@ const tracingEnvironment = (stage: StageConfig, name: string) => ({
   // The wrapper always appends `http` to the enabled list, so it is disabled explicitly.
   OTEL_NODE_ENABLED_INSTRUMENTATIONS: 'aws-lambda,aws-sdk',
   OTEL_NODE_DISABLED_INSTRUMENTATIONS: 'http',
-  OTEL_SERVICE_NAME: `rss-reader-${name}`,
+  OTEL_SERVICE_NAME: `${PROJECT}-${name}`,
   OTEL_RESOURCE_ATTRIBUTES: `deployment.environment.name=${stage.name},service.version=${BUILD_VERSION}`,
 });
 
@@ -140,7 +139,7 @@ export class AppStack extends Stack {
           ARCHIVE_ENABLED: String(stage.archive),
           ARCHIVE_ATHENA_WORKGROUP: archive.workgroup,
           ARCHIVE_ATHENA_DATABASE: archive.database,
-          RSS_READER_VERSION: BUILD_VERSION,
+          NEWSES_VERSION: BUILD_VERSION,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,

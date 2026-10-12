@@ -81,7 +81,7 @@ describe('two-factor authentication', () => {
     const setup = await post('/auth/2fa/setup', { password: 'tess password' }, tess);
     expect(setup.statusCode).toBe(200);
     ({ secret } = setup.json<{ secret: string; uri: string }>());
-    expect(setup.json<{ uri: string }>().uri).toMatch(/^otpauth:\/\/totp\/RSS%20Reader:tess\?/);
+    expect(setup.json<{ uri: string }>().uri).toMatch(/^otpauth:\/\/totp\/Newses:tess\?/);
 
     expect((await post('/auth/2fa/enable', { code: '000000' }, tess)).statusCode).toBe(401);
     const enabled = await post('/auth/2fa/enable', { code: codeFor(secret) }, tess);

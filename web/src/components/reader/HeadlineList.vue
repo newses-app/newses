@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Entry } from '@rss-reader/shared';
+import type { Entry } from '@newses/shared';
 import { mdiNoteTextOutline, mdiRss, mdiStar, mdiStarOutline } from '@mdi/js';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';

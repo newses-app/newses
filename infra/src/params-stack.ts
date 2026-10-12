@@ -1,6 +1,7 @@
 import { Stack, type StackProps } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import type { StageConfig } from './config.ts';
+import { PROJECT } from './deploy-config.ts';
 import { GeneratedParameter } from './generated-parameter.ts';
 
 /**
@@ -15,7 +16,7 @@ export class ParamsStack extends Stack {
 
   constructor(scope: Construct, id: string, props: StackProps & { stage: StageConfig }) {
     super(scope, id, props);
-    const path = `/rss-reader/${props.stage.name}`;
+    const path = `/${PROJECT}/${props.stage.name}`;
 
     this.dbPassword = new GeneratedParameter(this, 'DbPassword', {
       parameterName: `${path}/db-password`,

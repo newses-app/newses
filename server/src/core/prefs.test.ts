@@ -1,4 +1,4 @@
-import { DEFAULT_PREFS } from '@rss-reader/shared';
+import { DEFAULT_PREFS } from '@newses/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../db/client.ts';
 import { userPrefs, users } from '../db/schema.ts';

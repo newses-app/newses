@@ -297,7 +297,7 @@ export function describeNotices(
     resolved.length > 0 ? `${String(resolved.length)} resolved` : null,
   ].filter(Boolean);
   const critical = opened.some((n) => n.severity === 'critical');
-  const subject = `[rss-reader] ${critical ? 'CRITICAL: ' : ''}alerts ${parts.join(', ')}`;
+  const subject = `[Newses] ${critical ? 'CRITICAL: ' : ''}alerts ${parts.join(', ')}`;
   const line = (n: AlertNotice) => `- [${n.severity}] ${n.rule} (${n.subject}): ${n.summary}`;
   const sections = [
     opened.length > 0 ? `Opened:\n${opened.map(line).join('\n')}` : null,

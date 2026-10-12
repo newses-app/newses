@@ -66,15 +66,15 @@ phases:
           npm pkg set version="$version"
           if ($LASTEXITCODE -ne 0) { throw "npm pkg set failed" }
           Pop-Location
-          pnpm --filter @rss-reader/desktop build:win:release
+          pnpm --filter @newses/desktop build:win:release
           if ($LASTEXITCODE -ne 0) { throw "signed Windows build failed" }
 
           # Exactly these, so a failed or misnamed build stops here.
           $files = @(
-            "desktop\release\rss-reader-$version-windows-setup.exe",
-            "desktop\release\rss-reader-$version-windows-setup.exe.blockmap",
+            "desktop\release\newses-$version-windows-setup.exe",
+            "desktop\release\newses-$version-windows-setup.exe.blockmap",
             "desktop\release\latest.yml",
-            "desktop\release\rss-reader-$version-windows-x64.zip"
+            "desktop\release\newses-$version-windows-x64.zip"
           )
           foreach ($file in $files) {
             if (-not (Test-Path $file)) { throw "missing $file" }

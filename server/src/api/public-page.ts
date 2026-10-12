@@ -1,5 +1,5 @@
-import type { Entry } from '@rss-reader/shared';
-import { VIDEO_FRAME_SOURCES } from '@rss-reader/shared/web-csp';
+import type { Entry } from '@newses/shared';
+import { VIDEO_FRAME_SOURCES } from '@newses/shared/web-csp';
 
 /**
  * Policy for public pages: no scripts at all, the entry's images, media, and embedded videos,
@@ -102,7 +102,7 @@ ${
 }
 </article>
 ${isHttp(entry.link) ? `<p><a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">Read the original</a></p>` : ''}
-<footer>Shared from rss-reader.</footer>`,
+<footer>Shared from Newses.</footer>`,
   );
 }
 

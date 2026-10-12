@@ -68,7 +68,7 @@ if [ -n "$from" ]; then
   version=$(basename "$from")
   [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]] || die "no version at the end of $from"
   for deliverable in desktop mobile; do
-    name="rss-reader-$version-$deliverable.cdx.json"
+    name="newses-$version-$deliverable.cdx.json"
     curl -fsS --max-time 60 -o "$out/$name" "$from$name" || die "cannot download $from$name"
   done
   node infra/src/release/upload-sbom.ts --dir "$out" --tag "v$version"
@@ -85,11 +85,11 @@ for deliverable in "${deliverables[@]}"; do
   echo "== $deliverable"
   case "$deliverable" in
     image)
-      docker build -q -f docker/Dockerfile --build-arg "RSS_READER_VERSION=$version" \
-        -t rss-reader:sbom . >/dev/null
+      docker build -q -f docker/Dockerfile --build-arg "NEWSES_VERSION=$version" \
+        -t newses:sbom . >/dev/null
       # Packages only: without the selection, syft also lists every file the packages own.
       docker run --rm -e SYFT_FILE_METADATA_SELECTION=none \
-        -v /var/run/docker.sock:/var/run/docker.sock "$SYFT" -q docker:rss-reader:sbom -o cyclonedx-json@1.6 >"$work/image.json"
+        -v /var/run/docker.sock:/var/run/docker.sock "$SYFT" -q docker:newses:sbom -o cyclonedx-json@1.6 >"$work/image.json"
       "${build[@]}" --deliverable image --input "$work/image.json"
       ;;
     mobile)

@@ -1,4 +1,4 @@
-import type { Entry, EntryListResponse } from '@rss-reader/shared';
+import type { Entry, EntryListResponse } from '@newses/shared';
 import type { InfiniteData } from '@tanstack/vue-query';
 import { describe, expect, it } from 'vitest';
 import { patchEntryPages, statePatch } from './entry-cache.ts';

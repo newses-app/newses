@@ -22,14 +22,10 @@ process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
 children.push(
-  spawn(
-    'pnpm',
-    ['--filter', '@rss-reader/web', 'exec', 'vite', '--mode', 'native', '--strictPort'],
-    {
-      stdio: 'inherit',
-      shell,
-    },
-  ),
+  spawn('pnpm', ['--filter', '@newses/web', 'exec', 'vite', '--mode', 'native', '--strictPort'], {
+    stdio: 'inherit',
+    shell,
+  }),
 );
 
 async function waitForServer(): Promise<void> {
@@ -49,7 +45,7 @@ const electron = spawn('pnpm', ['exec', 'electron', '.'], {
   stdio: 'inherit',
   shell,
   // Editors built on Electron (VS Code) set ELECTRON_RUN_AS_NODE for their terminals' tools.
-  env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, RSS_READER_DEV_SERVER: DEV_SERVER },
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, NEWSES_DEV_SERVER: DEV_SERVER },
 });
 children.push(electron);
 electron.on('close', stop);

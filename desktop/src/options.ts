@@ -1,5 +1,5 @@
 // Desktop options (notifications, tray, launch at login) and the checks on what the renderer sends.
-import type { DesktopOptions } from '@rss-reader/shared';
+import type { DesktopOptions } from '@newses/shared';
 
 export const DEFAULT_OPTIONS: DesktopOptions = {
   notifications: true,
@@ -30,10 +30,10 @@ export function notificationTarget(value: unknown): string | null {
 /** An Exec argument quoted per the desktop entry spec. */
 const quoteExec = (arg: string) => `"${arg.replace(/["`$\\]/g, '\\$&')}"`;
 
-/** `~/.config/autostart/rss-reader.desktop` for Linux, where Electron cannot register login items. */
+/** `~/.config/autostart/newses.desktop` for Linux, where Electron cannot register login items. */
 export const autostartEntry = (executable: string) => `[Desktop Entry]
 Type=Application
-Name=rss-reader
+Name=Newses
 Exec=${quoteExec(executable)} ${HIDDEN_ARG}
 X-GNOME-Autostart-enabled=true
 `;

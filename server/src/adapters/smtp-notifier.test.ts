@@ -29,7 +29,7 @@ describe('SmtpNotifier', () => {
       {
         from: 'reader@example.com',
         to: 'ops@example.com',
-        subject: '[rss-reader] alerts 1 opened',
+        subject: '[Newses] alerts 1 opened',
         text: 'Opened:\n- [warning] host.rate_limited (a.example): a.example asked us to slow down\n',
       },
     ]);

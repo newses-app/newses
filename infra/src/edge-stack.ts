@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { WEB_CSP } from '@rss-reader/shared/web-csp';
+import { WEB_CSP } from '@newses/shared/web-csp';
 import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -11,14 +11,13 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
+import { REPO_ROOT, type StageConfig } from './config.ts';
 import {
   CERTIFICATE_ARN,
   downloadsBucketName,
   HOSTED_ZONE,
-  REPO_ROOT,
   resourceName,
-  type StageConfig,
-} from './config.ts';
+} from './deploy-config.ts';
 import type { GeneratedParameter } from './generated-parameter.ts';
 
 /** Paths served by the API; everything else is the static SPA. */

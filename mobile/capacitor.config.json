@@ -1,6 +1,6 @@
 {
   "appId": "app.newses",
-  "appName": "rss-reader",
+  "appName": "Newses",
   "webDir": "www",
   "server": {
     "androidScheme": "https",

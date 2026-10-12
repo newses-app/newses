@@ -1,4 +1,4 @@
-import type { Category, Counters, Subscription } from '@rss-reader/shared';
+import type { Category, Counters, Subscription } from '@newses/shared';
 import { categoryKey, type StreamKey, subscriptionKey } from './streams.ts';
 
 export interface CategoryNode {

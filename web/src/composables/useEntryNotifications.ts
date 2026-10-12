@@ -1,4 +1,4 @@
-import type { Counters } from '@rss-reader/shared';
+import type { Counters } from '@newses/shared';
 import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { newEntries } from '../lib/new-entries.ts';

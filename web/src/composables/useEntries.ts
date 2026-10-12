@@ -1,5 +1,5 @@
-import type { Entry, EntryListResponse, EntryState, MarkReadRequest } from '@rss-reader/shared';
-import { normaliseTags } from '@rss-reader/shared/client';
+import type { Entry, EntryListResponse, EntryState, MarkReadRequest } from '@newses/shared';
+import { normaliseTags } from '@newses/shared/client';
 import { type InfiniteData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';

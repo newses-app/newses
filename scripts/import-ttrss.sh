@@ -10,8 +10,8 @@ Usage: scripts/import-ttrss.sh <dump> [--aws dev|prod] [--users a,b] [--since YY
                                [--force] [--dry-run] [--yes]
 
   <dump>         pg_dump custom-format file (-Fc), .sql, or .sql.gz of the TTRSS database
-  --aws STAGE    Import into that AWS stage (AWS CLI credentials, us-east-2); default: the
-                 Docker stack in docker/
+  --aws STAGE    Import into that AWS stage (AWS CLI credentials, infra/deploy.config.json);
+                 default: the Docker stack in docker/
   --users a,b    Import only these TTRSS logins
   --since DATE   Skip entries older than DATE unless kept (starred, published, ...)
   --force        Re-import into users who have used this instance since their last import
@@ -56,12 +56,15 @@ else
   target="AWS stage $stage"
   label="aws-$stage"
   command -v aws >/dev/null || die 'the AWS CLI is not installed'
-  export AWS_REGION=us-east-2
+  # shellcheck source=lib/deploy-config.sh
+  . "$root/scripts/lib/deploy-config.sh"
+  AWS_REGION=$(deploy_region)
+  export AWS_REGION
   aws sts get-caller-identity >/dev/null || die 'no AWS credentials (set AWS_PROFILE or sign in)'
 fi
 
 # The source: a throwaway PostgreSQL with the dump restored, removed on exit.
-name="rss-reader-import-$$"
+name="newses-import-$$"
 tmp=$(mktemp -d)
 # shellcheck disable=SC2329 # run by the EXIT trap
 cleanup() {
@@ -103,22 +106,23 @@ if [ -z "$stage" ]; then
     "$db_container" | cut -d' ' -f1)
   docker network connect "$stack_network" "$name"
   run_import() {
-    "${compose[@]}" exec -T server rss-reader cli import-ttrss --source "$source_url" "$@"
+    "${compose[@]}" exec -T server newses cli import-ttrss --source "$source_url" "$@"
   }
 else
-  echo "Building the rss-reader image from this checkout (a few minutes the first time)..."
+  echo "Building the Newses image from this checkout (a few minutes the first time)..."
   image=$(docker build -q -f "$root/docker/Dockerfile" "$root")
-  host=$(aws ssm get-parameter --name /rss-reader/db/endpoint --query Parameter.Value --output text)
-  db_name="rss_reader_$stage"
-  db_password=$(aws ssm get-parameter --name "/rss-reader/$stage/db-password" \
+  prefix=$(deploy_prefix)
+  host=$(aws ssm get-parameter --name "/$prefix/db/endpoint" --query Parameter.Value --output text)
+  db_name="${prefix//-/_}_$stage"
+  db_password=$(aws ssm get-parameter --name "/$prefix/$stage/db-password" \
     --with-decryption --query Parameter.Value --output text)
-  app_secret=$(aws ssm get-parameter --name "/rss-reader/$stage/app-secret" \
+  app_secret=$(aws ssm get-parameter --name "/$prefix/$stage/app-secret" \
     --with-decryption --query Parameter.Value --output text)
   # Articles past retention go to the stage's archive in its blob bucket, when the stage has it on.
-  archive=$(aws lambda get-function-configuration --function-name "rss-reader-$stage-tick" \
+  archive=$(aws lambda get-function-configuration --function-name "$prefix-$stage-tick" \
     --query 'Environment.Variables.ARCHIVE_ENABLED' --output text)
   [ "$archive" = true ] || archive=false
-  blob_bucket=$(aws cloudformation describe-stacks --stack-name "rss-reader-$stage-data" \
+  blob_bucket=$(aws cloudformation describe-stacks --stack-name "$prefix-$stage-data" \
     --query "Stacks[0].Outputs[?OutputKey=='BlobBucket'].OutputValue" --output text)
   [ "$blob_bucket" != None ] || blob_bucket=''
   if $archive; then

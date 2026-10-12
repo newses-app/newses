@@ -6,8 +6,8 @@ import { provisionDatabase } from './provision.ts';
 
 const adminUrl = inject('postgresUrl');
 const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-const dev = { name: `rss_reader_dev_${suffix}`, password: 'dev-password' };
-const prod = { name: `rss_reader_prod_${suffix}`, password: 'prod-password' };
+const dev = { name: `newses_dev_${suffix}`, password: 'dev-password' };
+const prod = { name: `newses_prod_${suffix}`, password: 'prod-password' };
 // Like the RDS master user: no superuser, but CREATEROLE and CREATEDB.
 const master = { name: `master_${suffix}`, password: 'master-password' };
 

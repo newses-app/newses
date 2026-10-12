@@ -15,11 +15,12 @@ Usage: scripts/windows-signing-setup.sh [--subscription ID] [--account NAME] [--
   --subscription ID  Azure subscription with the signing account (default: az's current one)
   --account NAME     Artifact Signing account (default: the only one in the subscription)
   --profile NAME     Certificate profile (default: the account's only active public-trust one)
-  --app-name NAME    App registration for the release pipeline (default: rss-reader-release-signing)
+  --app-name NAME    App registration for the release pipeline (default: <prefix>-release-signing)
   --publisher NAME   Publisher name (default: the CN of the profile's certificate)
   --years N          Client secret lifetime in years (default: 1)
   --ssm              Also store the values as SecureString parameters under
-                     /rss-reader/release/windows-signing/ (AWS CLI credentials, us-east-2)
+                     /<prefix>/release/windows-signing/ (AWS CLI credentials,
+                     infra/deploy.config.json)
   --dry-run          Find the account, profile, and publisher, then stop before any change
 
 Each run adds a new client secret, saves it, then removes the app registration's older ones.
@@ -33,14 +34,17 @@ die() {
 }
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=lib/deploy-config.sh
+. "$root/scripts/lib/deploy-config.sh"
+# The deployment's resourcePrefix, else newses, so a rerun finds the app registration it made.
+prefix=$(name_prefix)
 env_file="$root/desktop/electron-builder.env"
-ssm_path=/rss-reader/release/windows-signing
-region=us-east-2
+ssm_path=/$prefix/release/windows-signing
 provider=Microsoft.CodeSigning
 # Renamed with the service; the role keeps its ID.
 roles=('Artifact Signing Certificate Profile Signer' 'Trusted Signing Certificate Profile Signer')
 
-subscription='' account='' profile='' app_name=rss-reader-release-signing publisher='' years=1
+subscription='' account='' profile='' app_name=$prefix-release-signing publisher='' years=1
 ssm=false dry_run=false
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -188,7 +192,7 @@ fi
 # failure here leaves the pipeline's current secret working.
 step='creating the client secret'
 old_secrets=$(az ad app credential list --id "$app_id" --query '[].keyId' -o tsv)
-secret=$(az ad app credential reset --id "$app_id" --append --display-name rss-reader-release \
+secret=$(az ad app credential reset --id "$app_id" --append --display-name "$prefix-release" \
   --years "$years" --query password -o tsv --only-show-errors)
 echo "New client secret, valid for $years year(s)"
 
@@ -214,6 +218,7 @@ echo "Wrote $env_file (gitignored)"
 
 if $ssm; then
   step='storing the SSM parameters'
+  region=$(deploy_region)
   # Values go through a private file so the secret never appears in a process list.
   request=$(mktemp)
   trap 'rm -f "$request"' EXIT

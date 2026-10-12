@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net';
-import { createApiClient } from '@rss-reader/shared';
+import { createApiClient } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db/client.ts';
@@ -287,11 +287,11 @@ describe('events stream', () => {
 
     const controller = new AbortController();
     const response = await fetch(`http://127.0.0.1:${String(port)}/api/v1/events`, {
-      headers: { authorization: `Bearer ${token}`, origin: 'app://rss-reader' },
+      headers: { authorization: `Bearer ${token}`, origin: 'app://newses' },
       signal: controller.signal,
     });
     expect(response.headers.get('content-type')).toMatch(/^text\/event-stream/);
-    expect(response.headers.get('access-control-allow-origin')).toBe('app://rss-reader');
+    expect(response.headers.get('access-control-allow-origin')).toBe('app://newses');
     expect(response.headers.get('x-accel-buffering')).toBe('no');
     const reader = (response.body as ReadableStream<Uint8Array>).getReader();
     const decoder = new TextDecoder();

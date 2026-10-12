@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { passwordSchema, loginNameSchema } from '@rss-reader/shared';
+import { passwordSchema, loginNameSchema } from '@newses/shared';
 import type { AuthServices } from '../core/auth/index.ts';
 import { ImportError } from '../importer/errors.ts';
 import type { ImportOptions } from '../importer/importer.ts';

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Label } from '@rss-reader/shared';
+import type { Label } from '@newses/shared';
 import { mdiDelete, mdiLabelOutline, mdiPencil, mdiPlus } from '@mdi/js';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';

@@ -1,4 +1,4 @@
-import type { Counters } from '@rss-reader/shared';
+import type { Counters } from '@newses/shared';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { categories, subscriptions } from '../../db/schema.ts';

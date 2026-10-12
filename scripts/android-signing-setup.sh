@@ -10,13 +10,14 @@ usage() {
 Usage: scripts/android-signing-setup.sh --backup DIR [--keystore FILE] [--alias NAME]
                                         [--dname DN] [--ssm] [--dry-run]
 
-  --backup DIR     Offline backup folder; the keystore is DIR/rss-reader-release.jks, generated
+  --backup DIR     Offline backup folder; the keystore is DIR/<prefix>-release.jks, generated
                    there if missing and reused if present
   --keystore FILE  Use this existing keystore instead (no backup copy is made)
-  --alias NAME     Key alias (default: rss-reader)
-  --dname DN       Certificate subject for a new keystore (default: CN=RSS Reader)
+  --alias NAME     Key alias (default: <prefix>)
+  --dname DN       Certificate subject for a new keystore (default: CN=Newses)
   --ssm            Also store the values as SecureString parameters under
-                   /rss-reader/release/android-signing/ (AWS CLI credentials, us-east-2)
+                   /<prefix>/release/android-signing/ (AWS CLI credentials,
+                   infra/deploy.config.json)
   --dry-run        Show what would happen, then stop before any change
 
 The password comes from ANDROID_KEYSTORE_PASSWORD, else mobile/android-signing.env, else a
@@ -30,14 +31,17 @@ die() {
 }
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=lib/deploy-config.sh
+. "$root/scripts/lib/deploy-config.sh"
+# The deployment's resourcePrefix, else newses, so a rerun finds the keystore it made before.
+prefix=$(name_prefix)
 env_file="$root/mobile/android-signing.env"
-ssm_path=/rss-reader/release/android-signing
-region=us-east-2
-name=rss-reader-release.jks
+ssm_path=/$prefix/release/android-signing
+name=$prefix-release.jks
 # Standard-tier SSM parameters hold up to 4 KB.
 standard_max=4096
 
-backup='' keystore='' alias=rss-reader dname='CN=RSS Reader' ssm=false dry_run=false
+backup='' keystore='' alias=$prefix dname='CN=Newses' ssm=false dry_run=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --backup | --keystore | --alias | --dname)
@@ -137,6 +141,7 @@ echo "Wrote $env_file (gitignored)"
 
 if $ssm; then
   step='storing the SSM parameters'
+  region=$(deploy_region)
   # Values go through a private file so the password never appears in a process list.
   request=$work/request.json
   put() {

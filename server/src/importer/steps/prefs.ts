@@ -1,4 +1,4 @@
-import { type PrefKey, prefsSchema } from '@rss-reader/shared';
+import { type PrefKey, prefsSchema } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import { userPrefs } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';

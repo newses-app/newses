@@ -135,7 +135,7 @@ export class OpmlService {
         }));
 
     return generateOpml({
-      head: { title: 'rss-reader subscriptions', dateCreated: new Date() },
+      head: { title: 'Newses subscriptions', dateCreated: new Date() },
       body: { outlines: [...categoryOutlines(null), ...feedOutlines(null)] },
     });
   }

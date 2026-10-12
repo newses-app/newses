@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuditEvent, OpsWindow } from '@rss-reader/shared';
+import type { AuditEvent, OpsWindow } from '@newses/shared';
 import { mdiAlertCircle, mdiAlert, mdiCheckCircle } from '@mdi/js';
 import { useInfiniteQuery, useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';

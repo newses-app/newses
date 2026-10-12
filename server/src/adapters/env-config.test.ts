@@ -58,7 +58,7 @@ describe('loadConfig', () => {
     ).toEqual({
       smtpUrl: 'smtp://mail:25',
       to: 'ops@example.com',
-      from: 'rss-reader <rss-reader@localhost>',
+      from: 'Newses <newses@localhost>',
     });
     expect(loadConfig({ ...base, SMTP_URL: 'smtp://mail:25' }).ops.alertEmail).toBeNull();
     expect(() => loadConfig({ ...base, ALERT_EMAIL_TO: 'ops@example.com' })).toThrow(ConfigError);

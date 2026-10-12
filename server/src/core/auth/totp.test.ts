@@ -37,10 +37,10 @@ describe('totp', () => {
   });
 
   it('builds otpauth URIs', () => {
-    const text = otpauthUri(RFC_SECRET, 'alice', 'RSS Reader');
-    expect(text.startsWith('otpauth://totp/RSS%20Reader:alice?')).toBe(true);
+    const text = otpauthUri(RFC_SECRET, 'alice', 'Newses');
+    expect(text.startsWith('otpauth://totp/Newses:alice?')).toBe(true);
     const uri = new URL(text);
     expect(uri.searchParams.get('secret')).toBe(base32Encode(RFC_SECRET));
-    expect(uri.searchParams.get('issuer')).toBe('RSS Reader');
+    expect(uri.searchParams.get('issuer')).toBe('Newses');
   });
 });

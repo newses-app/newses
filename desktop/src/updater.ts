@@ -3,7 +3,7 @@
 // restart or quit, and the rest are pointed at the downloads page.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { UpdateStatus } from '@rss-reader/shared';
+import type { UpdateStatus } from '@newses/shared';
 import { app, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { CHECK_INTERVAL_MS, parseUpdateConfig, updateMode } from './updates.ts';

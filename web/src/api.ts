@@ -1,4 +1,4 @@
-import { ApiError, createApiClient } from '@rss-reader/shared/client';
+import { ApiError, createApiClient } from '@newses/shared/client';
 import { trackSlow } from './lib/slow-requests.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 

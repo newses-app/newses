@@ -8,7 +8,7 @@ import type { SessionKind, UserRow } from './sessions.ts';
 import { hashToken } from './tokens.ts';
 import { base32Decode, base32Encode, matchTotp, newTotpSecret, otpauthUri } from './totp.ts';
 
-const ISSUER = 'RSS Reader';
+const ISSUER = 'Newses';
 const RECOVERY_CODE_COUNT = 10;
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 

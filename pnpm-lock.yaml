@@ -59,7 +59,7 @@ importers:
 
   desktop:
     devDependencies:
-      '@rss-reader/shared':
+      '@newses/shared':
         specifier: workspace:*
         version: link:../shared
       dmg-builder:
@@ -83,10 +83,10 @@ importers:
 
   infra:
     dependencies:
-      '@rss-reader/server':
+      '@newses/server':
         specifier: workspace:*
         version: link:../server
-      '@rss-reader/shared':
+      '@newses/shared':
         specifier: workspace:*
         version: link:../shared
       aws-cdk-lib:
@@ -95,6 +95,9 @@ importers:
       constructs:
         specifier: ^10.8.1
         version: 10.8.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@aws-sdk/client-ssm':
         specifier: ^3.1146.0
@@ -139,7 +142,7 @@ importers:
       '@capacitor/cli':
         specifier: ^8.5.3
         version: 8.5.3
-      '@rss-reader/shared':
+      '@newses/shared':
         specifier: workspace:*
         version: link:../shared
       esbuild:
@@ -187,6 +190,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
+      '@newses/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@node-rs/argon2':
         specifier: ^2.2.1
         version: 2.2.1
@@ -214,9 +220,6 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.43.0
         version: 1.43.0
-      '@rss-reader/shared':
-        specifier: workspace:*
-        version: link:../shared
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.1)
@@ -308,7 +311,7 @@ importers:
       '@mdi/js':
         specifier: ^7.4.47
         version: 7.4.47
-      '@rss-reader/shared':
+      '@newses/shared':
         specifier: workspace:*
         version: link:../shared
       '@tanstack/vue-query':

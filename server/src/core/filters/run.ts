@@ -1,4 +1,4 @@
-import { type FilterAction, MAX_SCORE, MAX_TAGS_PER_ENTRY, normaliseTag } from '@rss-reader/shared';
+import { type FilterAction, MAX_SCORE, MAX_TAGS_PER_ENTRY, normaliseTag } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { KEPT_ENTRY } from '../feeds/purge.ts';

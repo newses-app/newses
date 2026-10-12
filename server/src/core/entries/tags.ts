@@ -1,4 +1,4 @@
-import { normaliseTags, type TagCount } from '@rss-reader/shared';
+import { normaliseTags, type TagCount } from '@newses/shared';
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { entryTags, userEntries } from '../../db/schema.ts';

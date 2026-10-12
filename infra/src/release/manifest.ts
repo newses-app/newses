@@ -1,6 +1,6 @@
 // What the release pipeline's publish leg uploads for a version: the files both build legs
 // handed over, SHA256SUMS, the update feeds pointed at them, latest.json, and the downloads page.
-import type { ReleaseFile, ReleaseManifest } from '@rss-reader/shared/release';
+import type { ReleaseFile, ReleaseManifest } from '@newses/shared/release';
 import { sbomName } from './sbom.ts';
 
 /** A built file: name, size in bytes, and SHA-256 (hex). */
@@ -23,11 +23,11 @@ export interface Upload {
 
 /** The installers each version ships, by electron-builder's and the mobile build's naming. */
 export const installerNames = (version: string): Record<Installer, string> => ({
-  windows: `rss-reader-${version}-windows-setup.exe`,
-  windowsZip: `rss-reader-${version}-windows-x64.zip`,
-  appImage: `rss-reader-${version}-linux-x86_64.AppImage`,
-  deb: `rss-reader-${version}-linux-amd64.deb`,
-  android: `rss-reader-${version}-android.apk`,
+  windows: `newses-${version}-windows-setup.exe`,
+  windowsZip: `newses-${version}-windows-x64.zip`,
+  appImage: `newses-${version}-linux-x86_64.AppImage`,
+  deb: `newses-${version}-linux-amd64.deb`,
+  android: `newses-${version}-android.apk`,
 });
 
 /** electron-updater's feeds: Windows (NSIS) and Linux (AppImage). */
@@ -201,8 +201,8 @@ export function installCommands(kind: Installer | 'sbom', file: ReleaseFile) {
     case 'windowsZip':
       return [
         ...fetchAndCheck(file, 'powershell'),
-        `Expand-Archive ${name} -DestinationPath rss-reader`,
-        '.\\rss-reader\\rss-reader.exe',
+        `Expand-Archive ${name} -DestinationPath newses`,
+        '.\\newses\\Newses.exe',
       ];
     case 'deb':
       return [...fetchAndCheck(file, 'sh'), `sudo apt install ./${name}`];
@@ -284,7 +284,7 @@ export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>rss-reader ${version} downloads</title>
+    <title>Newses ${version} downloads</title>
     <style>
       :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
       body { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
@@ -300,8 +300,8 @@ export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom
     </style>
   </head>
   <body>
-    <h1>rss-reader ${version}${manifest.prerelease ? ' (prerelease)' : ''}</h1>
-    <p>Published ${manifest.published.slice(0, 10)}. The apps connect to any rss-reader server over HTTPS, and the desktop apps update themselves.</p>
+    <h1>Newses ${version}${manifest.prerelease ? ' (prerelease)' : ''}</h1>
+    <p>Published ${manifest.published.slice(0, 10)}. The apps connect to any Newses server over HTTPS, and the desktop apps update themselves.</p>
     <ul>
 ${list(installers)}
     </ul>

@@ -1,4 +1,4 @@
-import type { AppPassword, Category, Label, Session, Subscription, User } from '@rss-reader/shared';
+import type { AppPassword, Category, Label, Session, Subscription, User } from '@newses/shared';
 import type { AppPasswordRow } from '../core/auth/app-passwords.ts';
 import type { SessionRow, UserRow } from '../core/auth/sessions.ts';
 import type { CategoryRow } from '../core/categories.ts';

@@ -16,7 +16,7 @@ import {
   twoFactorSetupRequestSchema,
   twoFactorSetupResponseSchema,
   twoFactorStatusSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';

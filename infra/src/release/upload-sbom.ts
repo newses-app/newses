@@ -7,7 +7,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
-import { versionFromTag } from '@rss-reader/shared/release';
+import { versionFromTag } from '@newses/shared/release';
 import { REPO_ROOT } from '../config.ts';
 import { bomUploadRequest, uploadTarget } from './dtrack.ts';
 import { parseSbomName } from './sbom.ts';

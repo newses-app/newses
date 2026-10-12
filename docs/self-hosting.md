@@ -35,14 +35,15 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `OPS_HOST_HOURLY_BUDGET` | `200` | Requests to one site in an hour above which an alert opens |
 | `SMTP_URL` | unset | Mail server for alert emails, e.g. `smtps://user:password@mail.example.com:465` |
 | `ALERT_EMAIL_TO` | unset | Address alerts are emailed to; needs `SMTP_URL`. Unset keeps alerts on the Operations page only |
-| `ALERT_EMAIL_FROM` | `rss-reader <rss-reader@localhost>` | Sender of alert emails |
+| `ALERT_EMAIL_FROM` | `Newses <newses@localhost>` | Sender of alert emails |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP/HTTP endpoint for traces, metrics, and logs, e.g. `http://lgtm:4318` for the `observability` profile; unset turns OpenTelemetry off |
 | `OTEL_EXPORTER_OTLP_HEADERS` | unset | Headers for the endpoint, e.g. `authorization=Bearer …` |
 | `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on`, `1` | Trace sampling, e.g. `parentbased_traceidratio` and `0.1` |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Milliseconds between metric exports |
 | `DEPLOYMENT_ENVIRONMENT` | `self-hosted` | `deployment.environment.name` on all telemetry |
 | `GRAFANA_PORT` | `3000` | Port of Grafana on `127.0.0.1` (`observability` profile) |
-| `RSS_READER_IMAGE` | `rss-reader:latest` | Image tag to build or run |
+| `NEWSES_IMAGE` | `newses:latest` | Image tag to build or run |
+| `COMPOSE_PROJECT_NAME` | `newses` | Prefix of container and volume names; a stack created as `rss-reader` keeps that name to keep its volumes |
 | `VIRTUAL_HOST`, `LETSENCRYPT_HOST` | unset | Public hostname for nginx-proxy and acme-companion (`compose.nginx-proxy.yaml`) |
 | `NGINX_PROXY_NETWORK` | `nginx-proxy` | Existing Docker network of nginx-proxy |
 
@@ -58,9 +59,9 @@ Application variables, set in `compose.yaml`:
 
 Admins manage users through the admin API (`/api/v1/admin/users`). From the host, with the stack running:
 
-- Create: `echo 'the password' | C exec -T server rss-reader cli user create <login> [--admin]`
-- Reset a password, sign the user out everywhere, and revoke their app passwords: `echo 'new password' | C exec -T server rss-reader cli user reset-password <login>`
-- Turn off a user's two-factor authentication and sign them out everywhere: `C exec server rss-reader cli user reset-2fa <login>`
+- Create: `echo 'the password' | C exec -T server newses cli user create <login> [--admin]`
+- Reset a password, sign the user out everywhere, and revoke their app passwords: `echo 'new password' | C exec -T server newses cli user reset-password <login>`
+- Turn off a user's two-factor authentication and sign them out everywhere: `C exec server newses cli user reset-2fa <login>`
 
 ## Logs
 
@@ -93,7 +94,7 @@ Traces, metrics, and logs:
 
 1. Set `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` in `docker/.env`.
 2. `C --profile observability up -d`
-3. Open `http://127.0.0.1:3000` (on the Docker host; tunnel with `ssh -L 3000:127.0.0.1:3000` from elsewhere). Grafana allows anonymous admin access, so keep it off public interfaces. The `rss-reader` folder has dashboards for the overview, API, jobs, remote sites, and runtime; Explore searches traces (Tempo) and logs (Loki).
+3. Open `http://127.0.0.1:3000` (on the Docker host; tunnel with `ssh -L 3000:127.0.0.1:3000` from elsewhere). Grafana allows anonymous admin access, so keep it off public interfaces. The `newses` folder has dashboards for the overview, API, jobs, remote sites, and runtime; Explore searches traces (Tempo) and logs (Loki).
 
 Any OTLP/HTTP backend works instead of the bundled one. Telemetry carries route patterns and host names, never credentials, feed URLs, or article content.
 
@@ -120,12 +121,12 @@ The desktop and mobile apps need HTTPS. The proxy must forward the `Authorizatio
 
 ## Apps
 
-Install the desktop and Android apps from `https://reader.example.com/downloads/` and enter the server's HTTPS address at first launch; they update themselves from there. The proxy needs the headers above.
+Install the desktop and Android apps from an AWS stage's `https://<domain>/downloads/` (see `docs/architecture.md`) and enter the server's HTTPS address at first launch; they update themselves from there. The proxy needs the headers above.
 
 ## Backups
 
-- Enable nightly dumps with `C --profile backup up -d`. Dumps go to the `backups` volume as `rss-reader-YYYYMMDD-HHMMSS.dump` and are pruned after `BACKUP_RETENTION_DAYS`.
-- Take an ad-hoc dump with `C exec db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > rss-reader.dump`.
+- Enable nightly dumps with `C --profile backup up -d`. Dumps go to the `backups` volume as `newses-YYYYMMDD-HHMMSS.dump` and are pruned after `BACKUP_RETENTION_DAYS`.
+- Take an ad-hoc dump with `C exec db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > newses.dump`.
 - Back up the `blobs` volume too. Favicons and cached images re-fetch, but the archive (`archive/` in the volume) is not in the dumps and cannot be re-fetched.
 
 ## Restore
@@ -133,5 +134,5 @@ Install the desktop and Android apps from `https://reader.example.com/downloads/
 1. `C stop server worker`
 2. Restore one of:
    - From the backups volume: `C exec backup pg_restore --clean --if-exists -d "$POSTGRES_DB" /backups/<file>.dump`
-   - From a local file: `C exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < rss-reader.dump`
+   - From a local file: `C exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < newses.dump`
 3. `C start server worker`

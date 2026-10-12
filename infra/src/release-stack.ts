@@ -6,15 +6,14 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
+import { DOWNLOADS_PREFIX, type StageConfig } from './config.ts';
 import {
-  DOWNLOADS_PREFIX,
   downloadsBucketName,
   GITHUB_CONNECTION_ARN,
   GITHUB_REPO,
   resourceName,
   SIGNING_PARAMETERS,
-  type StageConfig,
-} from './config.ts';
+} from './deploy-config.ts';
 
 /** Build-environment variables read from SSM SecureString parameters; CodeBuild grants the reads. */
 const signingParameters = (group: string, names: Record<string, string>) =>

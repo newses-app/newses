@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TwoFactorSetup } from '@rss-reader/shared';
+import type { TwoFactorSetup } from '@newses/shared';
 import { mdiContentCopy, mdiDownload } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import QRCode from 'qrcode';
@@ -107,7 +107,7 @@ function downloadCodes(codes: string[]) {
   const url = URL.createObjectURL(new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'rss-reader-recovery-codes.txt';
+  link.download = 'newses-recovery-codes.txt';
   link.click();
   URL.revokeObjectURL(url);
 }

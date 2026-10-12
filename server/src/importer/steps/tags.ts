@@ -1,4 +1,4 @@
-import { MAX_TAGS_PER_ENTRY, normaliseTag } from '@rss-reader/shared';
+import { MAX_TAGS_PER_ENTRY, normaliseTag } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import { entryTags } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';

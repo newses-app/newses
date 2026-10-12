@@ -39,7 +39,7 @@ Behaviour:
 
 | Option | Effect |
 |---|---|
-| `--aws dev\|prod` | Import into that stage's database, with the caller's AWS credentials (`AWS_PROFILE`) for account `123456789012` in `us-east-2` |
+| `--aws dev\|prod` | Import into that stage's database, with the caller's AWS credentials (`AWS_PROFILE`), in the region of `infra/deploy.config.json` |
 | `--users`, `--since`, `--force` | Passed to the CLI |
 | `--dry-run` | Stop after the dry run |
 | `--yes` | Import without asking |
@@ -52,13 +52,13 @@ The script:
 
 ### Without a dump
 
-When TTRSS runs on the same Docker host, connect rss-reader's server container to TTRSS's network for the import. Both stacks name their database service `db`, so address TTRSS's by its container name:
+When TTRSS runs on the same Docker host, connect Newses's server container to TTRSS's network for the import. Both stacks name their database service `db`, so address TTRSS's by its container name:
 
 ```
-docker network connect <ttrss-project>_default rss-reader-server-1
-docker compose exec server rss-reader cli import-ttrss \
+docker network connect <ttrss-project>_default newses-server-1
+docker compose exec server newses cli import-ttrss \
   --source postgres://$TTRSS_DB_USER:$TTRSS_DB_PASS@<ttrss-project>-db-1/$TTRSS_DB_NAME --dry-run
-docker network disconnect <ttrss-project>_default rss-reader-server-1
+docker network disconnect <ttrss-project>_default newses-server-1
 ```
 
 Use the values from the TTRSS `.env`. The import only reads, in one read-only transaction.

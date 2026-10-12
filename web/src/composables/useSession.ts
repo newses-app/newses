@@ -1,4 +1,4 @@
-import type { CurrentSession, LoggedInResponse } from '@rss-reader/shared';
+import type { CurrentSession, LoggedInResponse } from '@newses/shared';
 import { type QueryClient, useQuery, useQueryClient } from '@tanstack/vue-query';
 import type { Router } from 'vue-router';
 import { useRouter } from 'vue-router';

@@ -1,4 +1,4 @@
-import { MAX_SCORE } from '@rss-reader/shared/client';
+import { MAX_SCORE } from '@newses/shared/client';
 
 /** A whole-number score typed by the user, or null when it is not one within the allowed range. */
 export function parseScore(text: string | number): number | null {

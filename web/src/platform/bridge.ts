@@ -1,4 +1,4 @@
-import type { PlatformBridge, SaveFile } from '@rss-reader/shared';
+import type { PlatformBridge, SaveFile } from '@newses/shared';
 
 export type { PlatformBridge, SaveFile };
 

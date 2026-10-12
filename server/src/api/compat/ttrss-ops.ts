@@ -1,4 +1,4 @@
-import { type Entry, normaliseTag, type Stream } from '@rss-reader/shared';
+import { type Entry, normaliseTag, type Stream } from '@newses/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import type { EntryServices } from '../../core/entries/index.ts';
 import type { LabelRow } from '../../core/entries/labels.ts';

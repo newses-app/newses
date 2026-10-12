@@ -14,7 +14,7 @@ import { PgBossJobQueue } from '../adapters/pg-boss-job-queue.ts';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import type { AppConfig } from '../core/config.ts';
 import { deriveKeys } from '../core/crypto.ts';
-import { HttpFetcher } from '../core/feeds/http.ts';
+import { HttpFetcher, userAgentFor } from '../core/feeds/http.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import { JOB_DEFINITIONS, type Jobs } from '../core/jobs.ts';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
@@ -54,7 +54,10 @@ export const PG_BOSS_TELEMETRY = {
 /** The fetcher for remote hosts, counting every request in the ops statistics. */
 export function createFetcher(config: AppConfig, ops: OpsRecorder): InstrumentedFetcher {
   return new InstrumentedFetcher(
-    new HttpFetcher({ allowPrivateNetworks: config.fetchAllowPrivateNetworks }),
+    new HttpFetcher({
+      allowPrivateNetworks: config.fetchAllowPrivateNetworks,
+      userAgent: userAgentFor(config.version),
+    }),
     ops,
   );
 }

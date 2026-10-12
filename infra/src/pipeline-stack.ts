@@ -1,20 +1,22 @@
 import { RemovalPolicy, Stack, type StackProps, Tags } from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import { PipelineType } from 'aws-cdk-lib/aws-codepipeline';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as pipelines from 'aws-cdk-lib/pipelines';
 import type { Construct } from 'constructs';
 import { BudgetStage } from './budget.ts';
+import { type StageConfig } from './config.ts';
 import {
   BUDGET_USD,
+  DEPLOY_CONFIG_PARAMETER,
   GITHUB_CONNECTION_ARN,
   GITHUB_REPO,
   PROJECT,
   resourceName,
-  type StageConfig,
-} from './config.ts';
+} from './deploy-config.ts';
 import { DatabaseStage } from './database.ts';
-import { RssReaderStage } from './stage.ts';
+import { NewsesStage } from './stage.ts';
 
 const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0;
 
@@ -72,12 +74,26 @@ export class PipelineStack extends Stack {
         }),
         installCommands: ['node --version', 'corepack enable', 'pnpm install --frozen-lockfile'],
         commands: [
+          // The deployment config is kept out of the repository.
+          `aws ssm get-parameter --name ${DEPLOY_CONFIG_PARAMETER} --query Parameter.Value --output text > infra/deploy.config.json`,
           'pnpm check',
           'pnpm audit --prod --audit-level high',
-          'pnpm --filter @rss-reader/web build',
+          'pnpm --filter @newses/web build',
           'cd infra && pnpm exec cdk synth',
         ],
         primaryOutputDirectory: 'infra/cdk.out',
+        rolePolicyStatements: [
+          new iam.PolicyStatement({
+            actions: ['ssm:GetParameter'],
+            resources: [
+              Stack.of(this).formatArn({
+                service: 'ssm',
+                resource: 'parameter',
+                resourceName: DEPLOY_CONFIG_PARAMETER.slice(1),
+              }),
+            ],
+          }),
+        ],
       }),
       codeBuildDefaults: {
         buildEnvironment: { buildImage: ARM_BUILD_IMAGE },
@@ -89,7 +105,7 @@ export class PipelineStack extends Stack {
     // busy with the other pipeline's update) fails this run, and a retry clears it.
     pipeline.addStage(new DatabaseStage(this, `${PROJECT}-db`));
     pipeline.addStage(
-      new RssReaderStage(this, resourceName(stage), {
+      new NewsesStage(this, resourceName(stage), {
         stage,
         webDir: props.webDir,
       }),
@@ -100,7 +116,7 @@ export class PipelineStack extends Stack {
               `curl -fsS -o /dev/null https://${stage.domainName}/`,
               `test "$(curl -s -o /dev/null -w '%{http_code}' https://${stage.domainName}/api/v1/subscriptions)" = 401`,
               // The apps' CORS preflight reaches the API through CloudFront.
-              `curl -fsS -o /dev/null -D - -X OPTIONS -H 'Origin: app://rss-reader' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' https://${stage.domainName}/api/v1/subscriptions | grep -qi '^access-control-allow-origin: app://rss-reader'`,
+              `curl -fsS -o /dev/null -D - -X OPTIONS -H 'Origin: app://newses' -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' https://${stage.domainName}/api/v1/subscriptions | grep -qi '^access-control-allow-origin: app://newses'`,
             ],
           }),
         ],

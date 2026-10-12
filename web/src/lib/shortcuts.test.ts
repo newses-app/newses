@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHORTCUT_ACTIONS } from '@rss-reader/shared/client';
+import { SHORTCUT_ACTIONS } from '@newses/shared/client';
 import {
   ACTION_GROUPS,
   bindableKey,

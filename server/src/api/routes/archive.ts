@@ -4,7 +4,7 @@ import {
   archivedEntrySchema,
   entrySchema,
   entryStateSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { ArchiveService } from '../../core/entries/archive.ts';

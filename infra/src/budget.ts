@@ -13,7 +13,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import type { Construct } from 'constructs';
-import { ACCOUNT, PROJECT, REGION } from './config.ts';
+import { ACCOUNT, PROJECT, REGION } from './deploy-config.ts';
 import { ManagedLogGroups } from './managed-log-groups.ts';
 
 /** Services that only build and deploy the project, which the budget leaves out. */

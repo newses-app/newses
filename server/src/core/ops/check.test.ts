@@ -192,7 +192,7 @@ describe('describeNotices', () => {
       ],
       'https://reader.example',
     );
-    expect(subject).toBe('[rss-reader] CRITICAL: alerts 1 opened, 1 resolved');
+    expect(subject).toBe('[Newses] CRITICAL: alerts 1 opened, 1 resolved');
     expect(text).toBe(
       'Opened:\n- [critical] ingest.stale (all): Stalled\n\n' +
         'Resolved:\n- [warning] host.failing (a.example): Failing\n\n' +

@@ -1,4 +1,4 @@
-import { DEFAULT_PREFS } from '@rss-reader/shared/client';
+import { DEFAULT_PREFS } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
 import { readingStyle } from './reading.ts';
 

@@ -54,7 +54,7 @@ export type HealthCheck = () => Promise<void>;
  * `/api/v1` cross-origin with bearer tokens. No credentials are allowed, so cookie sessions stay
  * same-origin.
  */
-export const APP_ORIGINS = ['app://rss-reader', 'https://localhost'];
+export const APP_ORIGINS = ['app://newses', 'https://localhost'];
 
 export interface ApiServices {
   auth: AuthService;
@@ -151,7 +151,7 @@ export function buildApp(deps: AppDeps) {
     void app.register(cookie);
     void app.register(swagger, {
       openapi: {
-        info: { title: 'rss-reader API', version: '1' },
+        info: { title: 'Newses API', version: '1' },
         components: {
           securitySchemes: {
             cookie: {

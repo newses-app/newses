@@ -1,4 +1,4 @@
-import { SHORTCUT_ACTIONS, type ShortcutAction } from '@rss-reader/shared/client';
+import { SHORTCUT_ACTIONS, type ShortcutAction } from '@newses/shared/client';
 
 export type { ShortcutAction };
 

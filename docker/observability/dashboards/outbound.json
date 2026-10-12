@@ -1,8 +1,8 @@
 {
-  "uid": "rss-reader-outbound",
-  "title": "rss-reader: Remote hosts",
+  "uid": "newses-outbound",
+  "title": "Newses: Remote hosts",
   "description": "Load on the sites the reader fetches from. Per-host detail is on the Operations page.",
-  "tags": ["rss-reader"],
+  "tags": ["newses"],
   "timezone": "browser",
   "schemaVersion": 39,
   "refresh": "30s",
@@ -12,9 +12,9 @@
   },
   "links": [
     {
-      "title": "rss-reader",
+      "title": "newses",
       "type": "dashboards",
-      "tags": ["rss-reader"],
+      "tags": ["newses"],
       "asDropdown": true
     }
   ],
@@ -59,7 +59,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (rss_fetch_outcome) (rate(rss_outbound_requests_total{job=~\"rss-reader-.*\"}[$__rate_interval]))",
+          "expr": "sum by (rss_fetch_outcome) (rate(rss_outbound_requests_total{job=~\"newses-.*\"}[$__rate_interval]))",
           "legendFormat": "{{rss_fetch_outcome}}",
           "refId": "A"
         }
@@ -105,7 +105,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (rss_fetch_purpose) (rate(rss_outbound_requests_total{job=~\"rss-reader-.*\"}[$__rate_interval]))",
+          "expr": "sum by (rss_fetch_purpose) (rate(rss_outbound_requests_total{job=~\"newses-.*\"}[$__rate_interval]))",
           "legendFormat": "{{rss_fetch_purpose}}",
           "refId": "A"
         }
@@ -151,7 +151,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (rss_fetch_purpose) (increase(rss_outbound_requests_total{job=~\"rss-reader-.*\",rss_fetch_outcome=\"rate_limited\"}[$__rate_interval]))",
+          "expr": "sum by (rss_fetch_purpose) (increase(rss_outbound_requests_total{job=~\"newses-.*\",rss_fetch_outcome=\"rate_limited\"}[$__rate_interval]))",
           "legendFormat": "{{rss_fetch_purpose}}",
           "refId": "A"
         }
@@ -197,7 +197,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(rss_outbound_requests_total{job=~\"rss-reader-.*\",rss_fetch_outcome=\"not_modified\"}[$__rate_interval])) / sum(rate(rss_outbound_requests_total{job=~\"rss-reader-.*\",rss_fetch_purpose=\"feed\"}[$__rate_interval]))",
+          "expr": "sum(rate(rss_outbound_requests_total{job=~\"newses-.*\",rss_fetch_outcome=\"not_modified\"}[$__rate_interval])) / sum(rate(rss_outbound_requests_total{job=~\"newses-.*\",rss_fetch_purpose=\"feed\"}[$__rate_interval]))",
           "legendFormat": "feeds answered 304",
           "refId": "A"
         }
@@ -244,7 +244,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, rss_fetch_purpose) (rate(rss_outbound_duration_seconds_bucket{job=~\"rss-reader-.*\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, rss_fetch_purpose) (rate(rss_outbound_duration_seconds_bucket{job=~\"newses-.*\"}[$__rate_interval])))",
           "legendFormat": "{{rss_fetch_purpose}}",
           "refId": "A"
         }

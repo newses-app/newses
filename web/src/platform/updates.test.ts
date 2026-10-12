@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '@rss-reader/shared';
+import type { UpdateStatus } from '@newses/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { webBridge } from './bridge.ts';
 import { createUpdates, promptVersion, updateSummary } from './updates.ts';

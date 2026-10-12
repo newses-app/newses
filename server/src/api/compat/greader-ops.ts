@@ -1,4 +1,4 @@
-import type { Entry, Stream } from '@rss-reader/shared';
+import type { Entry, Stream } from '@newses/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest, HTTPMethods } from 'fastify';
 import type { CategoryRow } from '../../core/categories.ts';
 import type { EntryFlags } from '../../core/entries/entries.ts';

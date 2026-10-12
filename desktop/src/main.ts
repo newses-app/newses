@@ -1,8 +1,8 @@
-// The desktop app: the native web build in a hardened window, served from app://rss-reader.
+// The desktop app: the native web build in a hardened window, served from app://newses.
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { NATIVE_CSP } from '@rss-reader/shared/web-csp';
+import { NATIVE_CSP } from '@newses/shared/web-csp';
 import {
   app,
   BrowserWindow,
@@ -33,7 +33,7 @@ import { centered, onScreen, restoreBounds } from './window-state.ts';
 const APP_ID = 'app.newses';
 const WEB_DIR = join(__dirname, 'web');
 /** `pnpm dev`: pages come from the web app's Vite dev server, still on the app origin. */
-const DEV_SERVER = app.isPackaged ? undefined : process.env.RSS_READER_DEV_SERVER;
+const DEV_SERVER = app.isPackaged ? undefined : process.env.NEWSES_DEV_SERVER;
 /** The bundled build's CSP, also sent as a header so it covers what a `<meta>` cannot. */
 const CSP = `${NATIVE_CSP}; frame-ancestors 'none'`;
 /** Renderer permissions the app uses: notifications, and copying share links. */
@@ -201,7 +201,7 @@ function createWindow(settings: SettingsStore, hidden: boolean) {
     minWidth: 360,
     minHeight: 480,
     show: false,
-    title: 'rss-reader',
+    title: 'Newses',
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#121212' : '#ffffff',
     icon: join(__dirname, 'icon.png'),
@@ -211,7 +211,7 @@ function createWindow(settings: SettingsStore, hidden: boolean) {
       sandbox: true,
       nodeIntegration: false,
       webviewTag: false,
-      additionalArguments: [`--rss-reader-version=${app.getVersion()}`],
+      additionalArguments: [`--newses-version=${app.getVersion()}`],
     },
   });
   if (bounds && saved?.maximized) win.maximize();

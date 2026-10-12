@@ -9,7 +9,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json server/
 COPY shared/package.json shared/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod --filter "@rss-reader/server..."
+    pnpm install --frozen-lockfile --prod --filter "@newses/server..."
 
 FROM node:${NODE_VERSION}-alpine AS web
 WORKDIR /app
@@ -18,15 +18,15 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY shared/package.json shared/
 COPY web/package.json web/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --filter "@rss-reader/web..."
+    pnpm install --frozen-lockfile --filter "@newses/web..."
 COPY shared ./shared
 COPY web ./web
-RUN pnpm --filter @rss-reader/web build
+RUN pnpm --filter @newses/web build
 
 FROM node:${NODE_VERSION}-alpine
-# Reported to the desktop and mobile apps; e.g. --build-arg RSS_READER_VERSION=$(git describe --always).
-ARG RSS_READER_VERSION=dev
-ENV RSS_READER_VERSION=${RSS_READER_VERSION}
+# Reported to the desktop and mobile apps; e.g. --build-arg NEWSES_VERSION=$(git describe --always).
+ARG NEWSES_VERSION=dev
+ENV NEWSES_VERSION=${NEWSES_VERSION}
 ENV NODE_ENV=production
 ENV WEB_DIR=/app/web/dist
 WORKDIR /app
@@ -38,9 +38,9 @@ COPY server/src ./server/src
 COPY shared ./shared
 COPY --from=deps /app/shared/node_modules ./shared/node_modules
 COPY --from=web /app/web/dist ./web/dist
-COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/rss-reader
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/newses
 RUN mkdir -p /data/blobs && chown node:node /data/blobs
 USER node
 EXPOSE 8080
-ENTRYPOINT ["rss-reader"]
+ENTRYPOINT ["newses"]
 CMD ["server"]

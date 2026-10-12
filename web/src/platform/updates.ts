@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '@rss-reader/shared';
+import type { UpdateStatus } from '@newses/shared';
 import { readonly, ref } from 'vue';
 import type { PlatformBridge } from './bridge.ts';
 

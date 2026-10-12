@@ -1,4 +1,4 @@
-import type { Entry, EntryListResponse, EntryState } from '@rss-reader/shared';
+import type { Entry, EntryListResponse, EntryState } from '@newses/shared';
 import type { InfiniteData } from '@tanstack/vue-query';
 
 /** The flags of `state` that are set, as a partial entry. */

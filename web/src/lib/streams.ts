@@ -1,4 +1,4 @@
-import type { SpecialFeed, Stream } from '@rss-reader/shared';
+import type { SpecialFeed, Stream } from '@newses/shared';
 
 /**
  * A stream as a route segment: special feeds by name (`read` for recently read), `f<id>` for a

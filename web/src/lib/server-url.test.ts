@@ -1,4 +1,4 @@
-import { API_VERSION } from '@rss-reader/shared/client';
+import { API_VERSION } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
 import { checkServer, compatibility, normaliseServerUrl } from './server-url.ts';
 
@@ -20,7 +20,7 @@ describe('normaliseServerUrl', () => {
   });
 });
 
-const info = (major: number, minor: number, product = 'rss-reader') => ({
+const info = (major: number, minor: number, product = 'newses') => ({
   product,
   version: 'abc1234',
   apiVersion: { major, minor },
@@ -41,9 +41,10 @@ describe('compatibility', () => {
   });
 
   it('refuses other products', () => {
-    expect(compatibility(info(1, 0, 'other')).status).toBe('notRssReader');
-    expect(compatibility({ hello: 'world' }).status).toBe('notRssReader');
-    expect(compatibility(null).status).toBe('notRssReader');
+    expect(compatibility(info(1, 0, 'rss-reader')).status).toBe('ok');
+    expect(compatibility(info(1, 0, 'other')).status).toBe('notNewses');
+    expect(compatibility({ hello: 'world' }).status).toBe('notNewses');
+    expect(compatibility(null).status).toBe('notNewses');
   });
 });
 

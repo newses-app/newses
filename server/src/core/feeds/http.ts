@@ -2,6 +2,10 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import { Agent, fetch, type Response } from 'undici';
 
+/** Identifies feed requests to remote hosts, with where their operators can learn about us. */
+export const userAgentFor = (version?: string) =>
+  `Newses${version ? `/${version}` : ''} (+https://newses.app)`;
+
 export type FetchErrorCode =
   | 'invalid_url'
   | 'blocked_address'
@@ -128,7 +132,7 @@ export class HttpFetcher implements Fetcher {
     this.#timeoutMs = options.timeoutMs ?? 20_000;
     this.#maxBytes = options.maxBytes ?? 10 * 1024 * 1024;
     this.#maxRedirects = options.maxRedirects ?? 5;
-    this.#userAgent = options.userAgent ?? 'rss-reader (self-hosted feed reader)';
+    this.#userAgent = options.userAgent ?? userAgentFor();
 
     const blocked = new BlockList();
     for (const [address, prefix, family] of PRIVATE_RANGES)

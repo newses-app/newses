@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { User } from '@rss-reader/shared';
+import type { User } from '@newses/shared';
 import { mdiAccountPlus, mdiCellphoneKey, mdiDelete, mdiLockReset } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { ref } from 'vue';

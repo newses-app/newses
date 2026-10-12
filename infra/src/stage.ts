@@ -1,14 +1,15 @@
 import { Aspects, Stage, type StageProps, Tags } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
 import { AppStack } from './app-stack.ts';
-import { ACCOUNT, PROJECT, REGION, resourceName, type StageConfig } from './config.ts';
+import { type StageConfig } from './config.ts';
+import { ACCOUNT, PROJECT, REGION, resourceName } from './deploy-config.ts';
 import { DataStack } from './data-stack.ts';
 import { EdgeStack } from './edge-stack.ts';
 import { ManagedLogGroups } from './managed-log-groups.ts';
 import { ParamsStack } from './params-stack.ts';
 import { ReleaseStack } from './release-stack.ts';
 
-export interface RssReaderStageProps extends StageProps {
+export interface NewsesStageProps extends StageProps {
   stage: StageConfig;
   /** Built web app; defaults to `web/dist`. */
   webDir?: string;
@@ -18,14 +19,14 @@ export interface RssReaderStageProps extends StageProps {
  * One deployment of the reader: credentials, data, Lambdas, CloudFront on the stage's domain,
  * and the pipeline that releases the apps to it.
  */
-export class RssReaderStage extends Stage {
+export class NewsesStage extends Stage {
   readonly params: ParamsStack;
   readonly data: DataStack;
   readonly app: AppStack;
   readonly edge: EdgeStack;
   readonly release: ReleaseStack;
 
-  constructor(scope: Construct, id: string, props: RssReaderStageProps) {
+  constructor(scope: Construct, id: string, props: NewsesStageProps) {
     super(scope, id, props);
     const { stage } = props;
     const env = { account: ACCOUNT, region: REGION };

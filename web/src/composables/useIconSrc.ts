@@ -1,4 +1,4 @@
-import type { Subscription } from '@rss-reader/shared';
+import type { Subscription } from '@newses/shared';
 import { iconSrc } from '../lib/native-urls.ts';
 import { appServer } from '../platform/index.ts';
 import { useSession } from './useSession.ts';

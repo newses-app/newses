@@ -1,5 +1,10 @@
-import type { ServerInfo } from '@rss-reader/shared';
-import { API_VERSION, createApiClient, PRODUCT_NAME } from '@rss-reader/shared/client';
+import type { ServerInfo } from '@newses/shared';
+import {
+  API_VERSION,
+  createApiClient,
+  LEGACY_PRODUCT_NAMES,
+  PRODUCT_NAME,
+} from '@newses/shared/client';
 
 /** The origin of an HTTPS address as typed, adding `https://` when no scheme is given; else null. */
 export function normaliseServerUrl(input: string): string | null {
@@ -15,10 +20,10 @@ export function normaliseServerUrl(input: string): string | null {
 
 export type ServerCheck =
   | { status: 'ok' | 'older'; info: ServerInfo }
-  | { status: 'unreachable' | 'notRssReader' | 'incompatible' };
+  | { status: 'unreachable' | 'notNewses' | 'incompatible' };
 
 /**
- * Whether `info` is an rss-reader server this app can use: another API major is incompatible; an
+ * Whether `info` is a Newses server this app can use: another API major is incompatible; an
  * older minor may lack what the app needs.
  */
 export function compatibility(
@@ -26,7 +31,9 @@ export function compatibility(
   required: { major: number; minor: number } = API_VERSION,
 ): ServerCheck {
   const server = info as Partial<ServerInfo> | null;
-  if (server?.product !== PRODUCT_NAME || !server.apiVersion) return { status: 'notRssReader' };
+  const product = server?.product;
+  const known = product === PRODUCT_NAME || LEGACY_PRODUCT_NAMES.includes(product ?? '');
+  if (!known || !server?.apiVersion) return { status: 'notNewses' };
   const { major, minor } = server.apiVersion;
   if (major !== required.major) return { status: 'incompatible' };
   return { status: minor < required.minor ? 'older' : 'ok', info: server as ServerInfo };

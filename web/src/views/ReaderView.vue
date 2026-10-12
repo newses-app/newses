@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Entry, EntryState } from '@rss-reader/shared';
+import type { Entry, EntryState } from '@newses/shared';
 import {
   mdiArchiveOutline,
   mdiArchiveSearchOutline,

@@ -1,4 +1,4 @@
-import { type FilterAction, type FilterRule, MAX_SCORE } from '@rss-reader/shared';
+import { type FilterAction, type FilterRule, MAX_SCORE } from '@newses/shared';
 import { RE2JS, RE2JSException } from 're2js';
 import { DomainError } from '../errors.ts';
 

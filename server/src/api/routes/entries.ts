@@ -11,7 +11,7 @@ import {
   syncResponseSchema,
   updatedCountSchema,
   fullTextResponseSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { EntryServices } from '../../core/entries/index.ts';

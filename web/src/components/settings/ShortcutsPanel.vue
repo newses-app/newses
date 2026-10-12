@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MAX_BINDINGS_PER_ACTION } from '@rss-reader/shared/client';
+import { MAX_BINDINGS_PER_ACTION } from '@newses/shared/client';
 import { mdiPlus, mdiRestore } from '@mdi/js';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Prefs } from '@rss-reader/shared';
-import { MAX_SCORE } from '@rss-reader/shared/client';
+import type { Prefs } from '@newses/shared';
+import { MAX_SCORE } from '@newses/shared/client';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDurations } from '../../composables/useDurations.ts';

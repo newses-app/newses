@@ -1,0 +1,35 @@
+{
+  "resourcePrefix": "newses",
+  "account": "123456789012",
+  "region": "us-east-2",
+  "githubRepo": "owner/newses",
+  "githubConnectionArn": "arn:aws:codeconnections:us-east-2:123456789012:connection/00000000-0000-0000-0000-000000000000",
+  "certificateArn": "arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000",
+  "hostedZone": { "zoneName": "example.com", "hostedZoneId": "Z0000000000EXAMPLE" },
+  "adotLayerArn": "arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:16",
+  "budgetUsd": 25,
+  "stages": [
+    {
+      "name": "dev",
+      "branch": "dev",
+      "releaseTags": { "tagsIncludes": ["v*-*"] },
+      "domainName": "reader-dev.example.com",
+      "retainData": false,
+      "backupDays": 1,
+      "compatTrace": true,
+      "archive": true,
+      "traceSampling": 1
+    },
+    {
+      "name": "prod",
+      "branch": "main",
+      "releaseTags": { "tagsIncludes": ["v*"], "tagsExcludes": ["v*-*"] },
+      "domainName": "reader.example.com",
+      "retainData": true,
+      "backupDays": 14,
+      "compatTrace": false,
+      "archive": true,
+      "traceSampling": 1
+    }
+  ]
+}

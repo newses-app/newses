@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Entry } from '@rss-reader/shared';
+import type { Entry } from '@newses/shared';
 import { mdiLinkOff, mdiOpenInNew, mdiRefresh } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';

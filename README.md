@@ -1,4 +1,4 @@
-# rss-reader
+# Newses
 
 Self-hosted, multi-user RSS reader and Tiny Tiny RSS replacement. Runs on Docker or AWS, with web, desktop, and mobile clients.
 

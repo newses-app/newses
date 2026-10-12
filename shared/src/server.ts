@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-/** `GET /server`: lets apps confirm a URL is an rss-reader server and check compatibility. */
+/** `GET /server`: lets apps confirm a URL is a Newses server and check compatibility. */
 export const serverInfoSchema = z.object({
-  /** Always `rss-reader`. */
+  /** `PRODUCT_NAME`, or one of `LEGACY_PRODUCT_NAMES` from servers not yet updated. */
   product: z.string(),
   /** The server build, or `dev` when the build did not set one. */
   version: z.string(),

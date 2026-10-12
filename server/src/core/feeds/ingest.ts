@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { normaliseTags } from '@rss-reader/shared';
+import { normaliseTags } from '@newses/shared';
 import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { enclosures, entries } from '../../db/schema.ts';

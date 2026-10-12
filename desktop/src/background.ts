@@ -21,7 +21,7 @@ export function setTray(enabled: boolean, actions: TrayActions) {
   if (tray) return;
   const icon = nativeImage.createFromPath(join(__dirname, 'icon.png')).resize({ width: 32 });
   tray = new Tray(icon);
-  tray.setToolTip('rss-reader');
+  tray.setToolTip('Newses');
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open', click: actions.open },
@@ -42,7 +42,7 @@ export function setTray(enabled: boolean, actions: TrayActions) {
 /** Registers or removes the login item; Linux uses an XDG autostart entry. */
 export async function setLaunchAtLogin(enabled: boolean) {
   if (process.platform === 'linux') {
-    const file = join(app.getPath('appData'), 'autostart', 'rss-reader.desktop');
+    const file = join(app.getPath('appData'), 'autostart', 'newses.desktop');
     if (!enabled) {
       await rm(file, { force: true });
       return;

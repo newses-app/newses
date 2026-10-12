@@ -1,4 +1,4 @@
-import type { ArchivedEntry, Entry, EntryState } from '@rss-reader/shared';
+import type { ArchivedEntry, Entry, EntryState } from '@newses/shared';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';

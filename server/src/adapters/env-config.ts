@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { passwordSchema } from '@rss-reader/shared';
+import { passwordSchema } from '@newses/shared';
 import type { AppConfig } from '../core/config.ts';
 
 const schema = z
@@ -37,7 +37,7 @@ const schema = z
     ARCHIVE_ENABLED: z.enum(['true', 'false']).default('true'),
     ARCHIVE_ATHENA_WORKGROUP: z.string().min(1).optional(),
     ARCHIVE_ATHENA_DATABASE: z.string().min(1).optional(),
-    RSS_READER_VERSION: z.string().default('dev'),
+    NEWSES_VERSION: z.string().default('dev'),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
@@ -46,7 +46,7 @@ const schema = z
     OPS_HOST_HOURLY_BUDGET: z.coerce.number().int().min(1).default(200),
     SMTP_URL: z.url({ protocol: /^smtps?$/ }).optional(),
     ALERT_EMAIL_TO: z.string().min(3).optional(),
-    ALERT_EMAIL_FROM: z.string().min(3).default('rss-reader <rss-reader@localhost>'),
+    ALERT_EMAIL_FROM: z.string().min(3).default('Newses <newses@localhost>'),
     ADMIN_LOGIN: z.string().min(1).optional(),
     ADMIN_PASSWORD: passwordSchema.optional(),
   })
@@ -84,7 +84,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   }
   const e = result.data;
   return {
-    version: e.RSS_READER_VERSION,
+    version: e.NEWSES_VERSION,
     databaseUrl: e.DATABASE_URL,
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,

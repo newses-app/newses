@@ -1,4 +1,4 @@
-import { entryTagsRequestSchema, tagCountSchema } from '@rss-reader/shared';
+import { entryTagsRequestSchema, tagCountSchema } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { TagService } from '../../core/entries/tags.ts';

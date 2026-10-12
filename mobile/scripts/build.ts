@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { versionFromTag } from '@rss-reader/shared/release';
+import { versionFromTag } from '@newses/shared/release';
 import { build } from 'esbuild';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -33,7 +33,7 @@ function run(command: string, args: string[], options: SpawnSyncOptions = {}) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-run('pnpm', ['--filter', '@rss-reader/web', 'build:native']);
+run('pnpm', ['--filter', '@newses/web', 'build:native']);
 await rm(www, { recursive: true, force: true });
 await cp(`${web}dist-native`, www, { recursive: true });
 
@@ -81,7 +81,7 @@ if (variant) {
   const unsigned = variant === 'release' && !signed ? '-unsigned' : '';
   const built = `${root}android/app/build/outputs/apk/${variant}/app-${variant}${unsigned}.apk`;
   const suffix = variant === 'debug' ? '-debug' : unsigned;
-  const apk = `${root}release/rss-reader-${version.name}-android${suffix}.apk`;
+  const apk = `${root}release/newses-${version.name}-android${suffix}.apk`;
   await mkdir(`${root}release`, { recursive: true });
   await copyFile(built, apk);
   console.log(`Built ${apk}`);

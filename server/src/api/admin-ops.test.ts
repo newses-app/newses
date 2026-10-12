@@ -1,4 +1,4 @@
-import type { AuditPage, OpsSummary, OpsUser } from '@rss-reader/shared';
+import type { AuditPage, OpsSummary, OpsUser } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db/client.ts';

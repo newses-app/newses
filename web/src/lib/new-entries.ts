@@ -1,4 +1,4 @@
-import type { Category, Counters, Subscription } from '@rss-reader/shared';
+import type { Category, Counters, Subscription } from '@newses/shared';
 import { categoryKey, streamPath, type StreamKey, subscriptionKey } from './streams.ts';
 
 /** What one notification says: how many new entries, where, and which stream a click opens. */

@@ -12,7 +12,7 @@ import {
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
-import type { PlatformBridge, SaveFile, UpdateStatus } from '@rss-reader/shared';
+import type { PlatformBridge, SaveFile, UpdateStatus } from '@newses/shared';
 import { type AndroidUpdate, androidUpdate, checkDue, parseCheckRecord } from './updates.ts';
 
 declare const APP_VERSION: string;

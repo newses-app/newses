@@ -13,7 +13,7 @@ await rm(out, { recursive: true, force: true });
 await mkdir(`${root}build`, { recursive: true });
 
 if (!process.argv.includes('--skip-web')) {
-  const result = spawnSync('pnpm', ['--filter', '@rss-reader/web', 'build:native'], {
+  const result = spawnSync('pnpm', ['--filter', '@newses/web', 'build:native'], {
     stdio: 'inherit',
     shell: process.platform === 'win32',
   });

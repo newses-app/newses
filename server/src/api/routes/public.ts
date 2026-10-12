@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Entry } from '@rss-reader/shared';
+import type { Entry } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';

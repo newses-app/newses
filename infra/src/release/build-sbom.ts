@@ -1,4 +1,4 @@
-// Writes a deliverable's CycloneDX SBOM (sbom.ts) to DIR/rss-reader-<version>-<deliverable>.cdx.json,
+// Writes a deliverable's CycloneDX SBOM (sbom.ts) to DIR/newses-<version>-<deliverable>.cdx.json,
 // for scripts/sbom.sh and the release pipeline's Linux leg. The version comes from --tag
 // (local builds are 0.0.0-dev). `mobile` runs Gradle (JDK 21 and the Android SDK); `image` takes
 // syft's SBOM of the Docker image as --input.
@@ -7,7 +7,7 @@ import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { versionFromTag } from '@rss-reader/shared/release';
+import { versionFromTag } from '@newses/shared/release';
 import { REPO_ROOT } from '../config.ts';
 import {
   type Bom,
@@ -88,7 +88,11 @@ const inputs = sources.pnpm.map(fromPnpm);
 if (sources.gradle) inputs.push(await fromGradle());
 if (values.input) inputs.push(JSON.parse(await readFile(values.input, 'utf8')) as Bom);
 
-const bom = splice(mergeBoms(inputs, deliverableRoot(deliverable, version)), isFirstParty);
+const { repository } = JSON.parse(await readFile(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+  repository?: { url?: string };
+};
+const root = deliverableRoot(deliverable, version, repository?.url);
+const bom = splice(mergeBoms(inputs, root), isFirstParty);
 await mkdir(values.out, { recursive: true });
 const path = join(values.out, sbomName(version, deliverable));
 await writeFile(path, `${JSON.stringify(bom, null, 2)}\n`);

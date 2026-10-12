@@ -8,7 +8,7 @@ import { centered, onScreen, restoreBounds } from './window-state.ts';
 
 let dir = '';
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), 'rss-reader-desktop-'));
+  dir = await mkdtemp(join(tmpdir(), 'newses-desktop-'));
 });
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });

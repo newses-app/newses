@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { MAX_NOTE_LENGTH } from '@rss-reader/shared';
+import { MAX_NOTE_LENGTH } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import { accessKeys } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';

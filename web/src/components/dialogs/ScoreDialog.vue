@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MAX_SCORE } from '@rss-reader/shared/client';
+import { MAX_SCORE } from '@newses/shared/client';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ApiError } from '../../api.ts';

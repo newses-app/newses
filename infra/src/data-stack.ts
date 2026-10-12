@@ -6,13 +6,14 @@ import {
   type ArchiveFieldType,
   ENCLOSURE_FIELDS,
   ENCLOSURES_COLUMN,
-} from '@rss-reader/server';
+} from '@newses/server';
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as athena from 'aws-cdk-lib/aws-athena';
 import * as glue from 'aws-cdk-lib/aws-glue';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
-import { resourceName, type StageConfig } from './config.ts';
+import { type StageConfig } from './config.ts';
+import { resourceName } from './deploy-config.ts';
 
 /** Athena writes query results under this prefix of the blob bucket. */
 const ATHENA_RESULTS = 'athena-results';

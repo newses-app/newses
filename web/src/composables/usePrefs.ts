@@ -1,5 +1,5 @@
-import type { Prefs, UpdatePrefsRequest } from '@rss-reader/shared';
-import { DEFAULT_PREFS } from '@rss-reader/shared/client';
+import type { Prefs, UpdatePrefsRequest } from '@newses/shared';
+import { DEFAULT_PREFS } from '@newses/shared/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { api } from '../api.ts';

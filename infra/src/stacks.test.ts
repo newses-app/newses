@@ -5,11 +5,18 @@ import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { BUILD_SERVICES } from './budget.ts';
-import { ACCOUNT, ADOT_LAYER_ARN, BUDGET_USD, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
+import {
+  ACCOUNT,
+  ADOT_LAYER_ARN,
+  BUDGET_USD,
+  CERTIFICATE_ARN,
+  REGION,
+  STAGES,
+} from './deploy-config.ts';
 import { DatabaseStage } from './database.ts';
 import { API_PATHS } from './edge-stack.ts';
 import { PipelineStack } from './pipeline-stack.ts';
-import { RssReaderStage } from './stage.ts';
+import { NewsesStage } from './stage.ts';
 
 // Skips Lambda bundling, which needs esbuild and network access.
 const newApp = () => new App({ context: { 'aws:cdk:bundling-stacks': [] } });
@@ -18,14 +25,14 @@ writeFileSync(join(webDir, 'index.html'), '<!doctype html>');
 
 const [dev, prod] = STAGES;
 if (!dev || !prod) throw new Error('dev and prod stages are configured');
-const stage = new RssReaderStage(newApp(), 'Test', { stage: dev, webDir });
+const stage = new NewsesStage(newApp(), 'Test', { stage: dev, webDir });
 const params = Template.fromStack(stage.params);
 const data = Template.fromStack(stage.data);
 const app = Template.fromStack(stage.app);
 const edge = Template.fromStack(stage.edge);
 const release = Template.fromStack(stage.release);
 
-describe('RssReaderStage', () => {
+describe('NewsesStage', () => {
   it('keeps generated credentials in SSM parameters rather than Secrets Manager', () => {
     for (const template of [params, data, app, edge]) {
       template.resourceCountIs('AWS::SecretsManager::Secret', 0);
@@ -41,11 +48,11 @@ describe('RssReaderStage', () => {
     expect(
       [stage.params, stage.data, stage.app, stage.edge, stage.release].map((s) => s.stackName),
     ).toEqual([
-      'rss-reader-dev-params',
-      'rss-reader-dev-data',
-      'rss-reader-dev-app',
-      'rss-reader-dev-edge',
-      'rss-reader-dev-release',
+      'newses-dev-params',
+      'newses-dev-data',
+      'newses-dev-app',
+      'newses-dev-edge',
+      'newses-dev-release',
     ]);
     const functions = Object.values(
       app.findResources('AWS::Lambda::Function', {
@@ -55,23 +62,21 @@ describe('RssReaderStage', () => {
       }),
     ) as { Properties: { FunctionName: string; Tags: { Key: string; Value: string }[] } }[];
     expect(functions.map((f) => f.Properties.FunctionName).sort()).toEqual(
-      ['api', 'extract', 'favicon', 'fetch', 'migrate', 'tick'].map(
-        (name) => `rss-reader-dev-${name}`,
-      ),
+      ['api', 'extract', 'favicon', 'fetch', 'migrate', 'tick'].map((name) => `newses-dev-${name}`),
     );
     for (const { Properties } of functions) {
       expect(Properties.Tags).toEqual(
         expect.arrayContaining([
-          { Key: 'project', Value: 'rss-reader' },
+          { Key: 'project', Value: 'newses' },
           { Key: 'stage', Value: 'dev' },
         ]),
       );
     }
-    app.hasResourceProperties('AWS::SQS::Queue', { QueueName: 'rss-reader-dev-feed-fetch' });
-    app.hasResourceProperties('AWS::Scheduler::Schedule', { Name: 'rss-reader-dev-auth-prune' });
-    edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'rss-reader-dev-spa-routes' });
+    app.hasResourceProperties('AWS::SQS::Queue', { QueueName: 'newses-dev-feed-fetch' });
+    app.hasResourceProperties('AWS::Scheduler::Schedule', { Name: 'newses-dev-auth-prune' });
+    edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'newses-dev-spa-routes' });
     edge.hasResourceProperties('AWS::CloudFront::Function', {
-      Name: 'rss-reader-dev-utf8-charset',
+      Name: 'newses-dev-utf8-charset',
     });
   });
 
@@ -101,7 +106,7 @@ describe('RssReaderStage', () => {
 const sharedStacks = (stackName: string) =>
   STAGES.map((config) => {
     const root = newApp();
-    new PipelineStack(root, `rss-reader-${config.name}-pipeline`, {
+    new PipelineStack(root, `newses-${config.name}-pipeline`, {
       env: { account: ACCOUNT, region: REGION },
       stage: config,
       webDir,
@@ -121,7 +126,7 @@ describe('Database', () => {
     database.resourceCountIs('AWS::EC2::NatGateway', 0);
     database.resourceCountIs('AWS::RDS::DBInstance', 1);
     database.hasResourceProperties('AWS::RDS::DBInstance', {
-      DBInstanceIdentifier: 'rss-reader-db',
+      DBInstanceIdentifier: 'newses-db',
       DBInstanceClass: 'db.t4g.micro',
       Engine: 'postgres',
       EngineVersion: '18',
@@ -132,19 +137,19 @@ describe('Database', () => {
       MultiAZ: false,
       DeletionProtection: true,
       MasterUsername: 'rss_admin',
-      MasterUserPassword: '{{resolve:ssm-secure:/rss-reader/db/master-password}}',
+      MasterUserPassword: '{{resolve:ssm-secure:/newses/db/master-password}}',
     });
     database.hasResource('AWS::RDS::DBInstance', { DeletionPolicy: 'Snapshot' });
     database.hasResourceProperties('AWS::RDS::DBParameterGroup', {
       Parameters: { 'rds.force_ssl': '1' },
     });
-    database.hasResourceProperties('AWS::SSM::Parameter', { Name: '/rss-reader/db/endpoint' });
+    database.hasResourceProperties('AWS::SSM::Parameter', { Name: '/newses/db/endpoint' });
     database.resourceCountIs('AWS::SecretsManager::Secret', 0);
     expect(shared.database.dependencies).toContain(shared.params);
   });
 
   it('is deployed the same by both pipelines', () => {
-    for (const name of ['rss-reader-db-params', 'rss-reader-db']) {
+    for (const name of ['newses-db-params', 'newses-db']) {
       const [fromDev, fromProd] = sharedStacks(name).map((template) =>
         JSON.stringify(template.toJSON()).replaceAll(/"S3Key":"\w+\.zip"/g, '"S3Key":"asset"'),
       );
@@ -155,29 +160,29 @@ describe('Database', () => {
   it('gives each stage its own database and role, which migrate creates', () => {
     for (const config of STAGES) {
       const template = Template.fromStack(
-        new RssReaderStage(newApp(), 'Test', { stage: config, webDir }).app,
+        new NewsesStage(newApp(), 'Test', { stage: config, webDir }).app,
       );
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `rss-reader-${config.name}-api`,
+        FunctionName: `newses-${config.name}-api`,
         Environment: {
           Variables: Match.objectLike({
-            DB_NAME: `rss_reader_${config.name}`,
-            DB_USER: `rss_reader_${config.name}`,
+            DB_NAME: `newses_${config.name}`,
+            DB_USER: `newses_${config.name}`,
           }),
         },
       });
     }
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-migrate',
+      FunctionName: 'newses-dev-migrate',
       Environment: {
         Variables: Match.objectLike({
           DB_MASTER_USER: 'rss_admin',
-          DB_MASTER_PASSWORD_PARAMETER: '/rss-reader/db/master-password',
+          DB_MASTER_PASSWORD_PARAMETER: '/newses/db/master-password',
         }),
       },
     });
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-api',
+      FunctionName: 'newses-dev-api',
       Environment: {
         Variables: Match.not(Match.objectLike({ DB_MASTER_PASSWORD_PARAMETER: Match.anyValue() })),
       },
@@ -196,7 +201,7 @@ describe('App', () => {
     ) as { Properties: Record<string, unknown> }[];
     expect(functions).toHaveLength(6);
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-api',
+      FunctionName: 'newses-dev-api',
       Environment: { Variables: Match.objectLike({ TRUST_PROXY: '2' }) },
     });
     for (const { Properties } of functions) {
@@ -251,7 +256,7 @@ describe('App', () => {
     });
 
     const untraced = Template.fromStack(
-      new RssReaderStage(newApp(), 'Test', { stage: { ...dev, traceSampling: 0 }, webDir }).app,
+      new NewsesStage(newApp(), 'Test', { stage: { ...dev, traceSampling: 0 }, webDir }).app,
     );
     for (const fn of Object.values(untraced.findResources('AWS::Lambda::Function'))) {
       expect(JSON.stringify(fn)).not.toContain('otel-instrument');
@@ -259,13 +264,13 @@ describe('App', () => {
   });
 
   it('publishes operations alerts from tick to the stage topic', () => {
-    app.hasResourceProperties('AWS::SNS::Topic', { TopicName: 'rss-reader-dev-alerts' });
+    app.hasResourceProperties('AWS::SNS::Topic', { TopicName: 'newses-dev-alerts' });
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-tick',
+      FunctionName: 'newses-dev-tick',
       Environment: { Variables: Match.objectLike({ ALERT_TOPIC_ARN: Match.anyValue() }) },
     });
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-api',
+      FunctionName: 'newses-dev-api',
       Environment: {
         Variables: Match.not(Match.objectLike({ ALERT_TOPIC_ARN: Match.anyValue() })),
       },
@@ -285,7 +290,7 @@ describe('App', () => {
     });
     data.hasOutput('BlobBucket', {});
     data.hasResourceProperties('AWS::Glue::Database', {
-      DatabaseInput: { Name: 'rss_reader_dev' },
+      DatabaseInput: { Name: 'newses_dev' },
     });
     data.hasResourceProperties('AWS::Glue::Table', {
       TableInput: Match.objectLike({
@@ -308,7 +313,7 @@ describe('App', () => {
       }),
     });
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-tick',
+      FunctionName: 'newses-dev-tick',
       Environment: { Variables: Match.objectLike({ ARCHIVE_ENABLED: 'true' }) },
     });
     expect(prod.archive).toBe(true);
@@ -316,15 +321,15 @@ describe('App', () => {
 
   it('reads and compacts the archive through an Athena workgroup', () => {
     data.hasResourceProperties('AWS::Athena::WorkGroup', {
-      Name: 'rss-reader-dev',
+      Name: 'newses-dev',
       WorkGroupConfiguration: Match.objectLike({ EnforceWorkGroupConfiguration: true }),
     });
     app.hasResourceProperties('AWS::Lambda::Function', {
-      FunctionName: 'rss-reader-dev-api',
+      FunctionName: 'newses-dev-api',
       Environment: {
         Variables: Match.objectLike({
-          ARCHIVE_ATHENA_WORKGROUP: 'rss-reader-dev',
-          ARCHIVE_ATHENA_DATABASE: 'rss_reader_dev',
+          ARCHIVE_ATHENA_WORKGROUP: 'newses-dev',
+          ARCHIVE_ATHENA_DATABASE: 'newses_dev',
         }),
       },
     });
@@ -336,7 +341,7 @@ describe('App', () => {
       },
     });
     app.hasResourceProperties('AWS::Scheduler::Schedule', {
-      Name: 'rss-reader-dev-archive-compact',
+      Name: 'newses-dev-archive-compact',
       ScheduleExpression: 'cron(0 4 * * ? *)',
     });
   });
@@ -371,7 +376,7 @@ describe('Edge', () => {
 describe('Downloads', () => {
   it('keeps downloads in their own named bucket, where superseded prereleases expire', () => {
     edge.hasResourceProperties('AWS::S3::Bucket', {
-      BucketName: `rss-reader-dev-downloads-${ACCOUNT}`,
+      BucketName: `newses-dev-downloads-${ACCOUNT}`,
       LifecycleConfiguration: {
         Rules: [
           Match.objectLike({
@@ -382,7 +387,7 @@ describe('Downloads', () => {
       },
     });
     edge.hasResourceProperties('AWS::CloudFront::Function', {
-      Name: 'rss-reader-dev-downloads-index',
+      Name: 'newses-dev-downloads-index',
     });
   });
 });
@@ -391,10 +396,10 @@ describe('Release', () => {
   it('releases from prerelease tags to dev, and other version tags to prod', () => {
     for (const config of STAGES) {
       const template = Template.fromStack(
-        new RssReaderStage(newApp(), 'Test', { stage: config, webDir }).release,
+        new NewsesStage(newApp(), 'Test', { stage: config, webDir }).release,
       );
       template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
-        Name: `rss-reader-${config.name}-release`,
+        Name: `newses-${config.name}-release`,
         Triggers: [
           Match.objectLike({
             GitConfiguration: Match.objectLike({
@@ -439,16 +444,16 @@ describe('Release', () => {
       if (!found) throw new Error(`No policy for ${role}`);
       return found[1];
     };
-    expect(policy('LinuxRole')).toContain('/rss-reader/release/android-signing/keystore');
+    expect(policy('LinuxRole')).toContain('/newses/release/android-signing/keystore');
     expect(policy('LinuxRole')).not.toContain('windows-signing');
-    expect(policy('WindowsRole')).toContain('/rss-reader/release/windows-signing/client-secret');
+    expect(policy('WindowsRole')).toContain('/newses/release/windows-signing/client-secret');
     expect(policy('WindowsRole')).not.toContain('android-signing');
     expect(policy('PublishRole')).not.toContain('-signing');
     for (const [id, document] of policies) {
-      expect(document.includes(`rss-reader-dev-downloads-${ACCOUNT}`)).toBe(
+      expect(document.includes(`newses-dev-downloads-${ACCOUNT}`)).toBe(
         id.startsWith('PublishRole'),
       );
-      expect(document).not.toContain('rss-reader-prod');
+      expect(document).not.toContain('newses-prod');
     }
   });
 });
@@ -456,7 +461,7 @@ describe('Release', () => {
 describe('PipelineStack', () => {
   it.each(STAGES)('deploys $name from the $branch branch', (config) => {
     const root = newApp();
-    const pipeline = new PipelineStack(root, `rss-reader-${config.name}-pipeline`, {
+    const pipeline = new PipelineStack(root, `newses-${config.name}-pipeline`, {
       env: { account: ACCOUNT, region: REGION },
       stage: config,
       webDir,
@@ -477,9 +482,9 @@ describe('PipelineStack', () => {
     }[];
     const stageNames = codePipeline?.Properties.Stages.map((s) => s.Name) ?? [];
     // The stage's functions read the shared database's address when they deploy.
-    expect(stageNames.indexOf('rss-reader-db')).toBeGreaterThan(-1);
-    expect(stageNames.indexOf('rss-reader-db')).toBeLessThan(
-      stageNames.indexOf(`rss-reader-${config.name}`),
+    expect(stageNames.indexOf('newses-db')).toBeGreaterThan(-1);
+    expect(stageNames.indexOf('newses-db')).toBeLessThan(
+      stageNames.indexOf(`newses-${config.name}`),
     );
     // Inline buildspecs are JSON; the asset publishing project names a buildspec file instead.
     const buildSpecs = Object.values(template.findResources('AWS::CodeBuild::Project'))
@@ -520,11 +525,11 @@ describe('PipelineStack', () => {
       .map((s) => s.stackName);
     expect(stackNames.sort()).toEqual(
       [
-        'rss-reader-budget',
-        'rss-reader-db',
-        'rss-reader-db-params',
+        'newses-budget',
+        'newses-db',
+        'newses-db-params',
         ...['app', 'data', 'edge', 'params', 'pipeline', 'release'].map(
-          (part) => `rss-reader-${config.name}-${part}`,
+          (part) => `newses-${config.name}-${part}`,
         ),
       ].sort(),
     );
@@ -532,7 +537,7 @@ describe('PipelineStack', () => {
 });
 
 describe('Budget', () => {
-  const budgetStacks = sharedStacks('rss-reader-budget');
+  const budgetStacks = sharedStacks('newses-budget');
 
   it('deploys the same project budget from both pipelines, notifying its own topic', () => {
     app.resourceCountIs('AWS::Budgets::Budget', 0);
@@ -542,11 +547,11 @@ describe('Budget', () => {
     if (!budget) throw new Error('budget stack');
     budget.hasResourceProperties('AWS::Budgets::Budget', {
       Budget: Match.objectLike({
-        BudgetName: 'rss-reader',
+        BudgetName: 'newses',
         BudgetLimit: { Amount: BUDGET_USD, Unit: 'USD' },
         FilterExpression: {
           And: [
-            { Tags: { Key: 'project', Values: ['rss-reader'], MatchOptions: ['EQUALS'] } },
+            { Tags: { Key: 'project', Values: ['newses'], MatchOptions: ['EQUALS'] } },
             { Not: { Dimensions: { Key: 'SERVICE', Values: BUILD_SERVICES } } },
           ],
         },
@@ -570,8 +575,8 @@ describe('Budget', () => {
     });
     // Tagged with the project only, so neither stage claims it.
     budget.hasResourceProperties('AWS::SNS::Topic', {
-      TopicName: 'rss-reader-budget',
-      Tags: [{ Key: 'project', Value: 'rss-reader' }],
+      TopicName: 'newses-budget',
+      Tags: [{ Key: 'project', Value: 'newses' }],
     });
   });
 });

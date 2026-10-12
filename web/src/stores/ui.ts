@@ -1,4 +1,4 @@
-import type { Entry } from '@rss-reader/shared';
+import type { Entry } from '@newses/shared';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 

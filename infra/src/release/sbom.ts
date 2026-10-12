@@ -55,16 +55,16 @@ export interface DeliverableSources {
 }
 
 export const SOURCES: Record<Deliverable, DeliverableSources> = {
-  server: { pnpm: [{ filter: '@rss-reader/server', prod: true }] },
+  server: { pnpm: [{ filter: '@newses/server', prod: true }] },
   image: { pnpm: [], input: true },
-  web: { pnpm: [{ filter: '@rss-reader/web', prod: true }] },
+  web: { pnpm: [{ filter: '@newses/web', prod: true }] },
   // esbuild bundles the main process, so desktop has only devDependencies: of those, the app
   // ships electron-updater and runs on Electron (whose own dependencies only install it).
   desktop: {
     pnpm: [
-      { filter: '@rss-reader/web', prod: true },
+      { filter: '@newses/web', prod: true },
       {
-        filter: '@rss-reader/desktop',
+        filter: '@newses/desktop',
         prod: false,
         keep: { components: ['electron'], closures: ['electron-updater'] },
       },
@@ -72,8 +72,8 @@ export const SOURCES: Record<Deliverable, DeliverableSources> = {
   },
   mobile: {
     pnpm: [
-      { filter: '@rss-reader/web', prod: true },
-      { filter: '@rss-reader/mobile', prod: true },
+      { filter: '@newses/web', prod: true },
+      { filter: '@newses/mobile', prod: true },
     ],
     gradle: true,
   },
@@ -81,9 +81,9 @@ export const SOURCES: Record<Deliverable, DeliverableSources> = {
 
 /** The file a deliverable's SBOM is written to, beside the installers' naming. */
 export const sbomName = (version: string, deliverable: Deliverable) =>
-  `rss-reader-${version}-${deliverable}.cdx.json`;
+  `newses-${version}-${deliverable}.cdx.json`;
 
-const SBOM_NAME = /^rss-reader-(.+)-([a-z]+)\.cdx\.json$/;
+const SBOM_NAME = /^newses-(.+)-([a-z]+)\.cdx\.json$/;
 
 /** The version and deliverable in an SBOM's file name, or undefined for another file. */
 export function parseSbomName(name: string) {
@@ -168,19 +168,23 @@ export function splice(bom: Bom, drop: (component: Component) => boolean): Bom {
  * Gradle projects (unversioned; their npm packages already list them) as components.
  */
 export const isFirstParty = (component: Component) =>
-  component.purl?.startsWith('pkg:npm/%40rss-reader/') === true ||
+  component.purl?.startsWith('pkg:npm/%40newses/') === true ||
   component.purl?.includes('project_path=') === true;
 
-/** The deliverable's root component. */
-export function deliverableRoot(deliverable: Deliverable, version: string): Component {
-  const name = `rss-reader-${deliverable}`;
+/** The deliverable's root component, with the source repository's URL when there is one. */
+export function deliverableRoot(
+  deliverable: Deliverable,
+  version: string,
+  repository?: string,
+): Component {
+  const name = `newses-${deliverable}`;
   return {
     type: deliverable === 'image' ? 'container' : 'application',
     'bom-ref': `${name}@${version}`,
     name,
     version,
     licenses: [{ license: { id: 'AGPL-3.0-or-later' } }],
-    externalReferences: [{ type: 'vcs', url: 'https://github.com/himynameschris/rss-reader' }],
+    ...(repository && { externalReferences: [{ type: 'vcs', url: repository }] }),
   };
 }
 

@@ -20,7 +20,7 @@ import {
   DB_MASTER_USER,
   PROJECT,
   REGION,
-} from './config.ts';
+} from './deploy-config.ts';
 import { GeneratedParameter } from './generated-parameter.ts';
 import { ManagedLogGroups } from './managed-log-groups.ts';
 

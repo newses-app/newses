@@ -1,4 +1,4 @@
-import type { ArchivedEntry, ArchiveEntriesResponse, Entry } from '@rss-reader/shared';
+import type { ArchivedEntry, ArchiveEntriesResponse, Entry } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../db/client.ts';

@@ -1,19 +1,18 @@
 {
-  "name": "@rss-reader/infra",
+  "name": "@newses/infra",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "typecheck": "tsc",
-    "cdk": "cdk",
-    "deploy:build:dev": "cdk deploy rss-reader-dev-pipeline",
-    "deploy:build:prod": "cdk deploy rss-reader-prod-pipeline"
+    "cdk": "cdk"
   },
   "dependencies": {
-    "@rss-reader/server": "workspace:*",
-    "@rss-reader/shared": "workspace:*",
+    "@newses/server": "workspace:*",
+    "@newses/shared": "workspace:*",
     "aws-cdk-lib": "^2.272.0",
-    "constructs": "^10.8.1"
+    "constructs": "^10.8.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@aws-sdk/client-ssm": "^3.1146.0",

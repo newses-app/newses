@@ -1,4 +1,4 @@
-import { prefsSchema, updatePrefsRequestSchema } from '@rss-reader/shared';
+import { prefsSchema, updatePrefsRequestSchema } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { PrefsService } from '../../core/prefs.ts';
 import { requireAuth, requireUser } from '../auth.ts';

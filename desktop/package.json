@@ -1,11 +1,11 @@
 {
-  "name": "@rss-reader/desktop",
-  "productName": "rss-reader",
-  "desktopName": "rss-reader.desktop",
+  "name": "@newses/desktop",
+  "productName": "Newses",
+  "desktopName": "newses.desktop",
   "version": "0.0.0",
   "private": true,
   "description": "Self-hosted feed reader",
-  "homepage": "https://github.com/himynameschris/rss-reader",
+  "homepage": "https://newses.app",
   "author": "Newses contributors",
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -22,7 +22,7 @@
     "typecheck": "tsc"
   },
   "devDependencies": {
-    "@rss-reader/shared": "workspace:*",
+    "@newses/shared": "workspace:*",
     "dmg-builder": "^26.15.3",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",

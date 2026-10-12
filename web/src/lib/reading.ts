@@ -1,4 +1,4 @@
-import type { Prefs } from '@rss-reader/shared';
+import type { Prefs } from '@newses/shared';
 
 /** System font stacks, so no font is downloaded (Privacy requirement). */
 const FONTS: Record<Prefs['articleFont'], string> = {

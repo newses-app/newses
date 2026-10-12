@@ -1,4 +1,4 @@
-import type { Enclosure, Entry, EntryState, Stream } from '@rss-reader/shared';
+import type { Enclosure, Entry, EntryState, Stream } from '@newses/shared';
 import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';

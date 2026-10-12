@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { mdiLogout } from '@mdi/js';
-import type { DesktopOptions } from '@rss-reader/shared';
+import type { DesktopOptions } from '@newses/shared';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';

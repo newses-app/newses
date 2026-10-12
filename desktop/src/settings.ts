@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { DesktopOptions } from '@rss-reader/shared';
+import type { DesktopOptions } from '@newses/shared';
 
 export interface WindowState {
   x: number;

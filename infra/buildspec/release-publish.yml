@@ -15,7 +15,7 @@ phases:
       nodejs: 24
     commands:
       - corepack enable
-      - pnpm install --frozen-lockfile --filter '@rss-reader/infra...'
+      - pnpm install --frozen-lockfile --filter '@newses/infra...'
 
   build:
     commands:

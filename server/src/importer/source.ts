@@ -16,7 +16,7 @@ export class TtrssSource {
   }
 
   static async open(url: string): Promise<TtrssSource> {
-    const client = new pg.Client({ connectionString: url, application_name: 'rss-reader import' });
+    const client = new pg.Client({ connectionString: url, application_name: 'newses import' });
     try {
       await client.connect();
     } catch (err) {

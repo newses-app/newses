@@ -28,6 +28,7 @@ export class CryptoError extends Error {
 }
 
 export function deriveKey(secret: string, purpose: KeyPurpose): Buffer {
+  // A fixed label from the product's earlier name: changing it changes every derived key.
   return Buffer.from(hkdfSync('sha256', secret, '', `rss-reader/${purpose}`, 32));
 }
 

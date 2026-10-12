@@ -3,7 +3,7 @@ import {
   entryLabelsRequestSchema,
   labelSchema,
   updateLabelRequestSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { LabelService } from '../../core/entries/labels.ts';

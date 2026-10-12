@@ -196,7 +196,7 @@ describe('server info', () => {
     const res = await app.inject({ url: '/api/v1/server' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      product: 'rss-reader',
+      product: 'newses',
       version: 'dev',
       apiVersion: { major: 1, minor: 0 },
     });
@@ -223,7 +223,7 @@ describe('CORS for apps', () => {
     });
 
   it('answers preflights from the app origins', async () => {
-    for (const origin of ['app://rss-reader', 'https://localhost']) {
+    for (const origin of ['app://newses', 'https://localhost']) {
       const res = await preflight(origin);
       expect(res.statusCode).toBe(204);
       expect(res.headers['access-control-allow-origin']).toBe(origin);
@@ -257,7 +257,7 @@ describe('CORS for apps', () => {
   });
 
   it('applies to the native API only', async () => {
-    const res = await app.inject({ url: '/healthz', headers: { origin: 'app://rss-reader' } });
+    const res = await app.inject({ url: '/healthz', headers: { origin: 'app://newses' } });
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 });

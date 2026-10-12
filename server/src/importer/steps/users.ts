@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { loginNameSchema } from '@rss-reader/shared';
+import { loginNameSchema } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import { hashPassword } from '../../core/auth/passwords.ts';
 import { base32Encode } from '../../core/auth/totp.ts';

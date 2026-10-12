@@ -2,11 +2,11 @@ import { extname, isAbsolute, relative, resolve } from 'node:path';
 
 /** The app's own origin: a privileged standard scheme, so it behaves like an HTTPS origin. */
 export const APP_SCHEME = 'app';
-export const APP_HOST = 'rss-reader';
+export const APP_HOST = 'newses';
 export const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
 
 /**
- * The bundled file an `app://rss-reader/...` request is for. Extensionless paths are the web app's
+ * The bundled file an `app://newses/...` request is for. Extensionless paths are the web app's
  * routes, so they get `index.html`. Null for other hosts and paths outside the bundle.
  */
 export function appFilePath(webDir: string, requestUrl: string): string | null {

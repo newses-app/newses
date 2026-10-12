@@ -1,4 +1,4 @@
-import type { Entry } from '@rss-reader/shared';
+import type { Entry } from '@newses/shared';
 import { generateRssFeed } from 'feedsmith';
 
 export const PUBLISHED_FEED_LENGTH = 50;
@@ -11,7 +11,7 @@ export function publishedFeedXml(entries: Entry[], urls: { site: string; self: s
   return generateRssFeed({
     title: 'Published articles',
     link: urls.site,
-    description: 'Articles published from rss-reader',
+    description: 'Articles published from Newses',
     lastBuildDate: new Date(),
     atom: { links: [{ href: urls.self, rel: 'self', type: 'application/rss+xml' }] },
     items: entries.map((entry) => ({

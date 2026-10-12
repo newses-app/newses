@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AppPassword } from '@rss-reader/shared';
+import type { AppPassword } from '@newses/shared';
 import { mdiContentCopy, mdiDelete, mdiKeyPlus } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';

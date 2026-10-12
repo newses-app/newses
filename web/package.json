@@ -1,5 +1,5 @@
 {
-  "name": "@rss-reader/web",
+  "name": "@newses/web",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",
-    "@rss-reader/shared": "workspace:*",
+    "@newses/shared": "workspace:*",
     "@tanstack/vue-query": "^5.104.1",
     "@vue/devtools-api": "^8.2.1",
     "pinia": "^4.0.3",

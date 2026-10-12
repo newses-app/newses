@@ -1,5 +1,5 @@
 {
-  "name": "@rss-reader/mobile",
+  "name": "@newses/mobile",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",
-    "@rss-reader/shared": "workspace:*",
+    "@newses/shared": "workspace:*",
     "esbuild": "^0.28.2"
   }
 }

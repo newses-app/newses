@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Category } from '@rss-reader/shared';
+import type { Category } from '@newses/shared';
 import {
   mdiAlertCircleOutline,
   mdiCancel,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FeedCandidate } from '@rss-reader/shared';
+import type { FeedCandidate } from '@newses/shared';
 import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';

@@ -7,7 +7,7 @@ import {
   opsSummarySchema,
   opsUserSchema,
   opsWindowSchema,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { OpsServices } from '../../core/ops/index.ts';

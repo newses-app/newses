@@ -1,6 +1,6 @@
 // Dependency-Track projects for the deliverables' SBOMs (upload-sbom.ts uploads them): one project
 // per deliverable, a version per release, tagged with where the version runs.
-import { versionFromTag } from '@rss-reader/shared/release';
+import { versionFromTag } from '@newses/shared/release';
 import type { Deliverable } from './sbom.ts';
 
 /** Release tags go to prod, prerelease tags to dev; untagged builds are local. */
@@ -24,9 +24,9 @@ export function uploadTarget(
 ): UploadTarget {
   if (!source.tag && !source.branch) throw new Error('An upload needs a tag or a branch');
   return {
-    projectName: `rss-reader-${deliverable}`,
+    projectName: `newses-${deliverable}`,
     projectVersion: source.tag ? versionFromTag(source.tag).name : (source.branch ?? ''),
-    tags: ['rss-reader', releaseKind(source.tag)],
+    tags: ['newses', releaseKind(source.tag)],
     isLatest: Boolean(source.tag),
   };
 }

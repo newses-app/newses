@@ -6,13 +6,13 @@ import type {
   FilterActionType,
   FilterField,
   FilterRequest,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import {
   FILTER_ACTIONS,
   FILTER_FIELDS,
   MAX_FILTER_PATTERN,
   MAX_SCORE,
-} from '@rss-reader/shared/client';
+} from '@newses/shared/client';
 import {
   mdiArrowDown,
   mdiArrowUp,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ArchivedEntry, EntryState } from '@rss-reader/shared';
+import type { ArchivedEntry, EntryState } from '@newses/shared';
 import { mdiArrowLeft, mdiMagnify, mdiNewspaperVariantOutline } from '@mdi/js';
 import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';

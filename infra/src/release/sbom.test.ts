@@ -37,7 +37,7 @@ const dependenciesOf = (result: Bom) =>
   Object.fromEntries((result.dependencies ?? []).map((d) => [d.ref, d.dependsOn ?? []]));
 
 // A bundled package: everything it lists is a devDependency.
-const desktop = npm('@rss-reader/desktop', '0.0.0');
+const desktop = npm('@newses/desktop', '0.0.0');
 const electron = npm('electron', '44.7.0');
 const get = npm('@electron/get');
 const updater = npm('electron-updater', '6.8.9');
@@ -76,8 +76,8 @@ describe('select', () => {
 
 describe('splice', () => {
   it('drops components and points their dependents at their dependencies', () => {
-    const web = npm('@rss-reader/web', '0.0.0');
-    const shared = npm('@rss-reader/shared', '0.0.0');
+    const web = npm('@newses/web', '0.0.0');
+    const shared = npm('@newses/shared', '0.0.0');
     const zod = npm('zod', '4.6.5');
     const vue = npm('vue', '3.5.43');
     const result = splice(
@@ -98,7 +98,7 @@ describe('splice', () => {
 
 describe('isFirstParty', () => {
   it('matches workspace packages and Gradle projects only', () => {
-    expect(isFirstParty(npm('@rss-reader/shared'))).toBe(true);
+    expect(isFirstParty(npm('@newses/shared'))).toBe(true);
     expect(
       isFirstParty({
         type: 'library',
@@ -111,7 +111,7 @@ describe('isFirstParty', () => {
 });
 
 describe('mergeBoms', () => {
-  const web = npm('@rss-reader/web', '0.0.0');
+  const web = npm('@newses/web', '0.0.0');
   const vue = npm('vue', '3.5.43');
   const webBom = bom(web, [vue, semver], [[web, [vue, semver]]]);
   const root = deliverableRoot('desktop', '1.2.3');
@@ -127,7 +127,7 @@ describe('mergeBoms', () => {
     expect(result.serialNumber).toMatch(/^urn:uuid:[0-9a-f-]{36}$/);
     expect(result.components?.map((c) => c.name)).toEqual(['vue', 'semver', 'electron-updater']);
     expect(dependenciesOf(result)).toEqual({
-      'rss-reader-desktop@1.2.3': [ref(vue), ref(semver), ref(updater)],
+      'newses-desktop@1.2.3': [ref(vue), ref(semver), ref(updater)],
       [ref(updater)]: [ref(semver)],
     });
   });
@@ -142,36 +142,48 @@ describe('deliverableRoot', () => {
     expect(deliverableRoot('server', '1.2.3')).toEqual(
       expect.objectContaining({
         type: 'application',
-        name: 'rss-reader-server',
+        name: 'newses-server',
         version: '1.2.3',
-        'bom-ref': 'rss-reader-server@1.2.3',
+        'bom-ref': 'newses-server@1.2.3',
       }),
     );
     expect(deliverableRoot('image', '1.2.3').type).toBe('container');
+  });
+
+  it('links the source repository only when it is known', () => {
+    expect(deliverableRoot('web', '1.2.3').externalReferences).toBeUndefined();
+    expect(deliverableRoot('web', '1.2.3', 'https://github.com/owner/newses')).toEqual(
+      expect.objectContaining({
+        externalReferences: [{ type: 'vcs', url: 'https://github.com/owner/newses' }],
+      }),
+    );
   });
 });
 
 describe('sbomName', () => {
   it('round-trips the version and deliverable', () => {
     const name = sbomName('1.2.3-rc.1', 'mobile');
-    expect(name).toBe('rss-reader-1.2.3-rc.1-mobile.cdx.json');
+    expect(name).toBe('newses-1.2.3-rc.1-mobile.cdx.json');
     expect(parseSbomName(name)).toEqual({ version: '1.2.3-rc.1', deliverable: 'mobile' });
-    expect(parseSbomName('rss-reader-1.2.3-android.apk')).toBeUndefined();
-    expect(parseSbomName('rss-reader-1.2.3-docs.cdx.json')).toBeUndefined();
+    expect(parseSbomName('newses-1.2.3-android.apk')).toBeUndefined();
+    expect(parseSbomName('newses-1.2.3-docs.cdx.json')).toBeUndefined();
   });
 });
 
 describe('addDistributions', () => {
   it('names each file by URL and SHA-256 on the root, after its other references', () => {
-    const root = deliverableRoot('mobile', '1.2.3');
+    const root = deliverableRoot('mobile', '1.2.3', 'https://github.com/owner/newses');
     const result = addDistributions(mergeBoms([], root), [
-      { url: 'https://reader.example.com/downloads/1.2.3/rss-reader-1.2.3-android.apk', sha256: 'abc' },
+      {
+        url: 'https://reader.example.com/downloads/1.2.3/newses-1.2.3-android.apk',
+        sha256: 'abc',
+      },
     ]);
     expect(result.metadata?.component?.externalReferences).toEqual([
-      { type: 'vcs', url: 'https://github.com/himynameschris/rss-reader' },
+      { type: 'vcs', url: 'https://github.com/owner/newses' },
       {
         type: 'distribution',
-        url: 'https://reader.example.com/downloads/1.2.3/rss-reader-1.2.3-android.apk',
+        url: 'https://reader.example.com/downloads/1.2.3/newses-1.2.3-android.apk',
         hashes: [{ alg: 'SHA-256', content: 'abc' }],
       },
     ]);

@@ -1,4 +1,4 @@
-import type { Category, Subscription } from '@rss-reader/shared';
+import type { Category, Subscription } from '@newses/shared';
 import { useQueryClient } from '@tanstack/vue-query';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../api.ts';

@@ -6,13 +6,13 @@ import type {
   PlatformBridge,
   SaveFile,
   UpdateStatus,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
 const invoke = <T>(method: string, ...args: unknown[]) =>
   ipcRenderer.invoke(`bridge:${method}`, ...args) as Promise<T>;
 
-const VERSION_ARG = '--rss-reader-version=';
+const VERSION_ARG = '--newses-version=';
 
 // Single handlers, replaced by later registrations.
 let navigate: (target: string) => void = () => undefined;

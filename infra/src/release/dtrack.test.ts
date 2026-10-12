@@ -12,18 +12,18 @@ describe('releaseKind', () => {
 describe('uploadTarget', () => {
   it("makes a tagged build the release's latest version", () => {
     expect(uploadTarget('desktop', { tag: 'v1.2.3-rc.1' })).toEqual({
-      projectName: 'rss-reader-desktop',
+      projectName: 'newses-desktop',
       projectVersion: '1.2.3-rc.1',
-      tags: ['rss-reader', 'dev'],
+      tags: ['newses', 'dev'],
       isLatest: true,
     });
   });
 
   it('files an untagged build under its branch, not as the latest', () => {
     expect(uploadTarget('server', { branch: 'dev' })).toEqual({
-      projectName: 'rss-reader-server',
+      projectName: 'newses-server',
       projectVersion: 'dev',
-      tags: ['rss-reader', 'local'],
+      tags: ['newses', 'local'],
       isLatest: false,
     });
   });
@@ -40,9 +40,9 @@ describe('bomUploadRequest', () => {
       '{"bomFormat":"CycloneDX"}',
     );
     expect(body).toEqual({
-      projectName: 'rss-reader-image',
+      projectName: 'newses-image',
       projectVersion: '1.2.3',
-      projectTags: [{ name: 'rss-reader' }, { name: 'prod' }],
+      projectTags: [{ name: 'newses' }, { name: 'prod' }],
       autoCreate: true,
       isLatest: true,
       bom: Buffer.from('{"bomFormat":"CycloneDX"}').toString('base64'),

@@ -11,7 +11,7 @@ Usage: scripts/reset-stage.sh <dev|prod> [--dry-run] [--yes]
 
   Deletes every user, subscription, entry, cached image, favicon, and archived entry in the
   stage, then recreates the admin with the password in SSM (changed at first sign-in).
-  prod is snapshotted first (rss-reader-prod-pre-reset-<time>).
+  prod is snapshotted first (<prefix>-prod-pre-reset-<time>).
 
   --dry-run  Look everything up and show what would be deleted, then stop
   --yes      dev only: reset without asking
@@ -34,25 +34,29 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$stage" in
-  dev) domain=reader-dev.example.com ;;
-  prod) domain=reader.example.com ;;
+  dev | prod) ;;
   '') usage >&2; exit 2 ;;
   *) die "the stage is dev or prod, not $stage" ;;
 esac
 [ "$stage" = dev ] || ! $yes || die '--yes is for dev only'
+# shellcheck source=lib/deploy-config.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/deploy-config.sh"
+domain=$(stage_domain "$stage")
 
 docker info >/dev/null 2>&1 || die 'Docker is not running'
 command -v aws >/dev/null || die 'the AWS CLI is not installed'
-export AWS_REGION=us-east-2
+AWS_REGION=$(deploy_region)
+export AWS_REGION
 aws sts get-caller-identity >/dev/null || die 'no AWS credentials (set AWS_PROFILE or sign in)'
 
-name="rss-reader-$stage"
+prefix=$(deploy_prefix)
+name="$prefix-$stage"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-host=$(aws ssm get-parameter --name /rss-reader/db/endpoint --query Parameter.Value --output text)
-db_name="rss_reader_$stage"
-db_password=$(aws ssm get-parameter --name "/rss-reader/$stage/db-password" \
+host=$(aws ssm get-parameter --name "/$prefix/db/endpoint" --query Parameter.Value --output text)
+db_name="${prefix//-/_}_$stage"
+db_password=$(aws ssm get-parameter --name "/$prefix/$stage/db-password" \
   --with-decryption --query Parameter.Value --output text)
 blob_bucket=$(aws cloudformation describe-stacks --stack-name "$name-data" \
   --query "Stacks[0].Outputs[?OutputKey=='BlobBucket'].OutputValue" --output text)
@@ -108,7 +112,7 @@ fi
 if [ "$stage" = prod ]; then
   snapshot="$name-pre-reset-$(date +%Y%m%d-%H%M%S)"
   echo "Snapshotting the database instance as $snapshot..."
-  aws rds create-db-snapshot --db-instance-identifier rss-reader-db \
+  aws rds create-db-snapshot --db-instance-identifier "$prefix-db" \
     --db-snapshot-identifier "$snapshot" >/dev/null
   aws rds wait db-snapshot-available --db-snapshot-identifier "$snapshot"
 fi
@@ -136,6 +140,6 @@ done
 
 echo
 echo "Stage $stage is empty. Sign in at https://$domain as admin with the password from:"
-echo "  aws ssm get-parameter --name /rss-reader/$stage/admin-password --with-decryption --query Parameter.Value --output text"
+echo "  aws ssm get-parameter --name /$prefix/$stage/admin-password --with-decryption --query Parameter.Value --output text"
 echo "Every session and app password is gone: the apps must sign in again."
 [ "$stage" != prod ] || echo "The previous data is in database snapshot $snapshot."

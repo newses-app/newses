@@ -1,4 +1,4 @@
-import { MAX_SCORE } from '@rss-reader/shared';
+import { MAX_SCORE } from '@newses/shared';
 import { inArray, sql } from 'drizzle-orm';
 import { plainText } from '../../core/entries/text.ts';
 import { DomainError } from '../../core/errors.ts';

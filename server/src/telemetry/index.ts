@@ -16,7 +16,7 @@ import {
   trace,
 } from '@opentelemetry/api';
 
-const SCOPE = 'rss-reader';
+const SCOPE = 'newses';
 
 /**
  * Export is on when an OTLP endpoint is configured, or on Lambda when the ADOT layer's wrapper

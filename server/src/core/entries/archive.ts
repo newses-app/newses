@@ -1,4 +1,4 @@
-import type { ArchivedEntry, Enclosure, Entry, EntryState } from '@rss-reader/shared';
+import type { ArchivedEntry, Enclosure, Entry, EntryState } from '@newses/shared';
 import { type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client.ts';

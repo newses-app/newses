@@ -5,19 +5,19 @@ describe('parseUpdateConfig', () => {
   it('reads the generic feed electron-builder writes', () => {
     expect(
       parseUpdateConfig(
-        "provider: generic\nurl: https://reader-dev.example.com/downloads\nupdaterCacheDirName: '@rss-readerdesktop-updater'\n",
+        "provider: generic\nurl: https://reader-dev.example.com/downloads\nupdaterCacheDirName: '@newsesdesktop-updater'\n",
       ),
     ).toEqual({ url: 'https://reader-dev.example.com/downloads', publisherName: null });
   });
 
   it('reads the Windows publisher, inline or as a list', () => {
     const feed = 'provider: generic\nurl: https://reader.example.com/downloads/\n';
-    expect(parseUpdateConfig(`${feed}publisherName:\n  - Newses contributors\n`)).toEqual({
+    expect(parseUpdateConfig(`${feed}publisherName:\n  - Example Publisher\n`)).toEqual({
       url: 'https://reader.example.com/downloads',
-      publisherName: 'Newses contributors',
+      publisherName: 'Example Publisher',
     });
-    expect(parseUpdateConfig(`${feed}publisherName: 'Newses contributors'\n`)?.publisherName).toBe(
-      'Newses contributors',
+    expect(parseUpdateConfig(`${feed}publisherName: 'Example Publisher'\n`)?.publisherName).toBe(
+      'Example Publisher',
     );
   });
 
@@ -35,7 +35,7 @@ describe('updateMode', () => {
     expect(
       updateMode({
         platform: 'linux',
-        appImage: '/home/me/rss-reader.AppImage',
+        appImage: '/home/me/newses.AppImage',
         hasUninstaller: false,
         config: signed,
       }),

@@ -4,7 +4,7 @@ import {
   type Prefs,
   prefsSchema,
   type UpdatePrefsRequest,
-} from '@rss-reader/shared';
+} from '@newses/shared';
 import { and, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { userPrefs } from '../db/schema.ts';

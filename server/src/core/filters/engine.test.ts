@@ -1,4 +1,4 @@
-import type { FilterAction, FilterRule } from '@rss-reader/shared';
+import type { FilterAction, FilterRule } from '@newses/shared';
 import { describe, expect, it } from 'vitest';
 import { compilePattern, type FilterDefinition, FilterSet, type FilterSubject } from './engine.ts';
 

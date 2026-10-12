@@ -22,14 +22,14 @@ const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, .
 // electron-builder's latest-linux.yml, as built.
 const linuxFeed = `version: 1.2.3-rc.1
 files:
-  - url: rss-reader-1.2.3-rc.1-linux-x86_64.AppImage
+  - url: newses-1.2.3-rc.1-linux-x86_64.AppImage
     sha512: abc==
     size: 125523051
     blockMapSize: 132223
-  - url: rss-reader-1.2.3-rc.1-linux-amd64.deb
+  - url: newses-1.2.3-rc.1-linux-amd64.deb
     sha512: def==
     size: 99257992
-path: rss-reader-1.2.3-rc.1-linux-x86_64.AppImage
+path: newses-1.2.3-rc.1-linux-x86_64.AppImage
 sha512: abc==
 releaseDate: '2026-10-10T20:01:43.112Z'
 `;
@@ -44,10 +44,10 @@ describe('checkBuiltFiles', () => {
   it('refuses a missing or unexpected file', () => {
     expect(() => {
       checkBuiltFiles(version, built.slice(1));
-    }).toThrow(/missing \[rss-reader/);
+    }).toThrow(/missing \[newses/);
     expect(() => {
-      checkBuiltFiles(version, [...built, 'rss-reader-1.2.2-android.apk']);
-    }).toThrow(/unexpected \[rss-reader-1\.2\.2-android\.apk\]/);
+      checkBuiltFiles(version, [...built, 'newses-1.2.2-android.apk']);
+    }).toThrow(/unexpected \[newses-1\.2\.2-android\.apk\]/);
   });
 });
 
@@ -179,8 +179,8 @@ describe('uploadPlan', () => {
       `downloads/${version}/${names.deb}`,
       `downloads/${version}/${names.android}`,
       `downloads/${version}/${names.windows}.blockmap`,
-      `downloads/${version}/rss-reader-${version}-desktop.cdx.json`,
-      `downloads/${version}/rss-reader-${version}-mobile.cdx.json`,
+      `downloads/${version}/newses-${version}-desktop.cdx.json`,
+      `downloads/${version}/newses-${version}-mobile.cdx.json`,
       `downloads/${version}/SHA256SUMS`,
       'downloads/latest.yml',
       'downloads/latest-linux.yml',

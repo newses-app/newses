@@ -41,13 +41,13 @@ phases:
         echo "tag=$RELEASE_TAG version=$version feed=$DOWNLOADS_URL"
         # electron-builder takes the version from package.json; never committed.
         (cd desktop && npm pkg set version="$version")
-        pnpm --filter @rss-reader/desktop build:linux:release
+        pnpm --filter @newses/desktop build:linux:release
 
         export ANDROID_HOME="$HOME/android-sdk" JAVA_HOME="$JAVA_21_HOME"
         export ANDROID_KEYSTORE_FILE=/tmp/release.jks
         printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d >"$ANDROID_KEYSTORE_FILE"
         chmod +x mobile/android/gradlew
-        pnpm --filter @rss-reader/mobile build:apk:release
+        pnpm --filter @newses/mobile build:apk:release
 
         # Desktop's SBOM serves the Windows leg's build too: the same packages on every platform.
         for deliverable in desktop mobile; do
@@ -56,12 +56,12 @@ phases:
 
         # Exactly these, so a failed or misnamed build stops here.
         files=(
-          "desktop/release/rss-reader-$version-linux-x86_64.AppImage"
-          "desktop/release/rss-reader-$version-linux-amd64.deb"
+          "desktop/release/newses-$version-linux-x86_64.AppImage"
+          "desktop/release/newses-$version-linux-amd64.deb"
           desktop/release/latest-linux.yml
-          "mobile/release/rss-reader-$version-android.apk"
-          "sbom/rss-reader-$version-desktop.cdx.json"
-          "sbom/rss-reader-$version-mobile.cdx.json"
+          "mobile/release/newses-$version-android.apk"
+          "sbom/newses-$version-desktop.cdx.json"
+          "sbom/newses-$version-mobile.cdx.json"
         )
         for file in "${files[@]}"; do
           aws s3 cp --only-show-errors "$file" "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/"
