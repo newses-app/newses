@@ -1,6 +1,6 @@
 # 0031. Serverless AWS deployment
 
-- Status: Accepted
+- Status: Superseded by 0058
 - Date: 2026-10-05
 - Supersedes 0015, 0016, 0022
 

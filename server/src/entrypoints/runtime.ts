@@ -10,11 +10,7 @@ import { logTraceFields, shutdownTelemetry } from '../telemetry/index.ts';
 export function createRuntime(role: string) {
   const config = loadConfig();
   const logger = createLogger(config, role);
-  const pool = createPool(config, logger, {
-    api: role === 'server',
-    // The CLI may connect to a paused Aurora Serverless database, which takes about 15 s to resume.
-    ...(role === 'cli' && { connectionTimeoutMillis: 30_000 }),
-  });
+  const pool = createPool(config, logger, { api: role === 'server' });
 
   const shutdownSteps: (() => Promise<void>)[] = [];
   let shuttingDown = false;

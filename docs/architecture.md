@@ -403,7 +403,7 @@ Events stream:
 
 Both compatibility APIs log each unsupported call with the client's user agent. `COMPAT_TRACE` logs every call and its parameters, credentials redacted; it is on for the AWS `dev` stage.
 
-The settings page shows apps' connection details from `/api/v1/auth/app-passwords/connection`: the server URL (`PUBLIC_URL`, else the request's origin) and the suggested sync interval, 60 minutes, so the AWS database can pause between syncs.
+The settings page shows apps' connection details from `/api/v1/auth/app-passwords/connection`: the server URL (`PUBLIC_URL`, else the request's origin) and the suggested sync interval, 60 minutes.
 
 ## Deployment
 
@@ -432,16 +432,20 @@ flowchart LR
   FT --> QF[[SQS fetch]] --> FF[λ fetch]
   FF --> QI[[SQS favicon]] --> FI[λ favicon]
   FA & FF --> QX[[SQS extract]] --> FX[λ extract]
-  FA & FT & FF & FI & FX --> DB[(Aurora Serverless v2)]
+  FA & FT & FF & FI & FX --> DB[(RDS PostgreSQL, shared by stages)]
   FA & FT & FF & FI --> S3B[(S3: blobs)]
   FA & FT --> ATH[Athena + Glue: archive] --> S3B
   FA & FF & FI & FX --> NET((Internet feeds))
 ```
 
-- Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket, archive catalog), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger, alert topic), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. Both pipelines also deploy the shared `rss-reader-budget` stack, after their stage. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
-- Names: stacks are `rss-reader-<stage>-{params,data,app,edge,release,pipeline}` and `rss-reader-budget`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name, except `rss-reader-<stage>-downloads-<account>`, which the release pipeline is granted by name. Everything is tagged `project=rss-reader`, and everything but the budget stack `stage=<stage>`.
-- Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
-- Dispatch runs every 30 minutes; purge (every 6 h), auth prune (hourly), and archive compaction (daily, 04:00 UTC) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
+- Stacks per stage: `Params` (generated credentials), `Data` (blob bucket, archive catalog), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger, alert topic), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. Both pipelines also deploy the shared `rss-reader-db-params` and `rss-reader-db` stacks (VPC with public subnets only, the database instance) before their stage, and the shared `rss-reader-budget` stack after it; both produce the same resources, and a test holds them equal. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
+- Names: stacks are `rss-reader-<stage>-{params,data,app,edge,release,pipeline}`, `rss-reader-db-params`, `rss-reader-db`, and `rss-reader-budget`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, CloudFront function and policies) or, when shared, `rss-reader-db`. Bucket names are generated from the stack name, except `rss-reader-<stage>-downloads-<account>`, which the release pipeline is granted by name. Everything is tagged `project=rss-reader`, and everything but the shared stacks `stage=<stage>`.
+- Functions run outside any VPC, so they reach feeds without NAT. The database is one RDS PostgreSQL 18 db.t4g.micro instance, `rss-reader-db`:
+  - Single-AZ, 20 GB gp3 that can grow to 50 GB, 14-day backups, deletion protection, and a final snapshot on removal.
+  - Publicly reachable on 5432, with TLS required (`rds.force_ssl`); its address is in the String parameter `/rss-reader/db/endpoint`.
+  - Each stage has a database and login role `rss_reader_<stage>`, which owns it. `PUBLIC` has no `CONNECT` on it, so stages cannot reach each other's data.
+  - The `migrate` function creates or updates the role and database as the master user `rss_admin` (password in `/rss-reader/db/master-password`) before migrating.
+- Dispatch runs every 30 minutes; purge (every 6 h), auth prune (hourly), and archive compaction (daily, 04:00 UTC) fall on dispatch times. One fetch invocation handles one host's batch; at most 8 run at once.
 - CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
 - CloudFront does not forward the viewer's `Host`, so functions get `PUBLIC_URL` set to the stage's domain.
 - `/api/v1/images/*` is cached at the edge (managed CachingOptimized policy: no cookies or viewer headers in the key, TTL from the API's `Cache-Control`); other API paths are not cached.
@@ -451,11 +455,10 @@ flowchart LR
 - Logs go to CloudWatch, kept a month. No CloudWatch metrics, alarms, or dashboards; the Operations page reports, and `ops.check` runs after each dispatch.
 - Tracing: functions run the ADOT layer (`ADOT_LAYER_ARN` in `infra/src/config.ts`) when the stage's `traceSampling` is above 0. The SDK samples that share of traces by trace id (`traceidratio`) and sends spans to X-Ray through Lambda's local endpoint; Lambda active tracing (not needed for these spans), Application Signals, and X-Ray Transaction Search are off. Only the `aws-lambda` and `aws-sdk` instrumentations run; undici is never instrumented, so feed requests carry no trace headers. Only our spans and AWS SDK calls are recorded: functions are bundled, so `pg` is not instrumented. Service names are `rss-reader-<function>`.
 - Alerts: `tick` publishes alert changes to the SNS topic `rss-reader-<stage>-alerts`; email subscriptions are added outside the stack (see `AGENTS.md`), so addresses stay out of the repository.
-- Budget: the `rss-reader-budget` stack holds one monthly AWS Budget (`BUDGET_USD` in `infra/src/config.ts`, $10) over everything tagged `project=rss-reader`, both stages and pipelines. Whichever pipeline runs first creates it; both produce the same resources, so later runs change nothing, and removing a stage leaves it in place. It notifies its own topic, `rss-reader-budget`, at 80% and 100% of actual spend and 100% of forecast. A custom resource activates the `project` cost-allocation tag. Untaggable charges (X-Ray, tax) fall outside it.
+- Budget: the `rss-reader-budget` stack holds one monthly AWS Budget (`BUDGET_USD` in `infra/src/config.ts`, $25) over running the project: everything tagged `project=rss-reader`, both stages, except the CodeBuild and CodePipeline services. Whichever pipeline runs first creates it; later runs change nothing, and removing a stage leaves it in place. It notifies its own topic, `rss-reader-budget`, at 80% and 100% of actual spend and 100% of forecast. A custom resource activates the `project` cost-allocation tag. Untaggable charges (X-Ray, tax) fall outside it.
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
 Constraints:
-- The first request after the database pauses waits about 15 s for it to resume.
 - Responses are capped at 6 MB; list pages with content end early past 2 M content characters.
 - No SSE; clients poll counters every 60 s while visible (hidden desktop apps with notifications on: every 30 min).
 

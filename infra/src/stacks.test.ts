@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+import { BUILD_SERVICES } from './budget.ts';
 import { ACCOUNT, ADOT_LAYER_ARN, BUDGET_USD, CERTIFICATE_ARN, REGION, STAGES } from './config.ts';
+import { DatabaseStage } from './database.ts';
 import { API_PATHS } from './edge-stack.ts';
 import { PipelineStack } from './pipeline-stack.ts';
 import { RssReaderStage } from './stage.ts';
@@ -33,9 +35,6 @@ describe('RssReaderStage', () => {
       template.resourceCountIs('Custom::GeneratedParameter', 0);
     }
     expect(stage.data.dependencies).toContain(stage.params);
-    data.hasResourceProperties('AWS::RDS::DBCluster', {
-      MasterUserPassword: '{{resolve:ssm-secure:/rss-reader/dev/db-password}}',
-    });
   });
 
   it('names and tags resources with the project and stage', () => {
@@ -68,10 +67,6 @@ describe('RssReaderStage', () => {
         ]),
       );
     }
-    data.hasResourceProperties('AWS::RDS::DBCluster', { DBClusterIdentifier: 'rss-reader-dev' });
-    data.hasResourceProperties('AWS::RDS::DBInstance', {
-      DBInstanceIdentifier: 'rss-reader-dev-writer',
-    });
     app.hasResourceProperties('AWS::SQS::Queue', { QueueName: 'rss-reader-dev-feed-fetch' });
     app.hasResourceProperties('AWS::Scheduler::Schedule', { Name: 'rss-reader-dev-auth-prune' });
     edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'rss-reader-dev-spa-routes' });
@@ -99,19 +94,93 @@ describe('RssReaderStage', () => {
   });
 });
 
-describe('Data', () => {
-  it('runs Aurora Serverless v2 that pauses at 0 ACU and requires TLS, without NAT', () => {
-    data.resourceCountIs('AWS::EC2::NatGateway', 0);
-    data.hasResourceProperties('AWS::RDS::DBCluster', {
-      Engine: 'aurora-postgresql',
-      ServerlessV2ScalingConfiguration: Match.objectLike({
-        MinCapacity: 0,
-        SecondsUntilAutoPause: 300,
-      }),
-      StorageEncrypted: true,
+/**
+ * A stack shared by both pipelines, as each pipeline synthesises it. With bundling skipped, asset
+ * hashes come from the construct path; real synthesis hashes the bundle, the same in both.
+ */
+const sharedStacks = (stackName: string) =>
+  STAGES.map((config) => {
+    const root = newApp();
+    new PipelineStack(root, `rss-reader-${config.name}-pipeline`, {
+      env: { account: ACCOUNT, region: REGION },
+      stage: config,
+      webDir,
     });
-    data.hasResourceProperties('AWS::RDS::DBClusterParameterGroup', {
+    const stack = root.node
+      .findAll()
+      .find((c): c is Stack => Stack.isStack(c) && c.stackName === stackName);
+    if (!stack) throw new Error(`No ${stackName} stack in the ${config.name} pipeline`);
+    return Template.fromStack(stack);
+  });
+
+describe('Database', () => {
+  const shared = new DatabaseStage(newApp(), 'Test');
+  const database = Template.fromStack(shared.database);
+
+  it('runs one small public PostgreSQL instance that requires TLS, without NAT', () => {
+    database.resourceCountIs('AWS::EC2::NatGateway', 0);
+    database.resourceCountIs('AWS::RDS::DBInstance', 1);
+    database.hasResourceProperties('AWS::RDS::DBInstance', {
+      DBInstanceIdentifier: 'rss-reader-db',
+      DBInstanceClass: 'db.t4g.micro',
+      Engine: 'postgres',
+      EngineVersion: '18',
+      StorageType: 'gp3',
+      AllocatedStorage: '20',
+      StorageEncrypted: true,
+      PubliclyAccessible: true,
+      MultiAZ: false,
+      DeletionProtection: true,
+      MasterUsername: 'rss_admin',
+      MasterUserPassword: '{{resolve:ssm-secure:/rss-reader/db/master-password}}',
+    });
+    database.hasResource('AWS::RDS::DBInstance', { DeletionPolicy: 'Snapshot' });
+    database.hasResourceProperties('AWS::RDS::DBParameterGroup', {
       Parameters: { 'rds.force_ssl': '1' },
+    });
+    database.hasResourceProperties('AWS::SSM::Parameter', { Name: '/rss-reader/db/endpoint' });
+    database.resourceCountIs('AWS::SecretsManager::Secret', 0);
+    expect(shared.database.dependencies).toContain(shared.params);
+  });
+
+  it('is deployed the same by both pipelines', () => {
+    for (const name of ['rss-reader-db-params', 'rss-reader-db']) {
+      const [fromDev, fromProd] = sharedStacks(name).map((template) =>
+        JSON.stringify(template.toJSON()).replaceAll(/"S3Key":"\w+\.zip"/g, '"S3Key":"asset"'),
+      );
+      expect(fromDev).toEqual(fromProd);
+    }
+  });
+
+  it('gives each stage its own database and role, which migrate creates', () => {
+    for (const config of STAGES) {
+      const template = Template.fromStack(
+        new RssReaderStage(newApp(), 'Test', { stage: config, webDir }).app,
+      );
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `rss-reader-${config.name}-api`,
+        Environment: {
+          Variables: Match.objectLike({
+            DB_NAME: `rss_reader_${config.name}`,
+            DB_USER: `rss_reader_${config.name}`,
+          }),
+        },
+      });
+    }
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-migrate',
+      Environment: {
+        Variables: Match.objectLike({
+          DB_MASTER_USER: 'rss_admin',
+          DB_MASTER_PASSWORD_PARAMETER: '/rss-reader/db/master-password',
+        }),
+      },
+    });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-api',
+      Environment: {
+        Variables: Match.not(Match.objectLike({ DB_MASTER_PASSWORD_PARAMETER: Match.anyValue() })),
+      },
     });
   });
 });
@@ -403,6 +472,15 @@ describe('PipelineStack', () => {
         }),
       ]),
     });
+    const [codePipeline] = Object.values(template.findResources('AWS::CodePipeline::Pipeline')) as {
+      Properties: { Stages: { Name: string }[] };
+    }[];
+    const stageNames = codePipeline?.Properties.Stages.map((s) => s.Name) ?? [];
+    // The stage's functions read the shared database's address when they deploy.
+    expect(stageNames.indexOf('rss-reader-db')).toBeGreaterThan(-1);
+    expect(stageNames.indexOf('rss-reader-db')).toBeLessThan(
+      stageNames.indexOf(`rss-reader-${config.name}`),
+    );
     // Inline buildspecs are JSON; the asset publishing project names a buildspec file instead.
     const buildSpecs = Object.values(template.findResources('AWS::CodeBuild::Project'))
       .map(
@@ -443,6 +521,8 @@ describe('PipelineStack', () => {
     expect(stackNames.sort()).toEqual(
       [
         'rss-reader-budget',
+        'rss-reader-db',
+        'rss-reader-db-params',
         ...['app', 'data', 'edge', 'params', 'pipeline', 'release'].map(
           (part) => `rss-reader-${config.name}-${part}`,
         ),
@@ -452,19 +532,7 @@ describe('PipelineStack', () => {
 });
 
 describe('Budget', () => {
-  const budgetStacks = STAGES.map((config) => {
-    const root = newApp();
-    new PipelineStack(root, `rss-reader-${config.name}-pipeline`, {
-      env: { account: ACCOUNT, region: REGION },
-      stage: config,
-      webDir,
-    });
-    const stack = root.node
-      .findAll()
-      .find((c): c is Stack => Stack.isStack(c) && c.stackName === 'rss-reader-budget');
-    if (!stack) throw new Error(`No budget stack in the ${config.name} pipeline`);
-    return Template.fromStack(stack);
-  });
+  const budgetStacks = sharedStacks('rss-reader-budget');
 
   it('deploys the same project budget from both pipelines, notifying its own topic', () => {
     app.resourceCountIs('AWS::Budgets::Budget', 0);
@@ -477,7 +545,10 @@ describe('Budget', () => {
         BudgetName: 'rss-reader',
         BudgetLimit: { Amount: BUDGET_USD, Unit: 'USD' },
         FilterExpression: {
-          Tags: { Key: 'project', Values: ['rss-reader'], MatchOptions: ['EQUALS'] },
+          And: [
+            { Tags: { Key: 'project', Values: ['rss-reader'], MatchOptions: ['EQUALS'] } },
+            { Not: { Dimensions: { Key: 'SERVICE', Values: BUILD_SERVICES } } },
+          ],
         },
       }),
       NotificationsWithSubscribers: [

@@ -13,13 +13,15 @@ import {
   resourceName,
   type StageConfig,
 } from './config.ts';
+import { DatabaseStage } from './database.ts';
 import { RssReaderStage } from './stage.ts';
 
 const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0;
 
 /**
  * Self-mutating pipeline: each push to the stage's branch runs `pnpm check`, builds the SPA,
- * bundles the Lambdas, deploys the stage, smoke-tests it, and deploys the shared project budget.
+ * bundles the Lambdas, deploys the shared database and the stage, smoke-tests it, and deploys the
+ * shared project budget.
  */
 export class PipelineStack extends Stack {
   constructor(
@@ -83,6 +85,9 @@ export class PipelineStack extends Stack {
       },
     });
 
+    // Shared by both pipelines, and needed by the stage; a clash between the pipelines (the stack
+    // busy with the other pipeline's update) fails this run, and a retry clears it.
+    pipeline.addStage(new DatabaseStage(this, `${PROJECT}-db`));
     pipeline.addStage(
       new RssReaderStage(this, resourceName(stage), {
         stage,

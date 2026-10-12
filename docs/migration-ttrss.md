@@ -39,7 +39,7 @@ Behaviour:
 
 | Option | Effect |
 |---|---|
-| `--aws dev\|prod` | Import into that stage's Aurora database, with the caller's AWS credentials (`AWS_PROFILE`) for account `123456789012` in `us-east-2` |
+| `--aws dev\|prod` | Import into that stage's database, with the caller's AWS credentials (`AWS_PROFILE`) for account `123456789012` in `us-east-2` |
 | `--users`, `--since`, `--force` | Passed to the CLI |
 | `--dry-run` | Stop after the dry run |
 | `--yes` | Import without asking |
@@ -48,7 +48,7 @@ The script:
 - Restores the dump (`pg_dump -Fc`, `.sql`, or `.sql.gz`) into a temporary PostgreSQL container, removed when the script exits.
 - Runs a dry run and prints its report, then asks before importing.
 - Saves the import's report to `ttrss-import-<target>-<time>.txt` (mode 600) in the current directory and prints it with temporary passwords hidden. Hand the passwords out from the file, then delete it.
-- On AWS, builds the image from the checkout and runs it locally against Aurora's public TLS endpoint, with the stage's database password and `APP_SECRET` from SSM; nothing runs in AWS. When the stage has the archive on (its `tick` function's `ARCHIVE_ENABLED`), the import writes it to the stage's blob bucket (the data stack's `BlobBucket` output) with the caller's credentials, which must last the whole import. The checkout must match the deployed version. A paused database takes up to 30 s to resume.
+- On AWS, builds the image from the checkout and runs it locally against the database instance's public TLS endpoint, as the stage's role with its password and `APP_SECRET` from SSM; nothing runs in AWS. When the stage has the archive on (its `tick` function's `ARCHIVE_ENABLED`), the import writes it to the stage's blob bucket (the data stack's `BlobBucket` output) with the caller's credentials, which must last the whole import. The checkout must match the deployed version.
 
 ### Without a dump
 

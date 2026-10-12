@@ -136,12 +136,12 @@
 | Backups | P1 | Documented `pg_dump` sidecar and restore procedure |
 | Health endpoint | P1 | `/healthz` reports DB and queue status |
 | Runtime portability | P1 | Queue, scheduler, blob storage, and realtime are swappable adapters; no local-disk state outside blob storage |
-| AWS deployment | P1.5 | Serverless, with no running instances: Lambda, SQS, EventBridge Scheduler, Aurora Serverless v2 scaling to zero, SPA on S3 + CloudFront. One CDK pipeline (CodePipeline + CodeBuild) per stage runs `pnpm check`, builds the SPA, bundles the Lambdas, and deploys: branch `dev` → `dev`, `main` → `prod` |
+| AWS deployment | P1.5 | Serverless compute: Lambda, SQS, EventBridge Scheduler, SPA on S3 + CloudFront; one small RDS PostgreSQL instance shared by the stages, each with its own database. One CDK pipeline (CodePipeline + CodeBuild) per stage runs `pnpm check`, builds the SPA, bundles the Lambdas, and deploys: branch `dev` → `dev`, `main` → `prod` |
 | Operations page | Observability | Admins see, per user, last activity, requests by app, and articles read; per site, requests by outcome, busiest hour, and pauses; job runs, failures, and durations; on Docker and AWS |
 | Audit log | Observability | Sign-ins, failed sign-ins, password, 2FA, app-password, and user-management events kept a year and browsable by admins |
 | Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured (Docker) or an address subscribes to the stage's alert topic (AWS), and resolve on their own |
 | Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime. On AWS, traces go to X-Ray at a sampling rate set per stage, without CloudWatch metrics or dashboards |
-| Cost budget | Observability | On AWS, one monthly budget over the project (limit set in the infra config, $10 to start) emails its subscribers as spend nears or is forecast past it |
+| Cost budget | Observability | On AWS, one monthly budget over running the project, without its build pipelines (limit set in the infra config), emails its subscribers as spend nears or is forecast past it |
 | Plugin API | Later | Third-party modules register content and lifecycle hooks |
 
 ## Non-functional requirements

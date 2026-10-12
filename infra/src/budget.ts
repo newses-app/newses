@@ -16,10 +16,14 @@ import type { Construct } from 'constructs';
 import { ACCOUNT, PROJECT, REGION } from './config.ts';
 import { ManagedLogGroups } from './managed-log-groups.ts';
 
+/** Services that only build and deploy the project, which the budget leaves out. */
+export const BUILD_SERVICES = ['CodeBuild', 'AWS CodePipeline'];
+
 /**
- * Monthly cost budget over everything tagged with the project, both stages and their pipelines,
- * notifying its own topic as actual spend nears the limit or the forecast passes it. Untaggable
- * charges, such as X-Ray traces and tax, fall outside it.
+ * Monthly cost budget over running the project: everything tagged with it, both stages, except the
+ * build pipelines' CodeBuild and CodePipeline charges. It notifies its own topic as actual spend
+ * nears the limit or the forecast passes it. Untaggable charges, such as X-Ray traces and tax,
+ * fall outside it.
  */
 export class BudgetStack extends Stack {
   /** Budget notifications; subscribe an email address to receive them. */
@@ -76,7 +80,11 @@ export class BudgetStack extends Stack {
         timeUnit: 'MONTHLY',
         budgetLimit: { amount: props.limitUsd, unit: 'USD' },
         filterExpression: {
-          tags: { key: 'project', values: [PROJECT], matchOptions: ['EQUALS'] },
+          and: [
+            { tags: { key: 'project', values: [PROJECT], matchOptions: ['EQUALS'] } },
+            // Service names as Cost Explorer reports them.
+            { not: { dimensions: { key: 'SERVICE', values: BUILD_SERVICES } } },
+          ],
         },
       },
       notificationsWithSubscribers: [

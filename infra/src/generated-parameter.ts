@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CustomResource, Duration, Stack } from 'aws-cdk-lib';
+import { CustomResource, Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -77,6 +77,19 @@ export class GeneratedParameter extends Construct {
         externalModules: ['@aws-sdk/*'],
       },
     });
-    return new cr.Provider(stack, id, { onEventHandler });
+    // Nothing may depend on the construct path, which differs between the pipelines that deploy
+    // the shared database stage: the log group is named here rather than by `ManagedLogGroups`,
+    // and the framework function's description, which names the path, is replaced.
+    const provider = new cr.Provider(stack, id, {
+      onEventHandler,
+      logGroup: new logs.LogGroup(stack, `${id}FrameworkLogs`, {
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: RemovalPolicy.DESTROY,
+      }),
+    });
+    const framework = provider.node.findChild('framework-onEvent').node
+      .defaultChild as lambda.CfnFunction;
+    framework.description = `AWS CDK resource provider framework - onEvent (${id})`;
+    return provider;
   }
 }

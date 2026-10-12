@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Duration, RemovalPolicy, Stack, type StackProps, Token } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -8,17 +8,21 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import type * as rds from 'aws-cdk-lib/aws-rds';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
 import {
   ADOT_LAYER_ARN,
   BUILD_VERSION,
+  DB_ENDPOINT_PARAMETER,
+  DB_MASTER_PASSWORD_PARAMETER,
+  DB_MASTER_USER,
+  dbName,
   REPO_ROOT,
   resourceName,
   type StageConfig,
@@ -32,12 +36,11 @@ const ARGON2_VERSION = (
   }
 ).dependencies['@node-rs/argon2'];
 
-/** Feed dispatch cadence; other schedules fall on dispatch times so the database wakes once. */
+/** Feed dispatch cadence; other schedules fall on dispatch times. */
 const DISPATCH_MINUTES = 30;
 
 export interface AppStackProps extends StackProps {
   stage: StageConfig;
-  cluster: rds.DatabaseCluster;
   params: ParamsStack;
   blobs: s3.Bucket;
   archive: { database: string; workgroup: string };
@@ -70,7 +73,7 @@ export class AppStack extends Stack {
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
-    const { stage, cluster, params, blobs, archive } = props;
+    const { stage, params, blobs, archive } = props;
     const { dbPassword, adminPassword, originHeader, appSecret } = params;
 
     const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', {
@@ -124,10 +127,11 @@ export class AppStack extends Stack {
           removalPolicy: stage.retainData ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
         }),
         environment: {
-          DB_HOST: cluster.clusterEndpoint.hostname,
-          DB_PORT: Token.asString(cluster.clusterEndpoint.port),
-          DB_NAME: 'rss_reader',
-          DB_USER: 'rss_reader',
+          // The shared instance is deployed by another pipeline stage, so it is not referenced.
+          DB_HOST: ssm.StringParameter.valueForStringParameter(this, DB_ENDPOINT_PARAMETER),
+          DB_PORT: '5432',
+          DB_NAME: dbName(stage),
+          DB_USER: dbName(stage),
           DB_PASSWORD_PARAMETER: dbPassword.parameterName,
           APP_SECRET_PARAMETER: appSecret.parameterName,
           // CloudFront does not forward the viewer's Host, so public links need the domain.
@@ -285,6 +289,12 @@ export class AppStack extends Stack {
     migrate.addEnvironment('ADMIN_LOGIN', 'admin');
     migrate.addEnvironment('ADMIN_PASSWORD_PARAMETER', adminPassword.parameterName);
     adminPassword.grantRead(migrate);
+    // Creates the stage's role and database on the shared instance before migrating.
+    migrate.addEnvironment('DB_MASTER_USER', DB_MASTER_USER);
+    migrate.addEnvironment('DB_MASTER_PASSWORD_PARAMETER', DB_MASTER_PASSWORD_PARAMETER);
+    ssm.StringParameter.fromSecureStringParameterAttributes(this, 'DbMasterPassword', {
+      parameterName: DB_MASTER_PASSWORD_PARAMETER,
+    }).grantRead(migrate);
     // Runs on every deployment that changes the migrate bundle, before the other functions update.
     new triggers.Trigger(this, 'Migrate', {
       handler: migrate,

@@ -24,7 +24,7 @@ import { trackRun } from '../tracking.ts';
 
 const ssm = new SSMClient({});
 
-function requireEnv(name: string): string {
+export function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set`);
   return value;
@@ -38,13 +38,18 @@ export async function readParameter(envName: string): Promise<string> {
   return Parameter?.Value ?? '';
 }
 
+/** A TLS connection URL for the database at DB_HOST and DB_PORT. */
+export function databaseUrl(user: string, password: string, database: string): string {
+  const auth = `${encodeURIComponent(user)}:${encodeURIComponent(password)}`;
+  const address = `${requireEnv('DB_HOST')}:${requireEnv('DB_PORT')}/${database}`;
+  return `postgres://${auth}@${address}?sslmode=verify-full`;
+}
+
 /** Builds DATABASE_URL from the DB_* variables and password parameter, unless it is set. */
 async function resolveDatabaseUrl(): Promise<void> {
   if (process.env.DATABASE_URL) return;
   const password = await readParameter('DB_PASSWORD_PARAMETER');
-  const auth = `${encodeURIComponent(requireEnv('DB_USER'))}:${encodeURIComponent(password)}`;
-  const address = `${requireEnv('DB_HOST')}:${requireEnv('DB_PORT')}/${requireEnv('DB_NAME')}`;
-  process.env.DATABASE_URL = `postgres://${auth}@${address}?sslmode=verify-full`;
+  process.env.DATABASE_URL = databaseUrl(requireEnv('DB_USER'), password, requireEnv('DB_NAME'));
 }
 
 /** Sets ADMIN_PASSWORD from the parameter named by ADMIN_PASSWORD_PARAMETER, when that is set. */
@@ -59,10 +64,7 @@ async function resolveAppSecret(): Promise<void> {
   process.env.APP_SECRET = await readParameter('APP_SECRET_PARAMETER');
 }
 
-/**
- * Config, logger, pool, and the AWS feed adapters, created once per Lambda cold start.
- * Connecting may wait for a paused Aurora Serverless database to resume (about 15 s).
- */
+/** Config, logger, pool, and the AWS feed adapters, created once per Lambda cold start. */
 export async function createLambdaRuntime(role: string) {
   await resolveDatabaseUrl();
   await resolveAdminPassword();

@@ -1,6 +1,6 @@
 # 0057. AWS tracing, shared budget stack, and alert notifications
 
-- Status: Accepted
+- Status: Superseded by 0058
 - Date: 2026-10-12
 - Supersedes 0056
 

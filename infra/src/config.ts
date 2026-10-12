@@ -25,10 +25,16 @@ export const ADOT_LAYER_ARN =
 export const BUILD_VERSION = process.env.CODEBUILD_RESOLVED_SOURCE_VERSION?.slice(0, 7) ?? 'dev';
 
 /**
- * Monthly cost budget in USD for the whole project. Both pipelines deploy it, so a change takes
- * effect on `dev` and holds once merged to `main`.
+ * Monthly cost budget in USD for running the project, both stages, without the build pipelines.
+ * Both pipelines deploy it, so a change takes effect on `dev` and holds once merged to `main`.
  */
-export const BUDGET_USD = 10;
+export const BUDGET_USD = 25;
+
+/** The shared database instance's master user, which creates each stage's role and database. */
+export const DB_MASTER_USER = 'rss_admin';
+export const DB_MASTER_PASSWORD_PARAMETER = `/${PROJECT}/db/master-password`;
+/** String parameter with the shared instance's address, which stages read at deployment. */
+export const DB_ENDPOINT_PARAMETER = `/${PROJECT}/db/endpoint`;
 
 export interface StageConfig {
   name: 'dev' | 'prod';
@@ -80,6 +86,9 @@ export const STAGES: StageConfig[] = [
  */
 export const resourceName = (stage: StageConfig, ...parts: string[]) =>
   [PROJECT, stage.name, ...parts].join('-');
+
+/** The stage's database on the shared instance, and the role that owns it. */
+export const dbName = (stage: StageConfig) => `${PROJECT}_${stage.name}`.replaceAll('-', '_');
 
 /** Where the app downloads live, in the downloads bucket and under the stage's domain. */
 export const DOWNLOADS_PREFIX = 'downloads';

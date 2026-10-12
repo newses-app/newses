@@ -14,6 +14,7 @@ import {
   SecretValue,
   Stack,
   type StackProps,
+  Token,
 } from 'aws-cdk-lib';
 import * as athena from 'aws-cdk-lib/aws-athena';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -35,9 +36,9 @@ const HIVE_TYPES: Record<ArchiveFieldType, string> = {
 };
 
 /**
- * Aurora Serverless v2 PostgreSQL that pauses at 0 ACU when idle, the blob bucket, and the
- * catalog Athena reads the archive in the bucket through.
- * Lambdas run outside any VPC (no NAT), so the cluster is public and accepts TLS only.
+ * The blob bucket and the catalog Athena reads the archive in the bucket through. The Aurora
+ * cluster the stage used before the shared database instance stays until the App stack has
+ * deployed without importing its endpoint.
  */
 export class DataStack extends Stack {
   readonly cluster: rds.DatabaseCluster;
@@ -106,9 +107,13 @@ export class DataStack extends Stack {
       }),
       storageEncrypted: true,
       backup: { retention: Duration.days(stage.backupDays) },
-      deletionProtection: stage.retainData,
+      // Off, so the next deployment can remove the cluster: stages now use the shared instance.
+      deletionProtection: false,
       removalPolicy: stage.retainData ? RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY,
     });
+    // The App stack imported these; they stay until it has deployed without them.
+    this.exportValue(this.cluster.clusterEndpoint.hostname);
+    this.exportValue(Token.asString(this.cluster.clusterEndpoint.port));
 
     this.blobs = new s3.Bucket(this, 'Blobs', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

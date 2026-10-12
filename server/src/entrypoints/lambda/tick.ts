@@ -36,7 +36,7 @@ async function run(event: TickEvent): Promise<void> {
     case 'dispatch': {
       const dispatched = await feeds.updater.dispatchDue();
       logger.info({ dispatched }, 'Dispatched feed fetches');
-      // Rides the dispatch schedule, so checking never wakes a paused database on its own.
+      // Rides the dispatch schedule rather than a schedule of its own.
       await ops.recorder.flush();
       await trackRun(ops.recorder, 'ops.check', () => ops.checker.run(), { kind: 'task' });
       return;

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Resets an AWS stage to a fresh, empty instance: drops the database schema, re-runs the migrate
 # function (which recreates the admin), empties the blob bucket, and purges the job queues.
-# Keeps the SSM parameters and the downloads bucket. Snapshots the prod cluster first.
+# Keeps the SSM parameters and the downloads bucket. Snapshots the shared database instance first
+# when resetting prod.
 set -euo pipefail
 
 usage() {
@@ -49,8 +50,8 @@ name="rss-reader-$stage"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-host=$(aws rds describe-db-clusters --db-cluster-identifier "$name" \
-  --query 'DBClusters[0].Endpoint' --output text)
+host=$(aws ssm get-parameter --name /rss-reader/db/endpoint --query Parameter.Value --output text)
+db_name="rss_reader_$stage"
 db_password=$(aws ssm get-parameter --name "/rss-reader/$stage/db-password" \
   --with-decryption --query Parameter.Value --output text)
 blob_bucket=$(aws cloudformation describe-stacks --stack-name "$name-data" \
@@ -62,11 +63,11 @@ psql() {
   # The password reaches the container through its environment, never its command line.
   PGPASSWORD=$db_password docker run --rm -i -e PGPASSWORD \
     -v "$tmp/rds-ca.pem:/rds-ca.pem:ro" postgres:18-alpine \
-    psql "postgres://rss_reader@$host:5432/rss_reader?sslmode=verify-full&sslrootcert=/rds-ca.pem" \
+    psql "postgres://$db_name@$host:5432/$db_name?sslmode=verify-full&sslrootcert=/rds-ca.pem" \
     -v ON_ERROR_STOP=1 -X -q "$@"
 }
 
-echo "Connecting to $host (a paused database takes up to 30 s to resume)..."
+echo "Connecting to $db_name on $host..."
 counts=$(psql -At -c "SELECT (SELECT count(*) FROM users) || ' users, ' ||
   (SELECT count(*) FROM subscriptions) || ' subscriptions, ' ||
   (SELECT count(*) FROM entries) || ' entries'") || counts='unreadable (above)'
@@ -93,7 +94,7 @@ echo "  database: $counts"
 echo "  blob bucket $blob_bucket: ${objects:-0} objects"
 echo "  ${#queues[@]} job queues: about $messages messages"
 echo "Kept: SSM parameters, the downloads bucket."
-[ "$stage" != prod ] || echo "The cluster is snapshotted first."
+[ "$stage" != prod ] || echo "The database instance, holding every stage, is snapshotted first."
 if $dry_run; then
   echo 'Dry run: nothing reset.'
   exit 0
@@ -106,10 +107,10 @@ fi
 
 if [ "$stage" = prod ]; then
   snapshot="$name-pre-reset-$(date +%Y%m%d-%H%M%S)"
-  echo "Snapshotting the cluster as $snapshot..."
-  aws rds create-db-cluster-snapshot --db-cluster-identifier "$name" \
-    --db-cluster-snapshot-identifier "$snapshot" >/dev/null
-  aws rds wait db-cluster-snapshot-available --db-cluster-snapshot-identifier "$snapshot"
+  echo "Snapshotting the database instance as $snapshot..."
+  aws rds create-db-snapshot --db-instance-identifier rss-reader-db \
+    --db-snapshot-identifier "$snapshot" >/dev/null
+  aws rds wait db-snapshot-available --db-snapshot-identifier "$snapshot"
 fi
 
 echo "Dropping the database schema..."
@@ -137,4 +138,4 @@ echo
 echo "Stage $stage is empty. Sign in at https://$domain as admin with the password from:"
 echo "  aws ssm get-parameter --name /rss-reader/$stage/admin-password --with-decryption --query Parameter.Value --output text"
 echo "Every session and app password is gone: the apps must sign in again."
-[ "$stage" != prod ] || echo "The previous data is in cluster snapshot $snapshot."
+[ "$stage" != prod ] || echo "The previous data is in database snapshot $snapshot."

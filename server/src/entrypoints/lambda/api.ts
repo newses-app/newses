@@ -55,8 +55,8 @@ export const handler = async (event: APIGatewayProxyEventV2, context: Context) =
   if (!fromCloudFront(event)) return { statusCode: 403, body: '' };
   const response = await proxy(event, context);
   // The container may be frozen once the response returns, so statistics and audit are written
-  // now, but only when the request used the database: writing must never wake a paused Aurora.
-  // Until then the counts wait in memory.
+  // now, but only when the request used the database, so the others open no connection to write
+  // them. Until then the counts wait in memory.
   if (database.used()) {
     await Promise.all([ops.recorder.flush(), ops.audit.settle()]);
     database.reset();
