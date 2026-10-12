@@ -11,7 +11,7 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { MemoryArchiveWriter, RecordingRealtime } from '../../test/fakes.ts';
+import { MemoryArchive, RecordingRealtime } from '../../test/fakes.ts';
 import { createTtrssSource } from '../../test/ttrss-source.ts';
 import { type ImportOptions, importTtrss } from '../importer.ts';
 import { TtrssSource } from '../source.ts';
@@ -66,10 +66,7 @@ const SOURCE_ROWS = `
     (11, 11, '', NULL, NULL, 2, false, true, '', '', NULL, false, NULL);
   INSERT INTO ttrss_tags (tag_name, owner_uid, post_int_id) VALUES ('news', 2, 1);`;
 
-async function run(
-  changes: Partial<ImportOptions> = {},
-  archive: MemoryArchiveWriter | null = null,
-) {
+async function run(changes: Partial<ImportOptions> = {}, archive: MemoryArchive | null = null) {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
@@ -217,7 +214,7 @@ describe('TTRSS entries import', () => {
     });
 
     it('archives entries older than their purge age, copies shared by users once', async () => {
-      const archive = new MemoryArchiveWriter();
+      const archive = new MemoryArchive();
       const report = await run({}, archive);
       expect(report.reconciled).toBe(true);
       expect(report.tally('pat', 'entries')).toEqual({ source: 10, imported: 7, archived: 1 });
@@ -260,7 +257,7 @@ describe('TTRSS entries import', () => {
     });
 
     it('re-runs without archiving anything again', async () => {
-      const archive = new MemoryArchiveWriter();
+      const archive = new MemoryArchive();
       await run({}, archive);
       const report = await run({}, archive);
       expect(report.reconciled).toBe(true);
@@ -269,7 +266,7 @@ describe('TTRSS entries import', () => {
     });
 
     it('counts what a dry run would archive, writing nothing', async () => {
-      const archive = new MemoryArchiveWriter();
+      const archive = new MemoryArchive();
       const report = await run({ dryRun: true }, archive);
       expect(report.reconciled).toBe(true);
       expect(report.tally('pat', 'entries').archived).toBe(1);

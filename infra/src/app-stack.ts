@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Duration, RemovalPolicy, Stack, type StackProps, Token } from 'aws-cdk-lib';
 import * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
@@ -32,6 +33,7 @@ export interface AppStackProps extends StackProps {
   cluster: rds.DatabaseCluster;
   params: ParamsStack;
   blobs: s3.Bucket;
+  archive: { database: string; workgroup: string };
 }
 
 /** Lambdas behind an HTTP API, SQS job queues, and the schedules that dispatch feeds. */
@@ -40,7 +42,7 @@ export class AppStack extends Stack {
 
   constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
-    const { stage, cluster, params, blobs } = props;
+    const { stage, cluster, params, blobs, archive } = props;
     const { dbPassword, adminPassword, originHeader, appSecret } = params;
 
     const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', {
@@ -99,6 +101,8 @@ export class AppStack extends Stack {
           PUBLIC_URL: `https://${stage.domainName}`,
           COMPAT_TRACE: String(stage.compatTrace),
           ARCHIVE_ENABLED: String(stage.archive),
+          ARCHIVE_ATHENA_WORKGROUP: archive.workgroup,
+          ARCHIVE_ATHENA_DATABASE: archive.database,
           RSS_READER_VERSION: BUILD_VERSION,
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
@@ -116,7 +120,8 @@ export class AppStack extends Stack {
           banner:
             "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
           // The runtime provides the AWS SDK; argon2 is native and installed for the target below.
-          externalModules: ['@aws-sdk/*', '@node-rs/argon2'],
+          // DuckDB reads the archive on Docker only, so functions never load it.
+          externalModules: ['@aws-sdk/*', '@node-rs/argon2', '@duckdb/*'],
           commandHooks: {
             beforeBundling: () => [],
             beforeInstall: () => [],
@@ -162,6 +167,43 @@ export class AppStack extends Stack {
     tickSchedule('Dispatch', `cron(0/${String(DISPATCH_MINUTES)} * * * ? *)`, 'dispatch');
     tickSchedule('Purge', 'cron(0 */6 * * ? *)', 'purge');
     tickSchedule('AuthPrune', 'cron(0 * * * ? *)', 'auth.prune');
+    tickSchedule('ArchiveCompact', 'cron(0 4 * * ? *)', 'archive.compact');
+
+    // Archive reads (api) and compaction (tick) query Athena over the Glue table; the bucket
+    // grants above cover the data and query results.
+    const athenaQueries = [
+      new iam.PolicyStatement({
+        actions: [
+          'athena:StartQueryExecution',
+          'athena:GetQueryExecution',
+          'athena:GetQueryResults',
+          'athena:StopQueryExecution',
+        ],
+        resources: [
+          this.formatArn({
+            service: 'athena',
+            resource: 'workgroup',
+            resourceName: archive.workgroup,
+          }),
+        ],
+      }),
+      new iam.PolicyStatement({
+        actions: ['glue:GetDatabase', 'glue:GetTable', 'glue:GetPartition', 'glue:GetPartitions'],
+        resources: [
+          this.formatArn({ service: 'glue', resource: 'catalog' }),
+          this.formatArn({ service: 'glue', resource: 'database', resourceName: archive.database }),
+          this.formatArn({
+            service: 'glue',
+            resource: 'table',
+            resourceName: `${archive.database}/*`,
+          }),
+        ],
+      }),
+    ];
+    for (const statement of athenaQueries) {
+      api.addToRolePolicy(statement);
+      tick.addToRolePolicy(statement);
+    }
 
     const fetch = fn('fetch', { timeout: Duration.minutes(15) });
     // One host's batch per invocation; at most 8 hosts at once.

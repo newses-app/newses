@@ -272,6 +272,7 @@ describe('entries API', () => {
         '/api/v1/counters',
         '/api/v1/sync',
         '/api/v1/prefs',
+        '/api/v1/archive/entries',
       ]),
     );
   });

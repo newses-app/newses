@@ -35,6 +35,8 @@ const schema = z
       ),
     COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
     ARCHIVE_ENABLED: z.enum(['true', 'false']).default('true'),
+    ARCHIVE_ATHENA_WORKGROUP: z.string().min(1).optional(),
+    ARCHIVE_ATHENA_DATABASE: z.string().min(1).optional(),
     RSS_READER_VERSION: z.string().default('dev'),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
@@ -45,7 +47,14 @@ const schema = z
   .refine((e) => (e.ADMIN_LOGIN === undefined) === (e.ADMIN_PASSWORD === undefined), {
     message: 'ADMIN_LOGIN and ADMIN_PASSWORD must be set together',
     path: ['ADMIN_PASSWORD'],
-  });
+  })
+  .refine(
+    (e) => (e.ARCHIVE_ATHENA_WORKGROUP === undefined) === (e.ARCHIVE_ATHENA_DATABASE === undefined),
+    {
+      message: 'ARCHIVE_ATHENA_WORKGROUP and ARCHIVE_ATHENA_DATABASE must be set together',
+      path: ['ARCHIVE_ATHENA_DATABASE'],
+    },
+  );
 
 export class ConfigError extends Error {
   override name = 'ConfigError';
@@ -75,6 +84,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     publicUrl: e.PUBLIC_URL ?? null,
     compatTrace: e.COMPAT_TRACE === 'true',
     archiveEnabled: e.ARCHIVE_ENABLED === 'true',
+    archiveAthena:
+      e.ARCHIVE_ATHENA_WORKGROUP && e.ARCHIVE_ATHENA_DATABASE
+        ? { workgroup: e.ARCHIVE_ATHENA_WORKGROUP, database: e.ARCHIVE_ATHENA_DATABASE }
+        : null,
     feeds: {
       updateIntervalSeconds: e.FEED_UPDATE_INTERVAL_MINUTES * 60,
       purgeDays: e.FEED_PURGE_DAYS,

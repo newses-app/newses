@@ -20,24 +20,14 @@ import type { ImageProxy } from '../../core/feeds/images.ts';
 import type { PrefsService } from '../../core/prefs.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 import { toCategory, toLabel, toSubscription } from '../dto.ts';
+import { proxiedImages } from '../proxied-images.ts';
 
 const idParams = z.object({ id: z.coerce.number().int() });
 
 export const entryRoutes: FastifyPluginAsyncZod<
   EntryServices & { prefs: PrefsService; images: ImageProxy; fullText: FullTextService }
 > = (app, { entries, counters, sync, prefs, images, fullText }) => {
-  /** Points images at the proxy for users who turned it on. */
-  async function withImages<
-    T extends { content?: string | null | undefined; fullContent?: string | null | undefined },
-  >(userId: number, list: T[]): Promise<T[]> {
-    if (!list.some((e) => e.content || e.fullContent) || !(await prefs.get(userId)).proxyImages)
-      return list;
-    return list.map((e) => ({
-      ...e,
-      ...(e.content && { content: images.rewrite(e.content) }),
-      ...(e.fullContent && { fullContent: images.rewrite(e.fullContent) }),
-    }));
-  }
+  const withImages = proxiedImages(prefs, images);
 
   app.addHook('preHandler', requireUser);
   app.addHook('onSend', (_request, reply, payload, done) => {

@@ -48,7 +48,7 @@ Workspace packages exist only where runtime or toolchain differs.
 ## Runtime model
 
 - Docker: one container image, role selected by command: `server`, `worker`, `migrate`, `cli`.
-- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune), `fetch`, `favicon`, `extract`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
+- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune, archive compaction), `fetch`, `favicon`, `extract`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
 
 Rules:
 - Server is stateless; sessions live in Postgres.
@@ -68,6 +68,7 @@ Rules:
 | `Scheduler` | Periodically dispatch due feeds and purges | In-process timer in worker | EventBridge Scheduler |
 | `BlobStore` | Favicons, cached images, archive files | Local volume | S3 |
 | `ArchiveWriter` | Write entries to the cold-storage archive | Parquet through `BlobStore` | Parquet through `BlobStore`, catalogued in Glue for Athena |
+| `ArchiveReader` | List, search, and get archived articles; compact the archive | DuckDB in-process, over the local blob directory | Athena over the Glue table |
 | `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
@@ -180,7 +181,12 @@ Purge (every 6 h):
 Archive:
 - Parquet files under the blob root, `archive/entries/month=YYYY-MM/<uuid>.parquet`, one month of `sort_at` per folder, rows sorted by feed URL and `sort_at`, snappy-compressed; files are only added. Layout: `server/src/adapters/archive-format.ts`.
 - Columns: the entry's id (null for imported rows), feed URL and title, GUID, link, title, author, content, its plain text, language, published, source-updated, fetched, sort, and archived times, and enclosures.
-- AWS: the Glue table `archive_entries` in database `rss_reader_<stage>` projects partitions from the month folders; objects move to Intelligent-Tiering.
+- AWS: the Glue table `archive_entries` in database `rss_reader_<stage>` projects partitions from the month folders; objects move to Intelligent-Tiering. Queries run in the `rss-reader-<stage>` Athena workgroup, results under `athena-results/` (kept a day), at most 10 GB scanned per query.
+- Reads: an article is a feed URL and GUID; readers keep the copy archived last, and the database's copy of an article wins over the archive's. Order: newest `sort_at` first, then feed URL and GUID. Search matches every word anywhere in the title or plain text, ignoring case (in the database: the full-text index).
+- A user's archive of a feed is the entries of its source they do not hold (purged for them, or older than their subscription) plus archived rows with the feed's URL; only current subscribers reach it.
+- Restoring an article re-inserts the entry with its original id when that is free (else a new one) and its enclosures, unless the database still has it, then adds the user's entry, read, in its subscription, with the requested state. Sync picks it up through `updated_at`. A restored article that is not kept is purged, and archived, again.
+- Compaction (daily): each month before the current one with several files becomes one file, without duplicates, sorted as written; the files read are then deleted. Docker: DuckDB writes the file, at most 10 minutes per run. AWS: Athena `UNLOAD`s the month to `archive/staging/`, from where it moves into the month folder, at most 3 minutes per run.
+- Docker reads the archive only from a local blob directory: with `BLOB_BUCKET` it is written but not read.
 - Deletes proxied images and remembered failures fetched more than 30 days ago.
 - Deletes tombstones older than 30 days, and expired host pauses.
 
@@ -283,6 +289,7 @@ Search:
 - Scores are whole numbers within ±1,000,000, set with the entry's flags. Entries scored below the user's `scoreHideBelow` are left out of subscription, category, All, and Fresh lists and unread counts; Starred, Published, label, tag, and Recently read lists show them, and catch-up marks them read.
 - `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
+- `GET /archive/entries` lists past articles of the user's feeds (one subscription, or all), with search (`q`) and a cursor; `GET /archive/entries/:key` returns one with content and enclosures; `POST /archive/entries/:key/restore` takes `PATCH /entries/:id`'s body and returns the restored entry. Keys are opaque: the month of the article's sort time, its feed URL, and GUID.
 - `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
 
 Filters:
@@ -383,14 +390,15 @@ flowchart LR
   FF --> QI[[SQS favicon]] --> FI[λ favicon]
   FA & FF --> QX[[SQS extract]] --> FX[λ extract]
   FA & FT & FF & FI & FX --> DB[(Aurora Serverless v2)]
-  FA & FF & FI --> S3B[(S3: blobs)]
+  FA & FT & FF & FI --> S3B[(S3: blobs)]
+  FA & FT --> ATH[Athena + Glue: archive] --> S3B
   FA & FF & FI & FX --> NET((Internet feeds))
 ```
 
 - Stacks per stage: `Params` (generated credentials), `Data` (VPC with public subnets only, Aurora, blob bucket, archive catalog), `App` (functions, HTTP API, queues with dead-letter queues, schedules, migrate trigger), `Edge` (CloudFront, SPA and downloads buckets, DNS records), `Release` (the release pipeline), all in us-east-2. CloudFront uses the existing `*.example.com` certificate in us-east-1, imported by ARN.
 - Names: stacks are `rss-reader-<stage>-{params,data,app,edge,release,pipeline}`, and resources with settable names use `rss-reader-<stage>-<role>` (functions, log groups, queues, schedules, HTTP API, cluster, CloudFront function and policies). Bucket names are generated from the stack name, except `rss-reader-<stage>-downloads-<account>`, which the release pipeline is granted by name. Everything is tagged `project=rss-reader` and `stage=<stage>`.
 - Functions run outside any VPC, so they reach feeds without NAT. Aurora is publicly reachable on 5432 with TLS required (`rds.force_ssl`) and a generated password; it scales between 0 and 2 ACU and pauses after 5 idle minutes.
-- Dispatch runs every 30 minutes; purge (every 6 h) and auth prune (hourly) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
+- Dispatch runs every 30 minutes; purge (every 6 h), auth prune (hourly), and archive compaction (daily, 04:00 UTC) fall on dispatch times, so the database wakes once per slot. One fetch invocation handles one host's batch; at most 8 run at once.
 - CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
 - CloudFront does not forward the viewer's `Host`, so functions get `PUBLIC_URL` set to the stage's domain.
 - `/api/v1/images/*` is cached at the edge (managed CachingOptimized policy: no cookies or viewer headers in the key, TTL from the API's `Cache-Control`); other API paths are not cached.

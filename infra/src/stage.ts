@@ -53,6 +53,7 @@ export class RssReaderStage extends Stage {
       cluster: this.data.cluster,
       params: this.params,
       blobs: this.data.blobs,
+      archive: this.data.archive,
     });
     this.edge = new EdgeStack(this, 'Edge', {
       env,

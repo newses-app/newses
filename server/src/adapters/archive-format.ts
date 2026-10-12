@@ -49,6 +49,11 @@ export const ARCHIVE_COLUMNS: readonly ArchiveField<ArchiveRow>[] = [
 
 export const ENCLOSURES_COLUMN = 'enclosures';
 
+export const ARCHIVE_CONTENT_TYPE = 'application/vnd.apache.parquet';
+
+/** The archive's table in the AWS Glue catalog. */
+export const ARCHIVE_TABLE = 'archive_entries';
+
 /** The month folder of a row: `YYYY-MM` of its `sort_at`, in UTC. */
 export const archiveMonth = (row: Pick<ArchiveRow, 'sortAt'>) =>
   row.sortAt.toISOString().slice(0, 7);

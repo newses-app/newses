@@ -3,6 +3,7 @@ import { parquetWriteBuffer, type SchemaElement } from 'hyparquet-writer';
 import type { ArchiveRow, ArchiveWriter, BlobStore } from '../core/ports.ts';
 import {
   ARCHIVE_COLUMNS,
+  ARCHIVE_CONTENT_TYPE,
   ARCHIVE_PARTITION,
   ARCHIVE_PREFIX,
   type ArchiveField,
@@ -92,7 +93,7 @@ export class ParquetArchiveWriter implements ArchiveWriter {
     for (const [month, monthRows] of months) {
       await this.#blobs.put(
         `${ARCHIVE_PREFIX}/${ARCHIVE_PARTITION}=${month}/${randomUUID()}.parquet`,
-        { data: archiveFile(monthRows), contentType: 'application/vnd.apache.parquet' },
+        { data: archiveFile(monthRows), contentType: ARCHIVE_CONTENT_TYPE },
       );
     }
   }

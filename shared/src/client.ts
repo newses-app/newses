@@ -17,6 +17,7 @@ import type {
   updateUserRequestSchema,
   User,
 } from './auth.ts';
+import type { ArchivedEntry, ArchiveEntriesQuery, ArchiveEntriesResponse } from './archive.ts';
 import type { Filter, FilterApplyResponse, FilterRequest, FilterTestResponse } from './filters.ts';
 import type {
   BulkEntryStateRequest,
@@ -275,6 +276,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<undefined>('PUT', `/entries/${id(entryId)}/labels`, { body: { labelIds } }),
       markRead: (body: MarkReadRequest) =>
         request<{ updated: number }>('POST', '/entries/mark-read', { body }),
+    },
+
+    archive: {
+      /** Past articles of the user's feeds, newest first. */
+      list: (query: ArchiveEntriesQuery = {}) =>
+        request<ArchiveEntriesResponse>('GET', '/archive/entries', { query: query as Query }),
+      get: (key: string) =>
+        request<ArchivedEntry>('GET', `/archive/entries/${encodeURIComponent(key)}`),
+      /** Brings the article back into the user's feed with this state; resolves to the entry. */
+      restore: (key: string, body: EntryState) =>
+        request<Entry>('POST', `/archive/entries/${encodeURIComponent(key)}/restore`, { body }),
     },
 
     labels: {

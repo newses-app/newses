@@ -137,19 +137,17 @@ describe('App', () => {
     }
   });
 
-  it('fetches at most 8 hosts at once and schedules dispatch, purge, and prune', () => {
+  it('fetches at most 8 hosts at once and schedules dispatch, purge, prune, and compaction', () => {
     app.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
       BatchSize: 1,
       ScalingConfig: { MaximumConcurrency: 8 },
     });
-    app.resourceCountIs('AWS::Scheduler::Schedule', 3);
+    app.resourceCountIs('AWS::Scheduler::Schedule', 4);
     app.hasResourceProperties('AWS::Scheduler::Schedule', {
       ScheduleExpression: 'cron(0/30 * * * ? *)',
     });
   });
-});
 
-describe('Edge', () => {
   it('archives in the blob bucket, catalogued for Athena by month, on both stages', () => {
     data.hasResourceProperties('AWS::S3::Bucket', {
       LifecycleConfiguration: {
@@ -192,6 +190,35 @@ describe('Edge', () => {
     expect(prod.archive).toBe(true);
   });
 
+  it('reads and compacts the archive through an Athena workgroup', () => {
+    data.hasResourceProperties('AWS::Athena::WorkGroup', {
+      Name: 'rss-reader-dev',
+      WorkGroupConfiguration: Match.objectLike({ EnforceWorkGroupConfiguration: true }),
+    });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'rss-reader-dev-api',
+      Environment: {
+        Variables: Match.objectLike({
+          ARCHIVE_ATHENA_WORKGROUP: 'rss-reader-dev',
+          ARCHIVE_ATHENA_DATABASE: 'rss_reader_dev',
+        }),
+      },
+    });
+    app.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Action: Match.arrayWith(['athena:StartQueryExecution']) }),
+        ]),
+      },
+    });
+    app.hasResourceProperties('AWS::Scheduler::Schedule', {
+      Name: 'rss-reader-dev-archive-compact',
+      ScheduleExpression: 'cron(0 4 * * ? *)',
+    });
+  });
+});
+
+describe('Edge', () => {
   it('serves the SPA from a private bucket and the API paths from the HTTP API', () => {
     edge.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
     edge.hasResourceProperties('AWS::CloudFront::Distribution', {

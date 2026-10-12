@@ -6,7 +6,7 @@ import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
-import { createFeedDeps } from './feed-deps.ts';
+import { createArchiveReader, createFeedDeps } from './feed-deps.ts';
 import { createRuntime, processSnapshot } from './runtime.ts';
 
 const { config, logger, pool, onShutdown } = createRuntime('server');
@@ -33,7 +33,7 @@ onShutdown(() => feedDeps.fetcher.close());
 const services = {
   ...createAuthServices(db, config.appSecret),
   feeds: createFeedServices(feedDeps),
-  entries: createEntryServices(db, realtime),
+  entries: createEntryServices(db, realtime, createArchiveReader(config, feedDeps.blobs)),
   prefs: new PrefsService(db),
   realtime,
 };

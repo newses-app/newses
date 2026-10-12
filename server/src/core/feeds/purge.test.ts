@@ -12,7 +12,7 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { MemoryArchiveWriter, MemoryBlobStore } from '../../test/fakes.ts';
+import { MemoryArchive, MemoryBlobStore } from '../../test/fakes.ts';
 import type { ArchiveRow } from '../ports.ts';
 import { faviconKey } from './favicons.ts';
 import { Purger } from './purge.ts';
@@ -161,10 +161,10 @@ describe('Purger', () => {
 
   describe('with an archive', () => {
     const PUBLISHED = new Date('2024-05-06T07:08:09.123Z');
-    let archive: MemoryArchiveWriter;
+    let archive: MemoryArchive;
 
     beforeEach(() => {
-      archive = new MemoryArchiveWriter();
+      archive = new MemoryArchive();
       purger = new Purger(db, blobs, SETTINGS, { archive });
     });
 

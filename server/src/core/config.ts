@@ -25,6 +25,8 @@ export interface AppConfig {
   compatTrace: boolean;
   /** Purge writes what it deletes to the cold-storage archive under the blob root. */
   archiveEnabled: boolean;
+  /** Athena reads the archive in `blobBucket` through this workgroup and Glue database. */
+  archiveAthena: { workgroup: string; database: string } | null;
   /** Built web app to serve, or null when it is hosted elsewhere. */
   webDir: string | null;
   feeds: FeedSettings;

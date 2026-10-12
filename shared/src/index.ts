@@ -3,6 +3,7 @@ export * from './feeds.ts';
 export * from './prefs.ts';
 export * from './prefs-defaults.ts';
 export * from './entries.ts';
+export * from './archive.ts';
 export * from './labels.ts';
 export * from './limits.ts';
 export * from './shortcuts.ts';

@@ -10,6 +10,7 @@
 | P2 | Power features | Labels, tags, notes, published feed, share links, reading preferences, and remappable shortcuts in daily use |
 | P3 | TTRSS cut-over | All TTRSS users imported; filters, scoring, and full text in daily use; TTRSS and Google Reader clients work against the server; TTRSS retired |
 | P4 | Native apps | Signed Electron apps for Windows and Linux and the Capacitor Android app installed from the stage's downloads, used against AWS and Docker servers, and updating themselves |
+| P5 | Cold-storage archive | Articles purge deletes and the TTRSS import drops are kept; users browse, search, and restore them on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -37,6 +38,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Special feeds | P1 | All articles, Fresh (configurable age), Starred, Published, Recently read, each with unread counts |
+| Archive | P5 | Past articles of subscribed feeds (purged, or older than the subscription) can be browsed per feed and searched; starring, publishing, noting, or labelling one restores it to the feed |
 | Archived feed | Later | Starred/published/noted entries of unsubscribed feeds remain readable under "Archived" |
 | Layouts | P1 | Three-pane (tree / headlines / article) and combined (expanded articles in list) modes; single-pane responsive layout below tablet width |
 | View modes | P1 | All, unread only, adaptive (unread if any, else all) |

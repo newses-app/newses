@@ -107,6 +107,35 @@ export interface ArchiveWriter {
   write(rows: ArchiveRow[]): Promise<void>;
 }
 
+/** An archive row's place in the archive's order: newest `sortAt` first, then feed URL and GUID. */
+export interface ArchivePosition {
+  sortAt: Date;
+  feedUrl: string;
+  guid: string;
+}
+
+export interface ArchiveListQuery {
+  feedUrls: string[];
+  /** Lower-case words that must all appear in the title or text. */
+  terms: string[];
+  /** Only rows after this one in the archive's order. */
+  after: ArchivePosition | null;
+  limit: number;
+}
+
+/** Reads the archive. Each article (feed URL and GUID) appears once, as archived last. */
+export interface ArchiveReader {
+  /** Headlines in the archive's order: no content or enclosures, and `text` cut short. */
+  list(query: ArchiveListQuery): Promise<ArchiveRow[]>;
+  /** One article, looked up in the month folder of its `sortAt` (`YYYY-MM`). */
+  get(month: string, feedUrl: string, guid: string): Promise<ArchiveRow | null>;
+  /**
+   * Merges each finished month with several files into one, until `deadline` (epoch ms);
+   * returns how many months were merged.
+   */
+  compact(deadline: number): Promise<number>;
+}
+
 /** Events are invalidation signals; clients refetch the data they describe. */
 export type RealtimeEvent = { type: 'counters' };
 

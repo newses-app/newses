@@ -24,6 +24,7 @@ import { ttrssRoutes } from './compat/ttrss.ts';
 import { feedIconRoutes, ttrssConfig, ttrssOps } from './compat/ttrss-ops.ts';
 import { errorHandler } from './errors.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
+import { archiveRoutes } from './routes/archive.ts';
 import { authRoutes } from './routes/auth.ts';
 import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions, noEventRoutes } from './routes/events.ts';
@@ -177,6 +178,11 @@ export function buildApp(deps: AppDeps) {
           prefs: services.prefs,
           images: services.feeds.images,
           fullText: services.feeds.fullText,
+        });
+        await api.register(archiveRoutes, {
+          archive: services.entries.archive,
+          prefs: services.prefs,
+          images: services.feeds.images,
         });
         await api.register(labelRoutes, { labels: services.entries.labels });
         await api.register(filterRoutes, {

@@ -25,7 +25,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `TRUST_PROXY` | `false` | `true`, the number of proxy hops, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |
 | `FEED_UPDATE_INTERVAL_MINUTES` | `30` | Default minutes between fetches of a feed (5–1440) |
 | `FEED_PURGE_DAYS` | `180` | Default age in days after which entries are deleted unless starred, published, noted, labelled, or shared; `0` keeps everything |
-| `ARCHIVE_ENABLED` | `true` | Keeps entries that purge deletes in a cold-storage archive in the `blobs` volume; `false` deletes them for good |
+| `ARCHIVE_ENABLED` | `true` | Keeps entries that purge deletes in a cold-storage archive in the `blobs` volume, where users browse and restore them; `false` deletes them for good |
 | `FEED_DISABLE_AFTER_FAILURES` | `20` | Consecutive failed fetches after which a feed is disabled until refreshed |
 | `FETCH_ALLOW_PRIVATE_NETWORKS` | unset | Feeds on private or loopback addresses are blocked; set `true` or comma-separated CIDRs (e.g. `192.168.1.0/24`) to allow LAN feeds |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created |

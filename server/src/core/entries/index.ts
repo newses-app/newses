@@ -1,6 +1,7 @@
 import type { Db } from '../../db/client.ts';
 import { FilterService } from '../filters/filters.ts';
-import type { Realtime } from '../ports.ts';
+import type { ArchiveReader, Realtime } from '../ports.ts';
+import { ArchiveService } from './archive.ts';
 import { AccessKeyService } from './access-keys.ts';
 import { CounterService } from './counters.ts';
 import { EntryService } from './entries.ts';
@@ -8,9 +9,16 @@ import { LabelService } from './labels.ts';
 import { SyncService } from './sync.ts';
 import { TagService } from './tags.ts';
 
-export function createEntryServices(db: Db, realtime: Realtime) {
+/** `archive` reads the cold-storage archive; null lists only what the database still holds. */
+export function createEntryServices(
+  db: Db,
+  realtime: Realtime,
+  archive: ArchiveReader | null = null,
+) {
+  const entries = new EntryService(db, realtime);
   return {
-    entries: new EntryService(db, realtime),
+    entries,
+    archive: new ArchiveService(db, entries, archive),
     counters: new CounterService(db),
     labels: new LabelService(db, realtime),
     tags: new TagService(db),

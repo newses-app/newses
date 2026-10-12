@@ -8,7 +8,7 @@ import { createFeedServices } from '../../core/feeds/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
 import { createLambdaRuntime, readParameter } from './runtime.ts';
 
-const { config, logger, pool, db, feedDeps } = await createLambdaRuntime('api');
+const { config, logger, pool, db, feedDeps, archive } = await createLambdaRuntime('api');
 
 const app = buildApp({
   logger,
@@ -21,7 +21,7 @@ const app = buildApp({
   services: {
     ...createAuthServices(db, config.appSecret),
     feeds: createFeedServices(feedDeps),
-    entries: createEntryServices(db, feedDeps.realtime),
+    entries: createEntryServices(db, feedDeps.realtime, archive),
     prefs: new PrefsService(db),
     realtime: feedDeps.realtime,
   },

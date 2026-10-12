@@ -5,8 +5,11 @@ import { createAuthServices } from '../core/auth/index.ts';
 import { SyncService } from '../core/entries/sync.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { createDb } from '../db/client.ts';
-import { createFeedDeps } from './feed-deps.ts';
+import { createArchiveReader, createFeedDeps } from './feed-deps.ts';
 import { createRuntime } from './runtime.ts';
+
+/** How long one daily archive compaction may run; the rest waits for the next day. */
+const ARCHIVE_COMPACT_BUDGET_MS = 10 * 60 * 1000;
 
 const { config, logger, pool, onShutdown } = createRuntime('worker');
 const db = createDb(pool);
@@ -57,6 +60,12 @@ scheduler.every('auth.prune', 60 * 60, async () => {
   await sessions.pruneExpired();
   await throttle.prune();
 });
+const archive = createArchiveReader(config, deps.blobs);
+if (archive)
+  scheduler.every('archive.compact', 24 * 60 * 60, async () => {
+    const months = await archive.compact(Date.now() + ARCHIVE_COMPACT_BUDGET_MS);
+    if (months > 0) logger.info({ months }, 'Compacted the archive');
+  });
 scheduler.start();
 onShutdown(() => scheduler.stop());
 

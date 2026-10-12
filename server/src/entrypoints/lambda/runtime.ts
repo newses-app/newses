@@ -10,7 +10,7 @@ import { HttpFetcher } from '../../core/feeds/http.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createDb } from '../../db/client.ts';
-import { createArchiveWriter, createBlobStore } from '../feed-deps.ts';
+import { createArchiveReader, createArchiveWriter, createBlobStore } from '../feed-deps.ts';
 import { createLogger, createPool } from '../runtime.ts';
 
 const ssm = new SSMClient({});
@@ -85,7 +85,7 @@ export async function createLambdaRuntime(role: string) {
     keys: deriveKeys(config.appSecret),
     logger,
   };
-  return { config, logger, pool, db, feedDeps };
+  return { config, logger, pool, db, feedDeps, archive: createArchiveReader(config, blobs) };
 }
 
 /** SQS batch handler: failed messages are reported back for redelivery, the rest are deleted. */

@@ -16,6 +16,7 @@ describe('loadConfig', () => {
       publicUrl: null,
       compatTrace: false,
       archiveEnabled: true,
+      archiveAthena: null,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
       fetchAllowPrivateNetworks: false,
       appSecret: APP_SECRET,
@@ -41,6 +42,11 @@ describe('loadConfig', () => {
     const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
     expect(loadConfig({ ...base, ARCHIVE_ENABLED: 'false' }).archiveEnabled).toBe(false);
     expect(() => loadConfig({ ...base, ARCHIVE_ENABLED: 'yes' })).toThrow(ConfigError);
+    expect(
+      loadConfig({ ...base, ARCHIVE_ATHENA_WORKGROUP: 'wg', ARCHIVE_ATHENA_DATABASE: 'db' })
+        .archiveAthena,
+    ).toEqual({ workgroup: 'wg', database: 'db' });
+    expect(() => loadConfig({ ...base, ARCHIVE_ATHENA_WORKGROUP: 'wg' })).toThrow(ConfigError);
   });
 
   it('parses overrides', () => {
