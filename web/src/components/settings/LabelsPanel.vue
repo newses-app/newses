@@ -6,7 +6,8 @@ import { useI18n } from 'vue-i18n';
 import { ApiError } from '../../api.ts';
 import { useLabelActions, useLabels } from '../../composables/useLabels.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
-import { contrastRatio, LABEL_COLORS, MIN_CONTRAST, nextLabelColors } from '../../lib/labels.ts';
+import { contrastRatio, MIN_CONTRAST } from '../../lib/appearance.ts';
+import { LABEL_COLORS, nextLabelColors } from '../../lib/labels.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
 

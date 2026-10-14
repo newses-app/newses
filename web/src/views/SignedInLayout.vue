@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { watch, watchEffect } from 'vue';
+import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
-import { useTheme } from 'vuetify';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
@@ -14,11 +13,11 @@ import TagPickerDialog from '../components/dialogs/TagPickerDialog.vue';
 import TagsDialog from '../components/dialogs/TagsDialog.vue';
 import SubscribeDialog from '../components/dialogs/SubscribeDialog.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
+import { useAppearance } from '../composables/useAppearance.ts';
 import { useLiveCounters } from '../composables/useCounters.ts';
 import { useEntryNotifications } from '../composables/useEntryNotifications.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
-import { readingStyle } from '../lib/reading.ts';
 import { shares } from '../platform/index.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -26,16 +25,9 @@ import { useUiStore } from '../stores/ui.ts';
 const { t } = useI18n();
 const ui = useUiStore();
 const router = useRouter();
-const theme = useTheme();
-const { prefs, loaded, update } = usePrefs();
+const { prefs, update } = usePrefs();
 
-watchEffect(() => {
-  if (loaded.value) theme.change(prefs.value.theme);
-});
-watchEffect(() => {
-  for (const [name, value] of Object.entries(readingStyle(prefs.value)))
-    document.documentElement.style.setProperty(name, value);
-});
+useAppearance();
 
 useLiveCounters();
 useEntryNotifications();

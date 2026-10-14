@@ -1,7 +1,7 @@
-import type { Prefs } from '@newses/shared';
+import type { FontKey, Prefs, ThemeTokens } from '@newses/shared';
 
 /** System font stacks, so no font is downloaded (Privacy requirement). */
-const FONTS: Record<Prefs['articleFont'], string> = {
+export const FONTS: Record<FontKey, string> = {
   default: 'inherit',
   sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   serif: 'Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, "Times New Roman", serif',
@@ -18,11 +18,14 @@ const WIDTHS: Record<Prefs['articleWidth'], string> = {
 /** CSS custom properties that article styles read; set on the document root. */
 export function readingStyle(
   prefs: Pick<Prefs, 'articleFont' | 'articleFontSize' | 'articleWidth'>,
+  theme: Pick<ThemeTokens, 'articleFont' | 'fontScale'>,
 ): Record<string, string> {
+  const font = prefs.articleFont === 'default' ? theme.articleFont : prefs.articleFont;
   return {
-    '--article-font': FONTS[prefs.articleFont],
-    // rem-relative, so the browser's own text-size setting still scales it.
-    '--article-font-size': `${String(prefs.articleFontSize / 16)}rem`,
+    '--article-font': FONTS[font],
+    // rem-relative, so the browser's own text-size setting still scales it. The theme's font scale
+    // sizes the root font, so it is divided out to keep the reader's size.
+    '--article-font-size': `${String(prefs.articleFontSize / 16 / theme.fontScale)}rem`,
     '--article-width': WIDTHS[prefs.articleWidth],
   };
 }

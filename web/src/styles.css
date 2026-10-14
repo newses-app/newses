@@ -1,3 +1,8 @@
+/* The theme's UI text scale; unlayered, so it overrides Vuetify's root font size. */
+html {
+  font-size: calc(var(--ui-font-scale, 1) * 100%);
+}
+
 /* Article bodies: sanitised feed HTML rendered with v-html. Reading preferences set the variables. */
 .article-content {
   overflow-wrap: anywhere;

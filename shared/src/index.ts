@@ -2,6 +2,8 @@ export * from './auth.ts';
 export * from './feeds.ts';
 export * from './prefs.ts';
 export * from './prefs-defaults.ts';
+export * from './themes.ts';
+export * from './themes-builtin.ts';
 export * from './entries.ts';
 export * from './archive.ts';
 export * from './labels.ts';

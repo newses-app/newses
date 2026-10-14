@@ -12,6 +12,7 @@
 | P4 | Native apps | Signed Electron apps for Windows and Linux and the Capacitor Android app installed from the stage's downloads, used against AWS and Docker servers, and updating themselves |
 | P5 | Cold-storage archive | Articles purge deletes and the TTRSS import drops are kept; users browse, search, and restore them on Docker and AWS |
 | Observability | Operations insight | Admins follow user activity, load on remote sites, job health, and security events on the Operations page and get alert emails; on Docker they trace requests and jobs in Grafana, on AWS in X-Ray, with a monthly cost budget |
+| Custom Themes | Appearance | Users adjust the appearance, save, import, export, and share their own themes, and use the Terminal and Sketch themes in the web, desktop, and Android apps |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -51,6 +52,7 @@
 | Keyboard shortcuts | P1 | TTRSS default bindings (`j`/`k`, `n`/`p`, `s`, `u`, `o`, `/`, `f a`, `g a`, …); `?` shows a help overlay |
 | Remappable shortcuts | P2 | Per-user keys or two-key sequences per action; settings record them, flag clashes, and reset to defaults; the help overlay shows the user's bindings |
 | Themes | P1 | Light, dark, follow system |
+| Custom themes | Custom Themes | Built-in Original, Terminal, and Sketch themes; per-user adjustments of colours, fonts, text scale, corners, density, borders, shadows, and effects; named themes saved, renamed, duplicated, deleted, imported, and exported as JSON; themes published to everyone on the server, which admins can unpublish; built-in palettes meet WCAG AA, and others warn below it |
 | Reading preferences | P2 | Font family, size, line width per user |
 | Enclosures | Later | Inline audio/video players and image galleries for enclosures |
 | Open original | P1 | Opens article link in a new tab/browser without marking unrelated items |

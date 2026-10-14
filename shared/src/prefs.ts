@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { MAX_SCORE } from './limits.ts';
 import { isKeySequence, MAX_BINDINGS_PER_ACTION, SHORTCUT_ACTIONS } from './shortcuts.ts';
+import { BUILTIN_THEME_KEYS, FONT_KEYS } from './themes-builtin.ts';
+import { partialThemeTokensSchema } from './themes.ts';
 
 export const viewModeSchema = z.enum(['all', 'unread', 'adaptive']);
 export const headlineOrderSchema = z.enum(['newest', 'oldest', 'title']);
@@ -10,9 +12,14 @@ const prefsShape = {
   viewMode: viewModeSchema,
   sortOrder: headlineOrderSchema,
   layout: z.enum(['threePane', 'combined']),
+  /** Light or dark mode of the appearance theme; `system` follows the OS. */
   theme: z.enum(['system', 'light', 'dark']),
-  /** Typeface of article text; `default` follows the app. System fonts only, so nothing loads. */
-  articleFont: z.enum(['default', 'sans', 'serif', 'mono']),
+  /** A built-in theme's key or a custom theme's id; one that no longer resolves shows Original. */
+  appearanceTheme: z.union([z.enum(BUILTIN_THEME_KEYS), z.number().int().positive()]),
+  /** The reader's changes to the appearance theme's tokens. */
+  themeAdjustments: partialThemeTokensSchema,
+  /** Typeface of article text; `default` follows the theme. System fonts only, so nothing loads. */
+  articleFont: z.enum(FONT_KEYS),
   /** Article text size in CSS pixels. */
   articleFontSize: z.number().int().min(12).max(28),
   /** Maximum width of the article column. */

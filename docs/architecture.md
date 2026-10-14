@@ -94,7 +94,10 @@ Rules:
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
 - Counters refetch on `counters` events. Without a stream they are polled every 60 s, paused while the page is hidden; a closed stream is retried every 5 minutes.
 - Below 900 px one pane shows at a time; below 700 px secondary toolbar actions move into a menu.
-- Reading preferences (font, text size, line width) set CSS custom properties on the document root that article styles read. Fonts are system font stacks, so nothing is downloaded.
+- A theme is a set of tokens (`shared/src/themes.ts`): style, light and dark palettes, UI and article fonts as keys, UI text scale, corners, density, borders, shadows, and effects. Built-in themes are in `shared`; the `appearanceTheme` preference names one, or a custom theme's id, and `themeAdjustments` holds the reader's partial overrides. The `theme` preference is the mode: light, dark, or the system's.
+- A theme resolves as its built-in base, then its overrides, then the reader's adjustments; a reference that no longer resolves shows Original. The result replaces the colours of Vuetify's `light` and `dark` themes in place, provides Vuetify defaults around the routes, and sets `--v-font-body`, `--ui-font-scale`, `data-theme-style`, and `data-effects` on the document root.
+- The last resolved tokens are kept in `localStorage` and applied before mounting, so a reload starts with the reader's theme and signed-out screens use it.
+- Reading preferences (font, text size, line width) set CSS custom properties on the document root that article styles read; the `default` font is the theme's article font, and the text size is kept under the theme's scale. Fonts are system font stacks, so nothing is downloaded.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - The `shortcutBindings` preference holds only changed actions; each replaces that action's defaults, and `[]` unbinds it. A key cannot be bound alone while it starts a chord.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
@@ -485,6 +488,7 @@ Deployment config:
 
 Operator setup, once per account:
 - Prerequisites: a CodeConnections connection to the GitHub repository, an ACM certificate in us-east-1 for the stages' domains, and the Route 53 hosted zone.
+- In an organization's member account, Budgets works only after the management account has launched Cost Explorer (console only) and allows member accounts access in Cost Management preferences; until then the `<prefix>-budget` stack fails. The management account's IAM roles reach these pages only once its root user activates IAM access to Billing information.
 - `infra/deploy.config.json` from the example, then stored as the parameter (`AGENTS.md`).
 - `pnpm --filter @newses/infra cdk bootstrap aws://<account>/<region>`
 - `pnpm --filter @newses/infra cdk deploy <prefix>-dev-pipeline` (and `<prefix>-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it, release stacks included.

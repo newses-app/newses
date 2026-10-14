@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { slow } from './lib/slow-requests.ts';
 import UpdatePrompt from './components/UpdatePrompt.vue';
+import { themeDefaults } from './composables/useAppearance.ts';
 import { bridge, NATIVE } from './platform/index.ts';
 import { useUiStore } from './stores/ui.ts';
 
@@ -76,7 +77,9 @@ function changeServer() {
         <p role="status" class="text-body-medium">{{ slow ? t('app.waking') : '' }}</p>
       </template>
     </div>
-    <router-view />
+    <v-defaults-provider :defaults="themeDefaults">
+      <router-view />
+    </v-defaults-provider>
     <UpdatePrompt v-if="NATIVE" />
     <v-snackbar :model-value="slow && !starting" location="top" timeout="-1">
       {{ t('app.waking') }}

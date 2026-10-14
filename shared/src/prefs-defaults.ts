@@ -5,6 +5,8 @@ export const DEFAULT_PREFS: Prefs = {
   sortOrder: 'newest',
   layout: 'threePane',
   theme: 'system',
+  appearanceTheme: 'original',
+  themeAdjustments: {},
   articleFont: 'default',
   articleFontSize: 16,
   articleWidth: 'medium',

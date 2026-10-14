@@ -5,7 +5,8 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.vue';
 import { i18n } from './plugins/i18n.ts';
 import { queryClient } from './plugins/query.ts';
-import { vuetify } from './plugins/vuetify.ts';
+import { createAppVuetify } from './plugins/vuetify.ts';
+import { startAppearance } from './composables/useAppearance.ts';
 import { installAuthGuard } from './composables/useSession.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 import { handleBack } from './platform/back-button.ts';
@@ -15,6 +16,8 @@ import { useUiStore } from './stores/ui.ts';
 import './styles.css';
 
 document.documentElement.dataset.platform = bridge.platform;
+// The last theme shown here, so a reload doesn't flash Original and signed-out screens are themed.
+const appearance = startAppearance();
 // The apps' server and token come from the shell before the first navigation needs them.
 await connection.load();
 if (NATIVE) routeExternalLinks(document, (url) => void bridge.openExternal(url));
@@ -24,7 +27,7 @@ const pinia = createPinia();
 createApp(App)
   .use(pinia)
   .use(router)
-  .use(vuetify)
+  .use(createAppVuetify(appearance))
   .use(i18n)
   .use(VueQueryPlugin, { queryClient })
   .mount('#app');
