@@ -31,6 +31,7 @@ import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
 import { appServer } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
+import FeedIcon from './FeedIcon.vue';
 import ScoreBadge from './ScoreBadge.vue';
 
 const props = defineProps<{ entry: Entry }>();
@@ -116,7 +117,9 @@ async function toggleFullText() {
         <span v-else>{{ title }}</span>
       </h2>
       <div class="text-body-medium text-medium-emphasis">
-        <span v-if="entry.feedTitle">{{ entry.feedTitle }}</span>
+        <span v-if="entry.feedTitle">
+          <FeedIcon :subscription-id="entry.subscriptionId" class="me-1" />{{ entry.feedTitle }}
+        </span>
         <span v-if="entry.author"> · {{ entry.author }}</span>
         <span>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span

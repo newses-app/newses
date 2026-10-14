@@ -97,7 +97,11 @@ export class FaviconService {
   async #download(feedSourceId: number, siteUrl: string): Promise<Blob | null> {
     let candidates = [new URL('/favicon.ico', siteUrl).href];
     try {
-      const page = await this.#fetch(siteUrl, { accept: 'text/html', maxBytes: MAX_PAGE_BYTES });
+      const page = await this.#fetch(siteUrl, {
+        accept: 'text/html',
+        maxBytes: MAX_PAGE_BYTES,
+        truncate: true,
+      });
       candidates = iconCandidates(decodeBody(page.body, page.contentType), page.url);
     } catch (err) {
       this.#logger.debug({ err, feedSourceId }, 'Favicon page fetch failed');

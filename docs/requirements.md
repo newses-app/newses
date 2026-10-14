@@ -26,7 +26,7 @@
 | OPML import/export | P1 | Round-trips feeds and nested categories; imports a TTRSS OPML export without loss of feed URLs or category structure |
 | Background updates | P1 | Per-feed interval (default global setting); conditional GET via ETag/Last-Modified; exponential backoff on failure; honours `Retry-After`/HTTP 429; manual "update now" |
 | Feed errors | P1 | Last error and time shown per feed; "feeds with errors" view; feed auto-disables after a configurable number of consecutive failures |
-| Favicons | P1 | Fetched per site, cached, shown in tree and headlines; fallback icon |
+| Favicons | P1 | Fetched per site, cached, shown in tree, headlines, and article headers; fallback icon |
 | Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, labelled, or shared entries |
 | HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
 | Per-feed options | Later | Hide from "All articles", pause updates, always show images |

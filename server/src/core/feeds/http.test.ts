@@ -129,6 +129,8 @@ describe('HttpFetcher', () => {
     expect(await failure(local().fetch(`${base}/big`, { maxBytes: 100 }))).toMatchObject({
       code: 'too_large',
     });
+    const head = await local().fetch(`${base}/big`, { maxBytes: 100, truncate: true });
+    expect(head.body.byteLength).toBe(100);
     expect(await failure(local({ timeoutMs: 200 }).fetch(`${base}/slow`))).toMatchObject({
       code: 'timeout',
     });

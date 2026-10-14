@@ -44,6 +44,8 @@ export interface FetchRequest {
   accept?: string;
   /** Overrides the fetcher's body limit for this request; downloads stop once it is exceeded. */
   maxBytes?: number;
+  /** Returns the first `maxBytes` of a larger body instead of failing. */
+  truncate?: boolean;
 }
 
 export interface FetchResult {
@@ -268,7 +270,7 @@ export class HttpFetcher implements Fetcher {
       });
     }
     const declared = Number(response.headers.get('content-length'));
-    if (declared > maxBytes) {
+    if (declared > maxBytes && !request.truncate) {
       await response.body?.cancel();
       throw new FetchError('too_large', `Response exceeds ${String(maxBytes)} bytes`);
     }
@@ -277,9 +279,13 @@ export class HttpFetcher implements Fetcher {
     try {
       for await (const chunk of (response.body ?? []) as AsyncIterable<Uint8Array>) {
         size += chunk.byteLength;
-        // Leaving the loop by throwing cancels the stream.
+        // Leaving the loop, by break or throw, cancels the stream.
         if (size > maxBytes) {
-          throw new FetchError('too_large', `Response exceeds ${String(maxBytes)} bytes`);
+          if (!request.truncate) {
+            throw new FetchError('too_large', `Response exceeds ${String(maxBytes)} bytes`);
+          }
+          chunks.push(chunk.subarray(0, chunk.byteLength - (size - maxBytes)));
+          break;
         }
         chunks.push(chunk);
       }

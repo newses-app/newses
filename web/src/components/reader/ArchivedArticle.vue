@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
 import { appServer } from '../../platform/index.ts';
+import FeedIcon from './FeedIcon.vue';
 
 const props = defineProps<{ entry: ArchivedEntry; restoring: boolean }>();
 /** `then` names the dialog to open on the restored entry once it is back in the feed. */
@@ -43,7 +44,9 @@ const enclosures = computed(() =>
         <span v-else>{{ title }}</span>
       </h2>
       <div class="text-body-medium text-medium-emphasis">
-        <span v-if="entry.feedTitle">{{ entry.feedTitle }}</span>
+        <span v-if="entry.feedTitle">
+          <FeedIcon :subscription-id="entry.subscriptionId" class="me-1" />{{ entry.feedTitle }}
+        </span>
         <span v-if="entry.author"> · {{ entry.author }}</span>
         <span>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span

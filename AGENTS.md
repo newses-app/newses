@@ -39,6 +39,10 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - `web` is bundled by Vite; browser code imports runtime values from `@newses/shared/client` (no Zod) and only types from `@newses/shared`. UI strings live in `web/src/locales/en.json`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
 
+## Commits
+
+- Agents never commit, amend, or push on their own. Leave changes in the working tree for the maintainer's review, and commit only when asked.
+
 ## Docs map
 
 | Doc | Owns |
@@ -70,4 +74,4 @@ Write an ADR for decisions that change: stack, architecture, data model concepts
 
 ## Tracking
 
-Progress, TODOs, and open questions go in GitHub Issues and milestones (`P1`, `P1.5`, `P1.6`, `P2`, `P3`, `P4`, `Later`), never in docs.
+Progress, TODOs, and open questions go in GitHub Issues and milestones, never in docs.
