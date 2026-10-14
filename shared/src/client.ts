@@ -229,6 +229,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       resetPassword: (userId: number, password: string) =>
         request<undefined>('POST', `/admin/users/${id(userId)}/password`, { body: { password } }),
       deleteUser: (userId: number) => request<undefined>('DELETE', `/admin/users/${id(userId)}`),
+      /** Withdraws a user's shared theme from everyone else. */
+      unpublishTheme: (themeId: number) =>
+        request<undefined>('POST', `/admin/themes/${id(themeId)}/unpublish`),
       resetTwoFactor: (userId: number) =>
         request<undefined>('POST', `/admin/users/${id(userId)}/2fa/reset`),
       ops: {

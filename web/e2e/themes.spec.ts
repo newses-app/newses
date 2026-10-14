@@ -145,6 +145,15 @@ test.describe('custom themes', () => {
     await expect(page.getByRole('button', { name: 'Reset adjustments' })).toBeDisabled();
     await expect.poll(primary).toBe('170,0,85');
 
+    // Publishing shares it with everyone on the server, until it is unpublished.
+    const dusk = page.locator('.theme-option').filter({ hasText: 'E2E Dusk' }).first();
+    await actionsFor('E2E Dusk');
+    await page.getByRole('menuitem', { name: 'Publish' }).click();
+    await expect(dusk.getByText('Published', { exact: true })).toBeVisible();
+    await actionsFor('E2E Dusk');
+    await page.getByRole('menuitem', { name: 'Unpublish' }).click();
+    await expect(dusk.getByText('Published', { exact: true })).toHaveCount(0);
+
     await actionsFor('E2E Dusk');
     await page.getByRole('menuitem', { name: 'Duplicate' }).click();
     await expect(page.getByRole('radio', { name: 'E2E Dusk copy', exact: true })).toBeVisible();

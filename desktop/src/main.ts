@@ -26,7 +26,7 @@ import { DEFAULT_OPTIONS, HIDDEN_ARG, notificationTarget, parseOptions } from '.
 import { openSettings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
 import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
-import { themeSource } from './theme.ts';
+import { themeBackground, themeSource } from './theme.ts';
 import { startUpdater, type Updater } from './updater.ts';
 import { centered, onScreen, restoreBounds } from './window-state.ts';
 
@@ -160,8 +160,12 @@ function registerBridge(settings: SettingsStore) {
     if (changes.launchAtLogin !== undefined) await setLaunchAtLogin(changes.launchAtLogin);
   });
   // `system` lets Electron follow the OS again; pinning light or dark would stop that for good.
-  handle('setTheme', (theme) => {
+  handle('setTheme', async (theme) => {
     nativeTheme.themeSource = themeSource(theme);
+    const background = themeBackground(theme);
+    if (!background) return;
+    window?.setBackgroundColor(background);
+    if (background !== settings.get().background) await settings.update({ background });
   });
   handle('getUpdateStatus', () => updater?.status() ?? { state: 'unsupported' });
   handle('checkForUpdates', () => updater?.check());
@@ -203,7 +207,8 @@ function createWindow(settings: SettingsStore, hidden: boolean) {
     show: false,
     title: 'Newses',
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#121212' : '#ffffff',
+    backgroundColor:
+      themeBackground(settings.get()) ?? (nativeTheme.shouldUseDarkColors ? '#121212' : '#ffffff'),
     icon: join(__dirname, 'icon.png'),
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),

@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
+import { isDark } from './lib/appearance.ts';
 import { slow } from './lib/slow-requests.ts';
 import UpdatePrompt from './components/UpdatePrompt.vue';
 import { themeDefaults } from './composables/useAppearance.ts';
@@ -14,14 +15,19 @@ const { t } = useI18n();
 const ui = useUiStore();
 const router = useRouter();
 const theme = useTheme();
-// The shells follow the app's theme: the OS's while it is `system`.
+// The shells follow the app's theme: the OS's mode while it is `system`, and its background, which
+// may be dark in light mode.
 watch(
-  () => ({
-    preference: theme.isSystem.value ? 'system' : theme.current.value.dark ? 'dark' : 'light',
-    dark: theme.current.value.dark,
-  }),
-  (current) => void bridge.setTheme(current as AppTheme),
-  { immediate: true },
+  (): AppTheme => {
+    const background = String(theme.current.value.colors.background).toLowerCase();
+    return {
+      preference: theme.isSystem.value ? 'system' : theme.current.value.dark ? 'dark' : 'light',
+      dark: /^#[0-9a-f]{6}$/.test(background) ? isDark(background) : theme.current.value.dark,
+      background,
+    };
+  },
+  (current) => void bridge.setTheme(current),
+  { immediate: true, deep: true },
 );
 const open = computed({
   get: () => ui.notice !== null,

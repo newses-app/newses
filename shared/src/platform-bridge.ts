@@ -26,7 +26,10 @@ export interface DesktopOptions {
 
 export interface AppTheme {
   preference: 'system' | 'light' | 'dark';
+  /** Whether the background is dark, so text and icons over it should be light. */
   dark: boolean;
+  /** The appearance theme's background, `#rrggbb`. */
+  background: string;
 }
 
 /**
@@ -81,8 +84,9 @@ export interface PlatformBridge {
    */
   onShare(handler: (text: string) => void): void;
   /**
-   * The app's theme: the reader's preference, and whether it is dark now. Desktop follows the
-   * preference (so `system` keeps tracking the OS); Android colours its system bar icons by `dark`.
+   * The app's theme: the reader's mode preference and its background now. Desktop follows the
+   * preference (so `system` keeps tracking the OS) and paints its window with the background;
+   * Android colours its system bar icons by `dark`.
    */
   setTheme(theme: AppTheme): Promise<void>;
   /**

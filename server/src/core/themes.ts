@@ -70,6 +70,17 @@ export class ThemeService {
     if (deleted.length === 0) throw new DomainError('not_found', 'Theme not found');
   }
 
+  /** Withdraws any user's theme from others (admins); its other users fall back to Original. */
+  async unpublish(id: number): Promise<ThemeRow> {
+    const [row] = await this.#db
+      .update(themes)
+      .set({ shared: false })
+      .where(eq(themes.id, id))
+      .returning();
+    if (!row) throw new DomainError('not_found', 'Theme not found');
+    return row;
+  }
+
   #select() {
     return this.#db
       .select({ theme: themes, ownerLogin: users.login })

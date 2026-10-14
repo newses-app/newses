@@ -16,6 +16,8 @@ export interface Settings {
   /** The session token, encrypted with the OS key store (base64). */
   token?: string | undefined;
   window?: WindowState | undefined;
+  /** The app theme's last background, so a new window starts in it rather than flashing. */
+  background?: string | undefined;
   /** Changed from the defaults in settings (options.ts). */
   options?: Partial<DesktopOptions> | undefined;
 }

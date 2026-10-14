@@ -4,9 +4,16 @@ import { api } from '../api.ts';
 
 export const THEMES_KEY = ['themes'] as const;
 
-/** The user's themes and those others share. */
+/**
+ * The user's themes and those others share. Shared themes change elsewhere, so authors' edits and
+ * unpublished themes show when the app regains focus.
+ */
 export function useThemes() {
-  return useQuery({ queryKey: THEMES_KEY, queryFn: () => api.themes.list() });
+  return useQuery({
+    queryKey: THEMES_KEY,
+    queryFn: () => api.themes.list(),
+    refetchOnWindowFocus: 'always',
+  });
 }
 
 /** Theme changes, each followed by refetching the list, so a theme in use updates once saved. */
@@ -31,5 +38,11 @@ export function useThemeActions() {
     await refresh();
   }
 
-  return { create, update, remove };
+  /** Withdraws another user's shared theme (admins). */
+  async function unpublish(id: number): Promise<void> {
+    await api.admin.unpublishTheme(id);
+    await refresh();
+  }
+
+  return { create, update, remove, unpublish };
 }

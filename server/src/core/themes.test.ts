@@ -89,6 +89,16 @@ describe('ThemeService', () => {
     expect(await service.list(alice)).toEqual([]);
   });
 
+  it("unpublishes anyone's theme for admins, hiding it from others", async () => {
+    const { theme: row } = await service.create(alice, theme('Dusk'));
+    await service.update(alice, row.id, { shared: true });
+    const unpublished = await service.unpublish(row.id);
+    expect(unpublished).toMatchObject({ id: row.id, ownerId: alice, shared: false });
+    expect(await service.list(bob)).toEqual([]);
+    expect((await service.list(alice)).map((view) => view.theme.name)).toEqual(['Dusk']);
+    await expect(service.unpublish(row.id + 1000)).rejects.toMatchObject({ code: 'not_found' });
+  });
+
   it('limits themes per user', async () => {
     await db.insert(themes).values(
       Array.from({ length: MAX_THEMES_PER_USER }, (_, i) => ({

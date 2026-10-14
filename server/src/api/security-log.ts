@@ -30,7 +30,8 @@ export type SecurityEvent =
   | 'user_updated'
   | 'user_password_reset'
   | 'user_deleted'
-  | 'user_two_factor_reset';
+  | 'user_two_factor_reset'
+  | 'theme_unpublished';
 
 const WARN = new Set<SecurityEvent>([
   'login_failed',

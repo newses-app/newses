@@ -21,6 +21,7 @@ import { ApiError } from '../../api.ts';
 import { adjustmentsPreview } from '../../composables/useAppearance.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
+import { useSession } from '../../composables/useSession.ts';
 import { useThemeActions, useThemes } from '../../composables/useThemes.ts';
 import {
   contrastIssues,
@@ -39,6 +40,8 @@ const vuetifyTheme = useTheme();
 const { prefs, update } = usePrefs();
 const themes = useThemes();
 const actions = useThemeActions();
+const { session } = useSession();
+const isAdmin = computed(() => session.value?.user.role === 'admin');
 
 const COLORS = [
   'background',
@@ -249,6 +252,45 @@ async function duplicate(theme: Theme) {
     ui.notify(t('appearance.saved', { name }));
 }
 
+/** Publishing shares the theme with everyone on the server; below WCAG AA it asks first. */
+async function publish(theme: Theme) {
+  const tokens = mergeTokens(BUILTIN_THEMES[theme.base], theme.tokens);
+  const lowContrast =
+    contrastIssues(tokens.palette.light, 'light').length +
+      contrastIssues(tokens.palette.dark, 'dark').length >
+    0;
+  if (
+    lowContrast &&
+    !(await ui.confirm(
+      t('appearance.publishTitle'),
+      t('appearance.publishLowContrast', { name: theme.name }),
+      t('appearance.publish'),
+    ))
+  )
+    return;
+  if (await run(() => actions.update(theme.id, { shared: true })))
+    ui.notify(t('appearance.published', { name: theme.name }));
+}
+
+async function unpublishOwn(theme: Theme) {
+  if (await run(() => actions.update(theme.id, { shared: false })))
+    ui.notify(t('appearance.unpublished', { name: theme.name }));
+}
+
+/** An admin withdraws someone else's theme; its users go back to Original. */
+async function unpublishShared(theme: Theme) {
+  if (
+    !(await ui.confirm(
+      t('appearance.unpublishTitle'),
+      t('appearance.unpublishText', { name: theme.name, author: theme.owner.login }),
+      t('appearance.unpublish'),
+    ))
+  )
+    return;
+  if (await run(() => actions.unpublish(theme.id)))
+    ui.notify(t('appearance.unpublished', { name: theme.name }));
+}
+
 /** Deleting the theme in use returns to Original. */
 async function remove(theme: Theme) {
   if (
@@ -362,6 +404,12 @@ async function pick(value: unknown) {
                   >
                     {{ t('appearance.by', { author: option.theme.owner.login }) }}
                   </span>
+                  <span
+                    v-else-if="option.theme?.shared"
+                    class="d-block text-body-small text-medium-emphasis"
+                  >
+                    {{ t('appearance.isPublished') }}
+                  </span>
                 </span>
               </template>
             </v-radio>
@@ -390,6 +438,26 @@ async function pick(value: unknown) {
                   role="menuitem"
                   :title="t('appearance.export')"
                   @click="exportTheme(option.theme)"
+                />
+                <template v-if="option.theme.mine">
+                  <v-list-item
+                    v-if="option.theme.shared"
+                    role="menuitem"
+                    :title="t('appearance.unpublish')"
+                    @click="unpublishOwn(option.theme)"
+                  />
+                  <v-list-item
+                    v-else
+                    role="menuitem"
+                    :title="t('appearance.publish')"
+                    @click="publish(option.theme)"
+                  />
+                </template>
+                <v-list-item
+                  v-else-if="isAdmin"
+                  role="menuitem"
+                  :title="t('appearance.unpublish')"
+                  @click="unpublishShared(option.theme)"
                 />
                 <v-list-item
                   v-if="option.theme.mine"

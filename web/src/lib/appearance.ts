@@ -84,6 +84,11 @@ export function contrastIssues(palette: ThemePalette, mode: Mode): ContrastIssue
   });
 }
 
+/** Whether `#rrggbb` is dark: light text and icons contrast with it more than dark ones. */
+export function isDark(hex: string): boolean {
+  return contrastRatio(hex, '#ffffff') > contrastRatio(hex, '#000000');
+}
+
 /** A custom theme: a built-in theme with some tokens overridden. */
 export interface CustomTheme {
   base: BuiltinThemeKey;

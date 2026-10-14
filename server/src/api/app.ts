@@ -28,6 +28,7 @@ import { telemetryEnabled } from '../telemetry/index.ts';
 import { errorHandler } from './errors.ts';
 import { registerOpsTracking } from './ops-tracking.ts';
 import { adminOpsRoutes } from './routes/admin-ops.ts';
+import { adminThemeRoutes } from './routes/admin-themes.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { archiveRoutes } from './routes/archive.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -190,6 +191,7 @@ export function buildApp(deps: AppDeps) {
         });
         await api.register(adminUserRoutes, services);
         await api.register(adminOpsRoutes, { ops: services.ops });
+        await api.register(adminThemeRoutes, { themes: services.themes });
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {
           ...services.entries,

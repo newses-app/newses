@@ -13,6 +13,7 @@ let app: ReturnType<typeof buildApp>;
 let services: ApiServices;
 let pat = 0;
 let other = 0;
+let admin = 0;
 
 interface Auth {
   cookie: string;
@@ -42,6 +43,7 @@ beforeAll(async () => {
   services = createTestServices(createDb(database.pool), new HttpFetcher());
   pat = (await services.users.create('pat', 'pat password')).id;
   other = (await services.users.create('other', 'other password')).id;
+  admin = (await services.users.create('admin', 'admin password', 'admin')).id;
   app = buildApp({ logger: pino({ level: 'silent' }), healthChecks: {}, services });
   await app.ready();
 });
@@ -79,6 +81,24 @@ describe('themes API', () => {
 
     expect((await call('DELETE', `/themes/${String(theme.id)}`, auth)).statusCode).toBe(204);
     expect((await call('GET', '/themes', auth)).json()).toEqual([]);
+  });
+
+  it('lets only admins unpublish a theme they do not own', async () => {
+    const auth = await sessionFor(pat);
+    const theme = (
+      await call('POST', '/themes', auth, { name: 'Loud', base: 'original', tokens: {} })
+    ).json<Theme>();
+    await call('PATCH', `/themes/${String(theme.id)}`, auth, { shared: true });
+    const url = `/admin/themes/${String(theme.id)}/unpublish`;
+
+    expect((await call('POST', url, await sessionFor(other))).statusCode).toBe(403);
+    const adminAuth = await sessionFor(admin);
+    expect((await call('GET', '/themes', adminAuth)).json<Theme[]>()).toHaveLength(1);
+    expect((await call('POST', url, adminAuth)).statusCode).toBe(204);
+    expect((await call('GET', '/themes', adminAuth)).json()).toEqual([]);
+    expect((await call('GET', '/themes', auth)).json<Theme[]>()[0]?.shared).toBe(false);
+    expect((await call('POST', '/admin/themes/999999/unpublish', adminAuth)).statusCode).toBe(404);
+    await call('DELETE', `/themes/${String(theme.id)}`, auth);
   });
 
   it('validates names, bases, and tokens', async () => {

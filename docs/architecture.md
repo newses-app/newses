@@ -126,7 +126,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The window has context isolation, the sandbox, no Node integration, and no webviews. New windows are denied and navigation away from the app is blocked; http(s) links open in the system browser. Only the notification and clipboard-write permissions are granted.
 - Fuses: no `RunAsNode`, `NODE_OPTIONS`, or inspect arguments; the app loads only from its integrity-checked asar.
 - The preload exposes the bridge; the main process answers only frames on the app origin and validates arguments.
-- The app's theme preference sets Electron's theme source: `system` follows the OS (light or dark title bar and `prefers-color-scheme`), light and dark pin it.
+- The app's theme preference sets Electron's theme source: `system` follows the OS (light or dark title bar and `prefers-color-scheme`), light and dark pin it. The window's background follows the appearance theme's, and the last one is kept in settings so a new window opens in it.
 - `settings.json` in the user data folder (owner-only) holds the server URL, window bounds, and the token encrypted with `safeStorage` (DPAPI on Windows, the keyring on Linux). On Linux without a keyring (`basic_text`) the token is kept in memory only, so each launch signs in.
 - One instance at a time. Closing saves the window bounds unless the window is minimized or off every screen; they are restored while still on a screen, else the window opens centred on the primary screen. The menu (File, Edit, View) shows on Alt.
 - WSLg places Linux windows itself, ignoring the bounds the app asks for, and does not report Windows-side moves or minimizing to the app. A window closed while minimized there reopens minimized and off-screen.
@@ -140,7 +140,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 `mobile/`: Capacitor for Android, `app.newses`, served from `https://localhost`. `android/` is committed.
 
 - `build` assembles `www/` from the native web build and `bridge.js` (the bridge bundled with the Capacitor plugins), loaded before the app's scripts, then syncs it into `android/`.
-- Bridge: the server URL in Preferences; the token in secure storage (AES-GCM with an Android Keystore key); links in Custom Tabs; files saved to the cache and offered through the share sheet; status and navigation bar icons follow the theme.
+- Bridge: the server URL in Preferences; the token in secure storage (AES-GCM with an Android Keystore key); links in Custom Tabs; files saved to the cache and offered through the share sheet; status and navigation bar icons are light over a dark theme background, judged by its luminance rather than the mode.
 - The back button closes the top dialog or menu, then the drawer, then goes back; at the start of the app's history it exits.
 - The app draws edge to edge (the native build's viewport has `viewport-fit=cover`): `#app` is inset by the safe areas (Capacitor's `--safe-area-inset-*` variables, else `env()`) and contains the layout, which scrolls inside it.
 - HTTPS only (cleartext off), `INTERNET` is the only permission, and app data is not backed up (Keystore keys do not move between devices).
@@ -340,7 +340,7 @@ Search:
 - `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
 - `GET /archive/entries` lists past articles of the user's feeds (one subscription, or all), with search (`q`) and a cursor; `GET /archive/entries/:key` returns one with content and enclosures; `POST /archive/entries/:key/restore` takes `PATCH /entries/:id`'s body and returns the restored entry. Keys are opaque: the month of the article's sort time, its feed URL, and GUID.
-- `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's; only the author can change or delete one. Stored tokens a later version no longer accepts are left out of the response.
+- `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's; only the author can change, publish (`shared`), or delete one. `POST /admin/themes/:id/unpublish` lets admins withdraw anyone's, logged as `theme_unpublished`. Stored tokens a later version no longer accepts are left out of the response. The web app refetches the list when it regains focus, so authors' edits and withdrawn themes reach other users; a theme that no longer resolves shows Original.
 - `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
 
 Filters:

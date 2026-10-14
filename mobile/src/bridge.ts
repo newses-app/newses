@@ -133,7 +133,8 @@ const bridge: PlatformBridge = {
     shareHandler = handler;
     for (const text of sharedTexts.splice(0)) handler(text);
   },
-  // A dark theme needs light status and navigation bar icons.
+  // The app draws edge to edge, so the bars show the page's theme background; over a dark one
+  // their icons must be light.
   setTheme: ({ dark }) =>
     SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }),
   onBackButton: (handler) => {

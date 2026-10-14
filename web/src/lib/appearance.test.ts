@@ -3,6 +3,7 @@ import { BUILTIN_THEMES, DEFAULT_PREFS } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
 import {
   contrastIssues,
+  isDark,
   contrastRatio,
   MIN_CONTRAST,
   MIN_GRAPHIC_CONTRAST,
@@ -48,6 +49,17 @@ describe('contrastIssues', () => {
       it(`passes for built-in ${key} ${mode}`, () => {
         expect(contrastIssues(tokens.palette[mode], mode)).toEqual([]);
       });
+});
+
+describe('isDark', () => {
+  it('tells dark backgrounds from light ones', () => {
+    for (const [key, tokens] of Object.entries(BUILTIN_THEMES)) {
+      expect(isDark(tokens.palette.dark.background), key).toBe(true);
+      expect(isDark(tokens.palette.light.background), key).toBe(false);
+    }
+    expect(isDark('#1a237e')).toBe(true);
+    expect(isDark('#ffd54f')).toBe(false);
+  });
 });
 
 describe('mergeAdjustments', () => {
