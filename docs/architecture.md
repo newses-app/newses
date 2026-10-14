@@ -455,7 +455,7 @@ flowchart LR
 - Logs go to CloudWatch, kept a month. No CloudWatch metrics, alarms, or dashboards; the Operations page reports, and `ops.check` runs after each dispatch.
 - Tracing: functions run the ADOT layer (`adotLayerArn` in the deployment config) when the stage's `traceSampling` is above 0. The SDK samples that share of traces by trace id (`traceidratio`) and sends spans to X-Ray through Lambda's local endpoint; Lambda active tracing (not needed for these spans), Application Signals, and X-Ray Transaction Search are off. Only the `aws-lambda` and `aws-sdk` instrumentations run; undici is never instrumented, so feed requests carry no trace headers. Only our spans and AWS SDK calls are recorded: functions are bundled, so `pg` is not instrumented. Service names are `<prefix>-<function>`.
 - Alerts: `tick` publishes alert changes to the SNS topic `<prefix>-<stage>-alerts`; email subscriptions are added outside the stack (see `AGENTS.md`), so addresses stay out of the repository.
-- Budget: the `<prefix>-budget` stack holds one monthly AWS Budget (`budgetUsd` in the deployment config) over running the project: everything tagged `project=<prefix>`, both stages, except the CodeBuild and CodePipeline services. Whichever pipeline runs first creates it; later runs change nothing, and removing a stage leaves it in place. It notifies its own topic, `<prefix>-budget`, at 80% and 100% of actual spend and 100% of forecast. A custom resource activates the `project` cost-allocation tag. Untaggable charges (X-Ray, tax) fall outside it.
+- Budget: the `<prefix>-budget` stack holds one monthly AWS Budget (`budgetUsd` in the deployment config) over running the project: everything tagged `project=<prefix>`, both stages, except the CodeBuild and CodePipeline services. Whichever pipeline runs first creates it; later runs change nothing, and removing a stage leaves it in place. It notifies its own topic, `<prefix>-budget`, at 80% and 100% of actual spend and 100% of forecast. It counts only once the `project` cost-allocation tag is active, which only the paying account (an organization's management account) can do. Untaggable charges (X-Ray, tax) fall outside it.
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
 Constraints:
@@ -488,6 +488,7 @@ Operator setup, once per account:
 - `infra/deploy.config.json` from the example, then stored as the parameter (`AGENTS.md`).
 - `pnpm --filter @newses/infra cdk bootstrap aws://<account>/<region>`
 - `pnpm --filter @newses/infra cdk deploy <prefix>-dev-pipeline` (and `<prefix>-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it, release stacks included.
+- In the paying account's Billing console (or `aws ce update-cost-allocation-tags-status`), the `project` cost-allocation tag activated once it appears, up to 24 h after the first deployment.
 - The signing parameters, before the first release: `scripts/windows-signing-setup.sh --ssm` and `scripts/android-signing-setup.sh --backup DIR --ssm`.
 - The first admin is `admin`, with a generated password in the SSM SecureString `/<prefix>/<stage>/admin-password` that must be changed at first sign-in. Create a personal admin, then disable or delete `admin`.
 
