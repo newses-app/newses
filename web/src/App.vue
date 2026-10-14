@@ -81,6 +81,13 @@ function changeServer() {
       <router-view />
     </v-defaults-provider>
     <UpdatePrompt v-if="NATIVE" />
+    <!-- The Sketch style's hand-drawn wobble (themes/sketch.css). -->
+    <svg width="0" height="0" class="position-absolute" aria-hidden="true" focusable="false">
+      <filter id="sketch-wobble">
+        <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="3" />
+        <feDisplacementMap in="SourceGraphic" scale="3" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
     <v-snackbar :model-value="slow && !starting" location="top" timeout="-1">
       {{ t('app.waking') }}
     </v-snackbar>

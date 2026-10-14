@@ -1,0 +1,92 @@
+/*
+ * Terminal style: browsing in a terminal. Unlayered, so it overrides Vuetify's layered styles.
+ * Decorations are generated content with empty alternative text, so screen readers skip them.
+ */
+
+/* Headings as prompts; a toolbar title holds its text in a placeholder. */
+html[data-theme-style='terminal']
+  :is(h1:not(.v-toolbar-title), .v-toolbar-title__placeholder)::before {
+  content: '$ ';
+  content: '$ ' / '';
+}
+html[data-theme-style='terminal'] h2:not(.article-content *)::before {
+  content: '# ';
+  content: '# ' / '';
+}
+
+/* Text buttons as [ label ]. */
+html[data-theme-style='terminal'] .v-btn:not(.v-btn--icon) .v-btn__content::before {
+  content: '[ ';
+  content: '[ ' / '';
+  white-space: pre;
+}
+html[data-theme-style='terminal'] .v-btn:not(.v-btn--icon) .v-btn__content::after {
+  content: ' ]';
+  content: ' ]' / '';
+  white-space: pre;
+}
+
+/* Headlines: `*` marks unread ones and `>` the selected one, which shows in inverse video. */
+html[data-theme-style='terminal'] .headline .headline-title::before {
+  content: '   ';
+  content: '   ' / '';
+  white-space: pre;
+}
+html[data-theme-style='terminal'] .headline.unread .headline-title::before {
+  content: ' * ';
+  content: ' * ' / '';
+}
+html[data-theme-style='terminal'] .headline.selected .headline-title::before {
+  content: '>  ';
+  content: '>  ' / '';
+}
+html[data-theme-style='terminal'] .headline.selected.unread .headline-title::before {
+  content: '>* ';
+  content: '>* ' / '';
+}
+html[data-theme-style='terminal'] .headline.selected {
+  background: rgb(var(--v-theme-on-surface));
+  color: rgb(var(--v-theme-surface));
+}
+html[data-theme-style='terminal'] .headline.selected .v-list-item__overlay {
+  opacity: 0;
+}
+html[data-theme-style='terminal'] .headline.selected :is(.headline-title, .v-list-item-subtitle) {
+  opacity: 1;
+}
+html[data-theme-style='terminal'] .headline.selected .score.high {
+  color: inherit;
+}
+
+/* Rules between panes and rows in the text colour. */
+html[data-theme-style='terminal'] {
+  --v-border-opacity: 0.35;
+}
+
+@media (forced-colors: none) {
+  /* Scanlines over everything; they never take clicks. */
+  html[data-theme-style='terminal'][data-effects~='texture'] body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.06) 2px 3px);
+  }
+
+  /* A cursor after the page title. */
+  @media (prefers-reduced-motion: no-preference) {
+    html[data-theme-style='terminal'][data-effects~='animation']
+      .v-toolbar-title__placeholder::after {
+      content: '_';
+      content: '_' / '';
+      animation: terminal-cursor 1s steps(1) infinite;
+    }
+  }
+}
+
+@keyframes terminal-cursor {
+  50% {
+    opacity: 0;
+  }
+}

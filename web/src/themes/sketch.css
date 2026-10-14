@@ -1,0 +1,79 @@
+/*
+ * Sketch style: drawn by hand. Unlayered, so it overrides Vuetify's layered styles. Frames are
+ * drawn on pseudo-elements and wobbled by the `#sketch-wobble` filter in App.vue, so only the
+ * lines wobble, never the text, and never per list row.
+ */
+
+/* Uneven corners, as if drawn freehand. */
+html[data-theme-style='sketch'] {
+  --sketch-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+}
+
+/* Cards, chrome, and filled buttons swap their straight border for a drawn frame. */
+html[data-theme-style='sketch'] :is(.v-card, .v-toolbar) {
+  border-color: transparent;
+}
+html[data-theme-style='sketch'] :is(.v-card, .theme-option)::after,
+html[data-theme-style='sketch'] .v-btn:is(.v-btn--variant-flat, .v-btn--variant-tonal)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border: var(--theme-border-width, 2px) solid rgb(var(--v-theme-on-surface));
+  border-radius: var(--sketch-radius);
+}
+html[data-theme-style='sketch'] .v-toolbar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  pointer-events: none;
+  border-block-end: var(--theme-border-width, 2px) solid rgb(var(--v-theme-on-surface));
+}
+html[data-theme-style='sketch'] :is(.v-card, .v-btn:not(.v-btn--icon), .theme-option) {
+  border-radius: var(--sketch-radius);
+}
+html[data-theme-style='sketch'] .theme-option {
+  position: relative;
+  border-color: transparent;
+}
+
+/* The selected headline and feed marked as with a highlighter. */
+html[data-theme-style='sketch']
+  :is(.headline.selected .headline-title, .tree .v-list-item--active .v-list-item-title) {
+  background: linear-gradient(
+    100deg,
+    transparent 0.2em,
+    rgba(var(--v-theme-primary), 0.25) 0.35em,
+    rgba(var(--v-theme-primary), 0.25) calc(100% - 0.35em),
+    transparent calc(100% - 0.2em)
+  );
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+html[data-theme-style='sketch']
+  :is(.headline.selected, .tree .v-list-item--active)
+  .v-list-item__overlay {
+  opacity: 0;
+}
+
+/* Underlined as the pointer passes. */
+html[data-theme-style='sketch']
+  :is(.headline, .tree .v-list-item):hover
+  :is(.headline-title, .v-list-item-title) {
+  text-decoration: underline wavy;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+@media (forced-colors: none) {
+  html[data-theme-style='sketch'] :is(.v-card, .theme-option, .v-toolbar)::after,
+  html[data-theme-style='sketch'] .v-btn:is(.v-btn--variant-flat, .v-btn--variant-tonal)::before {
+    filter: url('#sketch-wobble');
+  }
+
+  /* Paper grain under the page; surfaces keep their plain colour. */
+  html[data-theme-style='sketch'][data-effects~='texture'] .v-application {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}

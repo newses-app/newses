@@ -5,6 +5,7 @@ import { useTheme } from 'vuetify';
 import { type Appearance, mergeTokens, resolveAppearance, themeTokens } from '../lib/appearance.ts';
 import { readingStyle } from '../lib/reading.ts';
 import { usePrefs } from './usePrefs.ts';
+import { useThemes } from './useThemes.ts';
 
 const CACHE_KEY = 'newses.appearance';
 
@@ -60,14 +61,20 @@ export function startAppearance(): Appearance {
 export function useAppearance(): void {
   const theme = useTheme();
   const { prefs, loaded } = usePrefs();
-  const tokens = computed(() =>
-    loaded.value
-      ? themeTokens({
-          appearanceTheme: prefs.value.appearanceTheme,
-          themeAdjustments: adjustmentsPreview.value ?? prefs.value.themeAdjustments,
-        })
-      : startupTokens,
-  );
+  const themes = useThemes();
+  const tokens = computed(() => {
+    if (!loaded.value) return startupTokens;
+    const reference = prefs.value.appearanceTheme;
+    // A custom theme waits for the list, keeping the cached theme rather than showing Original.
+    if (typeof reference === 'number' && themes.isPending.value) return startupTokens;
+    return themeTokens(
+      {
+        appearanceTheme: reference,
+        themeAdjustments: adjustmentsPreview.value ?? prefs.value.themeAdjustments,
+      },
+      (id) => themes.data.value?.find((theme) => theme.id === id),
+    );
+  });
 
   watchEffect(() => {
     if (loaded.value) void theme.change(prefs.value.theme);

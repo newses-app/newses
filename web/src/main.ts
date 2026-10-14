@@ -15,6 +15,8 @@ import { router } from './router.ts';
 import { useUiStore } from './stores/ui.ts';
 import './styles.css';
 import './themes/fonts.css';
+import './themes/terminal.css';
+import './themes/sketch.css';
 
 document.documentElement.dataset.platform = bridge.platform;
 // The last theme shown here, so a reload doesn't flash Original and signed-out screens are themed.

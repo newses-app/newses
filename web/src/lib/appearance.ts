@@ -28,6 +28,25 @@ export function contrastRatio(a: string, b: string): number {
 }
 
 type PaletteColor = keyof ThemePalette;
+type Mode = 'light' | 'dark';
+
+/**
+ * The opacity of secondary text: Vuetify's medium emphasis of its high-emphasis text colour (the
+ * light theme's medium emphasis is set in plugins/vuetify.ts).
+ */
+const MEDIUM_EMPHASIS: Record<Mode, number> = { light: 0.87 * 0.72, dark: 0.7 };
+
+/** `#rrggbb` of `color` at `alpha` over `ground`. */
+function blend(color: string, ground: string, alpha: number): string {
+  const channel = (hex: string, i: number) => Number.parseInt(hex.slice(i, i + 2), 16);
+  return `#${[1, 3, 5]
+    .map((i) =>
+      Math.round(channel(color, i) * alpha + channel(ground, i) * (1 - alpha))
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
 
 /**
  * The least contrast each palette colour needs on the background and on the surface (WCAG AA).
@@ -50,11 +69,16 @@ export interface ContrastIssue {
 }
 
 /** The palette's colours whose contrast is below WCAG AA. */
-export function contrastIssues(palette: ThemePalette): ContrastIssue[] {
+export function contrastIssues(palette: ThemePalette, mode: Mode): ContrastIssue[] {
   return PALETTE_CONTRAST.flatMap(([color, min]) => {
+    // Text is checked as secondary text shows it, faded to medium emphasis over each ground.
     const ratio = Math.min(
-      contrastRatio(palette[color], palette.background),
-      contrastRatio(palette[color], palette.surface),
+      ...[palette.background, palette.surface].map((ground) =>
+        contrastRatio(
+          color === 'text' ? blend(palette.text, ground, MEDIUM_EMPHASIS[mode]) : palette[color],
+          ground,
+        ),
+      ),
     );
     return ratio < min ? [{ color, ratio, min }] : [];
   });
@@ -137,8 +161,6 @@ export function themeTokens(
   );
 }
 
-type Mode = 'light' | 'dark';
-
 /** What applying a theme sets: Vuetify's themes and defaults, and the document root's styles. */
 export interface Appearance {
   /** Merged into Vuetify's `light` and `dark` theme definitions. */
@@ -172,6 +194,12 @@ const ROUNDED: Record<Exclude<ThemeTokens['radius'], 'default'>, number | string
   large: 'lg',
 };
 
+const BORDER_WIDTHS: Record<ThemeTokens['border'], string> = {
+  none: '0px',
+  thin: '1px',
+  thick: '2px',
+};
+
 /** Components that make up the app's chrome, which a theme's border outlines. */
 const BORDERED = ['VAppBar', 'VCard', 'VNavigationDrawer', 'VToolbar'];
 
@@ -197,6 +225,7 @@ export function resolveAppearance(tokens: ThemeTokens): Appearance {
       // Vuetify's own font unless the theme picks one.
       '--v-font-body': tokens.uiFont === 'default' ? '' : FONTS[tokens.uiFont],
       '--ui-font-scale': String(tokens.fontScale),
+      '--theme-border-width': BORDER_WIDTHS[tokens.border],
     },
     attributes: {
       'data-theme-style': tokens.style,

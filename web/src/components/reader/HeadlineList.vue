@@ -71,7 +71,7 @@ const link = (entry: Entry) => ({
         <v-list-item
           :to="link(entry)"
           :active="entry.id === selectedId"
-          :class="{ unread: entry.unread }"
+          :class="{ unread: entry.unread, selected: entry.id === selectedId }"
           class="headline"
           @click="emit('open', entry)"
         >

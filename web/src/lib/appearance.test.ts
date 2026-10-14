@@ -26,8 +26,8 @@ describe('contrastRatio', () => {
 describe('contrastIssues', () => {
   it('reports colours below AA on the background or surface', () => {
     const palette = original.palette.light;
-    expect(contrastIssues(palette)).toEqual([]);
-    const issues = contrastIssues({ ...palette, primary: '#999999', success: '#bbbbbb' });
+    expect(contrastIssues(palette, 'light')).toEqual([]);
+    const issues = contrastIssues({ ...palette, primary: '#999999', success: '#bbbbbb' }, 'light');
     expect(issues.map(({ color, min }) => [color, min])).toEqual([
       ['primary', MIN_CONTRAST],
       ['success', MIN_GRAPHIC_CONTRAST],
@@ -35,10 +35,18 @@ describe('contrastIssues', () => {
     expect(issues[0]?.ratio).toBeCloseTo(contrastRatio('#999999', '#ffffff'));
   });
 
+  it('checks text as faded secondary text', () => {
+    // Solid, #555555 passes on white; at medium emphasis it shows lighter and fails.
+    const palette = { ...original.palette.light, text: '#555555' };
+    expect(contrastRatio('#555555', '#ffffff')).toBeGreaterThan(MIN_CONTRAST);
+    expect(contrastIssues(palette, 'light').map((issue) => issue.color)).toEqual(['text']);
+    expect(contrastIssues(original.palette.light, 'light')).toEqual([]);
+  });
+
   for (const [key, tokens] of Object.entries(BUILTIN_THEMES))
     for (const mode of ['light', 'dark'] as const)
       it(`passes for built-in ${key} ${mode}`, () => {
-        expect(contrastIssues(tokens.palette[mode])).toEqual([]);
+        expect(contrastIssues(tokens.palette[mode], mode)).toEqual([]);
       });
 });
 
@@ -135,7 +143,11 @@ describe('resolveAppearance', () => {
     });
     expect(appearance.themes.dark.variables['border-color']).toBe('#ffffff');
     expect(appearance.defaults).toEqual({ global: {} });
-    expect(appearance.variables).toEqual({ '--v-font-body': '', '--ui-font-scale': '1' });
+    expect(appearance.variables).toEqual({
+      '--v-font-body': '',
+      '--ui-font-scale': '1',
+      '--theme-border-width': '0px',
+    });
     expect(appearance.attributes).toEqual({ 'data-theme-style': 'standard', 'data-effects': '' });
   });
 

@@ -369,7 +369,9 @@
     "mode": "Mode",
     "builtIn": "Built-in",
     "themes": {
-      "original": "Original"
+      "original": "Original",
+      "terminal": "Terminal",
+      "sketch": "Sketch"
     },
     "adjust": "Adjust this theme",
     "adjustHint": "Changes apply to the theme you use and are saved as you make them.",
@@ -429,6 +431,23 @@
       "texture": "Background texture",
       "animation": "Decorative animation"
     },
+    "mine": "Your themes",
+    "shared": "Shared",
+    "by": "by {author}",
+    "themeActions": "Actions for {name}",
+    "rename": "Rename",
+    "duplicate": "Duplicate",
+    "copyName": "{name} copy",
+    "export": "Export",
+    "import": "Import theme",
+    "imported": "Imported {name}.",
+    "importInvalid": "That file is not a theme this server accepts.",
+    "saveAsNew": "Save as new theme",
+    "updateTheme": "Update theme",
+    "saved": "Saved {name}.",
+    "name": "Name",
+    "deleteTitle": "Delete theme?",
+    "deleteText": "Delete “{name}”? Anyone using it goes back to Original.",
     "discardTitle": "Discard adjustments?",
     "discardText": "Your adjustments to this theme will be lost.",
     "discard": "Discard"
