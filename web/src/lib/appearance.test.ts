@@ -2,9 +2,11 @@ import type { ThemeTokens } from '@newses/shared';
 import { BUILTIN_THEMES, DEFAULT_PREFS } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
 import {
+  contrastIssues,
   contrastRatio,
   MIN_CONTRAST,
   MIN_GRAPHIC_CONTRAST,
+  mergeAdjustments,
   mergeTokens,
   resolveAppearance,
   themeTokens,
@@ -21,26 +23,46 @@ describe('contrastRatio', () => {
   });
 });
 
-describe('built-in themes', () => {
-  // Primary, error, and warning also colour text (links, status); star and success only icons.
-  const text = ['text', 'primary', 'error', 'warning'] as const;
-  const graphics = ['star', 'success'] as const;
+describe('contrastIssues', () => {
+  it('reports colours below AA on the background or surface', () => {
+    const palette = original.palette.light;
+    expect(contrastIssues(palette)).toEqual([]);
+    const issues = contrastIssues({ ...palette, primary: '#999999', success: '#bbbbbb' });
+    expect(issues.map(({ color, min }) => [color, min])).toEqual([
+      ['primary', MIN_CONTRAST],
+      ['success', MIN_GRAPHIC_CONTRAST],
+    ]);
+    expect(issues[0]?.ratio).toBeCloseTo(contrastRatio('#999999', '#ffffff'));
+  });
 
   for (const [key, tokens] of Object.entries(BUILTIN_THEMES))
     for (const mode of ['light', 'dark'] as const)
-      it(`${key} ${mode} meets WCAG AA`, () => {
-        const palette = tokens.palette[mode];
-        for (const ground of [palette.background, palette.surface]) {
-          for (const color of text)
-            expect(contrastRatio(palette[color], ground), color).toBeGreaterThanOrEqual(
-              MIN_CONTRAST,
-            );
-          for (const color of graphics)
-            expect(contrastRatio(palette[color], ground), color).toBeGreaterThanOrEqual(
-              MIN_GRAPHIC_CONTRAST,
-            );
-        }
+      it(`passes for built-in ${key} ${mode}`, () => {
+        expect(contrastIssues(tokens.palette[mode])).toEqual([]);
       });
+});
+
+describe('mergeAdjustments', () => {
+  it('adds a change, merging palettes per mode and effects', () => {
+    const adjustments = {
+      density: 'compact' as const,
+      palette: { light: { primary: '#111111' } },
+      effects: { texture: true },
+    };
+    expect(
+      mergeAdjustments(adjustments, {
+        palette: { light: { star: '#222222' }, dark: { text: '#eeeeee' } },
+        effects: { animation: true },
+        radius: 'none',
+      }),
+    ).toEqual({
+      density: 'compact',
+      radius: 'none',
+      palette: { light: { primary: '#111111', star: '#222222' }, dark: { text: '#eeeeee' } },
+      effects: { texture: true, animation: true },
+    });
+    expect(adjustments.palette.light).toEqual({ primary: '#111111' });
+  });
 });
 
 describe('mergeTokens', () => {

@@ -6,6 +6,7 @@ import { createFeedServices } from '../core/feeds/index.ts';
 import { createOpsServices } from '../core/ops/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import { PrefsService } from '../core/prefs.ts';
+import { ThemeService } from '../core/themes.ts';
 import type { Db } from '../db/client.ts';
 import { silentLogger, TEST_APP_SECRET, TEST_OPS_SETTINGS, testFeedDeps } from './fakes.ts';
 
@@ -21,6 +22,7 @@ export function createTestServices(
     feeds: createFeedServices(deps),
     entries: createEntryServices(db, deps.realtime),
     prefs: new PrefsService(db),
+    themes: new ThemeService(db),
     realtime: deps.realtime,
     ops: createOpsServices({ db, logger: silentLogger, settings: TEST_OPS_SETTINGS }),
   };

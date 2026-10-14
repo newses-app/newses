@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Prefs } from '@newses/shared';
-import { MAX_SCORE } from '@newses/shared/client';
+import { FONT_KEYS, MAX_SCORE } from '@newses/shared/client';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDurations } from '../../composables/useDurations.ts';
@@ -18,8 +18,7 @@ const choices = <K extends keyof Prefs>(key: K, values: readonly Prefs[K][], pre
 const viewItems = choices('viewMode', ['adaptive', 'all', 'unread'], 'view');
 const orderItems = choices('sortOrder', ['newest', 'oldest', 'title'], 'order');
 const layoutItems = choices('layout', ['threePane', 'combined'], 'layout');
-const themeItems = choices('theme', ['system', 'light', 'dark'], 'theme');
-const fontItems = choices('articleFont', ['default', 'sans', 'serif', 'mono'], 'reading.fonts');
+const fontItems = choices('articleFont', FONT_KEYS, 'reading.fonts');
 const widthItems = choices('articleWidth', ['narrow', 'medium', 'wide', 'full'], 'reading.widths');
 /** The slider shows changes as it moves (mouse or keys) and saves once it rests. */
 const fontSize = ref<number | null>(null);
@@ -128,19 +127,7 @@ const switches = [
       @update:model-value="(v) => update({ [key]: Boolean(v) })"
     />
 
-    <h2 class="text-title-large mt-8 mb-4">{{ t('settings.appearance') }}</h2>
-    <v-row>
-      <v-col cols="12" sm="6">
-        <v-select
-          :model-value="prefs.theme"
-          :items="themeItems"
-          :label="t('theme.label')"
-          @update:model-value="(v) => update({ theme: v })"
-        />
-      </v-col>
-    </v-row>
-
-    <h3 class="text-title-medium mb-2">{{ t('reading.title') }}</h3>
+    <h2 class="text-title-large mt-8 mb-4">{{ t('reading.title') }}</h2>
     <v-row>
       <v-col cols="12" sm="6">
         <v-select

@@ -27,6 +27,39 @@ export function contrastRatio(a: string, b: string): number {
   return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
 }
 
+type PaletteColor = keyof ThemePalette;
+
+/**
+ * The least contrast each palette colour needs on the background and on the surface (WCAG AA).
+ * Primary, error, and warning also colour text; star and success colour only icons.
+ */
+const PALETTE_CONTRAST: [PaletteColor, number][] = [
+  ['text', MIN_CONTRAST],
+  ['primary', MIN_CONTRAST],
+  ['error', MIN_CONTRAST],
+  ['warning', MIN_CONTRAST],
+  ['star', MIN_GRAPHIC_CONTRAST],
+  ['success', MIN_GRAPHIC_CONTRAST],
+];
+
+export interface ContrastIssue {
+  color: PaletteColor;
+  /** The lower of its contrast on the background and on the surface. */
+  ratio: number;
+  min: number;
+}
+
+/** The palette's colours whose contrast is below WCAG AA. */
+export function contrastIssues(palette: ThemePalette): ContrastIssue[] {
+  return PALETTE_CONTRAST.flatMap(([color, min]) => {
+    const ratio = Math.min(
+      contrastRatio(palette[color], palette.background),
+      contrastRatio(palette[color], palette.surface),
+    );
+    return ratio < min ? [{ color, ratio, min }] : [];
+  });
+}
+
 /** A custom theme: a built-in theme with some tokens overridden. */
 export interface CustomTheme {
   base: BuiltinThemeKey;
@@ -57,6 +90,28 @@ export function mergeTokens(base: ThemeTokens, ...layers: PartialThemeTokens[]):
     }),
     base,
   );
+}
+
+type PartialPalette = NonNullable<NonNullable<PartialThemeTokens['palette']>['light']>;
+
+/** The reader's adjustments with `change` added; palettes and effects merge. */
+export function mergeAdjustments(
+  adjustments: PartialThemeTokens,
+  change: PartialThemeTokens,
+): PartialThemeTokens {
+  const { palette, effects, ...rest } = change;
+  const merged = assign(adjustments, rest);
+  if (palette) {
+    merged.palette = { ...adjustments.palette };
+    for (const mode of ['light', 'dark'] as const)
+      if (palette[mode])
+        merged.palette[mode] = assign<PartialPalette>(
+          adjustments.palette?.[mode] ?? {},
+          palette[mode],
+        );
+  }
+  if (effects) merged.effects = assign(adjustments.effects ?? {}, effects);
+  return merged;
 }
 
 const builtin = (key: string): ThemeTokens =>

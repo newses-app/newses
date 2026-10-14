@@ -6,6 +6,7 @@ import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { createOpsServices } from '../core/ops/index.ts';
 import { PrefsService } from '../core/prefs.ts';
+import { ThemeService } from '../core/themes.ts';
 import { createDb } from '../db/client.ts';
 import { createArchiveReader, createFeedDeps, PG_BOSS_TELEMETRY } from './feed-deps.ts';
 import { createRuntime, processSnapshot } from './runtime.ts';
@@ -41,6 +42,7 @@ const services = {
   feeds: createFeedServices(feedDeps),
   entries: createEntryServices(db, realtime, createArchiveReader(config, feedDeps.blobs)),
   prefs: new PrefsService(db),
+  themes: new ThemeService(db),
   realtime,
   ops,
 };

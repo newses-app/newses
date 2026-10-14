@@ -47,6 +47,7 @@ import type {
 } from './feeds.ts';
 import type { CreateLabelRequest, Label, UpdateLabelRequest } from './labels.ts';
 import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
+import type { CreateThemeRequest, Theme, UpdateThemeRequest } from './themes.ts';
 import type {
   AuditPage,
   AuditQuery,
@@ -357,6 +358,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
     prefs: {
       get: () => request<Prefs>('GET', '/prefs'),
       update: (body: UpdatePrefsRequest) => request<Prefs>('PATCH', '/prefs', { body }),
+    },
+
+    /** The user's appearance themes and those others share. */
+    themes: {
+      list: () => request<Theme[]>('GET', '/themes'),
+      create: (body: CreateThemeRequest) => request<Theme>('POST', '/themes', { body }),
+      update: (themeId: number, body: UpdateThemeRequest) =>
+        request<Theme>('PATCH', `/themes/${id(themeId)}`, { body }),
+      delete: (themeId: number) => request<undefined>('DELETE', `/themes/${id(themeId)}`),
     },
   };
 }

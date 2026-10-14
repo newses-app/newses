@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { MAX_THEME_NAME_LENGTH } from './limits.ts';
 import {
+  BUILTIN_THEME_KEYS,
   FONT_KEYS,
   MAX_FONT_SCALE,
   MIN_FONT_SCALE,
@@ -62,6 +64,37 @@ export const partialThemeTokensSchema = z
   })
   .partial();
 
+const nameSchema = z.string().trim().min(1).max(MAX_THEME_NAME_LENGTH);
+
+export const themeSchema = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  base: z.enum(BUILTIN_THEME_KEYS),
+  /** Overrides of the base's tokens. */
+  tokens: partialThemeTokensSchema,
+  /** Published to every user of the server. */
+  shared: z.boolean(),
+  /** The author. */
+  owner: z.object({ id: z.number().int(), login: z.string() }),
+  /** Whether the signed-in user is the author, and so may change it. */
+  mine: z.boolean(),
+  updatedAt: z.string(),
+});
+
+export const createThemeRequestSchema = z.object({
+  name: nameSchema,
+  base: z.enum(BUILTIN_THEME_KEYS),
+  tokens: partialThemeTokensSchema,
+});
+
+export const updateThemeRequestSchema = createThemeRequestSchema
+  .extend({ shared: z.boolean() })
+  .partial()
+  .strict();
+
+export type Theme = z.infer<typeof themeSchema>;
+export type CreateThemeRequest = z.infer<typeof createThemeRequestSchema>;
+export type UpdateThemeRequest = z.infer<typeof updateThemeRequestSchema>;
 export type ThemeTokens = z.infer<typeof themeTokensSchema>;
 export type PartialThemeTokens = z.infer<typeof partialThemeTokensSchema>;
 export type ThemePalette = ThemeTokens['palette']['light'];

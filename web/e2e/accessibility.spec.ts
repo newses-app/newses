@@ -41,6 +41,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         await signIn(page);
         for (const tab of [
           'preferences',
+          'appearance',
           'shortcuts',
           'feeds',
           'labels',

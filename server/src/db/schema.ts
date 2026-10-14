@@ -360,6 +360,31 @@ export const labels = pgTable(
   ],
 );
 
+// A user's appearance theme: a built-in base with some tokens overridden.
+export const themes = pgTable(
+  'themes',
+  {
+    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
+    ownerId: integer('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    // A built-in theme's key.
+    base: text('base').notNull(),
+    // Partial tokens, validated by the API; tokens added later take the base's values.
+    tokens: jsonb('tokens').notNull(),
+    // Published to every user of the server.
+    shared: boolean('shared').notNull().default(false),
+    ...timestamps(),
+  },
+  (t) => [
+    uniqueIndex('themes_owner_name_key').on(t.ownerId, sql`lower(${t.name})`),
+    index('themes_shared_idx')
+      .on(t.id)
+      .where(sql`${t.shared}`),
+  ],
+);
+
 // Inserts and deletes bump the user entry's updated_at (trigger), so sync carries its labels.
 export const entryLabels = pgTable(
   'entry_labels',

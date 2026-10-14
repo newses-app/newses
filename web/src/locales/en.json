@@ -260,10 +260,12 @@
     "title": "Article text",
     "font": "Font",
     "fonts": {
-      "default": "Default",
+      "default": "Theme's font",
       "sans": "Sans-serif",
       "serif": "Serif",
-      "mono": "Monospace"
+      "mono": "Monospace",
+      "patrickHand": "Handwriting (Patrick Hand)",
+      "plexMono": "Typewriter (IBM Plex Mono)"
     },
     "size": "Text size",
     "width": "Line width",
@@ -311,7 +313,7 @@
     "combined": "Combined (expanded articles)"
   },
   "theme": {
-    "label": "Theme",
+    "label": "Mode",
     "system": "Follow system",
     "light": "Light",
     "dark": "Dark"
@@ -362,9 +364,79 @@
     "choose": "This page offers several feeds. Choose one:",
     "done": "Subscribed to {feed}."
   },
+  "appearance": {
+    "theme": "Theme",
+    "mode": "Mode",
+    "builtIn": "Built-in",
+    "themes": {
+      "original": "Original"
+    },
+    "adjust": "Adjust this theme",
+    "adjustHint": "Changes apply to the theme you use and are saved as you make them.",
+    "reset": "Reset adjustments",
+    "colors": "Colours ({mode})",
+    "colorsHint": "Switch the mode to edit the other mode's colours.",
+    "colorNames": {
+      "background": "Background",
+      "surface": "Surface",
+      "text": "Text",
+      "primary": "Primary",
+      "star": "Star",
+      "error": "Error",
+      "warning": "Warning",
+      "success": "Success"
+    },
+    "lowContrast": "Contrast {ratio}:1 is below the {min}:1 that WCAG AA needs.",
+    "text": "Text",
+    "uiFont": "Interface font",
+    "articleFont": "Article font",
+    "articleFontHint": "Used unless Preferences sets an article font.",
+    "standard": "Standard",
+    "sameAsUi": "Same as the interface",
+    "fontScale": "Interface text size",
+    "shape": "Shape",
+    "style": "Style",
+    "styles": {
+      "standard": "Standard",
+      "terminal": "Terminal",
+      "sketch": "Sketch"
+    },
+    "radius": "Corners",
+    "radii": {
+      "default": "Standard",
+      "none": "Square",
+      "small": "Slightly rounded",
+      "large": "Rounded"
+    },
+    "density": "Spacing",
+    "densities": {
+      "default": "Standard",
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    },
+    "border": "Borders",
+    "borders": {
+      "none": "None",
+      "thin": "Thin",
+      "thick": "Thick"
+    },
+    "elevation": "Shadows",
+    "elevations": {
+      "default": "Standard",
+      "flat": "None"
+    },
+    "effects": {
+      "texture": "Background texture",
+      "animation": "Decorative animation"
+    },
+    "discardTitle": "Discard adjustments?",
+    "discardText": "Your adjustments to this theme will be lost.",
+    "discard": "Discard"
+  },
   "settings": {
     "tabs": {
       "preferences": "Preferences",
+      "appearance": "Appearance",
       "shortcuts": "Shortcuts",
       "feeds": "Feeds",
       "labels": "Labels",
@@ -375,7 +447,6 @@
       "operations": "Operations"
     },
     "reading": "Reading",
-    "appearance": "Appearance",
     "updates": "Updates",
     "updatesHint": "Defaults for your feeds; each feed can override them.",
     "freshAge": "Fresh articles are newer than",

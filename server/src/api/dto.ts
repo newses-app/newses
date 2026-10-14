@@ -1,9 +1,21 @@
-import type { AppPassword, Category, Label, Session, Subscription, User } from '@newses/shared';
+import {
+  type AppPassword,
+  BUILTIN_THEME_KEYS,
+  type BuiltinThemeKey,
+  type Category,
+  type Label,
+  partialThemeTokensSchema,
+  type Session,
+  type Subscription,
+  type Theme,
+  type User,
+} from '@newses/shared';
 import type { AppPasswordRow } from '../core/auth/app-passwords.ts';
 import type { SessionRow, UserRow } from '../core/auth/sessions.ts';
 import type { CategoryRow } from '../core/categories.ts';
 import type { LabelRow } from '../core/entries/labels.ts';
 import type { SubscriptionView } from '../core/feeds/subscriptions.ts';
+import type { ThemeView } from '../core/themes.ts';
 
 export function toUser(row: UserRow): User {
   return {
@@ -76,4 +88,20 @@ export function toSubscription({ subscription, source }: SubscriptionView): Subs
 
 export function toLabel(row: LabelRow): Label {
   return { id: row.id, caption: row.caption, fgColor: row.fgColor, bgColor: row.bgColor };
+}
+
+export function toTheme({ theme, ownerLogin }: ThemeView, userId: number): Theme {
+  // Values a later version no longer accepts fall back, so the theme still shows its base.
+  const base = BUILTIN_THEME_KEYS.find((key) => key === theme.base);
+  const tokens = partialThemeTokensSchema.safeParse(theme.tokens);
+  return {
+    id: theme.id,
+    name: theme.name,
+    base: base ?? ('original' satisfies BuiltinThemeKey),
+    tokens: tokens.success ? tokens.data : {},
+    shared: theme.shared,
+    owner: { id: theme.ownerId, login: ownerLogin },
+    mine: theme.ownerId === userId,
+    updatedAt: theme.updatedAt.toISOString(),
+  };
 }

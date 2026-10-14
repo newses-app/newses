@@ -1,0 +1,7 @@
+/*
+ * Theme fonts, bundled and served from the app's own origin (Privacy requirement). A browser
+ * downloads one only when text uses it. Latin only; other characters fall back through the stack.
+ */
+@import '@fontsource/patrick-hand/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-700.css';

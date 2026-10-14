@@ -18,7 +18,7 @@ const prefsShape = {
   appearanceTheme: z.union([z.enum(BUILTIN_THEME_KEYS), z.number().int().positive()]),
   /** The reader's changes to the appearance theme's tokens. */
   themeAdjustments: partialThemeTokensSchema,
-  /** Typeface of article text; `default` follows the theme. System fonts only, so nothing loads. */
+  /** Typeface of article text; `default` follows the theme. */
   articleFont: z.enum(FONT_KEYS),
   /** Article text size in CSS pixels. */
   articleFontSize: z.number().int().min(12).max(28),

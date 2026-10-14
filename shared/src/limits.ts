@@ -8,6 +8,9 @@ export const MAX_SCORE = 1_000_000;
 export const MAX_TAG_LENGTH = 64;
 export const MAX_TAGS_PER_ENTRY = 50;
 
+export const MAX_THEME_NAME_LENGTH = 60;
+export const MAX_THEMES_PER_USER = 50;
+
 /** A tag as stored: lower-case, single-spaced, without commas or control characters; null if empty. */
 export function normaliseTag(text: string): string | null {
   const tag = text

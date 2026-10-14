@@ -135,16 +135,38 @@ test.describe('reader', () => {
     await expect(page.getByRole('list', { name: 'Articles' })).toBeVisible();
   });
 
-  test('changes the theme from settings', async ({ page }) => {
-    await page.goto('/settings');
+  test('changes the mode from settings', async ({ page }) => {
+    await page.goto('/settings/appearance');
     // Vuetify's field wrapper receives the click for its inner input.
-    const theme = page.locator('.v-select').filter({ hasText: 'Theme' });
-    await theme.click();
+    const mode = page.locator('.v-select').filter({ hasText: 'Mode' });
+    await mode.click();
     await page.getByRole('option', { name: 'Dark' }).click();
     await expect(page.locator('.v-theme--dark').first()).toBeVisible();
-    await theme.click();
+    await mode.click();
     await page.getByRole('option', { name: 'Follow system' }).click();
     await expect(page.locator('.v-theme--light').first()).toBeVisible();
+  });
+
+  test('adjusts the theme and resets it', async ({ page }) => {
+    await page.goto('/settings/appearance');
+    const primary = () =>
+      page.evaluate(() =>
+        getComputedStyle(document.querySelector('.v-application') ?? document.body)
+          .getPropertyValue('--v-theme-primary')
+          .trim(),
+      );
+    const original = await primary();
+    const saved = page.waitForResponse(
+      (r) => r.request().method() === 'PATCH' && r.url().endsWith('/api/v1/prefs') && r.ok(),
+    );
+    await page.getByLabel('Primary').fill('#0055aa');
+    await expect.poll(primary).toBe('0,85,170');
+    // Saved once the change rests: still adjusted after a reload.
+    await saved;
+    await page.reload();
+    await expect.poll(primary).toBe('0,85,170');
+    await page.getByRole('button', { name: 'Reset adjustments' }).click();
+    await expect.poll(primary).toBe(original);
   });
 
   test('remaps a shortcut and resets it', async ({ page }) => {

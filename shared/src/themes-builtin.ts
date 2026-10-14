@@ -4,8 +4,11 @@ import type { ThemeTokens } from './themes.ts';
 
 /** `standard` is plain Vuetify; the others add a stylesheet scoped to `data-theme-style`. */
 export const THEME_STYLES = ['standard', 'terminal', 'sketch'] as const;
-/** Font keys, never font-family text. `default` is the app's font; for articles, the UI font. */
-export const FONT_KEYS = ['default', 'sans', 'serif', 'mono'] as const;
+/**
+ * Font keys, never font-family text. `default` is the app's font; for articles, the UI font.
+ * `patrickHand` and `plexMono` are bundled with the app.
+ */
+export const FONT_KEYS = ['default', 'sans', 'serif', 'mono', 'patrickHand', 'plexMono'] as const;
 /** Corner rounding; `default` keeps each component's own. */
 export const THEME_RADII = ['default', 'none', 'small', 'large'] as const;
 /** `default` keeps each component's own density. */

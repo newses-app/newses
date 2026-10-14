@@ -1,11 +1,13 @@
 import type { FontKey, Prefs, ThemeTokens } from '@newses/shared';
 
-/** System font stacks, so no font is downloaded (Privacy requirement). */
+/** System font stacks, and fonts bundled with the app (`themes/fonts.css`, Privacy requirement). */
 export const FONTS: Record<FontKey, string> = {
   default: 'inherit',
   sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   serif: 'Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, "Times New Roman", serif',
   mono: 'ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace',
+  patrickHand: '"Patrick Hand", "Segoe Print", "Bradley Hand", cursive',
+  plexMono: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
 };
 
 const WIDTHS: Record<Prefs['articleWidth'], string> = {

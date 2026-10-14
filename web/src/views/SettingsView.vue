@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 import AccountPanel from '../components/settings/AccountPanel.vue';
+import AppearancePanel from '../components/settings/AppearancePanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
 import FiltersPanel from '../components/settings/FiltersPanel.vue';
 import LabelsPanel from '../components/settings/LabelsPanel.vue';
@@ -23,6 +24,7 @@ const { session } = useSession();
 const isAdmin = computed(() => session.value?.user.role === 'admin');
 const tabs = computed(() => [
   'preferences',
+  'appearance',
   'shortcuts',
   'feeds',
   'labels',
@@ -59,6 +61,7 @@ useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings
   <v-main id="main" tabindex="-1">
     <v-container class="settings-container">
       <PrefsPanel v-if="tab === 'preferences'" />
+      <AppearancePanel v-else-if="tab === 'appearance'" />
       <ShortcutsPanel v-else-if="tab === 'shortcuts'" />
       <FeedsPanel v-else-if="tab === 'feeds'" />
       <LabelsPanel v-else-if="tab === 'labels'" />

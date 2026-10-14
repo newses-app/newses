@@ -1,4 +1,4 @@
-import type { ThemeTokens } from '@newses/shared';
+import type { PartialThemeTokens, ThemeTokens } from '@newses/shared';
 import { BUILTIN_THEMES } from '@newses/shared/client';
 import { computed, shallowRef, watch, watchEffect } from 'vue';
 import { useTheme } from 'vuetify';
@@ -10,6 +10,9 @@ const CACHE_KEY = 'newses.appearance';
 
 /** The theme's Vuetify defaults; App.vue provides them over the static ones. */
 export const themeDefaults = shallowRef<Appearance['defaults']>({});
+
+/** Adjustments being made, shown before they are saved. */
+export const adjustmentsPreview = shallowRef<PartialThemeTokens | null>(null);
 
 /** The theme applied at startup, kept until preferences load. */
 let startupTokens: ThemeTokens = BUILTIN_THEMES.original;
@@ -57,7 +60,14 @@ export function startAppearance(): Appearance {
 export function useAppearance(): void {
   const theme = useTheme();
   const { prefs, loaded } = usePrefs();
-  const tokens = computed(() => (loaded.value ? themeTokens(prefs.value) : startupTokens));
+  const tokens = computed(() =>
+    loaded.value
+      ? themeTokens({
+          appearanceTheme: prefs.value.appearanceTheme,
+          themeAdjustments: adjustmentsPreview.value ?? prefs.value.themeAdjustments,
+        })
+      : startupTokens,
+  );
 
   watchEffect(() => {
     if (loaded.value) void theme.change(prefs.value.theme);
@@ -74,7 +84,8 @@ export function useAppearance(): void {
         Object.assign(target.variables, appearance.themes[mode].variables);
       }
       applyToDocument(appearance);
-      cacheTokens(current);
+      // Only saved adjustments, so a reload never starts with ones that were not kept.
+      if (adjustmentsPreview.value === null) cacheTokens(current);
     },
     { immediate: true },
   );

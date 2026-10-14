@@ -6,6 +6,7 @@ import { createAuthServices } from '../../core/auth/index.ts';
 import { createEntryServices } from '../../core/entries/index.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
+import { ThemeService } from '../../core/themes.ts';
 import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
 
 const { config, logger, pool, db, feedDeps, ops, archive } = await createLambdaRuntime('api');
@@ -23,6 +24,7 @@ const app = buildApp({
     feeds: createFeedServices(feedDeps),
     entries: createEntryServices(db, feedDeps.realtime, archive),
     prefs: new PrefsService(db),
+    themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,
   },

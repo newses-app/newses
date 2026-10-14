@@ -183,6 +183,20 @@
       "when": 1791810478852,
       "tag": "0025_ops",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792004873615,
+      "tag": "0026_themes",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792004878148,
+      "tag": "0027_theme_triggers",
+      "breakpoints": true
     }
   ]
 }

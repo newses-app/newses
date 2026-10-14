@@ -97,7 +97,8 @@ Rules:
 - A theme is a set of tokens (`shared/src/themes.ts`): style, light and dark palettes, UI and article fonts as keys, UI text scale, corners, density, borders, shadows, and effects. Built-in themes are in `shared`; the `appearanceTheme` preference names one, or a custom theme's id, and `themeAdjustments` holds the reader's partial overrides. The `theme` preference is the mode: light, dark, or the system's.
 - A theme resolves as its built-in base, then its overrides, then the reader's adjustments; a reference that no longer resolves shows Original. The result replaces the colours of Vuetify's `light` and `dark` themes in place, provides Vuetify defaults around the routes, and sets `--v-font-body`, `--ui-font-scale`, `data-theme-style`, and `data-effects` on the document root.
 - The last resolved tokens are kept in `localStorage` and applied before mounting, so a reload starts with the reader's theme and signed-out screens use it.
-- Reading preferences (font, text size, line width) set CSS custom properties on the document root that article styles read; the `default` font is the theme's article font, and the text size is kept under the theme's scale. Fonts are system font stacks, so nothing is downloaded.
+- Reading preferences (font, text size, line width) set CSS custom properties on the document root that article styles read; the `default` font is the theme's article font, and the text size is kept under the theme's scale.
+- Fonts are system font stacks, except the theme fonts Patrick Hand and IBM Plex Mono (latin subsets), which are bundled and served from the app's own origin. A browser downloads one only when text uses it; the service worker caches fonts when first used rather than precaching them.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - The `shortcutBindings` preference holds only changed actions; each replaces that action's defaults, and `[]` unbinds it. A key cannot be bound alone while it starts a chord.
 - PWA: the service worker precaches the app shell only; API requests always go to the network.
@@ -273,6 +274,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `archived_feeds` | User | Title and URL of an unsubscribed feed that still holds kept entries |
 | `labels` / `entry_labels` | User | Caption (unique per user, case-insensitive), text and background colours (`#rrggbb`); many-to-many with `user_entries` |
 | `entry_tags` | User | (user entry, tag) pairs; tags are lower-case, single-spaced, without commas, at most 64 characters and 50 per entry |
+| `themes` | User | Name (unique per user, case-insensitive, at most 60 characters), built-in base key, partial tokens (JSON) over the base, shared flag; at most 50 per user. Not synced |
 | `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), RE2 pattern, inverse, scope (subscription and category id arrays; empty for all feeds); actions: type with a label, tag, or score |
 | `access_keys` | User | Secret keys for published feed and generated feeds |
 | `import_map` | Instance | (TTRSS table, source id) → new id and owning user; on user rows, when that user's last import finished |
@@ -335,6 +337,7 @@ Search:
 - `adaptive` view resolves to `unread` when the stream has unread entries, else `all`; the cursor carries the resolved view.
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
 - `GET /archive/entries` lists past articles of the user's feeds (one subscription, or all), with search (`q`) and a cursor; `GET /archive/entries/:key` returns one with content and enclosures; `POST /archive/entries/:key/restore` takes `PATCH /entries/:id`'s body and returns the restored entry. Keys are opaque: the month of the article's sort time, its feed URL, and GUID.
+- `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's; only the author can change or delete one. Stored tokens a later version no longer accepts are left out of the response.
 - `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
 
 Filters:

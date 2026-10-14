@@ -18,6 +18,7 @@ import type { FeedServices } from '../core/feeds/index.ts';
 import type { OpsServices } from '../core/ops/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
+import type { ThemeService } from '../core/themes.ts';
 import { INSECURE_SESSION_COOKIE, registerAuth, SESSION_COOKIE } from './auth.ts';
 import { greaderRoutes } from './compat/greader.ts';
 import { greaderEndpoints } from './compat/greader-ops.ts';
@@ -38,6 +39,7 @@ import { imageRoutes } from './routes/images.ts';
 import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
 import { prefsRoutes } from './routes/prefs.ts';
+import { themeRoutes } from './routes/themes.ts';
 import { legacyPublicRoutes, publicRoutes } from './routes/public.ts';
 import { serverRoutes } from './routes/server.ts';
 import { sharingRoutes } from './routes/sharing.ts';
@@ -65,6 +67,7 @@ export interface ApiServices {
   feeds: FeedServices;
   entries: EntryServices;
   prefs: PrefsService;
+  themes: ThemeService;
   realtime: Realtime;
   ops: OpsServices;
 }
@@ -208,6 +211,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(sharingRoutes, services.entries);
         await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs });
+        await api.register(themeRoutes, { themes: services.themes });
         if (deps.events === false) await api.register(noEventRoutes);
         else await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });
       },
