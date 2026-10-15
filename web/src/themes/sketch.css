@@ -61,7 +61,7 @@ html[data-theme-style='sketch']
 html[data-theme-style='sketch']
   :is(.headline, .tree .v-list-item):hover
   :is(.headline-title, .v-list-item-title) {
-  text-decoration: underline wavy;
+  text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
 }

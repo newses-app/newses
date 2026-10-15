@@ -26,23 +26,11 @@ html[data-theme-style='terminal'] .v-btn:not(.v-btn--icon) .v-btn__content::afte
   white-space: pre;
 }
 
-/* Headlines: `*` marks unread ones and `>` the selected one, which shows in inverse video. */
-html[data-theme-style='terminal'] .headline .headline-title::before {
-  content: '   ';
-  content: '   ' / '';
-  white-space: pre;
-}
-html[data-theme-style='terminal'] .headline.unread .headline-title::before {
-  content: ' * ';
-  content: ' * ' / '';
-}
+/* Headlines: `>` marks the selected one, which shows in inverse video. */
 html[data-theme-style='terminal'] .headline.selected .headline-title::before {
-  content: '>  ';
-  content: '>  ' / '';
-}
-html[data-theme-style='terminal'] .headline.selected.unread .headline-title::before {
-  content: '>* ';
-  content: '>* ' / '';
+  content: '> ';
+  content: '> ' / '';
+  white-space: pre;
 }
 html[data-theme-style='terminal'] .headline.selected {
   background: rgb(var(--v-theme-on-surface));

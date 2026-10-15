@@ -75,17 +75,19 @@ const link = (entry: Entry) => ({
           class="headline"
           @click="emit('open', entry)"
         >
+          <!-- Wrapped, so a feed glyph doesn't get the wider spacer Vuetify gives prepended icons. -->
           <template #prepend>
-            <img
-              v-if="entry.subscriptionId && icons.get(entry.subscriptionId)"
-              :src="icons.get(entry.subscriptionId)"
-              alt=""
-              width="16"
-              height="16"
-              class="me-3 align-self-start mt-1"
-              loading="lazy"
-            />
-            <v-icon v-else :icon="mdiRss" size="16" class="me-3 align-self-start mt-1" />
+            <span class="d-inline-flex me-3 align-self-start mt-1">
+              <img
+                v-if="entry.subscriptionId && icons.get(entry.subscriptionId)"
+                :src="icons.get(entry.subscriptionId)"
+                alt=""
+                width="16"
+                height="16"
+                loading="lazy"
+              />
+              <v-icon v-else :icon="mdiRss" size="16" />
+            </span>
           </template>
           <v-list-item-title class="headline-title">
             {{ entry.title ?? t('entries.untitled') }}
@@ -146,6 +148,16 @@ const link = (entry: Entry) => ({
   position: absolute;
   top: 8px;
   inset-inline-end: 8px;
+}
+/* Long headlines wrap to a second line, and no further. */
+.headline-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: manual;
 }
 .headline:not(.unread) .headline-title {
   font-weight: 400;
