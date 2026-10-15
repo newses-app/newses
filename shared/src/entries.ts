@@ -73,6 +73,10 @@ export const entrySchema = z.object({
   tags: z.array(z.string()),
   /** Public share link id (`/public/share/<id>`); null when not shared. */
   shareId: z.uuid().nullable(),
+  /** When the user last read the entry; null while unread. */
+  readAt: z.iso.datetime().nullable(),
+  /** Opaque; changes when the title, link, content, or extracted full text does. */
+  contentVersion: z.string(),
   /** Plain-text start of the content. */
   excerpt: z.string().nullable(),
   /** Sanitised HTML; present on single entries and when requested in lists. */
@@ -162,6 +166,9 @@ export const syncQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(5000).default(1000),
 });
 
+/** A sync token at the present: load current state from the lists, then follow changes from it. */
+export const syncTokenResponseSchema = z.object({ next: z.string() });
+
 export const syncResponseSchema = z.object({
   categories: z.array(categorySchema),
   subscriptions: z.array(subscriptionSchema),
@@ -198,6 +205,37 @@ export type PublishedFeedResponse = z.infer<typeof publishedFeedResponseSchema>;
 export type MarkReadRequest = z.infer<typeof markReadRequestSchema>;
 export type Counters = z.infer<typeof countersSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;
+export type SyncTokenResponse = z.infer<typeof syncTokenResponseSchema>;
 
 export const fullTextResponseSchema = z.object({ content: z.string() });
 export type FullTextResponse = z.infer<typeof fullTextResponseSchema>;
+
+/** Most entries per contents request. */
+export const MAX_CONTENTS_IDS = 100;
+
+export const entryContentsRequestSchema = z.object({
+  /** In order of priority; those past the response's size budget come back in `deferred`. */
+  ids: z.array(z.number().int()).min(1).max(MAX_CONTENTS_IDS),
+});
+
+export const entryContentSchema = z.object({
+  id: z.number().int(),
+  contentVersion: z.string(),
+  /** Sanitised HTML as stored; image URLs are not rewritten for the proxy. */
+  content: z.string().nullable(),
+  fullContent: z.string().nullable(),
+  enclosures: z.array(enclosureSchema),
+  /** Images in the content and full text (at most 30), each with its server-relative proxy path. */
+  images: z.array(z.object({ url: z.string(), proxy: z.string() })),
+});
+
+export const entryContentsResponseSchema = z.object({
+  entries: z.array(entryContentSchema),
+  /** Ids the user does not hold. */
+  missing: z.array(z.number().int()),
+  /** Ids left out to keep the response small; ask again. */
+  deferred: z.array(z.number().int()),
+});
+
+export type EntryContent = z.infer<typeof entryContentSchema>;
+export type EntryContentsResponse = z.infer<typeof entryContentsResponseSchema>;

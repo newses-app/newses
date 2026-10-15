@@ -10,6 +10,9 @@ const params = z.object({ signature: z.string().max(64), url: z.string().max(800
  */
 export const imageRoutes: FastifyPluginAsyncZod<{ images: ImageProxy }> = (app, { images }) => {
   app.get('/images/:signature/:url', { schema: { params, hide: true } }, async (request, reply) => {
+    // Any origin may read them, as the signed URL already allows; the apps fetch them to store
+    // offline, and CloudFront caches one response for every origin.
+    void reply.header('access-control-allow-origin', '*');
     const result = await images.get(request.params.signature, request.params.url);
     if ('error' in result) {
       return result.error === 'forbidden'

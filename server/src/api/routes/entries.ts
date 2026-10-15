@@ -1,6 +1,8 @@
 import {
   bulkEntryStateRequestSchema,
   countersSchema,
+  entryContentsRequestSchema,
+  entryContentsResponseSchema,
   entryListQuerySchema,
   entryListResponseSchema,
   entryNoteRequestSchema,
@@ -9,6 +11,7 @@ import {
   markReadRequestSchema,
   syncQuerySchema,
   syncResponseSchema,
+  syncTokenResponseSchema,
   updatedCountSchema,
   fullTextResponseSchema,
 } from '@newses/shared';
@@ -67,6 +70,35 @@ export const entryRoutes: FastifyPluginAsyncZod<
       const content = await fullText.forUser(userId, request.params.id);
       const [result] = await withImages(userId, [{ fullContent: content }]);
       return { content: result?.fullContent ?? content };
+    },
+  );
+
+  app.post(
+    '/entries/contents',
+    {
+      schema: {
+        body: entryContentsRequestSchema,
+        response: { 200: entryContentsResponseSchema },
+      },
+    },
+    async (request) => {
+      const result = await entries.contents(requireAuth(request).user.id, request.body.ids);
+      return {
+        ...result,
+        entries: result.entries.map((e) => {
+          const content = e.content ?? null;
+          const fullContent = e.fullContent ?? null;
+          return {
+            id: e.id,
+            contentVersion: e.contentVersion,
+            content,
+            fullContent,
+            enclosures: e.enclosures ?? [],
+            // Signed whatever the user's proxy preference: stored images never reach image hosts.
+            images: images.sources(`${content ?? ''}${fullContent ?? ''}`),
+          };
+        }),
+      };
     },
   );
 
@@ -133,6 +165,15 @@ export const entryRoutes: FastifyPluginAsyncZod<
         subscriptions: result.subscriptions.map(toSubscription),
         labels: result.labels.map(toLabel),
       };
+    },
+  );
+
+  app.get(
+    '/sync/token',
+    { schema: { response: { 200: syncTokenResponseSchema } } },
+    async (request) => {
+      requireAuth(request);
+      return { next: await sync.token() };
     },
   );
 

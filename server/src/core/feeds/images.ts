@@ -23,6 +23,42 @@ export const imageKey = (url: string) => `images/${createHash('sha256').update(u
 
 export type ImageResult = { image: Blob } | { error: 'forbidden' | 'unavailable' };
 
+/** An image as it appears in entry HTML, and its proxy path. */
+export interface ImageSource {
+  url: string;
+  proxy: string;
+}
+
+/** Images listed per entry for clients that store them. */
+const MAX_SOURCES = 30;
+
+/** Maps the image URLs in sanitised entry HTML: `img` src and srcset, picture sources, video posters. */
+function mapImages(html: string, map: (url: string) => string): string {
+  const srcset = (value: string) => mapSrcset(value, map);
+  return sanitizeHtml(html, {
+    // The content was sanitised at ingest; this pass only maps image URLs.
+    allowedTags: false,
+    allowedAttributes: false,
+    allowedSchemesByTag: { img: ['http', 'https', 'data'] },
+    transformTags: {
+      img: (tagName, attribs) => {
+        if (attribs.src) attribs.src = map(attribs.src);
+        if (attribs.srcset) attribs.srcset = srcset(attribs.srcset);
+        return { tagName, attribs };
+      },
+      // Picture sources carry images in srcset; media sources use src and are left alone.
+      source: (tagName, attribs) => {
+        if (attribs.srcset) attribs.srcset = srcset(attribs.srcset);
+        return { tagName, attribs };
+      },
+      video: (tagName, attribs) => {
+        if (attribs.poster) attribs.poster = map(attribs.poster);
+        return { tagName, attribs };
+      },
+    },
+  });
+}
+
 /**
  * Serves entry images from this server, so feed hosts never see readers' addresses and pages
  * load no third-party requests. Only URLs this server signed are fetched.
@@ -64,29 +100,20 @@ export class ImageProxy {
 
   /** Points image sources in sanitised entry HTML at the proxy, after `origin` when given. */
   rewrite(html: string, origin = ''): string {
-    const srcset = (value: string) => mapSrcset(value, (url) => this.path(url, origin));
-    return sanitizeHtml(html, {
-      // The content was sanitised at ingest; this pass only rewrites image URLs.
-      allowedTags: false,
-      allowedAttributes: false,
-      allowedSchemesByTag: { img: ['http', 'https', 'data'] },
-      transformTags: {
-        img: (tagName, attribs) => {
-          if (attribs.src) attribs.src = this.path(attribs.src, origin);
-          if (attribs.srcset) attribs.srcset = srcset(attribs.srcset);
-          return { tagName, attribs };
-        },
-        // Picture sources carry images in srcset; media sources use src and are left alone.
-        source: (tagName, attribs) => {
-          if (attribs.srcset) attribs.srcset = srcset(attribs.srcset);
-          return { tagName, attribs };
-        },
-        video: (tagName, attribs) => {
-          if (attribs.poster) attribs.poster = this.path(attribs.poster, origin);
-          return { tagName, attribs };
-        },
-      },
+    return mapImages(html, (url) => this.path(url, origin));
+  }
+
+  /**
+   * The http(s) images in sanitised entry HTML, each with its proxy path, in document order and
+   * at most `limit`; for clients that store articles' images.
+   */
+  sources(html: string, limit = MAX_SOURCES): ImageSource[] {
+    const urls = new Set<string>();
+    mapImages(html, (url) => {
+      if (urls.size < limit && httpUrl(url)) urls.add(url);
+      return url;
     });
+    return [...urls].map((url) => ({ url, proxy: this.path(url) }));
   }
 
   /** The image for a signed path, from the cache or fetched politely from its host. */

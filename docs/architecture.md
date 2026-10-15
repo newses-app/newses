@@ -180,7 +180,7 @@ Updater:
 - `Retry-After` (and HTTP 429 without it: 10 minutes) sets the source's `blocked_until`. A 429, or a 503 with `Retry-After`, also pauses every source on that host until then (`fetch_hosts`, shared by all processes), without counting failures.
 - "Update now" clears errors, re-enables the source, and enqueues a fetch. It is a no-op within a minute of the last fetch and refused (`throttled`) while `blocked_until` is in the future.
 - A permanent redirect (301/308 from the first hop on) moves the source to the new URL after a successful fetch, unless another source already has that URL.
-- Image proxy (per-user `proxyImages` preference): when an entry is served to such a user, `img` `src`/`srcset`, picture `source` `srcset`, and video `poster` URLs become `/api/v1/images/<hmac>/<base64url URL>`, signed with the `image-url` key. The route needs no session; it refuses unsigned URLs, then serves from `BlobStore` (`images/<sha256 of URL>`) or fetches once through `HttpFetcher` within the per-host limits and host pauses, up to 4 MB, accepting only images (declared or sniffed). Failures are not retried for 24 h. Responses are `public, max-age` 30 days, immutable, with a sandboxing CSP.
+- Image proxy (per-user `proxyImages` preference): when an entry is served to such a user, `img` `src`/`srcset`, picture `source` `srcset`, and video `poster` URLs become `/api/v1/images/<hmac>/<base64url URL>`, signed with the `image-url` key. The route needs no session; it refuses unsigned URLs, then serves from `BlobStore` (`images/<sha256 of URL>`) or fetches once through `HttpFetcher` within the per-host limits and host pauses, up to 4 MB, accepting only images (declared or sniffed). Failures are not retried for 24 h. Responses are `public, max-age` 30 days, immutable, with a sandboxing CSP and `Access-Control-Allow-Origin: *` (also on 403 and 404), so the apps can read them whatever CloudFront cached.
 - Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
 
 Purge (every 6 h):
@@ -258,7 +258,7 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 
 ## Data model
 
-Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, labels, and user entries as tombstones for incremental sync. Assigning or removing a label or tag touches the user entry, so sync carries its label ids and tags; tags copied at fan-out do not.
+Shared rows are stored once per instance; per-user rows carry `user_id`. Every table synced to clients has `updated_at`, maintained by a database trigger. Statement-level triggers record deletions of categories, subscriptions, labels, and user entries as tombstones for incremental sync. Assigning or removing a label or tag touches the user entry, so sync carries its label ids and tags; tags copied at fan-out do not. A change to an entry's content hash (title, link, or content) or full text touches every subscriber's user entry; fetches that change neither, and failed extractions, do not.
 
 | Entity | Scope | Notes |
 |---|---|---|
@@ -341,7 +341,8 @@ Search:
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
 - `GET /archive/entries` lists past articles of the user's feeds (one subscription, or all), with search (`q`) and a cursor; `GET /archive/entries/:key` returns one with content and enclosures; `POST /archive/entries/:key/restore` takes `PATCH /entries/:id`'s body and returns the restored entry. Keys are opaque: the month of the article's sort time, its feed URL, and GUID.
 - `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's; only the author can change, publish (`shared`), or delete one. `POST /admin/themes/:id/unpublish` lets admins withdraw anyone's, logged as `theme_unpublished`. Stored tokens a later version no longer accepts are left out of the response. The web app refetches the list when it regains focus, so authors' edits and withdrawn themes reach other users; a theme that no longer resolves shows Original.
-- `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`.
+- `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`. `GET /sync/token` returns a token at the watermark without walking history, for clients that load current state from the headline lists. Entries carry `readAt` and `contentVersion`, an opaque value that changes with the content hash or extracted full text.
+- `POST /entries/contents` takes up to 100 ids in priority order and returns each entry's stored content, full text, enclosures, and content version, with its images (at most 30) mapped to signed proxy paths whatever the user's `proxyImages`; ids the user does not hold come back as `missing`, and those past the size budget (never the first) as `deferred`.
 
 Filters:
 - Patterns are RE2 syntax (re2js), matched case-insensitively and in linear time; patterns RE2 cannot compile are refused when saved.
@@ -468,7 +469,7 @@ flowchart LR
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 
 Constraints:
-- Responses are capped at 6 MB; list pages with content end early past 2 M content characters.
+- Responses are capped at 6 MB; list pages with content, and contents batches, end early past 2 MB of content and full text (UTF-8).
 - No SSE; clients poll counters every 60 s while visible (hidden desktop apps with notifications on: every 30 min).
 
 #### Releases

@@ -239,13 +239,30 @@ describe('EntryService.list', () => {
   });
 
   it('ends pages with content early once they reach the size budget', async () => {
-    const small = new EntryService(db, realtime, { pageContentChars: 1 });
+    const small = new EntryService(db, realtime, { pageContentBytes: 1 });
     const options = { stream: {}, view: 'all', limit: 50, content: true } as const;
     const first = await small.list(alice, options);
     expect(first.entries).toHaveLength(1);
     const second = await small.list(alice, { ...options, cursor: first.cursor ?? '' });
     expect(second.entries[0]?.id).not.toBe(first.entries[0]?.id);
     expect((await small.list(alice, { ...options, content: false })).entries).toHaveLength(4);
+  });
+
+  it('returns contents in the order asked, deferring those past the size budget', async () => {
+    const options = { stream: {}, view: 'all', limit: 50, content: false } as const;
+    const [newest, next] = (await services.entries.list(alice, options)).entries.map((e) => e.id);
+    const ids = [next ?? 0, newest ?? 0, next ?? 0, 999_999];
+    const all = await services.entries.contents(alice, ids);
+    expect(all.entries.map((e) => e.id)).toEqual([next, newest]);
+    expect(all.entries[0]?.content).toBeDefined();
+    expect(all).toMatchObject({ missing: [999_999], deferred: [] });
+    const small = new EntryService(db, realtime, { pageContentBytes: 1 });
+    expect(await small.contents(alice, ids)).toMatchObject({
+      entries: [{ id: next }],
+      missing: [999_999],
+      deferred: [newest],
+    });
+    expect((await services.entries.contents(bob, ids)).entries).toEqual([]);
   });
 
   it.each([

@@ -23,6 +23,7 @@ import type {
   BulkEntryStateRequest,
   Counters,
   Entry,
+  EntryContentsResponse,
   EntryListQuery,
   EntryListResponse,
   EntryNoteRequest,
@@ -32,6 +33,7 @@ import type {
   PublishedFeedResponse,
   ShareResponse,
   SyncResponse,
+  SyncTokenResponse,
   TagCount,
 } from './entries.ts';
 import type {
@@ -293,6 +295,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** The linked page's article, extracted now unless it was before. */
       fullText: (entryId: number) =>
         request<FullTextResponse>('POST', `/entries/${id(entryId)}/full-text`),
+      /** Content, enclosures, and proxied image paths of up to 100 entries, for storing offline. */
+      contents: (ids: number[]) =>
+        request<EntryContentsResponse>('POST', '/entries/contents', { body: { ids } }),
       share: (entryId: number) => request<ShareResponse>('PUT', `/entries/${id(entryId)}/share`),
       unshare: (entryId: number) => request<undefined>('DELETE', `/entries/${id(entryId)}/share`),
       /** Replaces the entry's tags; resolves to them normalised. */
@@ -357,6 +362,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     /** Omit `since` for a full sync; call again with `next` while `more` is true. */
     sync: (since?: string, limit?: number) =>
       request<SyncResponse>('GET', '/sync', { query: { since, limit } }),
+    /** A token at the present, to follow changes after loading current state from the lists. */
+    syncToken: () => request<SyncTokenResponse>('GET', '/sync/token'),
 
     prefs: {
       get: () => request<Prefs>('GET', '/prefs'),

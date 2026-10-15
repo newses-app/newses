@@ -41,7 +41,9 @@ describe('compatibility', () => {
   });
 
   it('refuses other products', () => {
-    expect(compatibility(info(1, 0, 'rss-reader')).status).toBe('ok');
+    expect(compatibility(info(API_VERSION.major, API_VERSION.minor, 'rss-reader')).status).toBe(
+      'ok',
+    );
     expect(compatibility(info(1, 0, 'other')).status).toBe('notNewses');
     expect(compatibility({ hello: 'world' }).status).toBe('notNewses');
     expect(compatibility(null).status).toBe('notNewses');

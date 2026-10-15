@@ -13,8 +13,15 @@ import { excerpt } from './text.ts';
 export const SEARCH_CANDIDATES = 1000;
 /** Searches matching at most this many entries instance-wide are resolved from the GIN index. */
 const SELECTIVE_MATCHES = 20_000;
-/** Pages with content end early past this many content characters, keeping responses small. */
-const PAGE_CONTENT_CHARS = 2_000_000;
+/**
+ * Pages with content end early past this many bytes of content and full text, keeping responses
+ * well under Lambda's 6 MB cap after JSON escaping.
+ */
+const PAGE_CONTENT_BYTES = 2_000_000;
+
+/** UTF-8 size of an entry's content and full text. */
+const contentBytes = (content?: string | null, fullContent?: string | null) =>
+  Buffer.byteLength(content ?? '') + Buffer.byteLength(fullContent ?? '');
 
 export type ListOrder = 'newest' | 'oldest' | 'title' | 'relevance';
 
@@ -101,6 +108,8 @@ export interface HeadlineRow extends Record<string, unknown> {
   labels: number[];
   tags: string[];
   share_id: string | null;
+  read_at: string | null;
+  content_version: string;
   head: string | null;
   content?: string | null;
   full_content?: string | null;
@@ -108,12 +117,20 @@ export interface HeadlineRow extends Record<string, unknown> {
   k?: string;
 }
 
+/**
+ * Changes when the entry's title, link, or content does, or its full text is extracted again;
+ * clients compare it to decide whether a stored copy of the content is current.
+ */
+const CONTENT_VERSION = sql`left(e.content_hash, 16) || coalesce('.' || CASE
+    WHEN e.full_content IS NOT NULL
+    THEN floor(extract(epoch FROM e.full_content_at) * 1000)::bigint::text END, '')`;
+
 /** Headline columns of `user_entries ue` joined as in `HEADLINE_FROM`. */
 export const headlineColumns = (withContent: boolean) => sql`
   ue.id, ue.entry_id, ue.subscription_id, coalesce(s.title, fs.title, fs.url) AS feed_title,
   e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
   ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.score, ue.note,
-  ue.share_id,
+  ue.share_id, ${iso(sql`ue.read_at`)} AS read_at, ${CONTENT_VERSION} AS content_version,
   array(SELECT el.label_id FROM entry_labels el WHERE el.user_entry_id = ue.id ORDER BY 1) AS labels,
   array(SELECT et.tag FROM entry_tags et WHERE et.user_entry_id = ue.id ORDER BY 1) AS tags,
   left(e.content, 4000) AS head${withContent ? sql`, e.content, e.full_content` : sql``}`;
@@ -141,6 +158,8 @@ export function toEntry(row: HeadlineRow): Entry {
     labels: row.labels,
     tags: row.tags,
     shareId: row.share_id,
+    readAt: row.read_at,
+    contentVersion: row.content_version,
     excerpt: excerpt(row.head),
     ...(row.content !== undefined && { content: row.content }),
     ...(row.full_content !== undefined && { fullContent: row.full_content }),
@@ -186,17 +205,17 @@ export class EntryService {
   readonly #db: Db;
   readonly #realtime: Realtime;
   readonly #selectiveMatches: number;
-  readonly #pageContentChars: number;
+  readonly #pageContentBytes: number;
 
   constructor(
     db: Db,
     realtime: Realtime,
-    options: { selectiveMatches?: number; pageContentChars?: number } = {},
+    options: { selectiveMatches?: number; pageContentBytes?: number } = {},
   ) {
     this.#db = db;
     this.#realtime = realtime;
     this.#selectiveMatches = options.selectiveMatches ?? SELECTIVE_MATCHES;
-    this.#pageContentChars = options.pageContentChars ?? PAGE_CONTENT_CHARS;
+    this.#pageContentBytes = options.pageContentBytes ?? PAGE_CONTENT_BYTES;
   }
 
   /**
@@ -275,7 +294,12 @@ export class EntryService {
       rows = result.rows;
     }
 
-    const size = options.content ? this.#fitContent(rows, options.limit) : options.limit;
+    const size = options.content
+      ? this.#fitContent(
+          rows.map((r) => contentBytes(r.content, r.full_content)),
+          options.limit,
+        )
+      : options.limit;
     const page = rows.slice(0, size);
     const last = page.at(-1);
     let next: Cursor | null = null;
@@ -346,12 +370,35 @@ export class EntryService {
     return entries;
   }
 
-  /** How many of `rows` (at most `limit`, at least one) fit the page's content budget. */
-  #fitContent(rows: HeadlineRow[], limit: number): number {
-    let chars = 0;
-    for (const [i, row] of rows.slice(0, limit).entries()) {
-      chars += row.content?.length ?? 0;
-      if (chars > this.#pageContentChars && i > 0) return i;
+  /**
+   * Content and enclosures of the user's entries in the order asked, for clients that store
+   * articles; those past the content budget (always after the first) are `deferred`, and ids the
+   * user does not hold are `missing`.
+   */
+  async contents(
+    userId: number,
+    ids: number[],
+  ): Promise<{ entries: Entry[]; missing: number[]; deferred: number[] }> {
+    const unique = [...new Set(ids)];
+    const byId = new Map((await this.getMany(userId, unique)).map((e) => [e.id, e]));
+    const found = unique.flatMap((id) => byId.get(id) ?? []);
+    const size = this.#fitContent(
+      found.map((e) => contentBytes(e.content, e.fullContent)),
+      found.length,
+    );
+    return {
+      entries: found.slice(0, size),
+      missing: unique.filter((id) => !byId.has(id)),
+      deferred: found.slice(size).map((e) => e.id),
+    };
+  }
+
+  /** How many entries (at most `limit`, at least one) fit the content budget, given their sizes. */
+  #fitContent(sizes: number[], limit: number): number {
+    let bytes = 0;
+    for (const [i, size] of sizes.slice(0, limit).entries()) {
+      bytes += size;
+      if (bytes > this.#pageContentBytes && i > 0) return i;
     }
     return limit;
   }

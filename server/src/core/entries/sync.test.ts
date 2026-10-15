@@ -101,6 +101,63 @@ describe('SyncService', () => {
     expect(removed.entries.map((e) => [e.id, e.subscriptionId])).toEqual([[first, null]]);
   });
 
+  it('starts from a token at the present', async () => {
+    const before = await addEntry('before');
+    await db.insert(categories).values({ userId, title: 'Before' });
+    const token = await sync.token();
+    const after = await addEntry('after');
+    await db.delete(userEntries).where(eq(userEntries.id, before));
+    const delta = await sync.changes(userId, token, 100);
+    expect(delta.entries.map((e) => e.id)).toEqual([after]);
+    expect([delta.categories, delta.subscriptions]).toEqual([[], []]);
+    expect(delta.deleted.entries).toEqual([before]);
+  });
+
+  it('syncs edited content and extracted full text, not fetches that change neither', async () => {
+    const id = await addEntry('edited');
+    const [row] = await db.select().from(userEntries).where(eq(userEntries.id, id));
+    const entryId = row?.entryId ?? 0;
+    const initial = await sync.changes(userId, undefined, 100);
+    const version = initial.entries[0]?.contentVersion;
+
+    await db
+      .update(entries)
+      .set({ lastSeenAt: sql`now()` })
+      .where(eq(entries.id, entryId));
+    await db
+      .update(entries)
+      .set({ fullContentAt: sql`now()`, fullContentError: 'Timed out' })
+      .where(eq(entries.id, entryId));
+    const idle = await sync.changes(userId, initial.next, 100);
+    expect(idle.entries).toEqual([]);
+
+    await db
+      .update(entries)
+      .set({ title: 'Edited', contentHash: 'edited-2' })
+      .where(eq(entries.id, entryId));
+    const edited = await sync.changes(userId, idle.next, 100);
+    expect(edited.entries.map((e) => [e.id, e.title])).toEqual([[id, 'Edited']]);
+    expect(edited.entries[0]?.contentVersion).not.toBe(version);
+
+    await db
+      .update(entries)
+      .set({ fullContent: '<p>Full</p>', fullContentAt: sql`now()`, fullContentError: null })
+      .where(eq(entries.id, entryId));
+    const extracted = await sync.changes(userId, edited.next, 100);
+    expect(extracted.entries.map((e) => e.id)).toEqual([id]);
+    expect(extracted.entries[0]?.contentVersion).not.toBe(edited.entries[0]?.contentVersion);
+  });
+
+  it('carries the read time', async () => {
+    const id = await addEntry('read');
+    await db
+      .update(userEntries)
+      .set({ unread: false, readAt: sql`now()` })
+      .where(eq(userEntries.id, id));
+    const { entries: synced } = await sync.changes(userId, undefined, 100);
+    expect(synced[0]?.readAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+  });
+
   it('pages entries without losing rows that share a timestamp', async () => {
     await db.transaction(async (tx) => {
       const [entry] = await tx

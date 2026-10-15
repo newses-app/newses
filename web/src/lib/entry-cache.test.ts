@@ -20,6 +20,8 @@ const entry = (id: number): Entry => ({
   labels: [],
   tags: [],
   shareId: null,
+  readAt: null,
+  contentVersion: 'v1',
   excerpt: null,
 });
 

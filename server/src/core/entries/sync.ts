@@ -25,6 +25,13 @@ function decodeToken(value: string): Token {
   }
 }
 
+/** The start of the oldest transaction still open in the database, or now: every change before it has committed. */
+const WATERMARK = sql`least(now(), (
+    SELECT min(xact_start) FROM pg_stat_activity
+    WHERE datname = current_database() AND backend_type = 'client backend'
+      AND pid <> pg_backend_pid()
+  ))::text`;
+
 export interface SyncResult {
   categories: CategoryRow[];
   subscriptions: SubscriptionView[];
@@ -50,15 +57,20 @@ export class SyncService {
     this.#db = db;
   }
 
+  /** A token at the present, for clients that load current state some other way and then follow changes. */
+  async token(): Promise<string> {
+    const [state] = (
+      await this.#db.execute<{ watermark: string }>(sql`SELECT ${WATERMARK} AS watermark`)
+    ).rows;
+    if (!state) throw new Error('Sync watermark query returned no row');
+    return encodeToken({ t: state.watermark, i: 0 });
+  }
+
   async changes(userId: number, since: string | undefined, limit: number): Promise<SyncResult> {
     const token = since ? decodeToken(since) : null;
     const [state] = (
       await this.#db.execute<{ watermark: string; expired: boolean }>(sql`
-        SELECT least(now(), (
-            SELECT min(xact_start) FROM pg_stat_activity
-            WHERE datname = current_database() AND backend_type = 'client backend'
-              AND pid <> pg_backend_pid()
-          ))::text AS watermark,
+        SELECT ${WATERMARK} AS watermark,
           ${token ? sql`${token.t}::timestamptz < now() - make_interval(days => ${TOMBSTONE_RETENTION_DAYS})` : sql`false`} AS expired`)
     ).rows;
     if (!state) throw new Error('Sync watermark query returned no row');

@@ -113,6 +113,57 @@ describe('image proxy', () => {
     expect(requests('https://img.example/broken.png')).toBe(1);
   });
 
+  it('lists stored content with every image signed, and lets any origin read the images', async () => {
+    const list = await app.inject({ url: '/api/v1/entries', headers });
+    const id = list.json<{ entries: { id: number }[] }>().entries[0]?.id ?? 0;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/entries/contents',
+      headers,
+      payload: { ids: [id, 999_999] },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      entries: { id: number; content: string; images: { url: string; proxy: string }[] }[];
+      missing: number[];
+      deferred: number[];
+    }>();
+    expect(body).toMatchObject({ missing: [999_999], deferred: [] });
+    const [entry] = body.entries;
+    // Stored as is, whatever the user's proxy preference.
+    expect(entry?.content).toContain('src="https://img.example/cat.png"');
+    expect(entry?.images.map((i) => i.url)).toEqual([
+      'https://img.example/cat.png',
+      'https://img.example/broken.png',
+    ]);
+    const [cat, broken] = entry?.images.map((i) => i.proxy) ?? [];
+    expect(cat).toBe(services.feeds.images.path('https://img.example/cat.png'));
+
+    const origin = { origin: 'app://newses' };
+    const served = await app.inject({ url: cat ?? '', headers: origin });
+    expect(served.statusCode).toBe(200);
+    expect(served.headers['access-control-allow-origin']).toBe('*');
+    const failed = await app.inject({ url: broken ?? '', headers: origin });
+    expect([failed.statusCode, failed.headers['access-control-allow-origin']]).toEqual([404, '*']);
+    const forged = await app.inject({ url: `${(cat ?? '').slice(0, -4)}AAAA`, headers: origin });
+    expect([forged.statusCode, forged.headers['access-control-allow-origin']]).toEqual([403, '*']);
+  });
+
+  it('collects images from srcset, picture sources, and posters, without duplicates', () => {
+    const html =
+      '<img src="https://a.example/1.png" srcset="https://a.example/1.png 1x, https://a.example/2.png 2x">' +
+      '<picture><source srcset="https://a.example/3.webp"></picture>' +
+      '<video poster="https://a.example/4.jpg"></video><img src="data:image/png;base64,AA==">';
+    const proxy = services.feeds.images;
+    expect(proxy.sources(html).map((i) => i.url)).toEqual([
+      'https://a.example/1.png',
+      'https://a.example/2.png',
+      'https://a.example/3.webp',
+      'https://a.example/4.jpg',
+    ]);
+    expect(proxy.sources(html, 2)).toHaveLength(2);
+  });
+
   it('does not fetch from a paused host', async () => {
     const path = services.feeds.images.path('https://paused.example/x.png');
     await db

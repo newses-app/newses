@@ -1,6 +1,6 @@
 # 0028. Web app structure and serving
 
-- Status: Accepted
+- Status: Superseded by 0061
 - Date: 2026-10-04
 
 ## Context

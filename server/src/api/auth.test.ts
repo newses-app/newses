@@ -198,7 +198,7 @@ describe('server info', () => {
     expect(res.json()).toEqual({
       product: 'newses',
       version: 'dev',
-      apiVersion: { major: 1, minor: 0 },
+      apiVersion: { major: 1, minor: 1 },
     });
   });
 

@@ -1,6 +1,6 @@
 # 0011. Online-first clients with a sync-ready API
 
-- Status: Accepted
+- Status: Superseded by 0061
 - Date: 2026-10-03
 
 ## Context

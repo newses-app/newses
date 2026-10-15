@@ -233,6 +233,16 @@ describe('entries API', () => {
       headers,
     });
     expect(delta.json<{ entries: unknown[] }>().entries).toEqual([]);
+
+    const token = await app.inject({ method: 'GET', url: '/api/v1/sync/token', headers });
+    expect(token.statusCode).toBe(200);
+    const fromNow = await app.inject({
+      method: 'GET',
+      url: `/api/v1/sync?since=${token.json<{ next: string }>().next}`,
+      headers,
+    });
+    expect(fromNow.json<{ entries: unknown[] }>().entries).toEqual([]);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/sync/token' })).statusCode).toBe(401);
   });
 
   it('reads and updates preferences', async () => {
@@ -271,6 +281,8 @@ describe('entries API', () => {
         '/api/v1/entries',
         '/api/v1/counters',
         '/api/v1/sync',
+        '/api/v1/sync/token',
+        '/api/v1/entries/contents',
         '/api/v1/prefs',
         '/api/v1/themes',
         '/api/v1/archive/entries',

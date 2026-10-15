@@ -13,6 +13,7 @@
 | P5 | Cold-storage archive | Articles purge deletes and the TTRSS import drops are kept; users browse, search, and restore them on Docker and AWS |
 | Observability | Operations insight | Admins follow user activity, load on remote sites, job health, and security events on the Operations page and get alert emails; on Docker they trace requests and jobs in Grafana, on AWS in X-Ray, with a monthly cost budget |
 | Custom Themes | Appearance | Users adjust the appearance, save, import, export, and share their own themes, and use the Terminal and Sketch themes in the web, desktop, and Android apps |
+| Offline Reading | Offline use | Family members read and search unread and starred articles with images in the web, desktop, and Android apps without a connection; changes made offline reach the server on reconnect without overriding newer ones; installed Chromium PWAs and the Android app sync in the background; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -122,7 +123,17 @@
 | Desktop app | P4 | Electron app for Windows (installer, zip) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent, and a prompt to install newer versions |
 | macOS desktop app | Later | The desktop app, signed and notarised for macOS |
-| Offline reading | Later | Local store of recent unread/starred entries; queued state changes replayed on reconnect |
+
+### Offline
+
+| Feature | Phase | Acceptance criteria |
+|---|---|---|
+| Offline sync API | Offline Reading | Sync starts from a token for the present without walking history; edited content and full-text results reach sync; entries carry their read time and content version; content and proxied image URLs come in batches within the AWS response limit |
+| Offline reading | Offline Reading | Web (opt-in per device), desktop, and Android apps keep unread and starred entries with text and images, and headlines read in the last 7 days, within a storage limit; images on Wi-Fi only on Android by default; the app starts, lists every stream, opens articles, and shows counters without a connection |
+| Offline edits | Offline Reading | Article state, catch-up, notes, labels, tags, feed and label organisation, preferences, and themes change offline and are sent on reconnect; a newer change from another device is kept; note conflicts ask the reader |
+| Offline search | Offline Reading | Searching without a connection finds stored articles by their words |
+| Background sync | Offline Reading | Installed Chromium PWAs and the Android app sync while closed |
+| Offline status | Offline Reading | The app shows when it is offline, how many changes are waiting, and when it last synced; settings show storage used and clear it |
 
 ### Migration
 
