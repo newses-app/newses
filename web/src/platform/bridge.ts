@@ -1,6 +1,6 @@
-import type { PlatformBridge, SaveFile } from '@newses/shared';
+import type { NetworkStatus, PlatformBridge, SaveFile } from '@newses/shared';
 
-export type { PlatformBridge, SaveFile };
+export type { NetworkStatus, PlatformBridge, SaveFile };
 
 declare global {
   interface Window {
@@ -20,6 +20,21 @@ function download(file: SaveFile): Promise<boolean> {
   return Promise.resolve(true);
 }
 
+/** Browsers report whether there is a network at all, not which kind. */
+const browserNetwork = (): NetworkStatus => ({ connected: navigator.onLine, wifi: null });
+
+function onBrowserNetworkChange(listener: (status: NetworkStatus) => void): () => void {
+  const changed = () => {
+    listener(browserNetwork());
+  };
+  window.addEventListener('online', changed);
+  window.addEventListener('offline', changed);
+  return () => {
+    window.removeEventListener('online', changed);
+    window.removeEventListener('offline', changed);
+  };
+}
+
 /** The browser: same-origin server, cookie session, new tabs, and downloads. */
 export const webBridge: PlatformBridge = {
   platform: 'web',
@@ -36,7 +51,9 @@ export const webBridge: PlatformBridge = {
   saveFile: download,
   notify: () => Promise.resolve(),
   onNavigate: () => undefined,
-  onRefresh: () => undefined,
+  onRefresh: () => () => undefined,
+  getNetwork: () => Promise.resolve(browserNetwork()),
+  onNetworkChange: onBrowserNetworkChange,
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: () => undefined,

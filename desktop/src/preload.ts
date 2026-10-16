@@ -3,26 +3,37 @@ import type {
   AppNotification,
   AppTheme,
   DesktopOptions,
+  NetworkStatus,
   PlatformBridge,
   SaveFile,
   UpdateStatus,
 } from '@newses/shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
+// The preload runs in the window, but is typed with the main process's libraries, which have no DOM.
+declare const navigator: { readonly onLine: boolean };
+declare const window: {
+  addEventListener(type: 'online' | 'offline', listener: () => void): void;
+  removeEventListener(type: 'online' | 'offline', listener: () => void): void;
+};
+
 const invoke = <T>(method: string, ...args: unknown[]) =>
   ipcRenderer.invoke(`bridge:${method}`, ...args) as Promise<T>;
 
 const VERSION_ARG = '--newses-version=';
 
-// Single handlers, replaced by later registrations.
+// A single handler, replaced by later registrations.
 let navigate: (target: string) => void = () => undefined;
-let refresh: () => void = () => undefined;
+const refreshers = new Set<() => void>();
 ipcRenderer.on('bridge:navigate', (_event, target: string) => {
   navigate(target);
 });
 ipcRenderer.on('bridge:refresh', () => {
-  refresh();
+  for (const listener of refreshers) listener();
 });
+
+/** Chromium tells whether there is a network, not which kind. */
+const network = (): NetworkStatus => ({ connected: navigator.onLine, wifi: null });
 
 const bridge: PlatformBridge = {
   platform: 'desktop',
@@ -39,8 +50,23 @@ const bridge: PlatformBridge = {
   onNavigate: (handler) => {
     navigate = handler;
   },
-  onRefresh: (handler) => {
-    refresh = handler;
+  onRefresh: (listener) => {
+    refreshers.add(listener);
+    return () => {
+      refreshers.delete(listener);
+    };
+  },
+  getNetwork: () => Promise.resolve(network()),
+  onNetworkChange: (listener) => {
+    const changed = () => {
+      listener(network());
+    };
+    window.addEventListener('online', changed);
+    window.addEventListener('offline', changed);
+    return () => {
+      window.removeEventListener('online', changed);
+      window.removeEventListener('offline', changed);
+    };
   },
   getDesktopOptions: () => invoke<DesktopOptions>('getDesktopOptions'),
   setDesktopOptions: (options) => invoke<undefined>('setDesktopOptions', options),

@@ -2,7 +2,8 @@ import type { CurrentSession, LoggedInResponse } from '@newses/shared';
 import { type QueryClient, useQuery, useQueryClient } from '@tanstack/vue-query';
 import type { Router } from 'vue-router';
 import { useRouter } from 'vue-router';
-import { api, isUnauthenticated } from '../api.ts';
+import { api, isUnauthenticated, retryable } from '../api.ts';
+import { accountSignedIn, accountSignedOut } from '../offline/account.ts';
 import { connection, NATIVE } from '../platform/index.ts';
 
 export const SESSION_KEY = ['session'] as const;
@@ -27,9 +28,12 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
         queryKey: SESSION_KEY,
         queryFn: fetchSession,
         staleTime: Infinity,
-        // A waking server may time out or fail at first.
-        retry: (count, error) => !isUnauthenticated(error) && count < 3,
+        // Tried even while the server seems unreachable, so the app can say so instead of waiting.
+        networkMode: 'always',
+        // A waking server may fail at first.
+        retry: (count, error) => retryable(error) && count < 3,
       });
+      await accountSignedIn({ userId: session.user.id, serverUrl: connection.state.serverUrl });
       const mustChange = session.user.passwordChangeRequired;
       if (mustChange && to.name !== 'change-password') return { name: 'change-password' };
       if (!mustChange && to.name === 'change-password') return '/all';
@@ -81,6 +85,7 @@ export function useSession() {
       await api.auth.logout();
     } finally {
       await connection.signedOut();
+      await accountSignedOut();
       queryClient.clear();
       await router.push({ name: 'login' });
     }

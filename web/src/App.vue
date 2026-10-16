@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { isDark } from './lib/appearance.ts';
 import { slow } from './lib/slow-requests.ts';
+import { connectivity } from './offline/connectivity.ts';
 import UpdatePrompt from './components/UpdatePrompt.vue';
 import { themeDefaults } from './composables/useAppearance.ts';
 import { bridge, NATIVE } from './platform/index.ts';
@@ -52,6 +53,11 @@ router.isReady().then(
 function reload() {
   window.location.reload();
 }
+
+// The server answers again: start over without waiting for the reader.
+watch(connectivity, (state) => {
+  if (failed.value && state === 'online') reload();
+});
 
 /** The apps may have the wrong server, or one that is gone. */
 function changeServer() {

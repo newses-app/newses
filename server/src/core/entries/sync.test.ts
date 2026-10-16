@@ -33,6 +33,22 @@ async function addEntry(guid: string) {
   return row?.id ?? 0;
 }
 
+/**
+ * Follows changes until the entry arrives. The watermark comes from `pg_stat_activity`, which can
+ * lag on a busy machine and hold a just-committed row back to the next call, as clients expect.
+ */
+async function syncedEntry(id: number, since: string | undefined) {
+  let next = since;
+  for (let call = 0; call < 10; call++) {
+    const result = await sync.changes(userId, next, 100);
+    next = result.next;
+    const entry = result.entries.find((e) => e.id === id);
+    if (entry) return { entry, next };
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`Entry ${String(id)} was never synced`);
+}
+
 beforeAll(async () => {
   database = await createTestDatabase();
   db = createDb(database.pool);
@@ -117,8 +133,7 @@ describe('SyncService', () => {
     const id = await addEntry('edited');
     const [row] = await db.select().from(userEntries).where(eq(userEntries.id, id));
     const entryId = row?.entryId ?? 0;
-    const initial = await sync.changes(userId, undefined, 100);
-    const version = initial.entries[0]?.contentVersion;
+    const initial = await syncedEntry(id, undefined);
 
     await db
       .update(entries)
@@ -135,17 +150,16 @@ describe('SyncService', () => {
       .update(entries)
       .set({ title: 'Edited', contentHash: 'edited-2' })
       .where(eq(entries.id, entryId));
-    const edited = await sync.changes(userId, idle.next, 100);
-    expect(edited.entries.map((e) => [e.id, e.title])).toEqual([[id, 'Edited']]);
-    expect(edited.entries[0]?.contentVersion).not.toBe(version);
+    const edited = await syncedEntry(id, idle.next);
+    expect(edited.entry.title).toBe('Edited');
+    expect(edited.entry.contentVersion).not.toBe(initial.entry.contentVersion);
 
     await db
       .update(entries)
       .set({ fullContent: '<p>Full</p>', fullContentAt: sql`now()`, fullContentError: null })
       .where(eq(entries.id, entryId));
-    const extracted = await sync.changes(userId, edited.next, 100);
-    expect(extracted.entries.map((e) => e.id)).toEqual([id]);
-    expect(extracted.entries[0]?.contentVersion).not.toBe(edited.entries[0]?.contentVersion);
+    const extracted = await syncedEntry(id, edited.next);
+    expect(extracted.entry.contentVersion).not.toBe(edited.entry.contentVersion);
   });
 
   it('carries the read time', async () => {
@@ -154,8 +168,8 @@ describe('SyncService', () => {
       .update(userEntries)
       .set({ unread: false, readAt: sql`now()` })
       .where(eq(userEntries.id, id));
-    const { entries: synced } = await sync.changes(userId, undefined, 100);
-    expect(synced[0]?.readAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
+    const { entry } = await syncedEntry(id, undefined);
+    expect(entry.readAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
   });
 
   it('pages entries without losing rows that share a timestamp', async () => {

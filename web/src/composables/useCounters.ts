@@ -37,6 +37,7 @@ export function useLiveCounters(): void {
   let closeStream: (() => void) | null = null;
   let poll: ReturnType<typeof setInterval> | undefined;
   let reconnect: ReturnType<typeof setTimeout> | undefined;
+  let stopRefresh: () => void = () => undefined;
   const refresh = () => queryClient.invalidateQueries({ queryKey: COUNTERS_KEY });
 
   const startPolling = () => {
@@ -104,7 +105,7 @@ export function useLiveCounters(): void {
   onMounted(() => {
     connect();
     document.addEventListener('visibilitychange', onVisibility);
-    bridge.onRefresh(() => void refresh());
+    stopRefresh = bridge.onRefresh(() => void refresh());
   });
   onBeforeUnmount(() => {
     source?.close();
@@ -113,6 +114,6 @@ export function useLiveCounters(): void {
     stopPolling();
     clearTimeout(reconnect);
     document.removeEventListener('visibilitychange', onVisibility);
-    bridge.onRefresh(() => undefined);
+    stopRefresh();
   });
 }

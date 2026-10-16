@@ -84,12 +84,15 @@ Rules:
 | `components` | Reader (tree, headlines, combined list, article), dialogs, settings panels |
 | `composables` | Server state (TanStack Query), live counters, shortcuts, session |
 | `lib` | Pure logic: stream keys, tree building, shortcut matching, reordering, cache patches |
+| `offline` | Connectivity, and the per-account local store (IndexedDB through Dexie) |
 | `platform` | Platform bridge and the apps' server and token |
 | `stores` | Pinia store for UI state only (drawer, dialogs, notices) |
 
 - Routes: `/connect` (apps only), `/login`, `/settings/:tab`, `/:stream/:entry?`, `/:stream/archive/:key?` (`all` or a subscription). Streams are `all`, `fresh`, `starred`, `published`, `read`, `f<subscription>`, `c<category>` (`c0` uncategorised), `l<label>`, `t<tag>` (URL-encoded); search is `?q=`.
 - The archive view lists past articles read-only. Star, Publish, Labels, and Add note restore the article (the last two read, then open their dialog on it) and open it in its feed. It is reached from a subscription's or All articles' toolbar, and from a search, which it repeats over the archive.
 - Server data lives in the TanStack Query cache. State changes patch every cached copy, then save; a failure restores the previous flags. Headline lists are not refetched when entries change state, so read entries stay in place until the list is reloaded.
+- Connectivity is online, offline (the shell reports no network), or unreachable: a request failed at the network, took over 45 s to answer, or got 502–504. Any other answer makes it online. While unreachable, `GET /server` checks again after 5 s, backing off to once a minute, and at once when the network returns or the app resumes. Queries pause and are not retried unless online; the first session check still runs, so the app can say the server is unreachable, and it reloads once the server answers.
+- The local store is one IndexedDB database per account (`newses-<user>`, in the apps `newses-<server hash>-<user>`); `localStorage` remembers the last account. Signing out, or another user or server signing in, deletes the previous account's store; a 401 keeps it.
 - Entries scored above the user's `scoreHighlightAbove` get a highlight bar and a bold score.
 - Opening an entry marks it read once. Combined layout can mark entries read as they scroll above the top, saved in one request per second.
 - Counters refetch on `counters` events. Without a stream they are polled every 60 s, paused while the page is hidden; a closed stream is retried every 5 minutes.
@@ -108,7 +111,7 @@ Rules:
 
 Native build (`build:native`, `web/dist-native`), bundled by the desktop and mobile apps:
 - No service worker. `NATIVE_CSP` (`shared/src/web-csp.ts`) is in a `<meta>`: `WEB_CSP` with `connect-src https:`, because the server is chosen at runtime.
-- The shells set `window.rssReaderBridge` (`web/src/platform/bridge.ts`) before the app's scripts run: server URL, bearer token in secure storage, open in the system browser, save a file, notify, app version, update status. An update that is ready or available prompts once per version per launch; settings shows the version, the update status, and Check for updates. The web build uses a browser stand-in; the native build outside a shell keeps the server and token in memory.
+- The shells set `window.rssReaderBridge` (`web/src/platform/bridge.ts`) before the app's scripts run: server URL, bearer token in secure storage, open in the system browser, save a file, notify, app version, update status, network status (and on Android whether it is Wi-Fi), and refresh requests (resume, unlock, the tray; Android's return to the foreground). An update that is ready or available prompts once per version per launch; settings shows the version, the update status, and Check for updates. The web build uses a browser stand-in; the native build outside a shell keeps the server and token in memory.
 - The connect screen opens on first run and from "Change server" (sign-in page, settings, unreachable server). It takes an HTTPS origin and checks `GET /api/v1/server`: another product or API major is refused, an older minor warned about. Changing server revokes the old session first.
 - Sign-in asks for a bearer token, which the bridge keeps. Any 401 forgets it and returns to sign-in; signing out revokes the session, then forgets it.
 - Feed icons load from the user's `iconsPath` (login and session responses; the signed `/feed-icons` path), since an `<img>` cannot send the token.
@@ -143,7 +146,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - Bridge: the server URL in Preferences; the token in secure storage (AES-GCM with an Android Keystore key); links in Custom Tabs; files saved to the cache and offered through the share sheet; status and navigation bar icons are light over a dark theme background, judged by its luminance rather than the mode.
 - The back button closes the top dialog or menu, then the drawer, then goes back; at the start of the app's history it exits.
 - The app draws edge to edge (the native build's viewport has `viewport-fit=cover`): `#app` is inset by the safe areas (Capacitor's `--safe-area-inset-*` variables, else `env()`) and contains the layout, which scrolls inside it.
-- HTTPS only (cleartext off), `INTERNET` is the only permission, and app data is not backed up (Keystore keys do not move between devices).
+- HTTPS only (cleartext off), the permissions are `INTERNET` and `ACCESS_NETWORK_STATE`, and app data is not backed up (Keystore keys do not move between devices).
 - Share to subscribe: an `ACTION_SEND` `text/plain` filter on the `singleTask` activity; the app's `ShareTarget` plugin passes the text to the bridge (also for a share that launches the app), and the first http(s) URL opens the subscribe dialog filled in, after sign-in when signed out.
 - Updates (release builds only): at launch, at most daily, the bridge fetches the stage's `/downloads/latest.json` natively (no CORS) and compares its `versionCode`; a newer APK opens in the browser, which hands it to the package installer. The last result is kept between launches.
 - `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1). Release APKs are signed with the release keystore when `ANDROID_KEYSTORE_*` is set, else unsigned.

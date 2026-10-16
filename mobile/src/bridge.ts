@@ -10,9 +10,10 @@ import {
   SystemBarsStyle,
 } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
+import { type ConnectionStatus, Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
-import type { PlatformBridge, SaveFile, UpdateStatus } from '@newses/shared';
+import type { NetworkStatus, PlatformBridge, SaveFile, UpdateStatus } from '@newses/shared';
 import { type AndroidUpdate, androidUpdate, checkDue, parseCheckRecord } from './updates.ts';
 
 declare const APP_VERSION: string;
@@ -38,6 +39,20 @@ const sharedTexts: string[] = [];
 void ShareTarget.addListener('share', ({ text }) => {
   if (shareHandler) shareHandler(text);
   else sharedTexts.push(text);
+});
+
+const refreshers = new Set<() => void>();
+void App.addListener('resume', () => {
+  for (const listener of refreshers) listener();
+});
+
+const networkStatus = ({ connected, connectionType }: ConnectionStatus): NetworkStatus => ({
+  connected,
+  wifi: connectionType === 'unknown' ? null : connectionType === 'wifi',
+});
+const networkListeners = new Set<(status: NetworkStatus) => void>();
+void Network.addListener('networkStatusChange', (status) => {
+  for (const listener of networkListeners) listener(networkStatus(status));
 });
 
 let backHandler: (() => boolean) | null = null;
@@ -126,7 +141,19 @@ const bridge: PlatformBridge = {
   // Android notifications are not part of the app yet.
   notify: () => Promise.resolve(),
   onNavigate: () => undefined,
-  onRefresh: () => undefined,
+  onRefresh: (listener) => {
+    refreshers.add(listener);
+    return () => {
+      refreshers.delete(listener);
+    };
+  },
+  getNetwork: async () => networkStatus(await Network.getStatus()),
+  onNetworkChange: (listener) => {
+    networkListeners.add(listener);
+    return () => {
+      networkListeners.delete(listener);
+    };
+  },
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: (handler) => {

@@ -8,6 +8,8 @@ import { queryClient } from './plugins/query.ts';
 import { createAppVuetify } from './plugins/vuetify.ts';
 import { startAppearance } from './composables/useAppearance.ts';
 import { installAuthGuard } from './composables/useSession.ts';
+import { api } from './api.ts';
+import { startConnectivity } from './offline/connectivity.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 import { handleBack } from './platform/back-button.ts';
 import { routeExternalLinks } from './platform/external-links.ts';
@@ -23,6 +25,8 @@ document.documentElement.dataset.platform = bridge.platform;
 const appearance = startAppearance();
 // The apps' server and token come from the shell before the first navigation needs them.
 await connection.load();
+// Whether the device has a network, before the first request.
+await startConnectivity(bridge, () => api.serverInfo());
 if (NATIVE) routeExternalLinks(document, (url) => void bridge.openExternal(url));
 installAuthGuard(router, queryClient);
 

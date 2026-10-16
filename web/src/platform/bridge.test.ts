@@ -32,6 +32,18 @@ describe('webBridge', () => {
   });
 });
 
+describe('webBridge network', () => {
+  it('reports the browser network and its changes until the listener is removed', async () => {
+    expect(await webBridge.getNetwork()).toEqual({ connected: navigator.onLine, wifi: null });
+    const seen: boolean[] = [];
+    const remove = webBridge.onNetworkChange((status) => seen.push(status.connected));
+    window.dispatchEvent(new Event('offline'));
+    remove();
+    window.dispatchEvent(new Event('online'));
+    expect(seen).toHaveLength(1);
+  });
+});
+
 describe('memoryBridge', () => {
   it('starts empty each time', async () => {
     await memoryBridge().setToken('one');

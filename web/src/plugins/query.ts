@@ -1,7 +1,21 @@
-import { QueryCache, QueryClient } from '@tanstack/vue-query';
-import { isUnauthenticated } from '../api.ts';
+import { onlineManager, QueryCache, QueryClient } from '@tanstack/vue-query';
+import { watch } from 'vue';
+import { isUnauthenticated, retryable } from '../api.ts';
+import { connectivity } from '../offline/connectivity.ts';
 import { connection } from '../platform/index.ts';
 import { router } from '../router.ts';
+
+// Queries wait while the server is unreachable, not only while the browser reports no network,
+// and run again once it answers.
+onlineManager.setEventListener((setOnline) =>
+  watch(
+    connectivity,
+    (state) => {
+      setOnline(state === 'online');
+    },
+    { immediate: true },
+  ),
+);
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -19,7 +33,7 @@ export const queryClient = new QueryClient({
     queries: {
       // Server data changes through this app or realtime events, not by focus or reconnect.
       refetchOnWindowFocus: false,
-      retry: (count, error) => !isUnauthenticated(error) && count < 2,
+      retry: (count, error) => retryable(error) && count < 2,
       staleTime: 30_000,
     },
   },

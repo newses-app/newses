@@ -24,6 +24,13 @@ export interface DesktopOptions {
   launchAtLogin: boolean;
 }
 
+/** The device's network as the OS sees it; the server may still be unreachable over it. */
+export interface NetworkStatus {
+  connected: boolean;
+  /** On Wi-Fi rather than mobile data; null where the platform cannot tell. */
+  wifi: boolean | null;
+}
+
 export interface AppTheme {
   preference: 'system' | 'light' | 'dark';
   /** Whether the background is dark, so text and icons over it should be light. */
@@ -71,10 +78,14 @@ export interface PlatformBridge {
   /** Called with a clicked notification's target (desktop); replaces the previous handler. */
   onNavigate(handler: (target: string) => void): void;
   /**
-   * Called when counters should be refreshed now: after the computer resumes or unlocks, or from
-   * the tray (desktop); replaces the previous handler.
+   * Adds a listener for when server data should be refreshed now: after the computer resumes or
+   * unlocks, or from the tray (desktop); when the app returns to the foreground (Android). Returns a
+   * function that removes it.
    */
-  onRefresh(handler: () => void): void;
+  onRefresh(listener: () => void): () => void;
+  getNetwork(): Promise<NetworkStatus>;
+  /** Adds a listener for network changes; returns a function that removes it. */
+  onNetworkChange(listener: (status: NetworkStatus) => void): () => void;
   /** Null outside the desktop app. */
   getDesktopOptions(): Promise<DesktopOptions | null>;
   setDesktopOptions(options: Partial<DesktopOptions>): Promise<void>;
