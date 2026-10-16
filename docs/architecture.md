@@ -149,7 +149,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - HTTPS only (cleartext off), the permissions are `INTERNET` and `ACCESS_NETWORK_STATE`, and app data is not backed up (Keystore keys do not move between devices).
 - Share to subscribe: an `ACTION_SEND` `text/plain` filter on the `singleTask` activity; the app's `ShareTarget` plugin passes the text to the bridge (also for a share that launches the app), and the first http(s) URL opens the subscribe dialog filled in, after sign-in when signed out.
 - Updates (release builds only): at launch, at most daily, the bridge fetches the stage's `/downloads/latest.json` natively (no CORS) and compares its `versionCode`; a newer APK opens in the browser, which hands it to the package installer. The last result is kept between launches.
-- `versionName` comes from the release tag and `versionCode` is major·10000 + minor·100 + patch; local builds are `0.0.0-dev` (code 1). Release APKs are signed with the release keystore when `ANDROID_KEYSTORE_*` is set, else unsigned.
+- `versionName` comes from the release tag and `versionCode` is major·1000000 + minor·10000 + patch·100 + a prerelease slot: `-rc.N` (1–98) is N, a release 99, a `try-release.sh` build (`-try.*`) 0; other prerelease tags are refused. Local builds are `0.0.0-dev` (code 1). Release APKs are signed with the release keystore when `ANDROID_KEYSTORE_*` is set, else unsigned.
 
 ## Ingest pipeline
 

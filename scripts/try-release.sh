@@ -37,7 +37,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$leg" in all | linux | windows | publish) ;; *) die '--leg takes all, linux, windows, or publish' ;; esac
-# Dev releases are prereleases; versionCode 0 would be refused, hence 0.0.1.
+# Dev releases are prereleases; a -try.* build's versionCode sorts below any rc, and 0.0.0 would be 0.
 [ -n "$tag" ] || tag="v0.0.1-try.$(date +%s)"
 [[ $tag == v*-* ]] || die "dev releases need a prerelease tag (v1.2.3-x): $tag"
 [[ $tag != v0.0.0-* ]] || die "Android refuses versionCode 0; start at v0.0.1: $tag"
