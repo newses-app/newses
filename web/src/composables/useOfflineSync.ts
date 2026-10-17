@@ -1,0 +1,154 @@
+import type { Entry, SyncResponse } from '@newses/shared';
+import { type QueryClient, useQueryClient } from '@tanstack/vue-query';
+import { onBeforeUnmount, onMounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { api } from '../api.ts';
+import { replaceEntries } from '../lib/entry-cache.ts';
+import { DEFAULT_KEEP, upsertById } from '../lib/offline-keep.ts';
+import { markFilled, wasEvicted } from '../offline/account.ts';
+import { connectivity } from '../offline/connectivity.ts';
+import { exclusively } from '../offline/db.ts';
+import { currentStore } from '../offline/store.ts';
+import { pruneStore, supportsOffline, syncStore } from '../offline/sync.ts';
+import { bridge } from '../platform/index.ts';
+import { useUiStore } from '../stores/ui.ts';
+import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
+import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY } from './useFeeds.ts';
+import { ENTRIES_KEY } from './useEntries.ts';
+import { LABELS_KEY } from './useLabels.ts';
+
+/** Sync runs this often while the app is visible, and half as often while hidden. */
+const INTERVAL_MS = 15 * 60_000;
+/** Counters changes come in bursts (an action, then its event); sync once they settle. */
+const SETTLE_MS = 2000;
+
+/** Whether the server has the API the store needs; asked once per launch, again after failures. */
+let supported: Promise<boolean> | null = null;
+function serverSupportsOffline(): Promise<boolean> {
+  supported ??= api.serverInfo().then(supportsOffline, () => {
+    supported = null;
+    return false;
+  });
+  return supported;
+}
+
+/** Shows synced changes in what is on screen; read entries stay in lists until they reload. */
+function patchCaches(queryClient: QueryClient, changes: SyncResponse): void {
+  if (changes.entries.length > 0) {
+    const byId = new Map(changes.entries.map((e) => [e.id, e]));
+    queryClient.setQueriesData({ queryKey: [ENTRIES_KEY] }, (data) =>
+      replaceEntries(data as Parameters<typeof replaceEntries>[0], byId),
+    );
+    for (const entry of changes.entries) {
+      const cached = queryClient.getQueryData<Entry>(['entry', entry.id]);
+      if (!cached) continue;
+      if (cached.contentVersion === entry.contentVersion)
+        queryClient.setQueryData<Entry>(['entry', entry.id], { ...cached, ...entry });
+      else void queryClient.invalidateQueries({ queryKey: ['entry', entry.id] });
+    }
+  }
+  const patch = (key: readonly unknown[], changed: { id: number }[], deleted: number[]) => {
+    if (changed.length > 0 || deleted.length > 0)
+      queryClient.setQueryData<{ id: number }[]>(
+        key,
+        (list) => list && upsertById(list, changed, deleted),
+      );
+  };
+  patch(SUBSCRIPTIONS_KEY, changes.subscriptions, changes.deleted.subscriptions);
+  patch(CATEGORIES_KEY, changes.categories, changes.deleted.categories);
+  patch(LABELS_KEY, changes.labels, changes.deleted.labels);
+}
+
+/**
+ * Keeps the offline store current: at launch, when the app resumes or the server answers again,
+ * when counters change (an event or the regular poll, so no extra polling), and every 15 minutes
+ * (30 while hidden, and then only where counters are polled in the background). Mount once, in the
+ * signed-in layout.
+ */
+export function useOfflineSync(): void {
+  const queryClient = useQueryClient();
+  const ui = useUiStore();
+  const { t } = useI18n();
+  let running: Promise<void> | null = null;
+  /** Counts requests, so one made while a sync runs gets another after it. */
+  let requested = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let settle: ReturnType<typeof setTimeout> | undefined;
+
+  async function syncOnce(): Promise<void> {
+    const db = currentStore();
+    if (!db || connectivity.value !== 'online' || !(await serverSupportsOffline())) return;
+    await exclusively('sync', async () => {
+      const evicted = await wasEvicted(db);
+      const result = await syncStore({
+        api,
+        db,
+        onChanges: (changes) => {
+          patchCaches(queryClient, changes);
+        },
+      });
+      await pruneStore(db, Date.now(), DEFAULT_KEEP);
+      if (result === 'bootstrap') {
+        markFilled();
+        if (evicted) ui.notify(t('offline.evicted'));
+      }
+    });
+  }
+
+  /** Runs a sync, or one more after the current one when asked while it runs. */
+  function run(): void {
+    requested++;
+    if (running) return;
+    running = (async () => {
+      for (;;) {
+        const seen = requested;
+        await syncOnce().catch(() => undefined);
+        if (requested === seen) return;
+      }
+    })().finally(() => {
+      running = null;
+    });
+  }
+
+  function schedule(): void {
+    clearTimeout(timer);
+    timer = setTimeout(
+      () => {
+        if (!document.hidden || pollInBackground.value) run();
+        schedule();
+      },
+      document.hidden ? INTERVAL_MS * 2 : INTERVAL_MS,
+    );
+  }
+
+  let counters = '';
+  const stopCounters = queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
+    const key = event.query.queryKey as readonly unknown[];
+    if (key[0] !== COUNTERS_KEY[0]) return;
+    const current = JSON.stringify(event.query.state.data);
+    if (current === counters) return;
+    const first = counters === '';
+    counters = current;
+    if (first) return;
+    clearTimeout(settle);
+    settle = setTimeout(run, SETTLE_MS);
+  });
+  let stopRefresh: () => void = () => undefined;
+  const stopOnline = watch(connectivity, (state) => {
+    if (state === 'online') run();
+  });
+
+  onMounted(() => {
+    run();
+    schedule();
+    stopRefresh = bridge.onRefresh(run);
+  });
+  onBeforeUnmount(() => {
+    clearTimeout(timer);
+    clearTimeout(settle);
+    stopCounters();
+    stopRefresh();
+    stopOnline();
+  });
+}

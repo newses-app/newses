@@ -16,6 +16,7 @@ import FeedTree from '../components/reader/FeedTree.vue';
 import { useAppearance } from '../composables/useAppearance.ts';
 import { useLiveCounters } from '../composables/useCounters.ts';
 import { useEntryNotifications } from '../composables/useEntryNotifications.ts';
+import { useOfflineSync } from '../composables/useOfflineSync.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
 import { shares } from '../platform/index.ts';
@@ -31,6 +32,7 @@ useAppearance();
 
 useLiveCounters();
 useEntryNotifications();
+useOfflineSync();
 
 // A URL shared to the app, now or before signing in, opens the subscribe dialog filled in.
 watch(

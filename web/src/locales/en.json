@@ -5,6 +5,9 @@
     "unreachable": "Couldn't reach the server.",
     "retry": "Try again"
   },
+  "offline": {
+    "evicted": "The browser cleared the articles kept on this device. They are being downloaded again."
+  },
   "common": {
     "cancel": "Cancel",
     "close": "Close",

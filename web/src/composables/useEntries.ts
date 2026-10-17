@@ -5,6 +5,7 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
 import { patchEntryPages, statePatch } from '../lib/entry-cache.ts';
 import { parseStream, type StreamKey } from '../lib/streams.ts';
+import { keepLoaded } from '../offline/store.ts';
 import { COUNTERS_KEY, live } from './useCounters.ts';
 import { TAGS_KEY } from './useTags.ts';
 
@@ -27,9 +28,9 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
       const o = toValue(options);
       return [ENTRIES_KEY, o.stream, o.view, o.q ? 'relevance' : o.order, o.q, o.content] as const;
     }),
-    queryFn: ({ pageParam }) => {
+    queryFn: async ({ pageParam }) => {
       const o = toValue(options);
-      return api.entries.list({
+      const page = await api.entries.list({
         ...parseStream(o.stream),
         view: o.view,
         ...(o.q ? { q: o.q } : { order: o.order }),
@@ -37,6 +38,8 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
         content: o.content,
         limit: PAGE_SIZE,
       });
+      void keepLoaded(page.entries);
+      return page;
     },
     initialPageParam: '',
     getNextPageParam: (last) => last.cursor ?? undefined,

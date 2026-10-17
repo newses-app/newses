@@ -10,6 +10,8 @@ import { startAppearance } from './composables/useAppearance.ts';
 import { installAuthGuard } from './composables/useSession.ts';
 import { api } from './api.ts';
 import { startConnectivity } from './offline/connectivity.ts';
+import { mirrorQueries } from './offline/snapshot.ts';
+import { currentStore } from './offline/store.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 import { handleBack } from './platform/back-button.ts';
 import { routeExternalLinks } from './platform/external-links.ts';
@@ -29,6 +31,8 @@ await connection.load();
 await startConnectivity(bridge, () => api.serverInfo());
 if (NATIVE) routeExternalLinks(document, (url) => void bridge.openExternal(url));
 installAuthGuard(router, queryClient);
+// What the app needs to start offline, kept as it loads.
+mirrorQueries(queryClient, currentStore);
 
 const pinia = createPinia();
 createApp(App)

@@ -20,3 +20,24 @@ export function patchEntryPages(
     })),
   };
 }
+
+/**
+ * Replaces loaded entries with newer copies by id (from sync), keeping list order and what the
+ * copies lack, such as content.
+ */
+export function replaceEntries(
+  data: InfiniteData<EntryListResponse> | undefined,
+  byId: ReadonlyMap<number, Entry>,
+): InfiniteData<EntryListResponse> | undefined {
+  if (!data) return data;
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({
+      ...page,
+      entries: page.entries.map((entry) => {
+        const newer = byId.get(entry.id);
+        return newer ? { ...entry, ...newer } : entry;
+      }),
+    })),
+  };
+}
