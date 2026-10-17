@@ -102,10 +102,30 @@ export const entryListResponseSchema = z.object({
 
 const scoreSchema = z.number().int().min(-MAX_SCORE).max(MAX_SCORE);
 
-export const entryStateSchema = z
+const entryFlagsSchema = z
   .object({ unread: z.boolean(), starred: z.boolean(), published: z.boolean(), score: scoreSchema })
-  .partial()
-  .refine((s) => Object.keys(s).length > 0, { message: 'Set at least one flag' });
+  .partial();
+
+export const entryStateSchema = entryFlagsSchema.refine((s) => Object.keys(s).length > 0, {
+  message: 'Set at least one flag',
+});
+
+/**
+ * The values a client saw before changing them. A flag whose current value is neither this nor the
+ * target was changed elsewhere since, so it is left as it is and reported.
+ */
+const expectSchema = entryFlagsSchema.optional();
+
+export const entryStateRequestSchema = entryFlagsSchema
+  .extend({ expect: expectSchema })
+  .refine(
+    (s) =>
+      s.unread !== undefined ||
+      s.starred !== undefined ||
+      s.published !== undefined ||
+      s.score !== undefined,
+    { message: 'Set at least one flag' },
+  );
 
 export const bulkEntryStateRequestSchema = z
   .object({
@@ -114,6 +134,7 @@ export const bulkEntryStateRequestSchema = z
     starred: z.boolean().optional(),
     published: z.boolean().optional(),
     score: scoreSchema.optional(),
+    expect: expectSchema,
   })
   .refine(
     (s) =>
@@ -124,14 +145,41 @@ export const bulkEntryStateRequestSchema = z
     { message: 'Set at least one flag' },
   );
 
-/** Null or blank text clears the note. */
+/**
+ * Null or blank text clears the note. With `expected` (the note the client saw), a note changed
+ * elsewhere since is kept and the request answered `409 conflict`.
+ */
 export const entryNoteRequestSchema = z.object({
   note: z.string().max(MAX_NOTE_LENGTH).nullable(),
+  expected: z.string().max(MAX_NOTE_LENGTH).nullable().optional(),
 });
 
 /** Replaces the entry's tags; they are normalised and blank ones dropped. */
 export const entryTagsRequestSchema = z.object({
   tags: z.array(z.string().max(200)).max(MAX_TAGS_PER_ENTRY),
+});
+
+/** Adds and removes tags, keeping the others, so changes from several devices merge. */
+export const entryTagsChangeSchema = z.object({
+  add: z.array(z.string().max(200)).max(MAX_TAGS_PER_ENTRY).default([]),
+  remove: z.array(z.string().max(200)).max(MAX_TAGS_PER_ENTRY).default([]),
+});
+
+/** A flag change refused because the entry changed elsewhere, with the entry's values now. */
+export const stateConflictSchema = z.object({
+  id: z.number().int(),
+  current: z.object({
+    unread: z.boolean(),
+    starred: z.boolean(),
+    published: z.boolean(),
+    score: z.number().int(),
+  }),
+});
+
+export const bulkEntryStateResponseSchema = z.object({
+  updated: z.number().int(),
+  /** Only when `expect` was given. */
+  conflicts: z.array(stateConflictSchema).optional(),
 });
 
 export const shareResponseSchema = z.object({ shareId: z.uuid() });
@@ -204,6 +252,10 @@ export type Entry = z.infer<typeof entrySchema>;
 export type EntryListResponse = z.infer<typeof entryListResponseSchema>;
 export type EntryState = z.infer<typeof entryStateSchema>;
 export type BulkEntryStateRequest = z.infer<typeof bulkEntryStateRequestSchema>;
+export type EntryStateRequest = z.infer<typeof entryStateRequestSchema>;
+export type BulkEntryStateResponse = z.infer<typeof bulkEntryStateResponseSchema>;
+export type StateConflict = z.infer<typeof stateConflictSchema>;
+export type EntryTagsChange = z.input<typeof entryTagsChangeSchema>;
 export type EntryNoteRequest = z.infer<typeof entryNoteRequestSchema>;
 export type TagCount = z.infer<typeof tagCountSchema>;
 export type ShareResponse = z.infer<typeof shareResponseSchema>;

@@ -21,6 +21,7 @@ import type { ArchivedEntry, ArchiveEntriesQuery, ArchiveEntriesResponse } from 
 import type { Filter, FilterApplyResponse, FilterRequest, FilterTestResponse } from './filters.ts';
 import type {
   BulkEntryStateRequest,
+  BulkEntryStateResponse,
   Counters,
   Entry,
   EntryContentsResponse,
@@ -28,6 +29,8 @@ import type {
   EntryListResponse,
   EntryNoteRequest,
   EntryState,
+  EntryStateRequest,
+  EntryTagsChange,
   FullTextResponse,
   MarkReadRequest,
   PublishedFeedResponse,
@@ -47,7 +50,7 @@ import type {
   UpdateCategoryRequest,
   UpdateSubscriptionRequest,
 } from './feeds.ts';
-import type { CreateLabelRequest, Label, UpdateLabelRequest } from './labels.ts';
+import type { CreateLabelRequest, EntryLabelsChange, Label, UpdateLabelRequest } from './labels.ts';
 import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
 import type { CreateThemeRequest, Theme, UpdateThemeRequest } from './themes.ts';
 import type {
@@ -284,13 +287,24 @@ export function createApiClient(options: ApiClientOptions = {}) {
       list: (query: EntryListQuery = {}) =>
         request<EntryListResponse>('GET', '/entries', { query: query as Query }),
       get: (entryId: number) => request<Entry>('GET', `/entries/${id(entryId)}`),
-      update: (entryId: number, body: EntryState) =>
+      /** With `expect`, flags changed elsewhere since are left; the entry as it now is. */
+      update: (entryId: number, body: EntryState | EntryStateRequest) =>
         request<Entry>('PATCH', `/entries/${id(entryId)}`, { body }),
+      /** With `expect`, flags changed elsewhere since are left and reported as conflicts. */
       updateMany: (body: BulkEntryStateRequest) =>
-        request<{ updated: number }>('PATCH', '/entries', { body }),
-      /** Null or blank text clears the note. */
-      setNote: (entryId: number, note: EntryNoteRequest['note']) =>
-        request<undefined>('PUT', `/entries/${id(entryId)}/note`, { body: { note } }),
+        request<BulkEntryStateResponse>('PATCH', '/entries', { body }),
+      /**
+       * Null or blank text clears the note. With `expected`, a note changed elsewhere since stays
+       * and the request fails with `409 conflict` (API 1.2).
+       */
+      setNote: (
+        entryId: number,
+        note: EntryNoteRequest['note'],
+        expected?: EntryNoteRequest['expected'],
+      ) =>
+        request<undefined>('PUT', `/entries/${id(entryId)}/note`, {
+          body: expected === undefined ? { note } : { note, expected },
+        }),
       /** Shares the entry at `/public/share/<shareId>`; the same id while it stays shared. */
       /** The linked page's article, extracted now unless it was before. */
       fullText: (entryId: number) =>
@@ -303,9 +317,20 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Replaces the entry's tags; resolves to them normalised. */
       setTags: (entryId: number, tags: string[]) =>
         request<{ tags: string[] }>('PUT', `/entries/${id(entryId)}/tags`, { body: { tags } }),
+      /** Adds and removes tags, keeping the others (API 1.2); resolves to them all, normalised. */
+      changeTags: (entryId: number, change: EntryTagsChange) =>
+        request<{ tags: string[] }>('PATCH', `/entries/${id(entryId)}/tags`, { body: change }),
       /** Replaces the entry's labels. */
       setLabels: (entryId: number, labelIds: number[]) =>
         request<undefined>('PUT', `/entries/${id(entryId)}/labels`, { body: { labelIds } }),
+      /**
+       * Adds and removes labels, keeping the others and ignoring labels that no longer exist
+       * (API 1.2); resolves to the entry's labels.
+       */
+      changeLabels: (entryId: number, change: EntryLabelsChange) =>
+        request<{ labelIds: number[] }>('PATCH', `/entries/${id(entryId)}/labels`, {
+          body: change,
+        }),
       markRead: (body: MarkReadRequest) =>
         request<{ updated: number }>('POST', '/entries/mark-read', { body }),
     },

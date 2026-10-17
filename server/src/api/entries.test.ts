@@ -271,6 +271,93 @@ describe('entries API', () => {
     expect(unknown.statusCode).toBe(400);
   });
 
+  it('applies late changes only where nothing changed them since', async () => {
+    interface Flags {
+      id: number;
+      unread: boolean;
+      starred: boolean;
+      published: boolean;
+      score: number;
+    }
+    const list = await app.inject({ method: 'GET', url: '/api/v1/entries', headers });
+    const before = list.json<{ entries: Flags[] }>().entries;
+    const [a = 0, b = 0] = before.map((e) => e.id);
+    const patch = (payload: object) =>
+      app.inject({ method: 'PATCH', url: '/api/v1/entries', headers, payload });
+    await patch({ ids: [a, b], unread: false, starred: false, score: 0 });
+    // Another device stars b and scores it, after this client saw both unstarred at 0.
+    await patch({ ids: [b], starred: true, score: 9 });
+
+    const late = await patch({
+      ids: [a, b],
+      starred: true,
+      score: 5,
+      expect: { starred: false, score: 0 },
+    });
+    expect(late.json()).toEqual({
+      updated: 1,
+      conflicts: [{ id: b, current: { unread: false, starred: true, published: false, score: 9 } }],
+    });
+    const single = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/entries/${String(b)}`,
+      headers,
+      payload: { score: 1, expect: { score: 0 } },
+    });
+    expect(single.json()).toMatchObject({ id: b, starred: true, score: 9 });
+    const now = await app.inject({ method: 'GET', url: `/api/v1/entries/${String(a)}`, headers });
+    expect(now.json()).toMatchObject({ starred: true, score: 5 });
+
+    for (const { id, ...flags } of before)
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/entries/${String(id)}`,
+        headers,
+        payload: flags,
+      });
+  });
+
+  it('keeps notes changed elsewhere, and merges label and tag changes', async () => {
+    const list = await app.inject({ method: 'GET', url: '/api/v1/entries', headers });
+    const id = list.json<EntryList>().entries[0]?.id ?? 0;
+    const note = (payload: object) =>
+      app.inject({ method: 'PUT', url: `/api/v1/entries/${String(id)}/note`, headers, payload });
+    await note({ note: 'theirs' });
+    expect((await note({ note: 'mine', expected: null })).json()).toMatchObject({
+      error: 'conflict',
+    });
+    expect((await note({ note: 'mine', expected: ' theirs ' })).statusCode).toBe(204);
+    expect((await note({ note: 'mine', expected: 'older' })).statusCode).toBe(204);
+    await note({ note: null });
+
+    const tags = (method: 'PUT' | 'PATCH', payload: object) =>
+      app.inject({ method, url: `/api/v1/entries/${String(id)}/tags`, headers, payload });
+    await tags('PUT', { tags: ['a', 'b'] });
+    expect((await tags('PATCH', { add: ['C'], remove: ['A'] })).json()).toEqual({
+      tags: ['b', 'c'],
+    });
+    await tags('PUT', { tags: [] });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/labels',
+      headers,
+      payload: { caption: 'Merge', fgColor: '#000000', bgColor: '#ffffff' },
+    });
+    const label = created.json<{ id: number }>().id;
+    const labels = (payload: object) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/api/v1/entries/${String(id)}/labels`,
+        headers,
+        payload,
+      });
+    expect((await labels({ add: [label, 999_999] })).json()).toEqual({ labelIds: [label] });
+    expect((await labels({ remove: [label] })).json()).toEqual({ labelIds: [] });
+    expect((await labels({ add: [label] })).json()).toEqual({ labelIds: [label] });
+    await app.inject({ method: 'DELETE', url: `/api/v1/labels/${String(label)}`, headers });
+  });
+
   it('serves the OpenAPI document', async () => {
     const doc = await app.inject({ method: 'GET', url: '/api/v1/openapi.json' });
     expect(doc.statusCode).toBe(200);

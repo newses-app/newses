@@ -97,6 +97,38 @@ export class LabelService {
     if (changed && unread) await this.#realtime.publish(userId, { type: 'counters' });
   }
 
+  /**
+   * Adds and removes labels on one of the user's entries, keeping the others; labels that do not
+   * exist (any more) are ignored. Returns the entry's labels.
+   */
+  async changeEntryLabels(
+    userId: number,
+    entryId: number,
+    change: { add: number[]; remove: number[] },
+  ): Promise<number[]> {
+    const [current, owned] = await Promise.all([
+      this.#db
+        .select({ id: entryLabels.labelId })
+        .from(entryLabels)
+        .where(eq(entryLabels.userEntryId, entryId)),
+      change.add.length > 0
+        ? this.#db
+            .select({ id: labels.id })
+            .from(labels)
+            .where(and(eq(labels.userId, userId), inArray(labels.id, change.add)))
+        : [],
+    ]);
+    const gone = new Set(change.remove);
+    const wanted = [
+      ...new Set([
+        ...current.map((l) => l.id).filter((id) => !gone.has(id)),
+        ...owned.map((l) => l.id),
+      ]),
+    ].sort((a, b) => a - b);
+    await this.setEntryLabels(userId, entryId, wanted);
+    return wanted;
+  }
+
   async #unique<T>(caption: string, run: () => Promise<T>): Promise<T> {
     try {
       return await run();

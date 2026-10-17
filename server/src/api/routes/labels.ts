@@ -1,5 +1,6 @@
 import {
   createLabelRequestSchema,
+  entryLabelsChangeSchema,
   entryLabelsRequestSchema,
   labelSchema,
   updateLabelRequestSchema,
@@ -57,6 +58,24 @@ export const labelRoutes: FastifyPluginAsyncZod<{ labels: LabelService }> = (app
       );
       return reply.code(204).send();
     },
+  );
+
+  app.patch(
+    '/entries/:id/labels',
+    {
+      schema: {
+        params: idParams,
+        body: entryLabelsChangeSchema,
+        response: { 200: z.object({ labelIds: z.array(z.number().int()) }) },
+      },
+    },
+    async (request) => ({
+      labelIds: await labels.changeEntryLabels(
+        requireAuth(request).user.id,
+        request.params.id,
+        request.body,
+      ),
+    }),
   );
 
   return Promise.resolve();

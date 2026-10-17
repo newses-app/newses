@@ -1,10 +1,17 @@
 import type { Entry } from '@newses/shared';
 import Dexie from 'dexie';
 import { ref } from 'vue';
-import { DEFAULT_KEEP } from '../lib/offline-keep.ts';
 import { connection, NATIVE } from '../platform/index.ts';
-import { type Account, accountSignedIn, accountSignedOut, lastAccount } from './account.ts';
+import {
+  type Account,
+  accountSignedIn,
+  accountSignedOut,
+  lastAccount,
+  markEmptied,
+} from './account.ts';
 import { type OfflineDb, openOfflineDb } from './db.ts';
+import { outboxPending } from './outbox.ts';
+import { keepLimits } from './settings.ts';
 import { storeEntries } from './sync.ts';
 
 const ENABLED_KEY = 'newses.offline.enabled';
@@ -63,6 +70,20 @@ export function currentStore(): OfflineDb | null {
   return open.db;
 }
 
+/**
+ * Deletes everything kept on this device for the signed-in account, changes not yet sent
+ * included; the next sync downloads it again.
+ */
+export async function clearStore(): Promise<void> {
+  const account = lastAccount();
+  closeStore();
+  if (!account) return;
+  await Dexie.delete(account.name);
+  // Empty by choice, not evicted by the browser.
+  markEmptied();
+  outboxPending.value = 0;
+}
+
 export async function storeSignedIn(account: Account): Promise<void> {
   const previous = lastAccount();
   if (previous?.userId !== account.userId || previous.serverUrl !== account.serverUrl) {
@@ -81,7 +102,7 @@ export async function keepLoaded(entries: readonly Entry[]): Promise<void> {
   const db = currentStore();
   if (!db || entries.length === 0) return;
   try {
-    await storeEntries(db, entries, Date.now(), DEFAULT_KEEP);
+    await storeEntries(db, entries, Date.now(), keepLimits());
   } catch {
     // Full or blocked storage leaves the store as it was; sync tries again.
   }

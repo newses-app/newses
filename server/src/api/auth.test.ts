@@ -1,3 +1,4 @@
+import { API_VERSION } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { HttpFetcher } from '../core/feeds/http.ts';
@@ -198,7 +199,7 @@ describe('server info', () => {
     expect(res.json()).toEqual({
       product: 'newses',
       version: 'dev',
-      apiVersion: { major: 1, minor: 1 },
+      apiVersion: API_VERSION,
     });
   });
 

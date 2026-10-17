@@ -1,5 +1,6 @@
 import {
   bulkEntryStateRequestSchema,
+  bulkEntryStateResponseSchema,
   countersSchema,
   entryContentsRequestSchema,
   entryContentsResponseSchema,
@@ -7,7 +8,7 @@ import {
   entryListResponseSchema,
   entryNoteRequestSchema,
   entrySchema,
-  entryStateSchema,
+  entryStateRequestSchema,
   markReadRequestSchema,
   syncQuerySchema,
   syncResponseSchema,
@@ -104,10 +105,14 @@ export const entryRoutes: FastifyPluginAsyncZod<
 
   app.patch(
     '/entries/:id',
-    { schema: { params: idParams, body: entryStateSchema, response: { 200: entrySchema } } },
+    {
+      schema: { params: idParams, body: entryStateRequestSchema, response: { 200: entrySchema } },
+    },
     async (request) => {
       const userId = requireAuth(request).user.id;
-      await entries.setState(userId, [request.params.id], request.body);
+      const { expect, ...state } = request.body;
+      if (expect) await entries.changeState(userId, [request.params.id], state, expect);
+      else await entries.setState(userId, [request.params.id], state);
       const { content, enclosures, ...entry } = await entries.get(userId, request.params.id);
       return entry;
     },
@@ -117,17 +122,25 @@ export const entryRoutes: FastifyPluginAsyncZod<
     '/entries/:id/note',
     { schema: { params: idParams, body: entryNoteRequestSchema } },
     async (request, reply) => {
-      await entries.setNote(requireAuth(request).user.id, request.params.id, request.body.note);
+      const { note, expected } = request.body;
+      await entries.setNote(requireAuth(request).user.id, request.params.id, note, expected);
       return reply.code(204).send();
     },
   );
 
   app.patch(
     '/entries',
-    { schema: { body: bulkEntryStateRequestSchema, response: { 200: updatedCountSchema } } },
+    {
+      schema: {
+        body: bulkEntryStateRequestSchema,
+        response: { 200: bulkEntryStateResponseSchema },
+      },
+    },
     async (request) => {
-      const { ids, ...state } = request.body;
-      return { updated: await entries.setState(requireAuth(request).user.id, ids, state) };
+      const { ids, expect, ...state } = request.body;
+      const userId = requireAuth(request).user.id;
+      if (expect) return entries.changeState(userId, ids, state, expect);
+      return { updated: await entries.setState(userId, ids, state) };
     },
   );
 

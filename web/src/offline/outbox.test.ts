@@ -110,7 +110,7 @@ describe('flushOutbox', () => {
       'POST /entries/mark-read': () => Response.json({ updated: 1 }),
       'PUT /entries/5/tags': () => Response.json({ tags: ['x'] }),
     });
-    expect(await flushOutbox(api, db)).toEqual({ sent: 5, refused: [], stopped: null });
+    expect(await flushOutbox(api, db)).toMatchObject({ sent: 5, refused: [], stopped: null });
     expect(asked).toEqual([
       { route: 'PATCH /entries', body: { ids: [1, 2], unread: false } },
       { route: 'PATCH /entries/3', body: { starred: true } },
@@ -131,7 +131,7 @@ describe('flushOutbox', () => {
   ] as const)('keeps changes when %s', async (_, answer, stopped) => {
     await queueChanges(db, [{ kind: 'note', id: 1, note: 'n' }]);
     const { api } = server({ 'PUT /entries/1/note': answer });
-    expect(await flushOutbox(api, db)).toEqual({ sent: 0, refused: [], stopped });
+    expect(await flushOutbox(api, db)).toMatchObject({ sent: 0, refused: [], stopped });
     expect(await db.outbox.count()).toBe(1);
   });
 
@@ -157,7 +157,7 @@ describe('flushOutbox', () => {
       'PATCH /entries/2': failing(422, 'Bad score'),
       'PUT /entries/3/tags': () => Response.json({ tags: ['t'] }),
     });
-    expect(await flushOutbox(api, db)).toEqual({
+    expect(await flushOutbox(api, db)).toMatchObject({
       sent: 1,
       refused: [{ op: { kind: 'state', id: 2, state: { score: 5 } }, message: 'Bad score' }],
       stopped: null,
@@ -181,6 +181,70 @@ describe('flushOutbox', () => {
       'PUT /entries/1/labels',
     ]);
     expect(asked[2]?.body).toEqual({ labelIds: [1] });
+  });
+});
+
+describe('flushOutbox against a server that detects conflicts', () => {
+  it('keeps what the entry had first when merging changes', async () => {
+    await queueChanges(db, [
+      { kind: 'state', id: 1, state: { starred: true }, expect: { starred: false } },
+      {
+        kind: 'state',
+        id: 1,
+        state: { starred: false, unread: false },
+        expect: { starred: true, unread: true },
+      },
+      { kind: 'note', id: 1, note: 'a', expected: null },
+      { kind: 'note', id: 1, note: 'b', expected: 'a' },
+      { kind: 'labels', id: 1, labelIds: [1], base: [] },
+      { kind: 'labels', id: 1, labelIds: [1, 2], base: [1] },
+    ]);
+    const rows = await db.outbox.orderBy('seq').toArray();
+    expect(rows.map((r) => r.payload)).toEqual([
+      { id: 1, state: { starred: false, unread: false }, expect: { starred: false, unread: true } },
+      { id: 1, note: 'b', expected: null },
+      { id: 1, labelIds: [1, 2], base: [] },
+    ]);
+  });
+
+  it('sends changes against what the entry had, and reports the ones changed elsewhere', async () => {
+    await queueChanges(db, [
+      { kind: 'state', id: 1, state: { starred: true }, expect: { starred: false } },
+      { kind: 'state', id: 2, state: { starred: true }, expect: { starred: false } },
+      { kind: 'labels', id: 1, labelIds: [2, 3], base: [1, 2] },
+      { kind: 'tags', id: 1, tags: ['B', 'c'], base: ['a', 'b'] },
+      { kind: 'note', id: 1, note: ' mine ', expected: null },
+      { kind: 'labels', id: 2, labelIds: [4] },
+    ]);
+    const { api, asked } = server({
+      'PATCH /entries': () =>
+        Response.json({
+          updated: 1,
+          conflicts: [
+            { id: 2, current: { unread: true, starred: false, published: false, score: 0 } },
+          ],
+        }),
+      'PATCH /entries/1/labels': () => Response.json({ labelIds: [2, 3] }),
+      'PATCH /entries/1/tags': () => Response.json({ tags: ['b', 'c'] }),
+      'PUT /entries/1/note': () =>
+        Response.json({ error: 'conflict', message: 'Changed' }, { status: 409 }),
+      'GET /entries/1': () => Response.json(entry(1, { note: 'theirs' })),
+    });
+    expect(await flushOutbox(api, db, { conflicts: true })).toMatchObject({
+      sent: 6,
+      overridden: 1,
+      noteConflicts: [{ id: 1, mine: 'mine', theirs: 'theirs' }],
+      stopped: null,
+    });
+    expect(asked.map((a) => [a.route, a.body])).toEqual([
+      ['PATCH /entries', { ids: [1, 2], starred: true, expect: { starred: false } }],
+      ['PATCH /entries/1/labels', { add: [3], remove: [1] }],
+      ['PATCH /entries/1/tags', { add: ['c'], remove: ['a'] }],
+      ['PUT /entries/1/note', { note: ' mine ', expected: null }],
+      ['GET /entries/1', undefined],
+      // Queued before changes recorded what the entry had: replaced as before.
+      ['PUT /entries/2/labels', { labelIds: [4] }],
+    ]);
   });
 });
 

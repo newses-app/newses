@@ -47,6 +47,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           'labels',
           'filters',
           'sharing',
+          'offline',
           'account',
           'users',
         ]) {

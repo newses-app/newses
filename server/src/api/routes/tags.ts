@@ -1,4 +1,4 @@
-import { entryTagsRequestSchema, tagCountSchema } from '@newses/shared';
+import { entryTagsChangeSchema, entryTagsRequestSchema, tagCountSchema } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { TagService } from '../../core/entries/tags.ts';
@@ -27,6 +27,24 @@ export const tagRoutes: FastifyPluginAsyncZod<{ tags: TagService }> = (app, { ta
         requireAuth(request).user.id,
         request.params.id,
         request.body.tags,
+      ),
+    }),
+  );
+
+  app.patch(
+    '/entries/:id/tags',
+    {
+      schema: {
+        params: idParams,
+        body: entryTagsChangeSchema,
+        response: { 200: entryTagsRequestSchema },
+      },
+    },
+    async (request) => ({
+      tags: await tags.changeEntryTags(
+        requireAuth(request).user.id,
+        request.params.id,
+        request.body,
       ),
     }),
   );

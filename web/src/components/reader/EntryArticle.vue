@@ -24,6 +24,7 @@ import { api, ApiError } from '../../api.ts';
 import { useSubscriptions } from '../../composables/useFeeds.ts';
 import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
+import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useStoredImages } from '../../composables/useStoredImages.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
@@ -93,6 +94,13 @@ watch(
     choice.value = null;
   },
 );
+
+const { online, whenOnline } = useOnlineOnly();
+const share = whenOnline(() => {
+  ui.shareEntry = props.entry;
+});
+/** Full text stored with the article shows offline too; extracting it needs the server. */
+const extractFullText = whenOnline(() => toggleFullText());
 
 async function toggleFullText() {
   if (showFull.value) {
@@ -192,7 +200,8 @@ async function toggleFullText() {
           size="small"
           :prepend-icon="mdiLinkVariant"
           :color="entry.shareId ? 'primary' : undefined"
-          @click="ui.shareEntry = entry"
+          :aria-disabled="!online"
+          @click="share"
         >
           {{ entry.shareId ? t('sharing.shared') : t('sharing.share') }}
         </v-btn>
@@ -216,7 +225,8 @@ async function toggleFullText() {
           :prepend-icon="mdiTextBoxOutline"
           :loading="extracting"
           :aria-pressed="showFull"
-          @click="toggleFullText"
+          :aria-disabled="!online && !fullContent"
+          @click="fullContent ? toggleFullText() : extractFullText()"
         >
           {{ t('entries.fullText') }}
         </v-btn>

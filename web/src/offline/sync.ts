@@ -18,8 +18,20 @@ const PAGE_LIMIT = 200;
 const SYNC_LIMIT = 1000;
 const TOKEN_KEY = 'syncToken';
 
+/** The API minor that made replayed changes compare-and-set, and labels and tags merge. */
+const CONFLICTS_API_MINOR = 2;
+const RELOAD_KEY = 'reload';
+
 export const supportsOffline = ({ apiVersion }: ServerInfo) =>
   apiVersion.major === API_VERSION.major && apiVersion.minor >= OFFLINE_API_MINOR;
+
+export const detectsConflicts = ({ apiVersion }: ServerInfo) =>
+  apiVersion.major === API_VERSION.major && apiVersion.minor >= CONFLICTS_API_MINOR;
+
+/** Has the next sync load everything again, as after keeping more unread entries. */
+export async function reloadStore(db: OfflineDb): Promise<void> {
+  await db.meta.put({ key: RELOAD_KEY, value: true });
+}
 
 export interface SyncOptions {
   api: ApiClient;
@@ -79,7 +91,8 @@ async function removeEntries(db: OfflineDb, ids: readonly number[]): Promise<voi
  */
 export async function syncStore(options: SyncOptions): Promise<'bootstrap' | 'changes'> {
   const token = (await options.db.meta.get(TOKEN_KEY))?.value;
-  if (typeof token === 'string') {
+  const reload = (await options.db.meta.get(RELOAD_KEY))?.value === true;
+  if (typeof token === 'string' && !reload) {
     try {
       await followChanges(options, token);
       return 'changes';
@@ -100,7 +113,7 @@ async function bootstrap(options: SyncOptions): Promise<void> {
   const { next } = await api.syncToken();
   await db.transaction('rw', db.entries, db.contents, db.images, db.meta, async () => {
     await db.entries.clear();
-    await db.meta.delete(TOKEN_KEY);
+    await db.meta.bulkDelete([TOKEN_KEY, RELOAD_KEY]);
   });
   // Before the headlines, so even a first sync cut short leaves enough to start offline.
   const snapshots: [SnapshotQuery, () => Promise<unknown>][] = [

@@ -2,6 +2,7 @@ import { ApiError } from '@newses/shared/client';
 import { reactive, ref } from 'vue';
 import type { OfflineDb } from './db.ts';
 import { storedBytes } from './downloads.ts';
+import type { NoteConflict } from './outbox.ts';
 
 const STATUS_KEY = 'syncStatus';
 
@@ -16,6 +17,9 @@ export const syncStatus = reactive({
 
 /** Bumped to ask the running sync for one now (settings' Sync now, turning offline on). */
 export const syncRequests = ref(0);
+
+/** Notes changed both on this device and elsewhere, waiting for the reader to settle. */
+export const noteConflicts = ref<NoteConflict[]>([]);
 
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) return `${String(error.status)} ${error.message}`;

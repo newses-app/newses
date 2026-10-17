@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
+import NoteConflictDialog from '../components/dialogs/NoteConflictDialog.vue';
 import NoteDialog from '../components/dialogs/NoteDialog.vue';
 import ScoreDialog from '../components/dialogs/ScoreDialog.vue';
 import ShareDialog from '../components/dialogs/ShareDialog.vue';
@@ -12,6 +13,7 @@ import ShortcutHelp from '../components/dialogs/ShortcutHelp.vue';
 import TagPickerDialog from '../components/dialogs/TagPickerDialog.vue';
 import TagsDialog from '../components/dialogs/TagsDialog.vue';
 import SubscribeDialog from '../components/dialogs/SubscribeDialog.vue';
+import OfflineStatus from '../components/OfflineStatus.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
 import { useAppearance } from '../composables/useAppearance.ts';
 import { useLiveCounters } from '../composables/useCounters.ts';
@@ -98,5 +100,7 @@ useShortcutListener((action) => {
   <TagPickerDialog />
   <ShareDialog />
   <ShortcutHelp />
+  <NoteConflictDialog />
   <ConfirmDialog />
+  <OfflineStatus />
 </template>

@@ -4,21 +4,23 @@ import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api.ts';
 import { replaceEntries } from '../lib/entry-cache.ts';
-import { DEFAULT_KEEP, upsertById } from '../lib/offline-keep.ts';
+import { upsertById } from '../lib/offline-keep.ts';
 import { markFilled, wasEvicted } from '../offline/account.ts';
 import { connectivity, networkStatus } from '../offline/connectivity.ts';
 import { exclusively, type OfflineDb } from '../offline/db.ts';
-import { downloadContents, downloadImages } from '../offline/downloads.ts';
+import { downloadContents, downloadImages, trimToLimit } from '../offline/downloads.ts';
 import { flushOutbox, flushRequests, loadPending } from '../offline/outbox.ts';
 import {
   describeError,
   loadStatus,
+  noteConflicts,
   saveStatus,
   syncRequests,
   syncStatus,
 } from '../offline/status.ts';
 import { currentStore } from '../offline/store.ts';
-import { pruneStore, supportsOffline, syncStore } from '../offline/sync.ts';
+import { imagesNow, keepLimits, offlineSettings } from '../offline/settings.ts';
+import { detectsConflicts, pruneStore, supportsOffline, syncStore } from '../offline/sync.ts';
 import { appServer, bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
@@ -35,14 +37,17 @@ const INTERVAL_MS = 15 * 60_000;
 /** Counters changes come in bursts (an action, then its event); sync once they settle. */
 const SETTLE_MS = 2000;
 
-/** Whether the server has the API the store needs; asked once per launch, again after failures. */
-let supported: Promise<boolean> | null = null;
-function serverSupportsOffline(): Promise<boolean> {
-  supported ??= api.serverInfo().then(supportsOffline, () => {
-    supported = null;
-    return false;
-  });
-  return supported;
+/** What the server's API offers the store; asked once per launch, again after failures. */
+let support: Promise<{ offline: boolean; conflicts: boolean }> | null = null;
+function serverSupport(): Promise<{ offline: boolean; conflicts: boolean }> {
+  support ??= api.serverInfo().then(
+    (info) => ({ offline: supportsOffline(info), conflicts: detectsConflicts(info) }),
+    () => {
+      support = null;
+      return { offline: false, conflicts: false };
+    },
+  );
+  return support;
 }
 
 /** Shows synced changes in what is on screen; read entries stay in lists until they reload. */
@@ -91,11 +96,15 @@ export function useOfflineSync(): void {
   let retries = 0;
 
   /** Sends the changes kept on this device, oldest first; one tab at a time. */
-  async function flush(db: OfflineDb): Promise<void> {
+  async function flush(db: OfflineDb, conflicts: boolean): Promise<void> {
     if (!sessionVerified.value) return;
     await exclusively('outbox', async () => {
-      const { sent, refused, stopped } = await flushOutbox(api, db);
+      const result = await flushOutbox(api, db, { conflicts });
+      const { sent, refused, stopped } = result;
       for (const { message } of refused) ui.notify(t('offline.refused', { error: message }), true);
+      if (result.overridden > 0)
+        ui.notify(t('offline.overridden', { n: result.overridden }, result.overridden));
+      noteConflicts.value = [...noteConflicts.value, ...result.noteConflicts];
       clearTimeout(retry);
       if (stopped === 'unreachable' || (typeof stopped === 'object' && stopped !== null)) {
         const delay =
@@ -112,22 +121,24 @@ export function useOfflineSync(): void {
   async function syncOnce(): Promise<void> {
     const db = currentStore();
     if (!db || connectivity.value !== 'online') return;
-    syncStatus.unsupported = !(await serverSupportsOffline());
+    const { offline, conflicts } = await serverSupport();
+    syncStatus.unsupported = !offline;
     if (syncStatus.unsupported) return;
     syncStatus.running = true;
     try {
-      await flush(db);
+      await flush(db, conflicts);
       await exclusively('sync', async () => {
         const evicted = await wasEvicted(db);
         const result = await syncStore({
           api,
           db,
-          beforeResync: () => flush(db),
+          limits: keepLimits(),
+          beforeResync: () => flush(db, conflicts),
           onChanges: (changes) => {
             patchCaches(queryClient, changes);
           },
         });
-        await pruneStore(db, Date.now(), DEFAULT_KEEP);
+        await pruneStore(db, Date.now(), keepLimits());
         if (result === 'bootstrap') {
           markFilled();
           if (evicted) ui.notify(t('offline.evicted'));
@@ -135,9 +146,12 @@ export function useOfflineSync(): void {
         syncStatus.lastSyncedAt = Date.now();
         syncStatus.lastError = null;
         // Text first, so every kept article can be read before any image arrives.
-        const downloads = { api, db, server: appServer() ?? '' };
+        const { limitBytes } = offlineSettings;
+        if (!offlineSettings.images) await db.images.clear();
+        await trimToLimit(db, limitBytes);
+        const downloads = { api, db, server: appServer() ?? '', limitBytes };
         await downloadContents({ ...downloads, images: false });
-        await downloadImages({ ...downloads, images: networkStatus.value.wifi !== false });
+        await downloadImages({ ...downloads, images: imagesNow(networkStatus.value.wifi) });
       });
     } catch (error) {
       syncStatus.lastError = describeError(error);

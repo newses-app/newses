@@ -4,7 +4,7 @@ import { createApiClient } from '@newses/shared/client';
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openOfflineDb, type OfflineDb, toStoredEntry } from './db.ts';
-import { downloadContents, downloadImages, storedBytes } from './downloads.ts';
+import { downloadContents, downloadImages, storedBytes, trimToLimit } from './downloads.ts';
 
 const NOW = Date.parse('2026-10-16T12:00:00.000Z');
 
@@ -149,5 +149,28 @@ describe('downloadImages', () => {
     expect(await downloadImages(options)).toBe(0);
     expect(asked).toEqual([]);
     expect(await downloadImages({ ...options, images: false })).toBe(0);
+  });
+});
+
+describe('trimToLimit', () => {
+  it('removes images, then text, of the lowest-priority entries first', async () => {
+    await db.entries.bulkPut(
+      [entry(1), entry(2), entry(3, { unread: false, starred: true })].map(toStoredEntry),
+    );
+    await db.contents.bulkPut([1, 2, 3].map((id) => ({ ...content(id), bytes: 100 })));
+    const image = (url: string, entryIds: number[]) => ({
+      url,
+      blob: new Blob([]),
+      bytes: 100,
+      entryIds,
+      fetchedAt: NOW,
+    });
+    await db.images.bulkPut([image('a', [1]), image('b', [3]), image('c', [2, 3])]);
+    expect(await trimToLimit(db, 600)).toBe(0);
+    expect(await trimToLimit(db, 450)).toBe(200);
+    expect((await db.images.toCollection().primaryKeys()).sort()).toEqual(['a']);
+    expect(await trimToLimit(db, 250)).toBe(200);
+    expect(await db.images.count()).toBe(0);
+    expect(await db.contents.toCollection().primaryKeys()).toEqual([1, 2]);
   });
 });

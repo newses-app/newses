@@ -1,4 +1,4 @@
-import type { Enclosure, Entry, EntryState, Stream } from '@newses/shared';
+import type { Enclosure, Entry, EntryState, StateConflict, Stream } from '@newses/shared';
 import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -200,6 +200,9 @@ function filters(options: Pick<ListOptions, 'flags' | 'sortedFrom' | 'sortedBefo
     parts.push(sql` AND ue.sort_at < ${options.sortedBefore.toISOString()}::timestamptz`);
   return sql.join(parts);
 }
+
+const STATE_FLAGS = ['unread', 'starred', 'published', 'score'] as const;
+type StateFlag = (typeof STATE_FLAGS)[number];
 
 export class EntryService {
   readonly #db: Db;
@@ -454,6 +457,70 @@ export class EntryService {
     return updated.length;
   }
 
+  /**
+   * Compare-and-set for changes made offline and sent late: each flag changes only where it still
+   * has the value the client saw (`expect`), or none was given. A flag changed elsewhere since (to
+   * neither that value nor the target) keeps the newer value, and its entry is reported with its
+   * values now. Entries already at the target count as applied.
+   */
+  async changeState(
+    userId: number,
+    ids: number[],
+    state: EntryState,
+    expect: EntryState,
+  ): Promise<{ updated: number; conflicts: StateConflict[] }> {
+    const flags = STATE_FLAGS.filter((f) => state[f] !== undefined);
+    if (flags.length === 0 || ids.length === 0) return { updated: 0, conflicts: [] };
+    const column = {
+      unread: userEntries.unread,
+      starred: userEntries.starred,
+      published: userEntries.published,
+      score: userEntries.score,
+    };
+    const value = (flag: StateFlag, v: boolean | number | undefined) =>
+      flag === 'score' ? sql`${v}::integer` : sql`${v}::boolean`;
+    const applies = (flag: StateFlag) =>
+      expect[flag] === undefined ? sql`true` : sql`${column[flag]} = ${value(flag, expect[flag])}`;
+    const changed = (flag: StateFlag) => sql`${column[flag]} <> ${value(flag, state[flag])}`;
+    const conflicting = flags
+      .filter((f) => expect[f] !== undefined)
+      .map((f) => sql`(NOT ${applies(f)} AND ${changed(f)})`);
+    const mine = and(eq(userEntries.userId, userId), inArray(userEntries.id, ids));
+    const { updated, conflicts } = await this.#db.transaction(async (tx) => {
+      const conflicts =
+        conflicting.length > 0
+          ? await tx
+              .select({
+                id: userEntries.id,
+                unread: userEntries.unread,
+                starred: userEntries.starred,
+                published: userEntries.published,
+                score: userEntries.score,
+              })
+              .from(userEntries)
+              .where(and(mine, or(...conflicting)))
+          : [];
+      const set: PgUpdateSetSource<typeof userEntries> = {};
+      for (const flag of flags)
+        set[flag] =
+          sql`CASE WHEN ${applies(flag)} THEN ${value(flag, state[flag])} ELSE ${column[flag]} END`;
+      if (state.unread !== undefined)
+        set.readAt = sql`CASE WHEN ${applies('unread')} AND ${changed('unread')}
+          THEN ${state.unread ? sql`NULL` : sql`now()`} ELSE ${userEntries.readAt} END`;
+      const updated = await tx
+        .update(userEntries)
+        .set(set)
+        .where(and(mine, or(...flags.map((f) => sql`(${applies(f)} AND ${changed(f)})`))))
+        .returning({ id: userEntries.id });
+      return { updated: updated.length, conflicts };
+    });
+    if (updated > 0) await this.#realtime.publish(userId, { type: 'counters' });
+    return {
+      updated,
+      conflicts: conflicts.map(({ id, ...current }) => ({ id, current })),
+    };
+  }
+
   /** Flips one flag on the user's entries; returns how many changed. */
   async toggle(
     userId: number,
@@ -480,14 +547,32 @@ export class EntryService {
   }
 
   /** Sets or, with null or blank text, clears the user's note on an entry. */
-  async setNote(userId: number, id: number, note: string | null): Promise<void> {
+  /**
+   * Sets the note; null or blank text clears it. With `expected` (the note the client saw), a note
+   * changed elsewhere since is kept and `conflict` thrown, unless it already is the new text.
+   */
+  async setNote(
+    userId: number,
+    id: number,
+    note: string | null,
+    expected?: string | null,
+  ): Promise<void> {
     const text = note?.trim() || null;
+    const mine = and(eq(userEntries.userId, userId), eq(userEntries.id, id));
+    const unchanged =
+      expected === undefined
+        ? undefined
+        : sql`(${userEntries.note} IS NOT DISTINCT FROM ${expected?.trim() || null}::text
+            OR ${userEntries.note} IS NOT DISTINCT FROM ${text}::text)`;
     const updated = await this.#db
       .update(userEntries)
       .set({ note: text })
-      .where(and(eq(userEntries.userId, userId), eq(userEntries.id, id)))
+      .where(and(mine, unchanged))
       .returning({ id: userEntries.id });
-    if (updated.length === 0) throw new DomainError('not_found', 'Entry not found');
+    if (updated.length > 0) return;
+    const [exists] = await this.#db.select({ id: userEntries.id }).from(userEntries).where(mine);
+    if (!exists) throw new DomainError('not_found', 'Entry not found');
+    throw new DomainError('conflict', 'The note was changed on another device');
   }
 
   /** Shares one of the user's entries at a public link; returns its id, existing or new. */

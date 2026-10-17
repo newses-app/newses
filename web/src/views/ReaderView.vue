@@ -26,6 +26,7 @@ import HeadlineList from '../components/reader/HeadlineList.vue';
 import { useCounters } from '../composables/useCounters.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useIconSrc } from '../composables/useIconSrc.ts';
+import { useOnlineOnly } from '../composables/useOnlineOnly.ts';
 import { ENTRIES_KEY, useEntry, useEntryActions, useEntryList } from '../composables/useEntries.ts';
 import { useCategories, useSubscriptions } from '../composables/useFeeds.ts';
 import { useLabels } from '../composables/useLabels.ts';
@@ -270,8 +271,17 @@ async function openSearch() {
   await nextTick();
   searchField.value?.focus();
 }
+const { online, whenOnline } = useOnlineOnly();
+/** The archive is on the server only. */
+const browseArchiveOnline = whenOnline((search?: boolean) => browseArchive(search));
+
+/** Searching needs the server until articles on the device can be searched. */
 function search() {
   const text = searchText.value.trim();
+  if (text && !online.value) {
+    ui.notify(t('offline.needsConnection'));
+    return;
+  }
   void router.push({
     name: 'reader',
     params: { stream: streamKey.value },
@@ -454,7 +464,8 @@ const showArticle = computed(
       :icon="mdiArchiveSearchOutline"
       :aria-label="t('archive.searchFor', { q })"
       :title="t('archive.searchFor', { q })"
-      @click="browseArchive(true)"
+      :aria-disabled="!online"
+      @click="browseArchiveOnline(true)"
     />
     <template v-if="!compact">
       <v-menu>
@@ -541,7 +552,8 @@ const showArticle = computed(
         :icon="mdiArchiveOutline"
         :aria-label="t('archive.browse')"
         :title="t('archive.browse')"
-        @click="browseArchive()"
+        :aria-disabled="!online"
+        @click="browseArchiveOnline()"
       />
       <v-btn
         v-if="subscription"
@@ -591,7 +603,8 @@ const showArticle = computed(
           v-if="archiveStream"
           role="menuitem"
           :title="t('archive.browse')"
-          @click="browseArchive()"
+          :aria-disabled="!online"
+          @click="browseArchiveOnline()"
         />
         <v-list-item
           v-if="subscription"

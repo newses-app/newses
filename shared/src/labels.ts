@@ -24,6 +24,16 @@ export const entryLabelsRequestSchema = z.object({
   labelIds: z.array(z.number().int()).max(100),
 });
 
+/**
+ * Adds and removes labels, keeping the others, so changes from several devices merge; labels that
+ * no longer exist are ignored.
+ */
+export const entryLabelsChangeSchema = z.object({
+  add: z.array(z.number().int()).max(100).default([]),
+  remove: z.array(z.number().int()).max(100).default([]),
+});
+
 export type Label = z.infer<typeof labelSchema>;
+export type EntryLabelsChange = z.input<typeof entryLabelsChangeSchema>;
 export type CreateLabelRequest = z.infer<typeof createLabelRequestSchema>;
 export type UpdateLabelRequest = z.infer<typeof updateLabelRequestSchema>;

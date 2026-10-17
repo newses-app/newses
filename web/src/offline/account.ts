@@ -69,6 +69,12 @@ export function markFilled(): void {
   if (previous && !previous.filled) remember({ ...previous, filled: true });
 }
 
+/** Notes that the store was emptied on purpose, so the next sync does not report an eviction. */
+export function markEmptied(): void {
+  const previous = lastAccount();
+  if (previous?.filled) remember({ ...previous, filled: false });
+}
+
 /** A store that was filled but has no sync token was cleared by the browser (storage pressure, Safari's 7 days). */
 export async function wasEvicted(db: OfflineDb): Promise<boolean> {
   if (!lastAccount()?.filled) return false;

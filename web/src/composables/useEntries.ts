@@ -210,7 +210,14 @@ export function useEntryActions() {
     let how: 'sent' | 'queued';
     try {
       how = await save(
-        ids.map((id) => ({ kind: 'state', id, state })),
+        changed.map((entry) => ({
+          kind: 'state',
+          id: entry.id,
+          state,
+          expect: Object.fromEntries(
+            Object.keys(state).map((flag) => [flag, entry[flag as keyof EntryState]]),
+          ),
+        })),
         () =>
           ids.length === 1
             ? api.entries.update(ids[0] ?? 0, state)
@@ -235,7 +242,7 @@ export function useEntryActions() {
     patchCaches([entry.id], patch);
     let how: 'sent' | 'queued';
     try {
-      how = await save([{ kind: 'note', id: entry.id, note }], () =>
+      how = await save([{ kind: 'note', id: entry.id, note, expected: entry.note }], () =>
         api.entries.setNote(entry.id, note),
       );
     } catch (error) {
@@ -266,7 +273,7 @@ export function useEntryActions() {
     patchCaches([entry.id], patch);
     let how: 'sent' | 'queued';
     try {
-      how = await save([{ kind: 'tags', id: entry.id, tags }], async () => {
+      how = await save([{ kind: 'tags', id: entry.id, tags, base: entry.tags }], async () => {
         patch = await api.entries.setTags(entry.id, tags);
       });
       patchCaches([entry.id], patch);
@@ -285,7 +292,7 @@ export function useEntryActions() {
     patchCaches([entry.id], patch);
     let how: 'sent' | 'queued';
     try {
-      how = await save([{ kind: 'labels', id: entry.id, labelIds }], () =>
+      how = await save([{ kind: 'labels', id: entry.id, labelIds, base: entry.labels }], () =>
         api.entries.setLabels(entry.id, labelIds),
       );
     } catch (error) {

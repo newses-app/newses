@@ -3,7 +3,7 @@ import { MAX_CONTENTS_IDS } from '@newses/shared/client';
 import Dexie from 'dexie';
 import type { OfflineDb, StoredContent } from './db.ts';
 
-/** Content and images kept on the device, in bytes, until there is a setting for it. */
+/** Content and images kept on the device, in bytes, unless set otherwise. */
 export const DEFAULT_STORAGE_LIMIT = 1024 * 1024 * 1024;
 /** The proxy serves nothing larger. */
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
@@ -53,6 +53,44 @@ async function byPriority(db: OfflineDb): Promise<{ id: number; contentVersion: 
   ]);
   const seen = new Set<number>();
   return [...unread, ...starred, ...read].filter((e) => !seen.has(e.id) && seen.add(e.id));
+}
+
+/**
+ * Removes stored images, then content, of the lowest-priority entries until what is stored fits
+ * `limitBytes`, as after the limit was lowered. Returns the bytes freed.
+ */
+export async function trimToLimit(db: OfflineDb, limitBytes: number): Promise<number> {
+  const excess = (await storedBytes(db)) - limitBytes;
+  if (excess <= 0) return 0;
+  const rank = new Map((await byPriority(db)).map((e, i) => [e.id, i]));
+  const worst = rank.size;
+  const rankOf = (ids: number[]) => Math.min(...ids.map((id) => rank.get(id) ?? worst));
+  let freed = 0;
+  // Images go first: text is what makes an article readable.
+  const images: { url: string; bytes: number; rank: number }[] = [];
+  await db.images.each((image) => {
+    images.push({ url: image.url, bytes: image.bytes, rank: rankOf(image.entryIds) });
+  });
+  const dropImages: string[] = [];
+  for (const image of images.sort((a, b) => b.rank - a.rank)) {
+    if (freed >= excess) break;
+    dropImages.push(image.url);
+    freed += image.bytes;
+  }
+  await db.images.bulkDelete(dropImages);
+  if (freed >= excess) return freed;
+  const contents: { id: number; bytes: number }[] = [];
+  await db.contents.orderBy('bytes').eachKey((bytes, cursor) => {
+    contents.push({ id: cursor.primaryKey, bytes: Number(bytes) });
+  });
+  const dropContents: number[] = [];
+  for (const content of contents.sort((a, b) => rankOf([b.id]) - rankOf([a.id]))) {
+    if (freed >= excess) break;
+    dropContents.push(content.id);
+    freed += content.bytes;
+  }
+  await db.contents.bulkDelete(dropContents);
+  return freed;
 }
 
 /**

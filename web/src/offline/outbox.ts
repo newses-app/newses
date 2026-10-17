@@ -4,13 +4,24 @@ import { ref } from 'vue';
 import { statePatch } from '../lib/entry-cache.ts';
 import type { OfflineDb, OutboxRow } from './db.ts';
 
-/** A change made on this device that the server does not have yet. */
+/**
+ * A change made on this device that the server does not have yet, with what the entry had before
+ * (`expect`, `expected`, `base`), so a server that detects conflicts keeps changes made elsewhere
+ * since.
+ */
 export type OutboxOp =
-  | { kind: 'state'; id: number; state: EntryState }
-  | { kind: 'note'; id: number; note: string | null }
-  | { kind: 'labels'; id: number; labelIds: number[] }
-  | { kind: 'tags'; id: number; tags: string[] }
+  | { kind: 'state'; id: number; state: EntryState; expect?: EntryState }
+  | { kind: 'note'; id: number; note: string | null; expected?: string | null }
+  | { kind: 'labels'; id: number; labelIds: number[]; base?: number[] }
+  | { kind: 'tags'; id: number; tags: string[]; base?: string[] }
   | { kind: 'markRead'; request: MarkReadRequest };
+
+/** A note changed both here and elsewhere: the reader picks one. */
+export interface NoteConflict {
+  id: number;
+  mine: string | null;
+  theirs: string | null;
+}
 
 type QueuedOp = OutboxOp & { seq: number; queuedAt: number };
 
@@ -79,15 +90,28 @@ export async function queueChanges(
         await add(op);
         continue;
       }
-      const merged: OutboxOp =
-        op.kind === 'state' && existing.kind === 'state'
-          ? { ...op, state: { ...existing.state, ...op.state } }
-          : op;
+      const merged = mergeChange(existing, op);
       queued[same] = { ...merged, seq: existing.seq, queuedAt: existing.queuedAt };
       await db.outbox.put({ ...toRow(merged, existing.queuedAt), seq: existing.seq });
     }
   });
   await countPending(db);
+}
+
+/** A later change to the same entry merged into a waiting one, keeping what the entry had first. */
+function mergeChange(existing: OutboxOp, op: OutboxOp): OutboxOp {
+  if (op.kind === 'state' && existing.kind === 'state') {
+    const expect = existing.expect || op.expect ? { ...op.expect, ...existing.expect } : undefined;
+    return { ...op, state: { ...existing.state, ...op.state }, ...(expect && { expect }) };
+  }
+  if (op.kind === 'note' && existing.kind === 'note' && existing.expected !== undefined)
+    return { ...op, expected: existing.expected };
+  if (
+    (op.kind === 'labels' && existing.kind === 'labels') ||
+    (op.kind === 'tags' && existing.kind === 'tags')
+  )
+    return existing.base ? ({ ...op, base: existing.base } as OutboxOp) : op;
+  return op;
 }
 
 /**
@@ -146,38 +170,72 @@ export async function withPending<T extends Entry>(
 }
 
 /** The next request to send: a run of equal state changes in one bulk request, or one change. */
-function nextBatch(queued: readonly QueuedOp[]): QueuedOp[] {
+function nextBatch(queued: readonly QueuedOp[], conflicts: boolean): QueuedOp[] {
   const [first] = queued;
   if (first?.kind !== 'state') return first ? [first] : [];
-  const key = JSON.stringify(first.state);
+  const keyOf = (op: QueuedOp & { kind: 'state' }) =>
+    JSON.stringify([op.state, conflicts ? op.expect : null]);
+  const key = keyOf(first);
   const batch: QueuedOp[] = [];
   for (const op of queued) {
     if (op.kind === 'markRead' || batch.length === BULK_IDS) break;
-    if (op.kind === 'state' && JSON.stringify(op.state) === key) batch.push(op);
+    if (op.kind === 'state' && keyOf(op) === key) batch.push(op);
   }
   return batch;
 }
 
-async function send(api: ApiClient, batch: readonly QueuedOp[]): Promise<void> {
+const without = <T>(list: readonly T[], gone: readonly T[]) =>
+  list.filter((item) => !gone.includes(item));
+
+/** Sends a batch; with `conflicts`, as changes against what the entry had before. */
+async function send(
+  api: ApiClient,
+  batch: readonly QueuedOp[],
+  conflicts: boolean,
+  result: FlushResult,
+): Promise<void> {
   const [op] = batch;
   if (!op) return;
   switch (op.kind) {
-    case 'state':
-      if (batch.length === 1) await api.entries.update(op.id, op.state);
-      else
-        await api.entries.updateMany({
-          ids: batch.map((b) => (b.kind === 'state' ? b.id : 0)),
-          ...op.state,
-        });
+    case 'state': {
+      const ids = batch.map((b) => (b.kind === 'state' ? b.id : 0));
+      if (conflicts && op.expect) {
+        const answer = await api.entries.updateMany({ ids, ...op.state, expect: op.expect });
+        result.overridden += answer.conflicts?.length ?? 0;
+      } else if (batch.length === 1) await api.entries.update(op.id, op.state);
+      else await api.entries.updateMany({ ids, ...op.state });
       return;
+    }
     case 'note':
-      await api.entries.setNote(op.id, op.note);
+      if (!conflicts || op.expected === undefined) {
+        await api.entries.setNote(op.id, op.note);
+        return;
+      }
+      try {
+        await api.entries.setNote(op.id, op.note, op.expected);
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 409)) throw error;
+        const { note } = await api.entries.get(op.id);
+        result.noteConflicts.push({ id: op.id, mine: op.note?.trim() || null, theirs: note });
+      }
       return;
     case 'labels':
-      await api.entries.setLabels(op.id, op.labelIds);
+      if (conflicts && op.base)
+        await api.entries.changeLabels(op.id, {
+          add: without(op.labelIds, op.base),
+          remove: without(op.base, op.labelIds),
+        });
+      else await api.entries.setLabels(op.id, op.labelIds);
       return;
     case 'tags':
-      await api.entries.setTags(op.id, op.tags);
+      if (conflicts && op.base) {
+        const tags = normaliseTags(op.tags);
+        const base = normaliseTags(op.base);
+        await api.entries.changeTags(op.id, {
+          add: without(tags, base),
+          remove: without(base, tags),
+        });
+      } else await api.entries.setTags(op.id, op.tags);
       return;
     case 'markRead':
       await api.entries.markRead(op.request);
@@ -191,6 +249,10 @@ export const failedToReach = (error: unknown) =>
 
 export interface FlushResult {
   sent: number;
+  /** Changes not applied because the entry changed elsewhere since; the newer values stay. */
+  overridden: number;
+  /** Notes changed both here and elsewhere, for the reader to settle. */
+  noteConflicts: NoteConflict[];
   /** Changes the server refused, with its reason; they are not sent again. */
   refused: { op: OutboxOp; message: string }[];
   /**
@@ -203,17 +265,29 @@ export interface FlushResult {
 /**
  * Sends waiting changes, oldest first. A change the server cannot be reached for waits; one for an
  * entry that no longer exists goes; labels that no longer exist are left out and the rest sent
- * again; one the server refuses otherwise goes and is reported.
+ * again; one the server refuses otherwise goes and is reported. With `conflicts` (API 1.2), each
+ * change applies only where the entry still has what this device saw, labels and tags as added and
+ * removed, and a note changed elsewhere too is reported.
  */
-export async function flushOutbox(api: ApiClient, db: OfflineDb): Promise<FlushResult> {
-  const result: FlushResult = { sent: 0, refused: [], stopped: null };
+export async function flushOutbox(
+  api: ApiClient,
+  db: OfflineDb,
+  { conflicts = false } = {},
+): Promise<FlushResult> {
+  const result: FlushResult = {
+    sent: 0,
+    overridden: 0,
+    noteConflicts: [],
+    refused: [],
+    stopped: null,
+  };
   const relabelled = new Set<number>();
   for (;;) {
-    const batch = nextBatch((await db.outbox.orderBy('seq').toArray()).map(fromRow));
+    const batch = nextBatch((await db.outbox.orderBy('seq').toArray()).map(fromRow), conflicts);
     const [op] = batch;
     if (!op) break;
     try {
-      await send(api, batch);
+      await send(api, batch, conflicts, result);
       result.sent += batch.length;
     } catch (error) {
       if (failedToReach(error) || !(error instanceof ApiError)) {

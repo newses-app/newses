@@ -48,4 +48,20 @@ export class TagService {
     });
     return wanted.sort();
   }
+
+  /** Adds and removes tags on one of the user's entries, keeping the others; returns them all. */
+  async changeEntryTags(
+    userId: number,
+    entryId: number,
+    change: { add: string[]; remove: string[] },
+  ): Promise<string[]> {
+    const current = await this.#db
+      .select({ tag: entryTags.tag })
+      .from(entryTags)
+      .where(and(eq(entryTags.userEntryId, entryId), eq(entryTags.userId, userId)))
+      .orderBy(entryTags.tag);
+    const gone = new Set(normaliseTags(change.remove));
+    const kept = current.map((r) => r.tag).filter((tag) => !gone.has(tag));
+    return this.setEntryTags(userId, entryId, [...kept, ...change.add]);
+  }
 }

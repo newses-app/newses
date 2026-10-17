@@ -11,7 +11,6 @@ import { bridge, connection, desktop, NATIVE, updates } from '../../platform/ind
 import { updateSummary } from '../../platform/updates.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import AppPasswordsSection from './AppPasswordsSection.vue';
-import OfflineSection from './OfflineSection.vue';
 import PasswordForm from './PasswordForm.vue';
 import TwoFactorSection from './TwoFactorSection.vue';
 
@@ -105,8 +104,6 @@ async function revoke(id: number) {
         />
       </div>
     </template>
-
-    <div class="mb-6"><OfflineSection /></div>
 
     <h2 class="text-title-large mb-4">{{ t('account.changePassword') }}</h2>
     <PasswordForm @changed="passwordChanged" />
