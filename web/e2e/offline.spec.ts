@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './login.ts';
 
-/** Whether the first sync has filled the store, and with `worker` the service worker controls the page. */
+/**
+ * Whether the first sync has filled the store, and with `worker` the service worker controls the
+ * page. Polled with `expect.poll`: `waitForFunction` takes the promise it returns as true at once.
+ */
 async function readyOffline(worker: boolean): Promise<boolean> {
   if (worker && !navigator.serviceWorker.controller) return false;
   const account = JSON.parse(localStorage.getItem('newses.offline.account') ?? 'null') as {
@@ -32,6 +35,9 @@ async function readyOffline(worker: boolean): Promise<boolean> {
 }
 
 test.describe('offline', () => {
+  // The first sync and the waits for the server run past the default 30 seconds.
+  test.describe.configure({ timeout: 120_000 });
+
   test('starts from the stored snapshot without a connection', async ({
     page,
     context,
@@ -44,7 +50,7 @@ test.describe('offline', () => {
     });
     await page.reload();
     await expect(page.getByRole('list', { name: 'Feeds' })).toBeVisible();
-    await page.waitForFunction(readyOffline, true, { timeout: 60_000 });
+    await expect.poll(() => page.evaluate(readyOffline, true), { timeout: 60_000 }).toBe(true);
 
     await context.setOffline(true);
     await page.reload();
@@ -66,7 +72,7 @@ test.describe('offline', () => {
       localStorage.setItem('newses.offline.enabled', 'true');
     });
     await page.goto('/all');
-    await page.waitForFunction(readyOffline, false, { timeout: 60_000 });
+    await expect.poll(() => page.evaluate(readyOffline, false), { timeout: 60_000 }).toBe(true);
     const api = async <T>(path: string) =>
       (await (await page.request.get(`/api/v1${path}`)).json()) as T;
     interface Counters {
@@ -92,66 +98,74 @@ test.describe('offline', () => {
     const first = page.getByRole('list', { name: 'Articles' }).getByRole('link').first();
     await expect(first).toBeVisible();
 
-    await context.setOffline(true);
-    await first.click();
-    const id = Number(/\/(\d+)$/.exec(page.url())?.[1]);
-    const before = unread.find((e) => e.id === id);
-    const article = page.locator('article');
-    await expect(article.getByRole('heading').first()).toBeVisible();
-    // Stored images show from the device; the others have no source offline.
-    const sources = await article
-      .locator('.article-content img[src]')
-      .evaluateAll((images) => images.map((image) => image.getAttribute('src') ?? ''));
-    for (const src of sources) expect(src).toMatch(/^blob:/);
-    if (!before?.starred) await article.getByRole('button', { name: 'Star', exact: true }).click();
-    await article.getByRole('button', { name: /^(Add|Edit) note$/ }).click();
-    await page.getByRole('dialog').getByLabel('Note').fill('e2e offline note');
-    await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
-    await page.getByRole('button', { name: 'Mark as read', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'All articles' }).click();
-    // Asked first only when the reader's preference says so.
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Mark read' })
-      .click({ timeout: 3000 })
-      .catch(() => undefined);
-    await expect(page.getByText(/couldn't|went wrong/)).toHaveCount(0);
+    let id = Number.NaN;
+    try {
+      await context.setOffline(true);
+      await first.click();
+      await expect(page).toHaveURL(/\/\d+$/);
+      id = Number(/\/(\d+)$/.exec(page.url())?.[1]);
+      const before = unread.find((e) => e.id === id);
+      const article = page.locator('article');
+      await expect(article.getByRole('heading').first()).toBeVisible();
+      // Stored images show from the device; the others have no source offline.
+      const sources = await article
+        .locator('.article-content img[src]')
+        .evaluateAll((images) => images.map((image) => image.getAttribute('src') ?? ''));
+      for (const src of sources) expect(src).toMatch(/^blob:/);
+      if (!before?.starred)
+        await article.getByRole('button', { name: 'Star', exact: true }).click();
+      await article.getByRole('button', { name: /^(Add|Edit) note$/ }).click();
+      await page.getByRole('dialog').getByLabel('Note').fill('e2e offline note');
+      await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+      await page.getByRole('button', { name: 'Mark as read', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'All articles' }).click();
+      // Asked first only when the reader's preference says so.
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Mark read' })
+        .click({ timeout: 3000 })
+        .catch(() => undefined);
+      await expect(page.getByText(/couldn't|went wrong/)).toHaveCount(0);
 
-    await context.setOffline(false);
-    await expect
-      .poll(
-        async () => {
-          const entry = await api<Entry>(`/entries/${String(id)}`);
-          return [entry.starred, entry.note];
-        },
-        { timeout: 30_000 },
-      )
-      .toEqual([true, 'e2e offline note']);
-    await expect
-      .poll(
-        async () =>
-          (await api<Counters>('/counters')).subscriptions.find((s) => s.id === feed.id)?.unread,
-        { timeout: 30_000 },
-      )
-      .toBe(0);
-
-    // As it was.
-    const { csrfToken } = await api<{ csrfToken: string }>('/auth/session');
-    const headers = { 'x-csrf-token': csrfToken };
-    await page.request.patch('/api/v1/entries', {
-      headers,
-      data: { ids: unread.map((e) => e.id), unread: true },
-    });
-    await page.request.patch(`/api/v1/entries/${String(id)}`, {
-      headers,
-      data: { starred: before?.starred ?? false },
-    });
-    await page.request.put(`/api/v1/entries/${String(id)}/note`, {
-      headers,
-      data: { note: before?.note ?? null },
-    });
-    await page.evaluate(() => {
-      localStorage.removeItem('newses.offline.enabled');
-    });
+      await context.setOffline(false);
+      await expect
+        .poll(
+          async () => {
+            const entry = await api<Entry>(`/entries/${String(id)}`);
+            return [entry.starred, entry.note];
+          },
+          { timeout: 30_000 },
+        )
+        .toEqual([true, 'e2e offline note']);
+      await expect
+        .poll(
+          async () =>
+            (await api<Counters>('/counters')).subscriptions.find((s) => s.id === feed.id)?.unread,
+          { timeout: 30_000 },
+        )
+        .toBe(0);
+    } finally {
+      // As it was, also after a failed step; closed first, so the page sends nothing queued after.
+      await page.close();
+      await context.setOffline(false);
+      const before = unread.find((e) => e.id === id);
+      const session = await context.request.get('/api/v1/auth/session');
+      const { csrfToken } = (await session.json()) as { csrfToken: string };
+      const headers = { 'x-csrf-token': csrfToken };
+      await context.request.patch('/api/v1/entries', {
+        headers,
+        data: { ids: unread.map((e) => e.id), unread: true },
+      });
+      if (before) {
+        await context.request.patch(`/api/v1/entries/${String(id)}`, {
+          headers,
+          data: { starred: before.starred },
+        });
+        await context.request.put(`/api/v1/entries/${String(id)}/note`, {
+          headers,
+          data: { note: before.note },
+        });
+      }
+    }
   });
 });

@@ -1,6 +1,9 @@
 import { signIn } from './login.ts';
 import { expect, test } from './axe.ts';
 
+/** Dialogs and menus only: the reader and settings scans cover the page behind them. */
+const overlay = { include: '.v-overlay-container' };
+
 // The theme preference follows the system by default, so the colour scheme selects the theme.
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`accessibility (${colorScheme})`, () => {
@@ -63,69 +66,39 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
         await page.locator('body').press('?');
         await expect(dialog.getByText('Keyboard shortcuts')).toBeVisible();
-        await expectNoViolations('shortcut-help');
+        await expectNoViolations('shortcut-help', overlay);
         await dialog.getByRole('button', { name: 'Close' }).click();
         await expect(dialog).toBeHidden();
 
         await page.getByRole('button', { name: 'Subscribe' }).click();
         await expect(dialog.getByLabel('Feed or website address')).toBeVisible();
-        await expectNoViolations('subscribe');
+        await expectNoViolations('subscribe', overlay);
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
 
         await page.getByRole('button', { name: 'Mark as read' }).click();
         await expect(page.getByRole('menu')).toBeVisible();
-        await expectNoViolations('catch-up-menu');
+        await expectNoViolations('catch-up-menu', overlay);
         await page.getByRole('menuitem', { name: 'All articles' }).click();
         await expect(dialog.getByRole('button', { name: 'Mark read' })).toBeVisible();
-        await expectNoViolations('confirm');
+        await expectNoViolations('confirm', overlay);
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
 
-        await page.goto('/settings/feeds');
-        await page.getByRole('table').getByRole('button', { name: /^Edit/ }).first().click();
-        await expect(dialog.getByLabel('Title')).toBeVisible();
-        await expectNoViolations('edit-feed');
-        await dialog.getByRole('button', { name: 'Cancel' }).click();
-        await expect(dialog).toBeHidden();
-
-        await page.goto('/settings/shortcuts');
-        await page.getByRole('button', { name: 'Add keys for Show this help' }).click();
-        await dialog.getByRole('textbox', { name: 'Keys' }).press('s');
-        await expect(dialog.getByRole('button', { name: 'Replace' })).toBeVisible();
-        await expectNoViolations('record-shortcut');
-        await dialog.getByRole('button', { name: 'Cancel' }).click();
-        await expect(dialog).toBeHidden();
-
-        await page.goto('/settings/labels');
-        await page.getByRole('button', { name: 'New label' }).click();
-        await expect(dialog.getByLabel('Name')).toBeVisible();
-        await expectNoViolations('edit-label');
-        await dialog.getByRole('button', { name: 'Cancel' }).click();
-        await expect(dialog).toBeHidden();
-
-        await page.goto('/settings/filters');
-        await page.getByRole('button', { name: 'New filter' }).click();
-        await expect(dialog.getByLabel('Pattern')).toBeVisible();
-        await expectNoViolations('edit-filter');
-        await dialog.getByRole('button', { name: 'Cancel' }).click();
-        await expect(dialog).toBeHidden();
-
-        await page.goto('/all');
         await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
         await page.locator('article').getByRole('button', { name: /note$/ }).click();
         await expect(dialog.getByLabel('Note')).toBeVisible();
-        await expectNoViolations('note');
+        await expectNoViolations('note', overlay);
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
         await page.locator('article').getByRole('button', { name: 'Labels', exact: true }).click();
         await expect(dialog.getByLabel('New label')).toBeVisible();
-        await expectNoViolations('entry-labels');
+        await expectNoViolations('entry-labels', overlay);
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
         await page.locator('article').getByRole('button', { name: 'Tags', exact: true }).click();
         await expect(dialog.getByLabel('Tags')).toBeVisible();
-        await expectNoViolations('entry-tags');
+        await expectNoViolations('entry-tags', overlay);
         await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
         await page
@@ -133,7 +106,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           .getByRole('button', { name: /^Share/ })
           .click();
         await expect(dialog.getByText('Share link')).toBeVisible();
-        await expectNoViolations('share');
+        await expectNoViolations('share', overlay);
         await dialog.getByRole('button', { name: 'Close' }).click();
         await expect(dialog).toBeHidden();
         await page
@@ -141,8 +114,42 @@ for (const colorScheme of ['light', 'dark'] as const) {
           .getByRole('button', { name: 'Tags' })
           .click();
         await expect(dialog.getByRole('button', { name: 'Close' })).toBeVisible();
-        await expectNoViolations('tag-picker');
+        await expectNoViolations('tag-picker', overlay);
         await dialog.getByRole('button', { name: 'Close' }).click();
+        await expect(dialog).toBeHidden();
+      });
+
+      test('settings dialogs', async ({ page, expectNoViolations }) => {
+        await signIn(page);
+        const dialog = page.getByRole('dialog');
+
+        await page.goto('/settings/feeds');
+        await page.getByRole('table').getByRole('button', { name: /^Edit/ }).first().click();
+        await expect(dialog.getByLabel('Title')).toBeVisible();
+        await expectNoViolations('edit-feed', overlay);
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/settings/shortcuts');
+        await page.getByRole('button', { name: 'Add keys for Show this help' }).click();
+        await dialog.getByRole('textbox', { name: 'Keys' }).press('s');
+        await expect(dialog.getByRole('button', { name: 'Replace' })).toBeVisible();
+        await expectNoViolations('record-shortcut', overlay);
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/settings/labels');
+        await page.getByRole('button', { name: 'New label' }).click();
+        await expect(dialog.getByLabel('Name')).toBeVisible();
+        await expectNoViolations('edit-label', overlay);
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toBeHidden();
+
+        await page.goto('/settings/filters');
+        await page.getByRole('button', { name: 'New filter' }).click();
+        await expect(dialog.getByLabel('Pattern')).toBeVisible();
+        await expectNoViolations('edit-filter', overlay);
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
         await expect(dialog).toBeHidden();
       });
     });

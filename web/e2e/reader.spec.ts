@@ -130,8 +130,12 @@ test.describe('reader', () => {
   test('switches to the combined layout and back', async ({ page }) => {
     await page.goto('/all');
     await page.getByRole('button', { name: 'Combined (expanded articles)' }).click();
-    await expect(page.locator('.combined-card').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Three panes' }).click();
+    try {
+      await expect(page.locator('.combined-card').first()).toBeVisible();
+    } finally {
+      // The layout is a saved preference, which the other tests expect as three panes.
+      await page.getByRole('button', { name: 'Three panes' }).click();
+    }
     await expect(page.getByRole('list', { name: 'Articles' })).toBeVisible();
   });
 

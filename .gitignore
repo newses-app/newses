@@ -20,3 +20,6 @@ ttrss-import-*.txt
 /dtrack.env
 # AWS deployment values (infra/deploy.config.example.json shows the shape)
 /infra/deploy.config.json
+
+# Local working notes and runbooks, not part of the repository
+/plans/

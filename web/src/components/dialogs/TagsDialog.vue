@@ -6,6 +6,7 @@ import { ApiError } from '../../api.ts';
 import { useEntryActions } from '../../composables/useEntries.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTags } from '../../composables/useTags.ts';
+import { suggestTags } from '../../lib/tag-suggestions.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
@@ -20,9 +21,12 @@ const open = computed({
 });
 const restoreFocus = useReturnFocus(() => open.value);
 const tags = useTags(open);
-const suggestions = computed(() => tags.data.value?.map((t) => t.tag) ?? []);
+const tagNames = computed(() => tags.data.value?.map((t) => t.tag) ?? []);
 
 const selected = ref<string[]>([]);
+const search = ref<string | null>('');
+/** Only for what is typed, so the menu stays shut until then. */
+const suggestions = computed(() => suggestTags(tagNames.value, search.value, selected.value));
 const busy = ref(false);
 
 watch(
@@ -62,8 +66,11 @@ async function save() {
       <v-form @submit.prevent="save">
         <v-card-text>
           <v-combobox
+            v-model:search="search"
             :model-value="selected"
             :items="suggestions"
+            no-filter
+            hide-selected
             :label="t('tags.title')"
             :hint="t('tags.hint', { n: MAX_TAGS_PER_ENTRY })"
             persistent-hint

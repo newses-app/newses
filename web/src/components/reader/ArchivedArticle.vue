@@ -111,16 +111,17 @@ const enclosures = computed(() =>
     <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
     <v-list v-if="enclosures.length" density="compact" class="mt-4">
       <v-list-subheader>{{ t('entries.attachments') }}</v-list-subheader>
-      <v-list-item
-        v-for="enclosure in enclosures"
-        :key="enclosure.url"
-        :href="enclosure.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        :prepend-icon="mdiPaperclip"
-        :title="enclosure.url.split('/').pop() || enclosure.url"
-        :subtitle="enclosure.mimeType ?? ''"
-      />
+      <!-- Vuetify gives link items role=link, so each sits in its own listitem. -->
+      <div v-for="enclosure in enclosures" :key="enclosure.url" role="listitem">
+        <v-list-item
+          :href="enclosure.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          :prepend-icon="mdiPaperclip"
+          :title="enclosure.url.split('/').pop() || enclosure.url"
+          :subtitle="enclosure.mimeType ?? ''"
+        />
+      </div>
     </v-list>
   </article>
 </template>

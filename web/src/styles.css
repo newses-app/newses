@@ -56,6 +56,11 @@ html {
   padding: 0.25rem 0.5rem;
 }
 
+/* WCAG 2.2's 24px target size: compact density takes small buttons under it. */
+.v-btn:not(.v-btn--icon) {
+  min-height: 24px;
+}
+
 /* A clear keyboard focus ring; Vuetify's own is a faint overlay. Text fields keep their outline. */
 :focus-visible:not(.v-field__input) {
   outline: 2px solid rgb(var(--v-theme-primary));
