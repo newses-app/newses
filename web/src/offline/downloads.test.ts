@@ -81,7 +81,12 @@ describe('downloadContents', () => {
       [1, 2, 3],
       [2, 3],
     ]);
-    expect(await db.contents.get(1)).toMatchObject({ contentVersion: 'v1', bytes: 17 });
+    // The text, and its one word (10 bytes) in the search index.
+    expect(await db.contents.get(1)).toMatchObject({
+      contentVersion: 'v1',
+      words: ['xxxxxxxxxx'],
+      bytes: 17 + 18,
+    });
   });
 
   it('stops at the storage limit, and fetches a newer version', async () => {

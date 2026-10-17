@@ -168,6 +168,11 @@ async function clear() {
             }}
           </v-list-item-title>
         </v-list-item>
+        <v-list-item v-if="summary && summary.index > 0">
+          <v-list-item-title class="text-wrap">
+            {{ t('offline.searchIndex', { size: size(summary.index) }) }}
+          </v-list-item-title>
+        </v-list-item>
         <v-list-item v-if="outboxPending > 0">
           <v-list-item-title class="text-wrap">
             {{ t('offline.pending', { n: outboxPending }, outboxPending) }}

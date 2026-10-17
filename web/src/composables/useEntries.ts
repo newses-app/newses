@@ -71,18 +71,17 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
         const db = currentStore();
         return db ? { ...page, entries: await withPending(db, page.entries) } : page;
       };
-      // Search needs the server until the store can search.
+      // Searched on the device, the newest matches come first.
       return networkOrStore(remote, (db) =>
-        o.q
-          ? Promise.resolve(undefined)
-          : localList(db, {
-              stream: parseStream(o.stream),
-              view: o.view,
-              order: o.order,
-              cursor: pageParam || undefined,
-              limit: PAGE_SIZE,
-              content: o.content,
-            }),
+        localList(db, {
+          stream: parseStream(o.stream),
+          view: o.view,
+          order: o.q ? 'newest' : o.order,
+          cursor: pageParam || undefined,
+          limit: PAGE_SIZE,
+          content: o.content,
+          q: o.q,
+        }),
       );
     },
     networkMode: storeNetworkMode(),

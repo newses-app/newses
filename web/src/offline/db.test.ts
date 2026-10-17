@@ -69,7 +69,7 @@ describe('offline store', () => {
     const db = openOfflineDb('newses-2', replaced);
     await db.open();
     const newer = new Dexie('newses-2');
-    newer.version(3).stores({ entries: 'id' });
+    newer.version(4).stores({ entries: 'id' });
     await newer.open();
     expect(replaced).toHaveBeenCalledOnce();
     expect(db.isOpen()).toBe(false);

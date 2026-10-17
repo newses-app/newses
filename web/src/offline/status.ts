@@ -2,7 +2,7 @@ import type { CreateThemeRequest } from '@newses/shared';
 import { ApiError } from '@newses/shared/client';
 import { reactive, ref } from 'vue';
 import type { OfflineDb } from './db.ts';
-import { storedBytes } from './downloads.ts';
+import { indexBytes, storedBytes } from './downloads.ts';
 import type { NoteConflict } from './outbox.ts';
 
 const STATUS_KEY = 'syncStatus';
@@ -57,11 +57,12 @@ export async function saveStatus(db: OfflineDb): Promise<void> {
 
 /** What the store holds, for settings. */
 export async function storeSummary(db: OfflineDb) {
-  const [entries, contents, images, bytes] = await Promise.all([
+  const [entries, contents, images, bytes, index] = await Promise.all([
     db.entries.count(),
     db.contents.count(),
     db.images.count(),
     storedBytes(db),
+    indexBytes(db),
   ]);
-  return { entries, contents, images, bytes };
+  return { entries, contents, images, bytes, index };
 }

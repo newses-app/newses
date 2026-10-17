@@ -9,6 +9,7 @@ import type {
 import { DEFAULT_PREFS } from '@newses/shared/client';
 import Dexie from 'dexie';
 import { proxiedHtml } from '../lib/offline-content.ts';
+import { searchTerms } from '../lib/offline-search.ts';
 import {
   type LocalListQuery,
   localPage,
@@ -111,14 +112,47 @@ export async function storedStreamContext(db: OfflineDb, now = Date.now()) {
   return { context, prefs };
 }
 
-/** One page of a stream from the store, with content when asked for. */
+/** Ids of stored entries whose headline or content has a word, or (as `prefix`) one starting so. */
+async function matching(db: OfflineDb, word: string, prefix: boolean): Promise<Set<number>> {
+  const find = (table: typeof db.entries | typeof db.contents) =>
+    (prefix
+      ? table.where('words').startsWith(word)
+      : table.where('words').equals(word)
+    ).primaryKeys();
+  const [headlines, contents] = await Promise.all([find(db.entries), find(db.contents)]);
+  return new Set([...headlines, ...contents]);
+}
+
+/**
+ * Stored entries matching a search: every word, in the headline or the content, and the last one
+ * as a prefix. Null when the search has no words.
+ */
+export async function searchStore(db: OfflineDb, q: string): Promise<Set<number> | null> {
+  const { words, prefix } = searchTerms(q);
+  const sets = await Promise.all([
+    ...words.map((word) => matching(db, word, false)),
+    ...(prefix === null ? [] : [matching(db, prefix, true)]),
+  ]);
+  if (sets.length === 0) return null;
+  // Smallest first, so the intersection stays small.
+  const [first, ...rest] = sets.sort((a, b) => a.size - b.size);
+  return new Set([...(first ?? [])].filter((id) => rest.every((set) => set.has(id))));
+}
+
+/**
+ * One page of a stream from the store, with content when asked for; with `q`, only the entries
+ * matching it, newest first.
+ */
 export async function localList(
   db: OfflineDb,
-  query: LocalListQuery & { content: boolean },
+  query: LocalListQuery & { content: boolean; q?: string | null },
 ): Promise<EntryListResponse> {
+  const found = query.q ? await searchStore(db, query.q) : null;
   const [{ context, prefs }, stored] = await Promise.all([
     storedStreamContext(db),
-    db.entries.toArray(),
+    found
+      ? db.entries.bulkGet([...found]).then((rows) => rows.filter((r) => r !== undefined))
+      : db.entries.toArray(),
   ]);
   const page = localPage(stored.map(fromStoredEntry), query, context);
   if (!query.content) return page;

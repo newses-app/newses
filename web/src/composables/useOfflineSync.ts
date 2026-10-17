@@ -8,7 +8,12 @@ import { upsertById } from '../lib/offline-keep.ts';
 import { markFilled, wasEvicted } from '../offline/account.ts';
 import { connectivity, networkStatus } from '../offline/connectivity.ts';
 import { exclusively, type OfflineDb } from '../offline/db.ts';
-import { downloadContents, downloadImages, trimToLimit } from '../offline/downloads.ts';
+import {
+  downloadContents,
+  downloadImages,
+  indexStoredContents,
+  trimToLimit,
+} from '../offline/downloads.ts';
 import { warmThemeFonts } from '../offline/fonts.ts';
 import { flushOutbox, flushRequests, loadPending } from '../offline/outbox.ts';
 import {
@@ -170,6 +175,8 @@ export function useOfflineSync(): void {
         // Text first, so every kept article can be read before any image arrives.
         const { limitBytes } = offlineSettings;
         if (!offlineSettings.images) await db.images.clear();
+        // Content stored before search existed; new content is indexed as it downloads.
+        await indexStoredContents(db);
         await trimToLimit(db, limitBytes);
         const downloads = { api, db, server: appServer() ?? '', limitBytes };
         await downloadContents({ ...downloads, images: false });

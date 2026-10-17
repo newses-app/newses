@@ -1,5 +1,6 @@
 import type { Enclosure, EntryContent, Entry } from '@newses/shared';
 import Dexie, { type EntityTable } from 'dexie';
+import { headlineWords } from '../lib/offline-search.ts';
 
 /** IndexedDB cannot index booleans, so stored flags are 0 or 1. */
 export type Flag = 0 | 1;
@@ -12,6 +13,8 @@ export interface StoredEntry extends Omit<
   unread: Flag;
   starred: Flag;
   published: Flag;
+  /** Search words of the title, author, and feed. */
+  words?: string[];
 }
 
 /** An entry's content as `POST /entries/contents` returned it, and its size. */
@@ -22,8 +25,12 @@ export interface StoredContent {
   fullContent: string | null;
   enclosures: Enclosure[];
   images: EntryContent['images'];
-  /** UTF-8 bytes of content and full text, toward the storage limit. */
+  /** UTF-8 bytes of content and full text, and of its search words, toward the storage limit. */
   bytes: number;
+  /** Search words of the content and full text. */
+  words?: string[];
+  /** What `words` takes in the index; absent until the content is indexed. */
+  wordBytes?: number;
 }
 
 /** An image of stored entries, keyed by its URL in their content. */
@@ -71,9 +78,16 @@ export const toStoredEntry = ({
   unread: unread ? 1 : 0,
   starred: starred ? 1 : 0,
   published: published ? 1 : 0,
+  words: headlineWords(entry),
 });
 
-export const fromStoredEntry = ({ unread, starred, published, ...entry }: StoredEntry): Entry => ({
+export const fromStoredEntry = ({
+  unread,
+  starred,
+  published,
+  words: _words,
+  ...entry
+}: StoredEntry): Entry => ({
   ...entry,
   unread: unread === 1,
   starred: starred === 1,
@@ -99,6 +113,21 @@ export function openOfflineDb(name: string, onReplaced: () => void = () => undef
     contents: 'id, contentVersion, bytes',
     images: 'url, *entryIds, bytes',
   });
+  // Offline search; stored content is indexed afterwards, in batches (`indexStoredContents`).
+  db.version(3)
+    .stores({
+      entries:
+        'id, [subscriptionId+sortAt], [unread+sortAt], [starred+sortAt], [published+sortAt], readAt, *labels, *tags, *words',
+      contents: 'id, contentVersion, bytes, wordBytes, *words',
+    })
+    .upgrade((tx) =>
+      tx
+        .table<StoredEntry>('entries')
+        .toCollection()
+        .modify((entry) => {
+          entry.words = headlineWords(entry);
+        }),
+    );
   db.on('versionchange', () => {
     db.close();
     onReplaced();

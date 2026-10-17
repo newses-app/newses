@@ -1,6 +1,7 @@
 import type { ApiClient, EntryContent } from '@newses/shared';
 import { MAX_CONTENTS_IDS } from '@newses/shared/client';
 import Dexie from 'dexie';
+import { contentWords, wordBytes } from '../lib/offline-search.ts';
 import type { OfflineDb, StoredContent } from './db.ts';
 
 /** Content and images kept on the device, in bytes, unless set otherwise. */
@@ -29,6 +30,42 @@ const contentBytes = (c: Pick<EntryContent, 'content' | 'fullContent'>) => {
   const encoder = new TextEncoder();
   return encoder.encode(c.content ?? '').length + encoder.encode(c.fullContent ?? '').length;
 };
+
+/** Content as stored: with its search words, which count toward its size. */
+function indexed(content: Omit<StoredContent, 'bytes'>): StoredContent {
+  const words = contentWords(content);
+  const indexBytes = wordBytes(words);
+  return { ...content, words, wordBytes: indexBytes, bytes: contentBytes(content) + indexBytes };
+}
+
+/** Rows indexed per transaction, so the app stays responsive while older content is indexed. */
+const INDEX_BATCH = 200;
+
+/**
+ * Indexes stored content saved before search existed; returns how many. Rows already indexed have
+ * `wordBytes`, so the others are found from that index alone.
+ */
+export async function indexStoredContents(db: OfflineDb): Promise<number> {
+  const done = new Set(await db.contents.orderBy('wordBytes').primaryKeys());
+  const pending = (await db.contents.toCollection().primaryKeys()).filter((id) => !done.has(id));
+  for (let i = 0; i < pending.length; i += INDEX_BATCH) {
+    const ids = pending.slice(i, i + INDEX_BATCH);
+    await db.transaction('rw', db.contents, async () => {
+      const rows = (await db.contents.bulkGet(ids)).filter((r) => r !== undefined);
+      await db.contents.bulkPut(rows.map(({ bytes: _bytes, ...row }) => indexed(row)));
+    });
+  }
+  return pending.length;
+}
+
+/** Bytes the search index takes for stored content, summed from its index. */
+export async function indexBytes(db: OfflineDb): Promise<number> {
+  let total = 0;
+  await db.contents.orderBy('wordBytes').eachKey((bytes) => {
+    total += Number(bytes);
+  });
+  return total;
+}
 
 /** Bytes of stored content and images, summed from their indexes. */
 export async function storedBytes(db: OfflineDb): Promise<number> {
@@ -113,7 +150,7 @@ export async function downloadContents(options: DownloadOptions): Promise<number
     const batch = queue.splice(0, MAX_CONTENTS_IDS);
     const { entries, deferred } = await api.entries.contents(batch);
     if (entries.length === 0) break;
-    const rows: StoredContent[] = entries.map((e) => ({ ...e, bytes: contentBytes(e) }));
+    const rows = entries.map(indexed);
     // Only for entries still stored: sync may have removed some meanwhile.
     const present = new Set(
       (await db.entries.bulkGet(rows.map((r) => r.id))).flatMap((e) => (e ? [e.id] : [])),

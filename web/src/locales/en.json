@@ -9,6 +9,7 @@
     "title": "Offline reading",
     "enable": "Keep articles on this device to read without a connection",
     "stored": "{entries} articles kept, {contents} with their text, {images} images ({size})",
+    "searchIndex": "Search index: {size}",
     "syncing": "Syncing…",
     "lastSynced": "Last synced {when}",
     "neverSynced": "Not synced yet",
@@ -334,7 +335,9 @@
   },
   "search": {
     "label": "Search articles",
-    "placeholder": "Search"
+    "placeholder": "Search",
+    "placeholderOffline": "Search this device",
+    "onDevice": "Searching articles on this device"
   },
   "archive": {
     "browse": "Browse archive",

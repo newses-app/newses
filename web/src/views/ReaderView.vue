@@ -275,13 +275,10 @@ const { online, whenOnline } = useOnlineOnly();
 /** The archive is on the server only. */
 const browseArchiveOnline = whenOnline((search?: boolean) => browseArchive(search));
 
-/** Searching needs the server until articles on the device can be searched. */
+/** Without a connection, the search covers the articles kept on this device. */
 function search() {
   const text = searchText.value.trim();
-  if (text && !online.value) {
-    ui.notify(t('offline.needsConnection'));
-    return;
-  }
+  if (text && !online.value) ui.notify(t('search.onDevice'));
   void router.push({
     name: 'reader',
     params: { stream: streamKey.value },
@@ -442,7 +439,7 @@ const showArticle = computed(
       ref="searchField"
       v-model="searchText"
       :prepend-inner-icon="mdiMagnify"
-      :placeholder="t('search.placeholder')"
+      :placeholder="t(online ? 'search.placeholder' : 'search.placeholderOffline')"
       :aria-label="t('search.label')"
       density="compact"
       hide-details
