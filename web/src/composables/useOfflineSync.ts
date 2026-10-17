@@ -57,17 +57,36 @@ const INTERVAL_MS = 15 * 60_000;
 /** Counters changes come in bursts (an action, then its event); sync once they settle. */
 const SETTLE_MS = 2000;
 
-/** What the server's API offers the store; asked once per launch, again after failures. */
-let support: Promise<{ offline: boolean; conflicts: boolean }> | null = null;
-function serverSupport(): Promise<{ offline: boolean; conflicts: boolean }> {
-  support ??= api.serverInfo().then(
-    (info) => ({ offline: supportsOffline(info), conflicts: detectsConflicts(info) }),
+interface ServerSupport {
+  offline: boolean;
+  conflicts: boolean;
+}
+
+/**
+ * What the server's API offers the store; null when the server couldn't be asked. Kept for the
+ * server once offline is supported; asked again otherwise, as the server may be updated meanwhile.
+ * The apps can change server without reloading, so the answer is kept per server.
+ */
+let support: { server: string | null; answer: Promise<ServerSupport | null> } | null = null;
+function serverSupport(): Promise<ServerSupport | null> {
+  const server = appServer();
+  if (support?.server === server) return support.answer;
+  const forget = () => {
+    if (support?.server === server) support = null;
+  };
+  const answer = api.serverInfo().then(
+    (info) => {
+      const offline = supportsOffline(info);
+      if (!offline) forget();
+      return { offline, conflicts: detectsConflicts(info) };
+    },
     () => {
-      support = null;
-      return { offline: false, conflicts: false };
+      forget();
+      return null;
     },
   );
-  return support;
+  support = { server, answer };
+  return answer;
 }
 
 /** Shows synced changes in what is on screen; read entries stay in lists until they reload. */
@@ -203,9 +222,12 @@ export function useOfflineSync(): void {
     if (!db) return;
     await takeBackground(db).catch(() => undefined);
     if (connectivity.value !== 'online') return;
-    const { offline, conflicts } = await serverSupport();
-    syncStatus.unsupported = !offline;
+    // Not reached is not unsupported: the next sync asks again.
+    const server = await serverSupport();
+    syncStatus.unsupported = server?.offline === false;
+    if (!server) return;
     if (syncStatus.unsupported) return;
+    const { conflicts } = server;
     syncStatus.running = true;
     if (!NATIVE) warmThemeFonts();
     try {
