@@ -117,7 +117,7 @@ Rules:
 - Fonts are system font stacks, except the theme fonts Patrick Hand and IBM Plex Mono (latin subsets), which are bundled and served from the app's own origin. A browser downloads one only when text uses it; the service worker caches fonts when first used rather than precaching them, and with offline reading on, the first sync of a page loads all of them so themes render offline.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - The `shortcutBindings` preference holds only changed actions; each replaces that action's defaults, and `[]` unbinds it. A key cannot be bound alone while it starts a chord.
-- PWA: the service worker (`web/src/worker/sw.ts`, Workbox `injectManifest`) precaches the app shell only; API requests always go to the network. It is checked with the worker's globals (`web/src/worker/tsconfig.json`), so the offline modules it runs import neither Vue nor the DOM.
+- PWA: the service worker (`web/src/worker/sw.ts`, Workbox `injectManifest`) precaches the app shell only; API requests always go to the network. Feed icons (`/favicons/*`) are cached when first shown (up to 500), so they show offline. It is checked with the worker's globals (`web/src/worker/tsconfig.json`), so the offline modules it runs import neither Vue nor the DOM.
 - With offline reading on, installed Chrome and Edge apps sync with no window open: Periodic Background Sync (`newses-sync`, at least 30 min, when the browser grants it to the installed app) sends waiting changes, follows `/sync`, and downloads text; Background Sync (`newses-outbox`, registered when a change is kept) sends waiting changes when the connection returns. The page hands the worker the account's store and the device's choices in a small `newses-worker` database, as it has no `localStorage`; it confirms the session (and gets the CSRF token) first. What it could not send is reported by the next page that opens. Tabs and the worker share the Web Locks, so only one syncs. Other browsers sync while the app is open, and the Offline settings say which applies.
 
 Native build (`build:native`, `web/dist-native`), bundled by the desktop and mobile apps:
@@ -125,7 +125,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - The shells set `window.rssReaderBridge` (`web/src/platform/bridge.ts`) before the app's scripts run: server URL, bearer token in secure storage, open in the system browser, save a file, notify, app version, update status, network status (and on Android whether it is Wi-Fi), and refresh requests (resume, unlock, the tray; Android's return to the foreground). An update that is ready or available prompts once per version per launch; settings shows the version, the update status, and Check for updates. The web build uses a browser stand-in; the native build outside a shell keeps the server and token in memory.
 - The connect screen opens on first run and from "Change server" (sign-in page, settings, unreachable server). It takes an HTTPS origin and checks `GET /api/v1/server`: another product or API major is refused, an older minor warned about. Changing server revokes the old session first.
 - Sign-in asks for a bearer token, which the bridge keeps. Any 401 forgets it and returns to sign-in; signing out revokes the session, then forgets it.
-- Feed icons load from the user's `iconsPath` (login and session responses; the signed `/feed-icons` path), since an `<img>` cannot send the token.
+- Feed icons load from `iconUrl` on the server. A server before API 1.3 gives an `iconUrl` that needs the session, which an `<img>` cannot send, so against one they load from the user's `iconsPath` (login and session responses; the signed `/feed-icons` path).
 - Server-relative URLs in entry content (proxied images, links) are made absolute against the server; public page links use the server's origin.
 - The counters stream is read with `fetch`, which can send the token; 204 or an error falls back to polling, and an ended stream reconnects after 5 s.
 - OPML export saves through the bridge. Links to other origins open in the system browser and never navigate the app.
@@ -196,7 +196,7 @@ Updater:
 - "Update now" clears errors, re-enables the source, and enqueues a fetch. It is a no-op within a minute of the last fetch and refused (`throttled`) while `blocked_until` is in the future.
 - A permanent redirect (301/308 from the first hop on) moves the source to the new URL after a successful fetch, unless another source already has that URL.
 - Image proxy (per-user `proxyImages` preference): when an entry is served to such a user, `img` `src`/`srcset`, picture `source` `srcset`, and video `poster` URLs become `/api/v1/images/<hmac>/<base64url URL>`, signed with the `image-url` key. The route needs no session; it refuses unsigned URLs, then serves from `BlobStore` (`images/<sha256 of URL>`) or fetches once through `HttpFetcher` within the per-host limits and host pauses, up to 4 MB, accepting only images (declared or sniffed). Failures are not retried for 24 h. Responses are `public, max-age` 30 days, immutable, with a sandboxing CSP and `Access-Control-Allow-Origin: *` (also on 403 and 404), so the apps can read them whatever CloudFront cached.
-- Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits; stored in `BlobStore`; served with a sandboxing CSP.
+- Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits. Stored in `BlobStore` as `favicons/<sha256 of type and bytes>`, so sources showing the same icon share one blob, deleted once no source shows it. `iconUrl` is `/<key>`: no session, `public, max-age` 1 year, immutable, with a sandboxing CSP, and only for keys a source shows.
 
 Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, noted, labelled, or shared) are never purged.
@@ -342,6 +342,7 @@ Search:
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
 | Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
 | TTRSS-compatible | `/api/`, `/api/index.php` (POST, `op`) | See below |
+| Icons | `/favicons/<sha256>` | Subscriptions' `iconUrl`; no session; from the blob bucket through CloudFront on AWS |
 | Feed icons | `/feed-icons/<user segment>/<id>.ico` | Signed per-user path, no session, for TTRSS clients and the apps (`iconsPath`); see below |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*`; also under `/api/greader.php` | See below |
 
@@ -454,6 +455,7 @@ flowchart LR
   U[Browser / apps] --> CF[CloudFront]
   CF -- default --> S3W[(S3: SPA)]
   CF -- "/downloads, /downloads/*" --> S3D[(S3: downloads)]
+  CF -- "/favicons/*" --> S3B
   CF -- "/api, /api/*, /reader/*, /accounts/*, /feed-icons/*, /public/*, /public.php" --> API[HTTP API] --> FA[λ api]
   EB[EventBridge Scheduler] --> FT[λ tick]
   FT --> QF[[SQS fetch]] --> FF[λ fetch]
@@ -476,6 +478,7 @@ flowchart LR
 - CloudFront adds a secret `x-origin-verify` header to API requests; the API refuses requests without it.
 - CloudFront does not forward the viewer's `Host`, so functions get `PUBLIC_URL` set to the stage's domain.
 - `/api/v1/images/*` is cached at the edge (managed CachingOptimized policy: no cookies or viewer headers in the key, TTL from the API's `Cache-Control`); other API paths are not cached.
+- `/favicons/*` comes from the blob bucket through its own Origin Access Control, with no function involved; the Data stack's bucket policy lets the account's distributions read only `favicons/*`. The edge keeps icons a year, and a response headers policy sets their `Cache-Control` (S3 stores none) and sandboxing CSP.
 - Generated credentials are Standard SSM parameters under `/<prefix>/<stage>/`, created once by a custom resource in `Params` and deleted with it; `Params` deploys before `App`, whose functions read them: `db-password` (the stage role's), `admin-password`, and `app-secret` (SecureString), `origin-header` (String, because CloudFront resolves only String parameters). `TRUST_PROXY` is two hops (API Gateway appends CloudFront's address after the viewer's).
 - The SPA bucket is private, accessed via Origin Access Control. `assets/` is cached as immutable; other files are revalidated, and each deployment invalidates the distribution.
 - The downloads bucket is private behind its own Origin Access Control, written only by the release pipeline (kept with the stack when the stage retains data). `/downloads` redirects to `/downloads/`, and folder paths serve `index.html`; the page has its own CSP (no scripts).

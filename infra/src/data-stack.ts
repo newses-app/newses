@@ -10,10 +10,14 @@ import {
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as athena from 'aws-cdk-lib/aws-athena';
 import * as glue from 'aws-cdk-lib/aws-glue';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
 import { type StageConfig } from './config.ts';
 import { resourceName } from './deploy-config.ts';
+
+/** Feed icons' prefix in the blob bucket, which is also their path on the site. */
+export const FAVICONS_PREFIX = 'favicons';
 
 /** Athena writes query results under this prefix of the blob bucket. */
 const ATHENA_RESULTS = 'athena-results';
@@ -58,6 +62,18 @@ export class DataStack extends Stack {
         { id: 'archive-staging', prefix: 'archive/staging/', expiration: Duration.days(1) },
       ],
     });
+    // CloudFront serves feed icons from here, and nothing else. The distribution is in the Edge
+    // stack, which references this one, so any of the account's distributions is named.
+    this.blobs.addToResourcePolicy(
+      new iam.PolicyStatement({
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:GetObject'],
+        resources: [this.blobs.arnForObjects(`${FAVICONS_PREFIX}/*`)],
+        conditions: {
+          ArnLike: { 'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/*` },
+        },
+      }),
+    );
     // The TTRSS import script writes the archive here from the operator's machine.
     new CfnOutput(this, 'BlobBucket', { value: this.blobs.bucketName });
 

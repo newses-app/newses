@@ -1,4 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { Parser } from 'htmlparser2';
 import type { Db } from '../../db/client.ts';
 import { sign, verify } from '../crypto.ts';
@@ -17,7 +18,30 @@ const MAX_CANDIDATES = 3;
 const REUSE_DAYS = 30;
 const ICON_RELS = ['icon', 'shortcut', 'apple-touch-icon'];
 
-export const faviconKey = (feedSourceId: number) => `favicons/${String(feedSourceId)}`;
+/**
+ * Icons are stored by their content, so an icon's key (and URL, `/<key>`) never shows anything
+ * else, and the feeds of a site share one icon.
+ */
+export function faviconKey(icon: Blob): string {
+  const hash = createHash('sha256').update(icon.contentType).update('\0').update(icon.data);
+  return `favicons/${hash.digest('hex')}`;
+}
+
+/** Deletes the icons among `keys` that no feed source shows any more. */
+export async function deleteUnusedIcons(
+  db: Db,
+  blobs: BlobStore,
+  keys: readonly (string | null)[],
+): Promise<void> {
+  const candidates = [...new Set(keys.filter((key) => key !== null))];
+  if (candidates.length === 0) return;
+  const used = await db
+    .select({ key: feedSources.faviconKey })
+    .from(feedSources)
+    .where(inArray(feedSources.faviconKey, candidates));
+  const shown = new Set(used.map((row) => row.key));
+  await Promise.all(candidates.filter((key) => !shown.has(key)).map((key) => blobs.delete(key)));
+}
 
 /** Icon URLs a page declares, best first, then /favicon.ico. */
 export function iconCandidates(html: string, pageUrl: string): string[] {
@@ -62,14 +86,21 @@ export class FaviconService {
       .where(eq(feedSources.id, feedSourceId));
     if (!source?.siteUrl) return;
     const sibling = await this.#recentSibling(feedSourceId, source.siteUrl);
-    let icon: Blob | null;
-    if (!sibling) icon = await this.#download(feedSourceId, source.siteUrl);
-    else icon = sibling.faviconKey ? await this.#blobs.get(sibling.faviconKey) : null;
-    if (icon) await this.#blobs.put(faviconKey(feedSourceId), icon);
+    // A sibling's icon is shared, not copied.
+    let key = sibling ? sibling.faviconKey : null;
+    if (!sibling) {
+      const icon = await this.#download(feedSourceId, source.siteUrl);
+      if (icon) {
+        key = faviconKey(icon);
+        await this.#blobs.put(key, icon);
+      }
+    }
     await this.#db
       .update(feedSources)
-      .set({ faviconCheckedAt: sql`now()`, ...(icon && { faviconKey: faviconKey(feedSourceId) }) })
+      .set({ faviconCheckedAt: sql`now()`, ...(key && { faviconKey: key }) })
       .where(eq(feedSources.id, feedSourceId));
+    if (key && source.faviconKey !== key)
+      await deleteUnusedIcons(this.#db, this.#blobs, [source.faviconKey]);
   }
 
   /** Another source of the same site whose icon was checked recently. */
@@ -133,6 +164,16 @@ export class FaviconService {
       .where(and(eq(subscriptions.userId, userId), eq(subscriptions.feedSourceId, feedSourceId)))
       .limit(1);
     return subscribed ? this.get(feedSourceId) : null;
+  }
+
+  /** An icon by its key, while a feed source shows it; nothing else in the blob store is served. */
+  async byKey(key: string): Promise<Blob | null> {
+    const [shown] = await this.#db
+      .select({ id: feedSources.id })
+      .from(feedSources)
+      .where(eq(feedSources.faviconKey, key))
+      .limit(1);
+    return shown ? this.#blobs.get(key) : null;
   }
 
   async get(feedSourceId: number): Promise<Blob | null> {

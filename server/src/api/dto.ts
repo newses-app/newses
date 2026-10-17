@@ -71,7 +71,8 @@ export function toSubscription({ subscription, source }: SubscriptionView): Subs
     siteUrl: source.siteUrl,
     categoryId: subscription.categoryId,
     sortOrder: subscription.sortOrder,
-    iconUrl: source.faviconKey ? `/api/v1/favicons/${String(source.id)}` : null,
+    // Icon keys name their content, so the icon is served at its key, cached for good.
+    iconUrl: source.faviconKey ? `/${source.faviconKey}` : null,
     lastFetchedAt: source.lastFetchedAt?.toISOString() ?? null,
     lastError: source.lastError,
     lastErrorAt: source.lastErrorAt?.toISOString() ?? null,

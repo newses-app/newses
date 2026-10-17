@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import {
@@ -144,19 +144,24 @@ describe('Purger', () => {
     expect((await purger.purge()).entries).toBe(1);
   });
 
-  it('deletes unsubscribed sources unless they hold kept entries', async () => {
+  it('deletes unsubscribed sources unless they hold kept entries, and icons no source shows', async () => {
     const orphan = await feedWith(null, []);
+    const sharing = await feedWith(null, []);
     const kept = await feedWith(null, [{ guid: 'star', age: 1, starred: true }]);
-    await blobs.put(faviconKey(orphan.source?.id ?? 0), {
-      data: new Uint8Array([1]),
-      contentType: 'image/png',
-    });
+    const own = { data: new Uint8Array([1]), contentType: 'image/png' };
+    const shared = { data: new Uint8Array([2]), contentType: 'image/png' };
+    await blobs.put(faviconKey(own), own);
+    await blobs.put(faviconKey(shared), shared);
+    const iconOf = (key: string, ids: number[]) =>
+      db.update(feedSources).set({ faviconKey: key }).where(inArray(feedSources.id, ids));
+    await iconOf(faviconKey(own), [orphan.source?.id ?? 0]);
+    await iconOf(faviconKey(shared), [sharing.source?.id ?? 0, kept.source?.id ?? 0]);
     await db.delete(subscriptions);
 
-    expect((await purger.purge()).feedSources).toBe(1);
+    expect((await purger.purge()).feedSources).toBe(2);
     const remaining = (await db.select().from(feedSources)).map((s) => s.id);
     expect(remaining).toEqual([kept.source?.id]);
-    expect(blobs.blobs.size).toBe(0);
+    expect([...blobs.blobs.keys()]).toEqual([faviconKey(shared)]);
   });
 
   describe('with an archive', () => {

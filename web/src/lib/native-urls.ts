@@ -11,16 +11,18 @@ export const absolute = (url: string, server: string | null) =>
   server && serverRelative(url) ? new URL(url, server).href : url;
 
 /**
- * Where to load a subscription's icon. The browser uses the API's URL with its cookie; the apps
- * cannot send their token with an `<img>`, so they use the user's signed icon path instead.
+ * Where to load a subscription's icon: its public `iconUrl`, on the server in the apps. Servers
+ * before API 1.3 give an API URL that needs the session, so the apps, which cannot send their
+ * token with an `<img>`, use the user's signed icon path there.
  */
 export function iconSrc(
   subscription: Pick<Subscription, 'id' | 'iconUrl'>,
   iconsPath: string | undefined,
   server: string | null,
 ): string | null {
-  if (!subscription.iconUrl) return null;
-  if (!server) return subscription.iconUrl;
+  const { iconUrl } = subscription;
+  if (!iconUrl) return null;
+  if (!server || !iconUrl.startsWith('/api/')) return absolute(iconUrl, server);
   return iconsPath ? absolute(`${iconsPath}/${String(subscription.id)}.ico`, server) : null;
 }
 

@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
-// The browser's service worker: the app shell offline, theme fonts once used, and syncing with no
-// tab open where the browser allows it (installed Chrome and Edge apps).
+// The browser's service worker: the app shell offline, theme fonts and feed icons once used, and
+// syncing with no tab open where the browser allows it (installed Chrome and Edge apps).
 import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
@@ -35,7 +35,7 @@ cleanupOutdatedCaches();
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('index.html'), {
     denylist: [
-      /^\/(api|public|healthz|accounts|reader|feed-icons|downloads)(\/|$)/,
+      /^\/(api|public|healthz|accounts|reader|feed-icons|favicons|downloads)(\/|$)/,
       /^\/public\.php$/,
     ],
   }),
@@ -46,6 +46,12 @@ registerRoute(
 registerRoute(
   ({ request }) => request.destination === 'font',
   new CacheFirst({ cacheName: 'fonts', plugins: [new ExpirationPlugin({ maxEntries: 20 })] }),
+);
+
+// Feed icons are named by their content, so a cached one is never stale; kept, they show offline.
+registerRoute(
+  ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/favicons/'),
+  new CacheFirst({ cacheName: 'favicons', plugins: [new ExpirationPlugin({ maxEntries: 500 })] }),
 );
 
 self.addEventListener('periodicsync', (event) => {

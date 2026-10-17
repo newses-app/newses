@@ -4,7 +4,7 @@ import type { FeedSettings } from '../config.ts';
 import { iso } from '../entries/entries.ts';
 import { plainText } from '../entries/text.ts';
 import type { ArchivedEnclosure, ArchiveRow, ArchiveWriter, BlobStore } from '../ports.ts';
-import { faviconKey } from './favicons.ts';
+import { deleteUnusedIcons } from './favicons.ts';
 import { purgeDaysSql } from './ingest.ts';
 
 /** Unreferenced entries are deleted only after they have been absent from their feed this long. */
@@ -114,12 +114,17 @@ export class Purger {
         sql`${UNREFERENCED} AND e.feed_source_id IN (SELECT fs.id FROM feed_sources fs WHERE ${ABANDONED_SOURCE})`,
         deadline,
       );
-    const sources = await this.#db.execute<{ id: number }>(sql`
+    const sources = await this.#db.execute<{ id: number; favicon_key: string | null }>(sql`
       DELETE FROM feed_sources fs
       WHERE ${ABANDONED_SOURCE}
         ${this.#archive ? sql`AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.feed_source_id = fs.id)` : sql``}
-      RETURNING fs.id`);
-    await Promise.all(sources.rows.map(({ id }) => this.#blobs.delete(faviconKey(id))));
+      RETURNING fs.id, fs.favicon_key`);
+    // Other sources of the same site may still show their icons.
+    await deleteUnusedIcons(
+      this.#db,
+      this.#blobs,
+      sources.rows.map((row) => row.favicon_key),
+    );
     await this.#db.execute(sql`DELETE FROM fetch_hosts WHERE blocked_until < now()`);
 
     return {

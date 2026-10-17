@@ -204,6 +204,13 @@
       "when": 1792092814656,
       "tag": "0028_content_change_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792270698376,
+      "tag": "0029_favicon_content_keys",
+      "breakpoints": true
     }
   ]
 }

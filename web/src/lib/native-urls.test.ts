@@ -13,17 +13,22 @@ describe('absolute', () => {
 });
 
 describe('iconSrc', () => {
-  const subscription = { id: 7, iconUrl: '/api/v1/favicons/3' };
+  const subscription = { id: 7, iconUrl: `/favicons/${'a'.repeat(64)}` };
 
-  it('uses the API URL in the browser', () => {
-    expect(iconSrc(subscription, '/feed-icons/1.abc', null)).toBe('/api/v1/favicons/3');
+  it('uses the public icon URL, on the server in the apps', () => {
+    expect(iconSrc(subscription, '/feed-icons/1.abc', null)).toBe(subscription.iconUrl);
+    expect(iconSrc(subscription, undefined, SERVER)).toBe(
+      `https://rr.example.com${subscription.iconUrl}`,
+    );
   });
 
-  it('uses the signed icon path on the server in the apps', () => {
-    expect(iconSrc(subscription, '/feed-icons/1.abc', SERVER)).toBe(
+  it('uses the signed icon path in the apps when an older server gives an API URL', () => {
+    const older = { id: 7, iconUrl: '/api/v1/favicons/3' };
+    expect(iconSrc(older, '/feed-icons/1.abc', null)).toBe('/api/v1/favicons/3');
+    expect(iconSrc(older, '/feed-icons/1.abc', SERVER)).toBe(
       'https://rr.example.com/feed-icons/1.abc/7.ico',
     );
-    expect(iconSrc(subscription, undefined, SERVER)).toBeNull();
+    expect(iconSrc(older, undefined, SERVER)).toBeNull();
   });
 
   it('has no icon when the feed has none', () => {

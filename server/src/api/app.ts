@@ -37,6 +37,7 @@ import { entryRoutes } from './routes/entries.ts';
 import { eventRoutes, type EventStreamOptions, noEventRoutes } from './routes/events.ts';
 import { feedRoutes } from './routes/feeds.ts';
 import { filterRoutes } from './routes/filters.ts';
+import { faviconRoutes } from './routes/favicons.ts';
 import { imageRoutes } from './routes/images.ts';
 import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
@@ -233,6 +234,7 @@ export function buildApp(deps: AppDeps) {
       publicUrl: deps.publicUrl ?? null,
     });
     void app.register(legacyPublicRoutes);
+    void app.register(faviconRoutes, { favicons: services.feeds.favicons });
     const compat = {
       services: { auth: services.auth, sessions: services.sessions },
       options: { trace: deps.compatTrace ?? false },

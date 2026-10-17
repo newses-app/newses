@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { WEB_CSP } from '@newses/shared/web-csp';
-import { Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { Annotations, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -12,6 +12,7 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 import { REPO_ROOT, type StageConfig } from './config.ts';
+import { FAVICONS_PREFIX } from './data-stack.ts';
 import {
   CERTIFICATE_ARN,
   downloadsBucketName,
@@ -80,6 +81,8 @@ const UTF8_CHARSET = `function handler(event) {
 export interface EdgeStackProps extends StackProps {
   stage: StageConfig;
   api: apigw.HttpApi;
+  /** The Data stack's blob bucket, whose bucket policy lets CloudFront read the feed icons. */
+  blobBucketName: string;
   /** Created by the App stack, which deploys first. */
   originHeader: GeneratedParameter;
   /** Built web app (`web/dist`). */
@@ -87,8 +90,8 @@ export interface EdgeStackProps extends StackProps {
 }
 
 /**
- * CloudFront serving the SPA from S3, the API paths from the HTTP API, and the app downloads
- * from their own bucket, on the stage's domain.
+ * CloudFront serving the SPA from S3, the API paths from the HTTP API, feed icons from the blob
+ * bucket, and the app downloads from their own bucket, on the stage's domain.
  */
 export class EdgeStack extends Stack {
   readonly distribution: cloudfront.Distribution;
@@ -209,6 +212,58 @@ export class EdgeStack extends Stack {
       responseHeadersPolicy: apiHeaders,
     };
 
+    // Feed icons are named by their content, so the edge and browsers keep them for good. They
+    // come straight from the blob bucket, where S3 stores no Cache-Control, so the policies set it.
+    const faviconBehavior: cloudfront.BehaviorOptions = {
+      origin: origins.S3BucketOrigin.withOriginAccessControl(
+        s3.Bucket.fromBucketName(this, 'Blobs', props.blobBucketName),
+        {
+          originAccessControl: new cloudfront.S3OriginAccessControl(this, 'BlobsAccess', {
+            originAccessControlName: resourceName(stage, 'blobs'),
+          }),
+        },
+      ),
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      cachePolicy: new cloudfront.CachePolicy(this, 'FaviconCache', {
+        cachePolicyName: resourceName(stage, 'favicons'),
+        defaultTtl: Duration.days(365),
+        maxTtl: Duration.days(365),
+        enableAcceptEncodingGzip: true,
+        enableAcceptEncodingBrotli: true,
+      }),
+      compress: true,
+      responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'FaviconHeaders', {
+        responseHeadersPolicyName: resourceName(stage, 'favicon-headers'),
+        customHeadersBehavior: {
+          customHeaders: [
+            {
+              header: 'cache-control',
+              value: 'public, max-age=31536000, immutable',
+              override: true,
+            },
+          ],
+        },
+        securityHeadersBehavior: {
+          // Icons may be SVG; never let one run script on this origin.
+          contentSecurityPolicy: {
+            contentSecurityPolicy: "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            override: true,
+          },
+          contentTypeOptions: { override: true },
+          strictTransportSecurity: {
+            accessControlMaxAge: Duration.days(365),
+            includeSubdomains: false,
+            override: true,
+          },
+        },
+      }),
+    };
+    Annotations.of(this).acknowledgeWarning(
+      '@aws-cdk/aws-cloudfront-origins:updateImportedBucketPolicyOac',
+      "The Data stack's bucket policy grants CloudFront the icons",
+    );
+
     // Versioned files are immutable and the rest no-cache (set by the publisher), so the
     // managed CachingOptimized policy follows their Cache-Control.
     const downloadsBehavior: cloudfront.BehaviorOptions = {
@@ -267,6 +322,7 @@ export class EdgeStack extends Stack {
         '/downloads': downloadsBehavior,
         '/downloads/*': downloadsBehavior,
         '/api/v1/images/*': imageBehavior,
+        [`/${FAVICONS_PREFIX}/*`]: faviconBehavior,
         ...Object.fromEntries(API_PATHS.map((path) => [path, apiBehavior])),
       },
     });

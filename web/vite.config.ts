@@ -61,7 +61,8 @@ export default defineConfig(({ mode }) => ({
               },
             ],
           },
-          // The service worker is src/worker/sw.ts: the app shell, theme fonts, and background sync.
+          // The service worker is src/worker/sw.ts: the app shell, theme fonts, feed icons, and
+          // background sync.
           strategies: 'injectManifest',
           srcDir: 'src/worker',
           filename: 'sw.ts',
@@ -72,6 +73,6 @@ export default defineConfig(({ mode }) => ({
         }),
   ],
   server: {
-    proxy: { '/api': 'http://localhost:8080' },
+    proxy: { '/api': 'http://localhost:8080', '/favicons': 'http://localhost:8080' },
   },
 }));

@@ -349,7 +349,7 @@ describe('App', () => {
 
 describe('Edge', () => {
   it('serves the SPA from a private bucket and the API paths from the HTTP API', () => {
-    edge.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
+    edge.resourceCountIs('AWS::CloudFront::OriginAccessControl', 3);
     edge.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: Match.objectLike({
         Aliases: [dev.domainName],
@@ -362,6 +362,7 @@ describe('Edge', () => {
             PathPattern: '/api/v1/images/*',
             CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
           }),
+          Match.objectLike({ PathPattern: '/favicons/*', AllowedMethods: ['GET', 'HEAD'] }),
           ...API_PATHS.map((path) => Match.objectLike({ PathPattern: path })),
         ],
       }),
@@ -369,6 +370,55 @@ describe('Edge', () => {
     edge.hasResourceProperties('AWS::Route53::RecordSet', {
       Name: `${dev.domainName}.`,
       Type: 'A',
+    });
+  });
+});
+
+describe('Feed icons', () => {
+  it('serves them from the blob bucket, cached for a year and sandboxed', () => {
+    edge.hasResourceProperties('AWS::CloudFront::CachePolicy', {
+      CachePolicyConfig: Match.objectLike({ Name: 'newses-dev-favicons', DefaultTTL: 31536000 }),
+    });
+    edge.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        Name: 'newses-dev-favicon-headers',
+        CustomHeadersConfig: {
+          Items: [
+            {
+              Header: 'cache-control',
+              Value: 'public, max-age=31536000, immutable',
+              Override: true,
+            },
+          ],
+        },
+        SecurityHeadersConfig: Match.objectLike({
+          ContentSecurityPolicy: Match.objectLike({
+            ContentSecurityPolicy: Match.stringLikeRegexp('sandbox'),
+          }),
+        }),
+      }),
+    });
+  });
+
+  it('lets CloudFront read only the icons in the blob bucket', () => {
+    data.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Principal: { Service: 'cloudfront.amazonaws.com' },
+            Action: 's3:GetObject',
+            Resource: {
+              'Fn::Join': [
+                '',
+                [Match.objectLike({ 'Fn::GetAtt': Match.anyValue() }), '/favicons/*'],
+              ],
+            },
+            Condition: {
+              ArnLike: { 'AWS:SourceArn': `arn:aws:cloudfront::${ACCOUNT}:distribution/*` },
+            },
+          }),
+        ]),
+      },
     });
   });
 });

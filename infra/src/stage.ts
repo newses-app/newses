@@ -59,6 +59,7 @@ export class NewsesStage extends Stage {
       stackName: resourceName(stage, 'edge'),
       stage,
       api: this.app.api,
+      blobBucketName: this.data.blobs.bucketName,
       originHeader: this.params.originHeader,
       ...(props.webDir !== undefined && { webDir: props.webDir }),
     });
