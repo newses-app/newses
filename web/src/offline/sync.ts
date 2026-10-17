@@ -157,21 +157,40 @@ async function followChanges(options: SyncOptions, token: string): Promise<void>
   const now = (options.now ?? Date.now)();
   let since = token;
   for (;;) {
-    const changes = await api.sync(since, SYNC_LIMIT);
-    const tables = [db.entries, db.contents, db.images, db.meta, db.outbox];
-    const entries = await db.transaction('rw', tables, async () => {
-      const current = await storeEntries(db, changes.entries, now, limits);
-      await removeEntries(db, changes.deleted.entries);
-      await patchList(db, 'subscriptions', changes.subscriptions, changes.deleted.subscriptions);
-      await patchList(db, 'categories', changes.categories, changes.deleted.categories);
-      await patchList(db, 'labels', changes.labels, changes.deleted.labels);
-      await db.meta.put({ key: TOKEN_KEY, value: changes.next });
-      return current;
-    });
-    options.onChanges?.({ ...changes, entries });
+    const changes = await applyChanges(db, await api.sync(since, SYNC_LIMIT), now, limits);
+    options.onChanges?.(changes);
     since = changes.next;
     if (!changes.more) return;
   }
+}
+
+/** The token the store's sync stands at; null before the first sync. */
+export async function storedSyncToken(db: OfflineDb): Promise<string | null> {
+  const token = (await db.meta.get(TOKEN_KEY))?.value;
+  return typeof token === 'string' ? token : null;
+}
+
+/**
+ * Stores one page of changes and moves the store's token on to its `next`; returns the page with
+ * the changes still waiting applied to its entries, to patch what is on screen.
+ */
+export async function applyChanges(
+  db: OfflineDb,
+  changes: SyncResponse,
+  now: number,
+  limits: KeepLimits = DEFAULT_KEEP,
+): Promise<SyncResponse> {
+  const tables = [db.entries, db.contents, db.images, db.meta, db.outbox];
+  const entries = await db.transaction('rw', tables, async () => {
+    const current = await storeEntries(db, changes.entries, now, limits);
+    await removeEntries(db, changes.deleted.entries);
+    await patchList(db, 'subscriptions', changes.subscriptions, changes.deleted.subscriptions);
+    await patchList(db, 'categories', changes.categories, changes.deleted.categories);
+    await patchList(db, 'labels', changes.labels, changes.deleted.labels);
+    await db.meta.put({ key: TOKEN_KEY, value: changes.next });
+    return current;
+  });
+  return { ...changes, entries };
 }
 
 async function patchList(

@@ -136,8 +136,13 @@ export function openOfflineDb(name: string, onReplaced: () => void = () => undef
   return db;
 }
 
-/** Missing outside secure contexts and in some older browsers, whatever the DOM typings say. */
-const storage = () => navigator.storage as StorageManager | undefined;
+/**
+ * Missing outside secure contexts and in some older browsers, whatever the DOM typings say; and
+ * `persist` is the page's alone, not the service worker's.
+ */
+const storage = () =>
+  navigator.storage as
+    (Omit<StorageManager, 'persist'> & { persist?: () => Promise<boolean> }) | undefined;
 
 /**
  * Asks the browser to keep the store under storage pressure. Call it from a click: Firefox asks the
@@ -145,7 +150,7 @@ const storage = () => navigator.storage as StorageManager | undefined;
  */
 export async function requestPersistence(): Promise<boolean> {
   try {
-    return (await storage()?.persist()) ?? false;
+    return (await storage()?.persist?.()) ?? false;
   } catch {
     return false;
   }

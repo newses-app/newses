@@ -5,7 +5,8 @@ import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fromStoredEntry, openOfflineDb, type OfflineDb, toStoredEntry } from './db.ts';
 import { localCatchUp, newestStoredId } from './local.ts';
-import { flushOutbox, outboxPending, queueChanges, withPending } from './outbox.ts';
+import { flushOutbox, queueChanges, withPending } from './outbox.ts';
+import { outboxPending } from './status.ts';
 import { writeQuery } from './snapshot.ts';
 import { storeEntries } from './sync.ts';
 

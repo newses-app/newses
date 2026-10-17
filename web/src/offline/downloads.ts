@@ -38,6 +38,22 @@ function indexed(content: Omit<StoredContent, 'bytes'>): StoredContent {
   return { ...content, words, wordBytes: indexBytes, bytes: contentBytes(content) + indexBytes };
 }
 
+/**
+ * Stores content from `POST /entries/contents`, indexed, for the entries still stored (a sync may
+ * have removed some meanwhile); returns the rows stored.
+ */
+export async function storeContents(
+  db: OfflineDb,
+  entries: readonly EntryContent[],
+): Promise<StoredContent[]> {
+  const present = new Set(
+    (await db.entries.bulkGet(entries.map((e) => e.id))).flatMap((e) => (e ? [e.id] : [])),
+  );
+  const rows = entries.filter((e) => present.has(e.id)).map(indexed);
+  await db.contents.bulkPut(rows);
+  return rows;
+}
+
 /** Rows indexed per transaction, so the app stays responsive while older content is indexed. */
 const INDEX_BATCH = 200;
 
@@ -150,13 +166,8 @@ export async function downloadContents(options: DownloadOptions): Promise<number
     const batch = queue.splice(0, MAX_CONTENTS_IDS);
     const { entries, deferred } = await api.entries.contents(batch);
     if (entries.length === 0) break;
-    const rows = entries.map(indexed);
-    // Only for entries still stored: sync may have removed some meanwhile.
-    const present = new Set(
-      (await db.entries.bulkGet(rows.map((r) => r.id))).flatMap((e) => (e ? [e.id] : [])),
-    );
-    await db.contents.bulkPut(rows.filter((r) => present.has(r.id)));
-    stored += present.size;
+    const rows = await storeContents(db, entries);
+    stored += rows.length;
     total += rows.reduce((sum, r) => sum + r.bytes, 0);
     queue.unshift(...deferred);
   }

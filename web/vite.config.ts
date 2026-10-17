@@ -61,24 +61,13 @@ export default defineConfig(({ mode }) => ({
               },
             ],
           },
-          workbox: {
-            // The app shell only: API responses are never cached (online-first). Theme fonts are
-            // cached when first used, so only the fonts a theme uses download.
+          // The service worker is src/worker/sw.ts: the app shell, theme fonts, and background sync.
+          strategies: 'injectManifest',
+          srcDir: 'src/worker',
+          filename: 'sw.ts',
+          injectManifest: {
+            // The app shell only: API responses are never cached.
             globPatterns: ['**/*.{js,css,html,svg,png}'],
-            runtimeCaching: [
-              {
-                urlPattern: ({ request }) => request.destination === 'font',
-                handler: 'CacheFirst',
-                options: { cacheName: 'fonts', expiration: { maxEntries: 20 } },
-              },
-            ],
-            // Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and
-            // feeds, the native and compatibility APIs, and feed icons never get the app shell.
-            // Nor do the app downloads, which CloudFront serves on AWS.
-            navigateFallbackDenylist: [
-              /^\/(api|public|healthz|accounts|reader|feed-icons|downloads)(\/|$)/,
-              /^\/public\.php$/,
-            ],
           },
         }),
   ],

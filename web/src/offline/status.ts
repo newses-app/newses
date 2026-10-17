@@ -3,7 +3,8 @@ import { ApiError } from '@newses/shared/client';
 import { reactive, ref } from 'vue';
 import type { OfflineDb } from './db.ts';
 import { indexBytes, storedBytes } from './downloads.ts';
-import type { NoteConflict } from './outbox.ts';
+import { type NoteConflict, onPendingCount } from './outbox.ts';
+import type { BackgroundState } from './registration.ts';
 
 const STATUS_KEY = 'syncStatus';
 
@@ -15,6 +16,18 @@ export const syncStatus = reactive({
   /** The server's API is older than the store needs. */
   unsupported: false,
 });
+
+/** Whether this browser syncs with no tab open, for settings; set at each sync. */
+export const backgroundState = ref<BackgroundState | null>(null);
+
+/** How many changes wait to be sent, for the status, settings, and sign-out. */
+export const outboxPending = ref(0);
+onPendingCount((pending) => {
+  outboxPending.value = pending;
+});
+
+/** Bumped when changes are kept, so the running sync sends them as soon as it can. */
+export const flushRequests = ref(0);
 
 /** Bumped to ask the running sync for one now (settings' Sync now, turning offline on). */
 export const syncRequests = ref(0);

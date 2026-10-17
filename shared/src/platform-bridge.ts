@@ -31,6 +31,26 @@ export interface NetworkStatus {
   wifi: boolean | null;
 }
 
+/** The Android background job's settings; the bridge adds the server and token itself. */
+export interface BackgroundSyncOptions {
+  /** False stops the job and deletes what it staged and was given. */
+  enabled: boolean;
+  /** Only on an unmetered network. */
+  wifiOnly: boolean;
+  /** Where the store's sync stands, for the job to carry on from. */
+  syncToken: string | null;
+}
+
+/**
+ * A response the background job fetched while the app was closed: a `/sync` page (with the token
+ * it was asked from) or `/entries/contents`, as JSON text. Taken in the order fetched.
+ */
+export interface StagedPage {
+  kind: 'sync' | 'contents';
+  since: string | null;
+  body: string;
+}
+
 export interface AppTheme {
   preference: 'system' | 'light' | 'dark';
   /** Whether the background is dark, so text and icons over it should be light. */
@@ -86,6 +106,10 @@ export interface PlatformBridge {
   getNetwork(): Promise<NetworkStatus>;
   /** Adds a listener for network changes; returns a function that removes it. */
   onNetworkChange(listener: (status: NetworkStatus) => void): () => void;
+  /** Starts, changes, or stops the background job (Android); elsewhere it does nothing. */
+  setBackgroundSync(options: BackgroundSyncOptions): Promise<void>;
+  /** What the background job fetched since last asked, removed as it is taken; elsewhere empty. */
+  takeBackgroundSync(): Promise<StagedPage[]>;
   /** Null outside the desktop app. */
   getDesktopOptions(): Promise<DesktopOptions | null>;
   setDesktopOptions(options: Partial<DesktopOptions>): Promise<void>;

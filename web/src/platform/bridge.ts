@@ -1,6 +1,6 @@
-import type { NetworkStatus, PlatformBridge, SaveFile } from '@newses/shared';
+import type { NetworkStatus, PlatformBridge, SaveFile, StagedPage } from '@newses/shared';
 
-export type { NetworkStatus, PlatformBridge, SaveFile };
+export type { NetworkStatus, PlatformBridge, SaveFile, StagedPage };
 
 declare global {
   interface Window {
@@ -54,6 +54,9 @@ export const webBridge: PlatformBridge = {
   onRefresh: () => () => undefined,
   getNetwork: () => Promise.resolve(browserNetwork()),
   onNetworkChange: onBrowserNetworkChange,
+  // Installed browsers sync from the service worker instead (`offline/registration.ts`).
+  setBackgroundSync: () => Promise.resolve(),
+  takeBackgroundSync: () => Promise.resolve([]),
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: () => undefined,

@@ -3,14 +3,19 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatRelative } from '../../lib/format.ts';
 import { persisted, requestPersistence } from '../../offline/db.ts';
-import { outboxPending } from '../../offline/outbox.ts';
 import {
   LIMIT_CHOICES,
   offlineSettings,
   saveSettings,
   UNREAD_CHOICES,
 } from '../../offline/settings.ts';
-import { storeSummary, syncRequests, syncStatus } from '../../offline/status.ts';
+import {
+  backgroundState,
+  outboxPending,
+  storeSummary,
+  syncRequests,
+  syncStatus,
+} from '../../offline/status.ts';
 import {
   clearStore,
   currentStore,
@@ -27,6 +32,27 @@ const enabled = ref(offlineEnabled());
 const kept = ref(false);
 const summary = ref<Awaited<ReturnType<typeof storeSummary>> | null>(null);
 const android = bridge.platform === 'android';
+const desktop = bridge.platform === 'desktop';
+
+/**
+ * Syncing while closed: Android's background job, or in a browser the service worker, which only
+ * installed Chrome and Edge apps get. The desktop app keeps running in the tray instead.
+ */
+const backgroundAvailable = computed(
+  () => android || backgroundState.value === 'on' || backgroundState.value === 'off',
+);
+const backgroundHint = computed(() => {
+  if (android) return t('offline.backgroundAndroid');
+  switch (backgroundState.value) {
+    case 'on':
+    case 'off':
+      return t('offline.backgroundInstalled');
+    case 'notInstalled':
+      return t('offline.backgroundInstall');
+    default:
+      return t('offline.backgroundUnsupported');
+  }
+});
 
 /** Safari deletes a site's storage after 7 days without a visit, unless it is on the Home Screen. */
 const iosBrowser =
@@ -144,6 +170,20 @@ async function clear() {
         hide-details
         @update:model-value="change({ images: $event === true })"
       />
+      <v-switch
+        v-if="backgroundAvailable"
+        :model-value="offlineSettings.background"
+        :label="t('offline.background')"
+        :hint="backgroundHint"
+        persistent-hint
+        color="primary"
+        density="compact"
+        class="mb-2"
+        @update:model-value="change({ background: $event === true })"
+      />
+      <p v-else-if="!desktop" class="text-body-medium text-medium-emphasis mb-2">
+        {{ backgroundHint }}
+      </p>
       <v-switch
         v-if="android"
         :model-value="offlineSettings.wifiOnly"

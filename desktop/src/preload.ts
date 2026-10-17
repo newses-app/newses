@@ -68,6 +68,9 @@ const bridge: PlatformBridge = {
       window.removeEventListener('offline', changed);
     };
   },
+  // The desktop app keeps running in the tray, where it syncs on its own schedule.
+  setBackgroundSync: () => Promise.resolve(),
+  takeBackgroundSync: () => Promise.resolve([]),
   getDesktopOptions: () => invoke<DesktopOptions>('getDesktopOptions'),
   setDesktopOptions: (options) => invoke<undefined>('setDesktopOptions', options),
   // Sharing to the app is Android's.

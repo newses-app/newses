@@ -5,7 +5,8 @@ import { useI18n } from 'vue-i18n';
 import { api } from '../api.ts';
 import { replaceEntries } from '../lib/entry-cache.ts';
 import { upsertById } from '../lib/offline-keep.ts';
-import { markFilled, wasEvicted } from '../offline/account.ts';
+import { lastAccount, markFilled, wasEvicted } from '../offline/account.ts';
+import { reportOf, takeWorkerReport, type WorkerReport } from '../offline/background.ts';
 import { connectivity, networkStatus } from '../offline/connectivity.ts';
 import { exclusively, type OfflineDb } from '../offline/db.ts';
 import {
@@ -15,9 +16,12 @@ import {
   trimToLimit,
 } from '../offline/downloads.ts';
 import { warmThemeFonts } from '../offline/fonts.ts';
-import { flushOutbox, flushRequests, loadPending } from '../offline/outbox.ts';
+import { flushOutbox, loadPending } from '../offline/outbox.ts';
+import { setPeriodicSync } from '../offline/registration.ts';
 import {
+  backgroundState,
   describeError,
+  flushRequests,
   keepThemeDrafts,
   loadStatus,
   loadThemeDrafts,
@@ -28,7 +32,15 @@ import {
 } from '../offline/status.ts';
 import { currentStore } from '../offline/store.ts';
 import { imagesNow, keepLimits, offlineSettings } from '../offline/settings.ts';
-import { detectsConflicts, pruneStore, supportsOffline, syncStore } from '../offline/sync.ts';
+import {
+  detectsConflicts,
+  pruneStore,
+  storedSyncToken,
+  supportsOffline,
+  syncStore,
+} from '../offline/sync.ts';
+import { importStaged } from '../offline/staged.ts';
+import { writeWorkerConfig } from '../offline/worker-config.ts';
 import { appServer, bridge, NATIVE } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
@@ -103,34 +115,76 @@ export function useOfflineSync(): void {
   let retry: ReturnType<typeof setTimeout> | undefined;
   let retries = 0;
 
+  /** Tells the reader what sending changes did, here or in the service worker. */
+  async function announce(db: OfflineDb, report: WorkerReport): Promise<void> {
+    for (const { kind, code, message, url } of report.refused)
+      ui.notify(
+        kind === 'subscription.create' && code === 'choose'
+          ? t('offline.subscribeChoose', { url: url ?? '' })
+          : t('offline.refused', { error: message }),
+        true,
+      );
+    if (report.themeDrafts.length > 0) {
+      await keepThemeDrafts(db, report.themeDrafts);
+      for (const { name } of report.themeDrafts) ui.notify(t('offline.themeDraft', { name }), true);
+    }
+    // Objects created offline now have the server's ids, or are gone; show what the server has.
+    if (report.renumbered)
+      await Promise.all(
+        ['subscriptions', 'categories', 'labels', 'themes', 'prefs', ENTRIES_KEY, 'entry'].map(
+          (name) => queryClient.invalidateQueries({ queryKey: [name] }),
+        ),
+      );
+    if (report.overridden > 0)
+      ui.notify(t('offline.overridden', { n: report.overridden }, report.overridden));
+    noteConflicts.value = [...noteConflicts.value, ...report.noteConflicts];
+  }
+
+  /**
+   * What happened while the app was closed: the Android job's staged pages, stored in order (even
+   * offline, which is when they matter), and what the service worker reported.
+   */
+  async function takeBackground(db: OfflineDb): Promise<void> {
+    if (NATIVE) {
+      const pages = await bridge.takeBackgroundSync();
+      if (pages.length === 0) return;
+      await exclusively('sync', async () => {
+        const staged = await importStaged(db, pages, { limits: keepLimits() });
+        for (const changes of staged.changes) patchCaches(queryClient, changes);
+      });
+      return;
+    }
+    const report = await takeWorkerReport(db);
+    if (report) {
+      await announce(db, report);
+      await loadStatus(db);
+    }
+  }
+
+  /** Hands the background syncs what they need: settings, and where the store's sync stands. */
+  async function publishBackground(db: OfflineDb): Promise<void> {
+    const { background, wifiOnly, unread, limitBytes } = offlineSettings;
+    if (NATIVE) {
+      if (bridge.platform === 'android')
+        await bridge.setBackgroundSync({
+          enabled: background,
+          wifiOnly,
+          syncToken: await storedSyncToken(db),
+        });
+      return;
+    }
+    const account = lastAccount();
+    await writeWorkerConfig(account ? { dbName: account.name, unread, limitBytes } : null);
+    backgroundState.value = await setPeriodicSync(background);
+  }
+
   /** Sends the changes kept on this device, oldest first; one tab at a time. */
   async function flush(db: OfflineDb, conflicts: boolean): Promise<void> {
     if (!sessionVerified.value) return;
     await exclusively('outbox', async () => {
       const result = await flushOutbox(api, db, { conflicts });
-      const { sent, refused, stopped } = result;
-      for (const { op, code, message } of refused)
-        ui.notify(
-          op.kind === 'subscription.create' && code === 'choose'
-            ? t('offline.subscribeChoose', { url: op.body.url })
-            : t('offline.refused', { error: message }),
-          true,
-        );
-      if (result.themeDrafts.length > 0) {
-        await keepThemeDrafts(db, result.themeDrafts);
-        for (const { name } of result.themeDrafts)
-          ui.notify(t('offline.themeDraft', { name }), true);
-      }
-      // Objects created offline now have the server's ids, or are gone; show what the server has.
-      if (result.created.length > 0 || result.dropped.length > 0)
-        await Promise.all(
-          ['subscriptions', 'categories', 'labels', 'themes', 'prefs', ENTRIES_KEY, 'entry'].map(
-            (name) => queryClient.invalidateQueries({ queryKey: [name] }),
-          ),
-        );
-      if (result.overridden > 0)
-        ui.notify(t('offline.overridden', { n: result.overridden }, result.overridden));
-      noteConflicts.value = [...noteConflicts.value, ...result.noteConflicts];
+      const { sent, stopped } = result;
+      await announce(db, reportOf(result));
       clearTimeout(retry);
       if (stopped === 'unreachable' || (typeof stopped === 'object' && stopped !== null)) {
         const delay =
@@ -146,7 +200,9 @@ export function useOfflineSync(): void {
 
   async function syncOnce(): Promise<void> {
     const db = currentStore();
-    if (!db || connectivity.value !== 'online') return;
+    if (!db) return;
+    await takeBackground(db).catch(() => undefined);
+    if (connectivity.value !== 'online') return;
     const { offline, conflicts } = await serverSupport();
     syncStatus.unsupported = !offline;
     if (syncStatus.unsupported) return;
@@ -182,6 +238,7 @@ export function useOfflineSync(): void {
         await downloadContents({ ...downloads, images: false });
         await downloadImages({ ...downloads, images: imagesNow(networkStatus.value.wifi) });
       });
+      await publishBackground(db).catch(() => undefined);
     } catch (error) {
       syncStatus.lastError = describeError(error);
       throw error;

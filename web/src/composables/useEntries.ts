@@ -24,13 +24,8 @@ import {
   storedStreamContext,
   storeNetworkMode,
 } from '../offline/local.ts';
-import {
-  failedToReach,
-  flushRequests,
-  type OutboxOp,
-  queueChanges,
-  withPending,
-} from '../offline/outbox.ts';
+import { failedToReach, type OutboxOp, queueChanges, withPending } from '../offline/outbox.ts';
+import { flushRequests } from '../offline/status.ts';
 import { sendOrQueue } from './sendOrQueue.ts';
 import { currentStore, keepLoaded } from '../offline/store.ts';
 import { COUNTERS_KEY, live } from './useCounters.ts';

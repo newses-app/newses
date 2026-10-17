@@ -6,5 +6,7 @@
     "moduleResolution": "Bundler",
     "types": ["node", "vite/client", "vite-plugin-pwa/client"]
   },
-  "include": ["src", "e2e", "*.ts"]
+  "include": ["src", "e2e", "*.ts"],
+  // The service worker has the worker's globals, not the DOM's: src/worker/tsconfig.json checks it.
+  "exclude": ["src/worker"]
 }

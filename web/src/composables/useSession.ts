@@ -8,7 +8,7 @@ import { api, isUnauthenticated, retryable } from '../api.ts';
 import { connectivity } from '../offline/connectivity.ts';
 import { seedQueries, writeQuery } from '../offline/snapshot.ts';
 import { currentStore, storeSignedIn, storeSignedOut } from '../offline/store.ts';
-import { outboxPending } from '../offline/outbox.ts';
+import { outboxPending } from '../offline/status.ts';
 import { connection, NATIVE } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 

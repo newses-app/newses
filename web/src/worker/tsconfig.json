@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2024", "WebWorker"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": [],
+    // Workbox's plugin types predate exact optional properties; the modules this shares with the
+    // page are checked with them by tsconfig.json.
+    "exactOptionalPropertyTypes": false,
+    "noEmit": true
+  },
+  "include": ["sw.ts"]
+}

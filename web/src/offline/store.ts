@@ -1,7 +1,7 @@
 import type { Entry } from '@newses/shared';
 import Dexie from 'dexie';
 import { ref } from 'vue';
-import { connection, NATIVE } from '../platform/index.ts';
+import { bridge, connection, NATIVE } from '../platform/index.ts';
 import {
   type Account,
   accountSignedIn,
@@ -10,9 +10,11 @@ import {
   markEmptied,
 } from './account.ts';
 import { type OfflineDb, openOfflineDb } from './db.ts';
-import { outboxPending } from './outbox.ts';
+import { outboxPending } from './status.ts';
+import { setPeriodicSync } from './registration.ts';
 import { keepLimits } from './settings.ts';
 import { storeEntries } from './sync.ts';
+import { writeWorkerConfig } from './worker-config.ts';
 
 const ENABLED_KEY = 'newses.offline.enabled';
 
@@ -41,7 +43,25 @@ export async function setOfflineEnabled(enabled: boolean): Promise<void> {
   if (enabled) return;
   const account = lastAccount();
   closeStore();
+  await stopBackground();
   if (account) await Dexie.delete(account.name);
+}
+
+/**
+ * Stops syncing while the app is closed and drops what that staged, when the store it feeds goes
+ * (offline reading off, Clear, sign-out, another account); the next sync starts it again.
+ */
+async function stopBackground(): Promise<void> {
+  try {
+    if (NATIVE)
+      await bridge.setBackgroundSync({ enabled: false, wifiOnly: false, syncToken: null });
+    else {
+      await writeWorkerConfig(null);
+      await setPeriodicSync(false);
+    }
+  } catch {
+    // Nothing was running.
+  }
 }
 
 /** Set when another tab took the store over for a newer schema; this page should reload. */
@@ -77,6 +97,7 @@ export function currentStore(): OfflineDb | null {
 export async function clearStore(): Promise<void> {
   const account = lastAccount();
   closeStore();
+  await stopBackground();
   if (!account) return;
   await Dexie.delete(account.name);
   // Empty by choice, not evicted by the browser.
@@ -88,12 +109,14 @@ export async function storeSignedIn(account: Account): Promise<void> {
   const previous = lastAccount();
   if (previous?.userId !== account.userId || previous.serverUrl !== account.serverUrl) {
     closeStore();
+    if (previous) await stopBackground();
   }
   await accountSignedIn(account);
 }
 
 export async function storeSignedOut(): Promise<void> {
   closeStore();
+  await stopBackground();
   await accountSignedOut();
 }
 

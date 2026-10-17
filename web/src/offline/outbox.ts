@@ -6,7 +6,6 @@ import type {
   MarkReadRequest,
 } from '@newses/shared';
 import { ApiError, normaliseTags } from '@newses/shared/client';
-import { ref } from 'vue';
 import { statePatch } from '../lib/entry-cache.ts';
 import {
   applyResourceOps,
@@ -53,11 +52,11 @@ const BULK_IDS = 1000;
 /** Answers a proxy or load balancer gives while the server is down; the change waits. */
 const GATEWAY_STATUSES = new Set([502, 503, 504]);
 
-/** How many changes wait to be sent, for settings and sign-out. */
-export const outboxPending = ref(0);
-
-/** Bumped when changes are kept, so the running sync sends them as soon as it can. */
-export const flushRequests = ref(0);
+/** Hears how many changes wait after each change to the outbox; the page keeps it reactive. */
+let reportCount: (pending: number) => void = () => undefined;
+export function onPendingCount(listener: (pending: number) => void): void {
+  reportCount = listener;
+}
 
 /** A change as stored; a queued change's own place and time stay out of its payload. */
 const toRow = (op: OutboxOp, queuedAt: number): OutboxRow => {
@@ -74,8 +73,9 @@ const fromRow = (row: OutboxRow): QueuedOp =>
   }) as QueuedOp;
 
 async function countPending(db: OfflineDb): Promise<number> {
-  outboxPending.value = await db.outbox.count();
-  return outboxPending.value;
+  const pending = await db.outbox.count();
+  reportCount(pending);
+  return pending;
 }
 
 export const loadPending = (db: OfflineDb) => countPending(db);

@@ -11,6 +11,11 @@ export interface OfflineSettings {
   wifiOnly: boolean;
   /** Content and images together stay under this. */
   limitBytes: number;
+  /**
+   * Syncs while the app is closed: from the service worker in installed Chrome and Edge apps,
+   * from a background job on Android.
+   */
+  background: boolean;
 }
 
 const KEY = 'newses.offline.settings';
@@ -23,6 +28,7 @@ export const DEFAULT_SETTINGS: OfflineSettings = {
   images: true,
   wifiOnly: true,
   limitBytes: DEFAULT_STORAGE_LIMIT,
+  background: true,
 };
 
 function load(): OfflineSettings {

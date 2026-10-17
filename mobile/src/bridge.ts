@@ -13,7 +13,13 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { type ConnectionStatus, Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
-import type { NetworkStatus, PlatformBridge, SaveFile, UpdateStatus } from '@newses/shared';
+import type {
+  NetworkStatus,
+  PlatformBridge,
+  SaveFile,
+  StagedPage,
+  UpdateStatus,
+} from '@newses/shared';
 import { type AndroidUpdate, androidUpdate, checkDue, parseCheckRecord } from './updates.ts';
 
 declare const APP_VERSION: string;
@@ -32,6 +38,21 @@ const ShareTarget = registerPlugin<{
     listener: (data: { text: string }) => void,
   ): Promise<PluginListenerHandle>;
 }>('ShareTarget');
+
+/**
+ * The app's own plugin (android/…/BackgroundSyncPlugin.java): a WorkManager job that fetches
+ * changes and article text while the app is closed, for the web app to store when it opens.
+ */
+const BackgroundSync = registerPlugin<{
+  configure(options: {
+    enabled: boolean;
+    wifiOnly: boolean;
+    syncToken: string | null;
+    serverUrl: string | null;
+    token: string | null;
+  }): Promise<void>;
+  take(): Promise<{ pages: StagedPage[] }>;
+}>('BackgroundSync');
 
 /** Shares wait here until the web app sets its handler. */
 let shareHandler: ((text: string) => void) | null = null;
@@ -154,6 +175,14 @@ const bridge: PlatformBridge = {
       networkListeners.delete(listener);
     };
   },
+  // The job is handed the server and token here, so the web app never passes the token on.
+  setBackgroundSync: async (options) =>
+    BackgroundSync.configure({
+      ...options,
+      serverUrl: options.enabled ? (await Preferences.get({ key: SERVER_KEY })).value : null,
+      token: options.enabled ? await SecureStorage.getItem(TOKEN_KEY) : null,
+    }),
+  takeBackgroundSync: async () => (await BackgroundSync.take()).pages,
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: (handler) => {

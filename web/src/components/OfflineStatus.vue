@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatRelative } from '../lib/format.ts';
 import { connectivity } from '../offline/connectivity.ts';
-import { outboxPending } from '../offline/outbox.ts';
+import { outboxPending } from '../offline/status.ts';
 import { syncStatus } from '../offline/status.ts';
 
 const { t, locale } = useI18n();

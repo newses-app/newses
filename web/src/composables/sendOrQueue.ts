@@ -1,6 +1,9 @@
 import { connectivity } from '../offline/connectivity.ts';
-import { failedToReach, flushRequests, type OutboxOp, queueChanges } from '../offline/outbox.ts';
+import { failedToReach, type OutboxOp, queueChanges } from '../offline/outbox.ts';
+import { flushRequests } from '../offline/status.ts';
+import { requestOutboxSync } from '../offline/registration.ts';
 import { currentStore } from '../offline/store.ts';
+import { NATIVE } from '../platform/index.ts';
 import { sessionVerified } from './useSession.ts';
 
 export type Saved<T> = { sent: true; value: T } | { sent: false };
@@ -25,5 +28,7 @@ export async function sendOrQueue<T>(
   }
   await queueChanges(db, ops);
   flushRequests.value++;
+  // An installed browser app sends them when the connection returns, even with no tab open.
+  if (!NATIVE) void requestOutboxSync();
   return { sent: false };
 }
