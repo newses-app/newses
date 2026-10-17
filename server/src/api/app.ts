@@ -1,3 +1,4 @@
+import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
@@ -181,6 +182,10 @@ export function buildApp(deps: AppDeps) {
           exposedHeaders: ['retry-after'],
           maxAge: 86400,
         });
+        // JSON over 1 KB, in Brotli (at quality 4, as 11 costs too much CPU) or gzip; event
+        // streams and images are left as they are. CloudFront forwards Accept-Encoding here, as
+        // its API behaviour does not cache (and so does not compress) itself.
+        await api.register(compress, { encodings: ['br', 'gzip'], threshold: 1024 });
         registerAuth(api, services.sessions);
         api.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
         await api.register(serverRoutes, { version: deps.version ?? 'dev' });

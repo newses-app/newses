@@ -57,31 +57,99 @@ test.describe('offline', () => {
     });
   });
 
-  test('keeps a change made offline and sends it on reconnecting', async ({ page, context }) => {
+  test('reads, stars, notes, and catches up offline, and the server has it all after', async ({
+    page,
+    context,
+  }) => {
     await signIn(page);
     await page.evaluate(() => {
       localStorage.setItem('newses.offline.enabled', 'true');
     });
     await page.goto('/all');
     await page.waitForFunction(readyOffline, false, { timeout: 60_000 });
-    await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
-    await expect(page).toHaveURL(/\/all\/\d+$/);
-    const id = /\/(\d+)$/.exec(page.url())?.[1] ?? '';
-    const article = page.locator('article');
-    await expect(article.getByRole('button', { name: 'Mark unread' })).toBeVisible();
-    const starred = async () =>
-      ((await (await page.request.get(`/api/v1/entries/${id}`)).json()) as { starred: boolean })
-        .starred;
+    const api = async <T>(path: string) =>
+      (await (await page.request.get(`/api/v1${path}`)).json()) as T;
+    interface Counters {
+      subscriptions: { id: number; unread: number }[];
+    }
+    interface Entry {
+      id: number;
+      starred: boolean;
+      note: string | null;
+    }
+    // A feed with a few unread articles, so catching it up is quick to undo.
+    const feed = (await api<Counters>('/counters')).subscriptions
+      .filter((s) => s.unread > 1)
+      .sort((a, b) => a.unread - b.unread)[0];
+    test.skip(!feed, 'Needs a feed with two or more unread articles');
+    if (!feed) return;
+    const unread = (
+      await api<{ entries: Entry[] }>(
+        `/entries?subscriptionId=${String(feed.id)}&view=unread&limit=200`,
+      )
+    ).entries;
+    await page.goto(`/f${String(feed.id)}`);
+    const first = page.getByRole('list', { name: 'Articles' }).getByRole('link').first();
+    await expect(first).toBeVisible();
 
     await context.setOffline(true);
-    await article.getByRole('button', { name: 'Star', exact: true }).click();
-    await expect(article.getByRole('button', { name: 'Unstar' })).toBeVisible();
+    await first.click();
+    const id = Number(/\/(\d+)$/.exec(page.url())?.[1]);
+    const before = unread.find((e) => e.id === id);
+    const article = page.locator('article');
+    await expect(article.getByRole('heading').first()).toBeVisible();
+    // Stored images show from the device; the others have no source offline.
+    const sources = await article
+      .locator('.article-content img[src]')
+      .evaluateAll((images) => images.map((image) => image.getAttribute('src') ?? ''));
+    for (const src of sources) expect(src).toMatch(/^blob:/);
+    if (!before?.starred) await article.getByRole('button', { name: 'Star', exact: true }).click();
+    await article.getByRole('button', { name: /^(Add|Edit) note$/ }).click();
+    await page.getByRole('dialog').getByLabel('Note').fill('e2e offline note');
+    await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('button', { name: 'Mark as read', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'All articles' }).click();
+    // Asked first only when the reader's preference says so.
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Mark read' })
+      .click({ timeout: 3000 })
+      .catch(() => undefined);
     await expect(page.getByText(/couldn't|went wrong/)).toHaveCount(0);
 
     await context.setOffline(false);
-    await expect.poll(starred, { timeout: 30_000 }).toBe(true);
-    await article.getByRole('button', { name: 'Unstar' }).click();
-    await expect.poll(starred).toBe(false);
+    await expect
+      .poll(
+        async () => {
+          const entry = await api<Entry>(`/entries/${String(id)}`);
+          return [entry.starred, entry.note];
+        },
+        { timeout: 30_000 },
+      )
+      .toEqual([true, 'e2e offline note']);
+    await expect
+      .poll(
+        async () =>
+          (await api<Counters>('/counters')).subscriptions.find((s) => s.id === feed.id)?.unread,
+        { timeout: 30_000 },
+      )
+      .toBe(0);
+
+    // As it was.
+    const { csrfToken } = await api<{ csrfToken: string }>('/auth/session');
+    const headers = { 'x-csrf-token': csrfToken };
+    await page.request.patch('/api/v1/entries', {
+      headers,
+      data: { ids: unread.map((e) => e.id), unread: true },
+    });
+    await page.request.patch(`/api/v1/entries/${String(id)}`, {
+      headers,
+      data: { starred: before?.starred ?? false },
+    });
+    await page.request.put(`/api/v1/entries/${String(id)}/note`, {
+      headers,
+      data: { note: before?.note ?? null },
+    });
     await page.evaluate(() => {
       localStorage.removeItem('newses.offline.enabled');
     });

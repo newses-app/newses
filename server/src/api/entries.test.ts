@@ -1,4 +1,5 @@
 import type { AddressInfo } from 'node:net';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { createApiClient } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -358,6 +359,32 @@ describe('entries API', () => {
     await app.inject({ method: 'DELETE', url: `/api/v1/labels/${String(label)}`, headers });
   });
 
+  it('compresses JSON for clients that accept it, and leaves small answers plain', async () => {
+    // Over the 1 KB threshold.
+    const url = '/api/v1/openapi.json';
+    const plain = await app.inject({ method: 'GET', url, headers });
+    expect(plain.rawPayload.length).toBeGreaterThan(1024);
+    expect(plain.headers['content-encoding']).toBeUndefined();
+    for (const encoding of ['br', 'gzip'] as const) {
+      const packed = await app.inject({
+        method: 'GET',
+        url,
+        headers: { ...headers, 'accept-encoding': encoding },
+      });
+      expect(packed.headers['content-encoding']).toBe(encoding);
+      expect(packed.headers.vary).toMatch(/accept-encoding/i);
+      const body =
+        encoding === 'br' ? brotliDecompressSync(packed.rawPayload) : gunzipSync(packed.rawPayload);
+      expect(JSON.parse(body.toString())).toEqual(plain.json());
+    }
+    const small = await app.inject({
+      method: 'GET',
+      url: '/api/v1/server',
+      headers: { 'accept-encoding': 'br' },
+    });
+    expect(small.headers['content-encoding']).toBeUndefined();
+  });
+
   it('serves the OpenAPI document', async () => {
     const doc = await app.inject({ method: 'GET', url: '/api/v1/openapi.json' });
     expect(doc.statusCode).toBe(200);
@@ -387,10 +414,16 @@ describe('events stream', () => {
 
     const controller = new AbortController();
     const response = await fetch(`http://127.0.0.1:${String(port)}/api/v1/events`, {
-      headers: { authorization: `Bearer ${token}`, origin: 'app://newses' },
+      headers: {
+        authorization: `Bearer ${token}`,
+        origin: 'app://newses',
+        'accept-encoding': 'br, gzip',
+      },
       signal: controller.signal,
     });
     expect(response.headers.get('content-type')).toMatch(/^text\/event-stream/);
+    // Compressing would buffer the stream.
+    expect(response.headers.get('content-encoding')).toBeNull();
     expect(response.headers.get('access-control-allow-origin')).toBe('app://newses');
     expect(response.headers.get('x-accel-buffering')).toBe('no');
     const reader = (response.body as ReadableStream<Uint8Array>).getReader();
