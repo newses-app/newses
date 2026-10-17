@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatRelative } from '../../lib/format.ts';
 import { persisted, requestPersistence } from '../../offline/db.ts';
+import { outboxPending } from '../../offline/outbox.ts';
 import { storeSummary, syncRequests, syncStatus } from '../../offline/status.ts';
 import { currentStore, offlineEnabled, setOfflineEnabled } from '../../offline/store.ts';
 import { NATIVE } from '../../platform/index.ts';
@@ -68,6 +69,11 @@ function syncNow() {
             size: size(summary.bytes),
           })
         }}
+      </v-list-item-title>
+    </v-list-item>
+    <v-list-item v-if="outboxPending > 0">
+      <v-list-item-title class="text-wrap">
+        {{ t('offline.pending', { n: outboxPending }, outboxPending) }}
       </v-list-item-title>
     </v-list-item>
     <v-list-item>

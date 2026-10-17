@@ -1,13 +1,39 @@
-import type { Entry, EntryListResponse, EntryState, MarkReadRequest } from '@newses/shared';
+import type {
+  Counters,
+  Entry,
+  EntryListResponse,
+  EntryState,
+  MarkReadRequest,
+} from '@newses/shared';
 import { normaliseTags } from '@newses/shared/client';
 import { type InfiniteData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
 import { patchEntryPages, statePatch } from '../lib/entry-cache.ts';
+import { adjustCounters, type CounterChange } from '../lib/offline-counters.ts';
 import { parseStream, type StreamKey } from '../lib/streams.ts';
-import { localEntry, localList, networkOrStore, storeNetworkMode } from '../offline/local.ts';
+import { connectivity } from '../offline/connectivity.ts';
+import type { OfflineDb } from '../offline/db.ts';
+import {
+  changeStored,
+  localCatchUp,
+  localEntry,
+  localList,
+  networkOrStore,
+  newestStoredId,
+  storedStreamContext,
+  storeNetworkMode,
+} from '../offline/local.ts';
+import {
+  failedToReach,
+  flushRequests,
+  type OutboxOp,
+  queueChanges,
+  withPending,
+} from '../offline/outbox.ts';
 import { currentStore, keepLoaded } from '../offline/store.ts';
 import { COUNTERS_KEY, live } from './useCounters.ts';
+import { sessionVerified } from './useSession.ts';
 import { TAGS_KEY } from './useTags.ts';
 
 export const ENTRIES_KEY = 'entries';
@@ -41,7 +67,8 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
           limit: PAGE_SIZE,
         });
         void keepLoaded(page.entries);
-        return page;
+        const db = currentStore();
+        return db ? { ...page, entries: await withPending(db, page.entries) } : page;
       };
       // Search needs the server until the store can search.
       return networkOrStore(remote, (db) =>
@@ -77,7 +104,10 @@ export function useEntry(id: MaybeRefOrGetter<number | null>) {
       return (
         current ??
         networkOrStore(
-          () => api.entries.get(entryId),
+          async () => {
+            const entry = await api.entries.get(entryId);
+            return db ? ((await withPending(db, [entry]))[0] ?? entry) : entry;
+          },
           (store) => localEntry(store, entryId),
         )
       );
@@ -87,7 +117,10 @@ export function useEntry(id: MaybeRefOrGetter<number | null>) {
   });
 }
 
-/** State changes applied to every cached copy first, then saved. */
+/**
+ * Changes applied to every cached copy first, then saved: at once while the server can be reached,
+ * otherwise (with offline reading on) kept in the outbox and sent when it can be.
+ */
 export function useEntryActions() {
   const queryClient = useQueryClient();
 
@@ -105,16 +138,84 @@ export function useEntryActions() {
     if (!live.value) void queryClient.invalidateQueries({ queryKey: COUNTERS_KEY });
   };
 
+  /** Counters as the server will count them once it has changes kept on this device. */
+  async function countQueued(db: OfflineDb, changes: CounterChange[]): Promise<void> {
+    const counters = queryClient.getQueryData<Counters>(COUNTERS_KEY);
+    if (!counters || changes.length === 0) return;
+    const { context } = await storedStreamContext(db);
+    queryClient.setQueryData(COUNTERS_KEY, adjustCounters(counters, changes, context));
+  }
+
+  /**
+   * Sends a change, or keeps it in the outbox: while the server cannot be reached, before the
+   * session is confirmed, and behind changes already waiting, so they reach the server in order.
+   * Throws when the server refuses it, or cannot be reached and there is no store to keep it in.
+   */
+  async function save(
+    ops: OutboxOp[],
+    request: () => Promise<unknown>,
+  ): Promise<'sent' | 'queued'> {
+    const db = currentStore();
+    if (!db) {
+      await request();
+      return 'sent';
+    }
+    if (
+      connectivity.value === 'online' &&
+      sessionVerified.value &&
+      (await db.outbox.count()) === 0
+    ) {
+      try {
+        await request();
+        return 'sent';
+      } catch (error) {
+        if (!failedToReach(error)) throw error;
+      }
+    }
+    await queueChanges(db, ops);
+    flushRequests.value++;
+    return 'queued';
+  }
+
+  /** Keeps the store as fresh as the caches, and counts a kept change until the server has it. */
+  async function saved(
+    how: 'sent' | 'queued',
+    entries: readonly Entry[],
+    patch: Partial<Entry>,
+  ): Promise<void> {
+    const db = currentStore();
+    if (db) {
+      await changeStored(
+        db,
+        entries.map((e) => e.id),
+        patch,
+      ).catch(() => undefined);
+    }
+    if (how === 'sent') refreshCounters();
+    else if (db)
+      await countQueued(
+        db,
+        entries.map((before) => ({ before, after: { ...before, ...patch } })),
+      );
+  }
+
   async function setState(entries: Entry[], state: EntryState): Promise<void> {
     const changed = entries.filter((e) =>
       Object.entries(state).some(([flag, value]) => e[flag as keyof EntryState] !== value),
     );
     if (changed.length === 0) return;
     const ids = changed.map((e) => e.id);
-    patchCaches(ids, statePatch(state));
+    const patch = statePatch(state);
+    patchCaches(ids, patch);
+    let how: 'sent' | 'queued';
     try {
-      if (ids.length === 1) await api.entries.update(ids[0] ?? 0, state);
-      else await api.entries.updateMany({ ids, ...state });
+      how = await save(
+        ids.map((id) => ({ kind: 'state', id, state })),
+        () =>
+          ids.length === 1
+            ? api.entries.update(ids[0] ?? 0, state)
+            : api.entries.updateMany({ ids, ...state }),
+      );
     } catch (error) {
       // Restore each entry's previous flags.
       for (const entry of changed) {
@@ -125,18 +226,23 @@ export function useEntryActions() {
       }
       throw error;
     }
-    refreshCounters();
+    await saved(how, changed, patch);
   }
 
   /** Saves the entry's note; null or blank text clears it. */
   async function setNote(entry: Entry, note: string | null): Promise<void> {
-    patchCaches([entry.id], { note: note?.trim() || null });
+    const patch = { note: note?.trim() || null };
+    patchCaches([entry.id], patch);
+    let how: 'sent' | 'queued';
     try {
-      await api.entries.setNote(entry.id, note);
+      how = await save([{ kind: 'note', id: entry.id, note }], () =>
+        api.entries.setNote(entry.id, note),
+      );
     } catch (error) {
       patchCaches([entry.id], { note: entry.note });
       throw error;
     }
+    await saved(how, [entry], patch);
   }
 
   /** Shares the entry at a public link; returns the link's id. */
@@ -156,31 +262,75 @@ export function useEntryActions() {
 
   /** Replaces the entry's tags. */
   async function setTags(entry: Entry, tags: string[]): Promise<void> {
-    patchCaches([entry.id], { tags: normaliseTags(tags).sort() });
+    let patch: Partial<Entry> = { tags: normaliseTags(tags).sort() };
+    patchCaches([entry.id], patch);
+    let how: 'sent' | 'queued';
     try {
-      patchCaches([entry.id], await api.entries.setTags(entry.id, tags));
+      how = await save([{ kind: 'tags', id: entry.id, tags }], async () => {
+        patch = await api.entries.setTags(entry.id, tags);
+      });
+      patchCaches([entry.id], patch);
     } catch (error) {
       patchCaches([entry.id], { tags: entry.tags });
       throw error;
     } finally {
       void queryClient.invalidateQueries({ queryKey: TAGS_KEY });
     }
+    await saved(how, [entry], patch);
   }
 
   /** Replaces the entry's labels. */
   async function setLabels(entry: Entry, labelIds: number[]): Promise<void> {
-    patchCaches([entry.id], { labels: [...labelIds].sort((a, b) => a - b) });
+    const patch = { labels: [...labelIds].sort((a, b) => a - b) };
+    patchCaches([entry.id], patch);
+    let how: 'sent' | 'queued';
     try {
-      await api.entries.setLabels(entry.id, labelIds);
+      how = await save([{ kind: 'labels', id: entry.id, labelIds }], () =>
+        api.entries.setLabels(entry.id, labelIds),
+      );
     } catch (error) {
       patchCaches([entry.id], { labels: entry.labels });
       throw error;
     }
-    refreshCounters();
+    await saved(how, [entry], patch);
+  }
+
+  /**
+   * Catch-up on the stored entries, kept for the server with the newest id the device knows of,
+   * so entries that arrive before it is sent stay unread.
+   */
+  async function catchUpStored(db: OfflineDb, request: MarkReadRequest): Promise<number> {
+    const maxId = request.maxId ?? (await newestStoredId(db));
+    const kept = { ...request, ...(maxId !== undefined && { maxId }) };
+    const caught = await localCatchUp(db, kept);
+    await queueChanges(db, [{ kind: 'markRead', request: kept }]);
+    flushRequests.value++;
+    patchCaches(
+      caught.map((e) => e.id),
+      { unread: false },
+    );
+    await countQueued(
+      db,
+      caught.map((before) => ({ before, after: { ...before, unread: false } })),
+    );
+    await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
+    return caught.length;
   }
 
   async function markRead(request: MarkReadRequest): Promise<number> {
-    const { updated } = await api.entries.markRead(request);
+    const db = currentStore();
+    if (
+      db &&
+      (connectivity.value !== 'online' || !sessionVerified.value || (await db.outbox.count()) > 0)
+    )
+      return catchUpStored(db, request);
+    let updated: number;
+    try {
+      ({ updated } = await api.entries.markRead(request));
+    } catch (error) {
+      if (db && failedToReach(error)) return catchUpStored(db, request);
+      throw error;
+    }
     await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
     refreshCounters();
     return updated;

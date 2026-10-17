@@ -43,6 +43,7 @@ import {
 } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
 import { connectivity } from '../offline/connectivity.ts';
+import { currentStore } from '../offline/store.ts';
 import { bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -158,9 +159,12 @@ function change(entries: Entry[], state: EntryState) {
   actions.setState(entries, state).catch(notifyError);
 }
 
-/** Reading marks entries read, but not without a connection, where the change cannot be saved. */
+/**
+ * Reading marks entries read; without a connection only when offline reading keeps the change, as
+ * it could not be saved otherwise.
+ */
 function readAutomatically(entries: Entry[]) {
-  if (connectivity.value === 'online') change(entries, { unread: false });
+  if (connectivity.value === 'online' || currentStore()) change(entries, { unread: false });
 }
 
 // Opening an entry marks it read once; toggling it unread again leaves it unread.

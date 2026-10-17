@@ -1,13 +1,16 @@
 import type { CurrentSession, LoggedInResponse } from '@newses/shared';
 import { type QueryClient, useQuery, useQueryClient } from '@tanstack/vue-query';
-import { watch } from 'vue';
+import { ref, watch } from 'vue';
 import type { Router } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, isUnauthenticated, retryable } from '../api.ts';
 import { connectivity } from '../offline/connectivity.ts';
 import { seedQueries, writeQuery } from '../offline/snapshot.ts';
 import { currentStore, storeSignedIn, storeSignedOut } from '../offline/store.ts';
+import { outboxPending } from '../offline/outbox.ts';
 import { connection, NATIVE } from '../platform/index.ts';
+import { useUiStore } from '../stores/ui.ts';
 
 export const SESSION_KEY = ['session'] as const;
 
@@ -15,6 +18,11 @@ const fetchSession = () => api.auth.session();
 
 /** Set while the app runs on the stored session; the server checks it once it answers. */
 let startedOffline = false;
+/**
+ * Whether the server has confirmed this launch's session (and, in a browser, given its CSRF
+ * token), so changes made offline can be sent.
+ */
+export const sessionVerified = ref(false);
 /** Set once this launch's session from the server is in the store. */
 let sessionKept = false;
 
@@ -64,6 +72,7 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
     startedOffline = false;
     try {
       await queryClient.query({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: 0 });
+      sessionVerified.value = true;
     } catch (error) {
       if (!isUnauthenticated(error)) {
         startedOffline = true;
@@ -84,6 +93,7 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
     try {
       const session = await currentSession(queryClient);
       await storeSignedIn({ userId: session.user.id, serverUrl: connection.state.serverUrl });
+      if (!startedOffline) sessionVerified.value = true;
       // The account is known only now, so the snapshot of its session is written here, once.
       const db = sessionKept || startedOffline ? null : currentStore();
       if (db) {
@@ -96,6 +106,7 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
       return true;
     } catch (error) {
       if (isUnauthenticated(error)) {
+        sessionVerified.value = false;
         await connection.signedOut();
         return { name: 'login', query: { redirect: to.fullPath } };
       }
@@ -107,6 +118,8 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
 export function useSession() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const ui = useUiStore();
+  const { t } = useI18n();
   const query = useQuery({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: Infinity });
 
   async function signedIn(result: LoggedInResponse): Promise<void> {
@@ -135,8 +148,22 @@ export function useSession() {
     await signedIn(await api.auth.loginTwoFactor({ challenge, code }));
   }
 
-  /** Revokes the session on the server, then forgets it here, even when the server is unreachable. */
+  /**
+   * Revokes the session on the server, then forgets it here, even when the server is unreachable.
+   * Signing out deletes the offline store, so changes not yet sent are lost; the reader confirms.
+   */
   async function logout(): Promise<void> {
+    const pending = outboxPending.value;
+    if (
+      pending > 0 &&
+      !(await ui.confirm(
+        t('offline.signOutTitle'),
+        t('offline.signOutPending', { n: pending }, pending),
+        t('nav.logout'),
+      ))
+    )
+      return;
+    sessionVerified.value = false;
     try {
       await api.auth.logout();
     } finally {

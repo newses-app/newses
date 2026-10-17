@@ -7,8 +7,9 @@ import { replaceEntries } from '../lib/entry-cache.ts';
 import { DEFAULT_KEEP, upsertById } from '../lib/offline-keep.ts';
 import { markFilled, wasEvicted } from '../offline/account.ts';
 import { connectivity, networkStatus } from '../offline/connectivity.ts';
-import { exclusively } from '../offline/db.ts';
+import { exclusively, type OfflineDb } from '../offline/db.ts';
 import { downloadContents, downloadImages } from '../offline/downloads.ts';
+import { flushOutbox, flushRequests, loadPending } from '../offline/outbox.ts';
 import {
   describeError,
   loadStatus,
@@ -24,7 +25,11 @@ import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
 import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY } from './useFeeds.ts';
 import { ENTRIES_KEY } from './useEntries.ts';
 import { LABELS_KEY } from './useLabels.ts';
+import { sessionVerified } from './useSession.ts';
 
+/** Changes kept offline are sent again after this, doubling up to five minutes. */
+const RETRY_MS = 2000;
+const MAX_RETRY_MS = 5 * 60_000;
 /** Sync runs this often while the app is visible, and half as often while hidden. */
 const INTERVAL_MS = 15 * 60_000;
 /** Counters changes come in bursts (an action, then its event); sync once they settle. */
@@ -82,6 +87,27 @@ export function useOfflineSync(): void {
   let requested = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let settle: ReturnType<typeof setTimeout> | undefined;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let retries = 0;
+
+  /** Sends the changes kept on this device, oldest first; one tab at a time. */
+  async function flush(db: OfflineDb): Promise<void> {
+    if (!sessionVerified.value) return;
+    await exclusively('outbox', async () => {
+      const { sent, refused, stopped } = await flushOutbox(api, db);
+      for (const { message } of refused) ui.notify(t('offline.refused', { error: message }), true);
+      clearTimeout(retry);
+      if (stopped === 'unreachable' || (typeof stopped === 'object' && stopped !== null)) {
+        const delay =
+          typeof stopped === 'object'
+            ? stopped.retryAfterSeconds * 1000
+            : Math.min(RETRY_MS * 2 ** retries++, MAX_RETRY_MS);
+        retry = setTimeout(run, delay);
+      } else retries = 0;
+      // The server now has what was kept; counters and lists follow from the sync after this.
+      if (sent > 0) void queryClient.invalidateQueries({ queryKey: COUNTERS_KEY });
+    });
+  }
 
   async function syncOnce(): Promise<void> {
     const db = currentStore();
@@ -90,11 +116,13 @@ export function useOfflineSync(): void {
     if (syncStatus.unsupported) return;
     syncStatus.running = true;
     try {
+      await flush(db);
       await exclusively('sync', async () => {
         const evicted = await wasEvicted(db);
         const result = await syncStore({
           api,
           db,
+          beforeResync: () => flush(db),
           onChanges: (changes) => {
             patchCaches(queryClient, changes);
           },
@@ -163,11 +191,12 @@ export function useOfflineSync(): void {
   const stopOnline = watch(connectivity, (state) => {
     if (state === 'online') run();
   });
-  const stopRequests = watch(syncRequests, run);
+  const stopRequests = watch([syncRequests, flushRequests, sessionVerified], run);
 
   onMounted(() => {
     const db = currentStore();
     if (db) void loadStatus(db).catch(() => undefined);
+    if (db) void loadPending(db).catch(() => undefined);
     run();
     schedule();
     stopRefresh = bridge.onRefresh(run);
@@ -175,6 +204,7 @@ export function useOfflineSync(): void {
   onBeforeUnmount(() => {
     clearTimeout(timer);
     clearTimeout(settle);
+    clearTimeout(retry);
     stopCounters();
     stopRefresh();
     stopOnline();

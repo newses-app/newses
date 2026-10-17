@@ -9,6 +9,7 @@ import {
   upsertById,
 } from '../lib/offline-keep.ts';
 import { type OfflineDb, type StoredImage, toStoredEntry } from './db.ts';
+import { withPending } from './outbox.ts';
 import { readQuery, type SnapshotQuery, writeQuery } from './snapshot.ts';
 
 /** The API minor that added what the store needs: sync tokens, read times, content versions. */
@@ -32,20 +33,23 @@ export interface SyncOptions {
 }
 
 /**
- * Puts the entries the store keeps and removes the others, for sync and for lists loaded online.
- * Content stays only with its entry.
+ * Puts the entries the store keeps and removes the others, for sync and for lists loaded online,
+ * with the changes still waiting in the outbox applied; returns them so. Content stays only with
+ * its entry.
  */
 export async function storeEntries(
   db: OfflineDb,
   entries: readonly Entry[],
   now: number,
   limits: KeepLimits = DEFAULT_KEEP,
-): Promise<void> {
-  const kept = entries.filter((e) => keeps(e, now, limits));
-  const dropped = entries.filter((e) => !keeps(e, now, limits)).map((e) => e.id);
-  await db.transaction('rw', db.entries, db.contents, db.images, async () => {
+): Promise<Entry[]> {
+  return db.transaction('rw', db.entries, db.contents, db.images, db.outbox, async () => {
+    const current = await withPending(db, entries);
+    const kept = current.filter((e) => keeps(e, now, limits));
+    const dropped = current.filter((e) => !keeps(e, now, limits)).map((e) => e.id);
     await db.entries.bulkPut(kept.map(toStoredEntry));
     await removeEntries(db, dropped);
+    return current;
   });
 }
 
@@ -141,15 +145,17 @@ async function followChanges(options: SyncOptions, token: string): Promise<void>
   let since = token;
   for (;;) {
     const changes = await api.sync(since, SYNC_LIMIT);
-    await db.transaction('rw', db.entries, db.contents, db.images, db.meta, async () => {
-      await storeEntries(db, changes.entries, now, limits);
+    const tables = [db.entries, db.contents, db.images, db.meta, db.outbox];
+    const entries = await db.transaction('rw', tables, async () => {
+      const current = await storeEntries(db, changes.entries, now, limits);
       await removeEntries(db, changes.deleted.entries);
       await patchList(db, 'subscriptions', changes.subscriptions, changes.deleted.subscriptions);
       await patchList(db, 'categories', changes.categories, changes.deleted.categories);
       await patchList(db, 'labels', changes.labels, changes.deleted.labels);
       await db.meta.put({ key: TOKEN_KEY, value: changes.next });
+      return current;
     });
-    options.onChanges?.(changes);
+    options.onChanges?.({ ...changes, entries });
     since = changes.next;
     if (!changes.more) return;
   }

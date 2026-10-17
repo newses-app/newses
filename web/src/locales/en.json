@@ -19,7 +19,11 @@
     "notPersisted": "The browser may clear these articles when it runs low on space.",
     "evicted": "The browser cleared the articles kept on this device. They are being downloaded again.",
     "notStored": "This article's text isn't on this device yet. It will download the next time you're online.",
-    "notSaved": "You're offline, so this change wasn't saved."
+    "notSaved": "You're offline, so this change wasn't saved.",
+    "pending": "{n} change waiting to be sent | {n} changes waiting to be sent",
+    "refused": "A change made offline couldn't be saved: {error}",
+    "signOutTitle": "Sign out?",
+    "signOutPending": "{n} change made offline hasn't reached the server yet. Signing out deletes it. | {n} changes made offline haven't reached the server yet. Signing out deletes them."
   },
   "common": {
     "cancel": "Cancel",
