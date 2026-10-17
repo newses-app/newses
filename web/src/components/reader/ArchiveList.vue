@@ -4,8 +4,10 @@ import { mdiRss } from '@mdi/js';
 import { nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import { useListPosition } from '../../composables/useListPosition.ts';
 import { useSentinel } from '../../composables/useSentinel.ts';
 import { formatRelative } from '../../lib/format.ts';
+import type { ListPosition } from '../../lib/list-position.ts';
 
 const props = defineProps<{
   entries: ArchivedEntry[];
@@ -14,8 +16,16 @@ const props = defineProps<{
   showPreview: boolean;
   hasMore: boolean;
   loading: boolean;
+  /** Where to scroll back to when the list mounts again. */
+  position: ListPosition | null;
+  /** The article the reader came back from, shown and focused once the list is back. */
+  returnedFrom: string | null;
 }>();
-const emit = defineEmits<{ loadMore: []; open: [entry: ArchivedEntry] }>();
+const emit = defineEmits<{
+  loadMore: [];
+  open: [entry: ArchivedEntry];
+  savePosition: [position: ListPosition];
+}>();
 const { t, locale } = useI18n();
 const route = useRoute();
 
@@ -35,6 +45,13 @@ watch(
         ?.scrollIntoView({ block: 'nearest' });
   },
 );
+useListPosition(list, {
+  attr: 'key',
+  count: () => props.entries.length,
+  position: () => props.position,
+  returnedFrom: () => props.returnedFrom,
+  save: (position) => emit('savePosition', position),
+});
 
 const link = (entry: ArchivedEntry) => ({
   name: 'archive',

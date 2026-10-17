@@ -13,6 +13,7 @@ import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSubscriptions } from '../composables/useFeeds.ts';
 import { useIconSrc } from '../composables/useIconSrc.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
+import type { ListPosition } from '../lib/list-position.ts';
 import { parseStream, subscriptionKey } from '../lib/streams.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -125,6 +126,18 @@ async function restore(state: EntryState, then?: 'note' | 'labels') {
   }
 }
 
+// On phones the list leaves while an article is open. Back on the same list, it returns to its
+// place and to the headline of the article last read, which takes focus.
+const listPosition = ref<ListPosition | null>(null);
+const returnedFrom = ref<string | null>(null);
+const listContext = computed(() => JSON.stringify([streamKey.value, q.value]));
+watch([key, listContext], ([current, context], [previous, previousContext]) => {
+  if (context !== previousContext) {
+    listPosition.value = null;
+    returnedFrom.value = null;
+  } else returnedFrom.value = current === null && singlePane.value ? previous : null;
+});
+
 const showList = computed(() => !singlePane.value || key.value === null);
 const showArticle = computed(() => !singlePane.value || key.value !== null);
 const scroller = ref<HTMLElement | null>(null);
@@ -181,7 +194,10 @@ watch(key, () => scroller.value?.scrollTo({ top: 0 }));
           :show-preview="prefs.showContentPreview"
           :has-more="list.hasNextPage.value"
           :loading="loading"
+          :position="listPosition"
+          :returned-from="returnedFrom"
           @load-more="list.fetchNextPage()"
+          @save-position="(position) => (listPosition = position)"
         />
       </div>
       <div v-if="showArticle" class="flex-grow-1 fill-height article-pane">

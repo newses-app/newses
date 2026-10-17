@@ -43,7 +43,7 @@
 | Special feeds | P1 | All articles, Fresh (configurable age), Starred, Published, Recently read, each with unread counts |
 | Archive | P5 | Past articles of subscribed feeds (purged, or older than the subscription) can be browsed per feed and searched; starring, publishing, noting, or labelling one restores it to the feed |
 | Archived feed | Later | Starred/published/noted entries of unsubscribed feeds remain readable under "Archived" |
-| Layouts | P1 | Three-pane (tree / headlines / article) and combined (expanded articles in list) modes; single-pane responsive layout below tablet width |
+| Layouts | P1 | Three-pane (tree / headlines / article) and combined (expanded articles in list) modes; single-pane responsive layout below tablet width, where returning from an article keeps the list's position |
 | View modes | P1 | All, unread only, adaptive (unread if any, else all) |
 | Sorting | P1 | Newest first, oldest first, title |
 | Score sorting | Later | Sort by score, then date |

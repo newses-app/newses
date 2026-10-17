@@ -194,7 +194,8 @@
     "scoreHint": "Lists highlight or hide articles by score; see Settings.",
     "scoreInvalid": "Enter a whole number from −{max} to {max}",
     "scoreSaved": "Score saved",
-    "unreadLabel": "Unread"
+    "unreadLabel": "Unread",
+    "publishedLabel": "Published"
   },
   "labels": {
     "title": "Labels",

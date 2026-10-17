@@ -35,6 +35,7 @@ import { useShortcutHandler } from '../composables/useShortcuts.ts';
 import { useTreeEditing } from '../composables/useTreeEditing.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { safeUrl } from '../lib/format.ts';
+import type { ListPosition } from '../lib/list-position.ts';
 import {
   labelKey,
   parseStream,
@@ -214,15 +215,23 @@ watch(
   },
 );
 
-async function closeArticle() {
-  const id = entryId.value;
-  await router.push({ name: 'reader', params: { stream: streamKey.value }, query: route.query });
-  // On phones the list comes back: focus returns to the article's headline.
-  if (singlePane.value && id !== null) {
-    await nextTick();
-    document.querySelector<HTMLElement>(`[data-entry="${String(id)}"] a`)?.focus();
-  }
+function closeArticle() {
+  void router.push({ name: 'reader', params: { stream: streamKey.value }, query: route.query });
 }
+
+// On phones the list leaves while an article is open. Back on the same list, it returns to its
+// place and to the headline of the article last read, which takes focus.
+const listPosition = ref<ListPosition | null>(null);
+const returnedFrom = ref<number | null>(null);
+const listContext = computed(() =>
+  JSON.stringify([streamKey.value, q.value, prefs.value.viewMode, prefs.value.sortOrder]),
+);
+watch([entryId, listContext], ([id, context], [previous, previousContext]) => {
+  if (context !== previousContext) {
+    listPosition.value = null;
+    returnedFrom.value = null;
+  } else returnedFrom.value = id === null && singlePane.value ? previous : null;
+});
 
 async function step(delta: 1 | -1) {
   // A key pressed while the first page loads acts once it arrives.
@@ -374,7 +383,7 @@ useShortcutHandler((action: ShortcutAction) => {
       return true;
     }
     case 'closeArticle':
-      if (entryId.value !== null) void closeArticle();
+      if (entryId.value !== null) closeArticle();
       return true;
     case 'search':
       void openSearch();
@@ -641,7 +650,10 @@ const showArticle = computed(
           :show-preview="prefs.showContentPreview"
           :has-more="list.hasNextPage.value"
           :loading="loading"
+          :position="listPosition"
+          :returned-from="returnedFrom"
           @load-more="list.fetchNextPage()"
+          @save-position="(position) => (listPosition = position)"
           @open="openedFromList"
           @toggle-star="(entry) => change([entry], { starred: !entry.starred })"
         />
