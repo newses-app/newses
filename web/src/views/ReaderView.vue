@@ -671,7 +671,7 @@ const showArticle = computed(
 
 <style scoped>
 .reader-main {
-  height: 100dvh;
+  height: var(--app-height);
 }
 .headlines-pane {
   width: clamp(18rem, 32vw, 28rem);
