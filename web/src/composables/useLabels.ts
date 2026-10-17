@@ -1,13 +1,14 @@
 import type { CreateLabelRequest, Label, UpdateLabelRequest } from '@newses/shared';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api } from '../api.ts';
+import { storedQuery } from '../offline/local.ts';
 import { COUNTERS_KEY } from './useCounters.ts';
 import { ENTRIES_KEY } from './useEntries.ts';
 
 export const LABELS_KEY = ['labels'] as const;
 
 export function useLabels() {
-  return useQuery({ queryKey: LABELS_KEY, queryFn: () => api.labels.list() });
+  return useQuery({ queryKey: LABELS_KEY, ...storedQuery('labels', () => api.labels.list()) });
 }
 
 /** Label changes, each followed by refetching what shows labels. */

@@ -3,6 +3,7 @@ import { DEFAULT_PREFS } from '@newses/shared/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { api } from '../api.ts';
+import { storedQuery } from '../offline/local.ts';
 import { COUNTERS_KEY } from './useCounters.ts';
 import { ENTRIES_KEY } from './useEntries.ts';
 
@@ -13,7 +14,7 @@ export function usePrefs() {
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: PREFS_KEY,
-    queryFn: () => api.prefs.get(),
+    ...storedQuery('prefs', () => api.prefs.get()),
     staleTime: Infinity,
   });
   const mutation = useMutation({

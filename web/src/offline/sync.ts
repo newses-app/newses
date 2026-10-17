@@ -8,7 +8,7 @@ import {
   readCutoff,
   upsertById,
 } from '../lib/offline-keep.ts';
-import { type OfflineDb, toStoredEntry } from './db.ts';
+import { type OfflineDb, type StoredImage, toStoredEntry } from './db.ts';
 import { readQuery, type SnapshotQuery, writeQuery } from './snapshot.ts';
 
 /** The API minor that added what the store needs: sync tokens, read times, content versions. */
@@ -43,16 +43,30 @@ export async function storeEntries(
 ): Promise<void> {
   const kept = entries.filter((e) => keeps(e, now, limits));
   const dropped = entries.filter((e) => !keeps(e, now, limits)).map((e) => e.id);
-  await db.transaction('rw', db.entries, db.contents, async () => {
+  await db.transaction('rw', db.entries, db.contents, db.images, async () => {
     await db.entries.bulkPut(kept.map(toStoredEntry));
     await removeEntries(db, dropped);
   });
 }
 
+/** Removes entries with their content, and images no other stored entry shows. */
 async function removeEntries(db: OfflineDb, ids: readonly number[]): Promise<void> {
   if (ids.length === 0) return;
   await db.entries.bulkDelete([...ids]);
   await db.contents.bulkDelete([...ids]);
+  const gone = new Set(ids);
+  const shown: StoredImage[] = [];
+  const unused: string[] = [];
+  for (const image of await db.images
+    .where('entryIds')
+    .anyOf([...ids])
+    .toArray()) {
+    const entryIds = image.entryIds.filter((id) => !gone.has(id));
+    if (entryIds.length > 0) shown.push({ ...image, entryIds });
+    else unused.push(image.url);
+  }
+  await db.images.bulkDelete(unused);
+  await db.images.bulkPut(shown);
 }
 
 /**
@@ -80,10 +94,23 @@ async function bootstrap(options: SyncOptions): Promise<void> {
   const now = (options.now ?? Date.now)();
   // First, so changes made while the lists load arrive afterwards.
   const { next } = await api.syncToken();
-  await db.transaction('rw', db.entries, db.contents, db.meta, async () => {
+  await db.transaction('rw', db.entries, db.contents, db.images, db.meta, async () => {
     await db.entries.clear();
     await db.meta.delete(TOKEN_KEY);
   });
+  // Before the headlines, so even a first sync cut short leaves enough to start offline.
+  const snapshots: [SnapshotQuery, () => Promise<unknown>][] = [
+    ['session', () => api.auth.session()],
+    ['prefs', () => api.prefs.get()],
+    ['subscriptions', () => api.subscriptions.list()],
+    ['categories', () => api.categories.list()],
+    ['labels', () => api.labels.list()],
+    ['themes', () => api.themes.list()],
+    ['counters', () => api.counters()],
+    ['tags', () => api.tags()],
+  ];
+  const results = await Promise.all(snapshots.map(([, load]) => load()));
+  await Promise.all(snapshots.map(([name], i) => writeQuery(db, name, results[i])));
   const lists: [EntryListQuery, number][] = [
     [{ special: 'all', view: 'unread' }, limits.unread],
     [{ special: 'starred', view: 'all' }, limits.starred],
@@ -103,18 +130,6 @@ async function bootstrap(options: SyncOptions): Promise<void> {
       cursor = page.cursor;
     } while (cursor && loaded < cap);
   }
-  const snapshots: [SnapshotQuery, () => Promise<unknown>][] = [
-    ['session', () => api.auth.session()],
-    ['prefs', () => api.prefs.get()],
-    ['subscriptions', () => api.subscriptions.list()],
-    ['categories', () => api.categories.list()],
-    ['labels', () => api.labels.list()],
-    ['themes', () => api.themes.list()],
-    ['counters', () => api.counters()],
-    ['tags', () => api.tags()],
-  ];
-  const loaded = await Promise.all(snapshots.map(([, load]) => load()));
-  await Promise.all(snapshots.map(([name], i) => writeQuery(db, name, loaded[i])));
   await db.meta.put({ key: TOKEN_KEY, value: next });
   await followChanges(options, next);
 }
@@ -126,7 +141,7 @@ async function followChanges(options: SyncOptions, token: string): Promise<void>
   let since = token;
   for (;;) {
     const changes = await api.sync(since, SYNC_LIMIT);
-    await db.transaction('rw', db.entries, db.contents, db.meta, async () => {
+    await db.transaction('rw', db.entries, db.contents, db.images, db.meta, async () => {
       await storeEntries(db, changes.entries, now, limits);
       await removeEntries(db, changes.deleted.entries);
       await patchList(db, 'subscriptions', changes.subscriptions, changes.deleted.subscriptions);
@@ -178,6 +193,8 @@ export async function pruneStore(
     ...overflow(starred, limits.starred),
     ...overflow(read, limits.read),
   ]);
-  await db.transaction('rw', db.entries, db.contents, () => removeEntries(db, [...gone]));
+  await db.transaction('rw', db.entries, db.contents, db.images, () =>
+    removeEntries(db, [...gone]),
+  );
   return gone.size;
 }

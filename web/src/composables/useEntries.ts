@@ -5,7 +5,8 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
 import { patchEntryPages, statePatch } from '../lib/entry-cache.ts';
 import { parseStream, type StreamKey } from '../lib/streams.ts';
-import { keepLoaded } from '../offline/store.ts';
+import { localEntry, localList, networkOrStore, storeNetworkMode } from '../offline/local.ts';
+import { currentStore, keepLoaded } from '../offline/store.ts';
 import { COUNTERS_KEY, live } from './useCounters.ts';
 import { TAGS_KEY } from './useTags.ts';
 
@@ -28,19 +29,35 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
       const o = toValue(options);
       return [ENTRIES_KEY, o.stream, o.view, o.q ? 'relevance' : o.order, o.q, o.content] as const;
     }),
-    queryFn: async ({ pageParam }) => {
+    queryFn: ({ pageParam }) => {
       const o = toValue(options);
-      const page = await api.entries.list({
-        ...parseStream(o.stream),
-        view: o.view,
-        ...(o.q ? { q: o.q } : { order: o.order }),
-        ...(pageParam && { cursor: pageParam }),
-        content: o.content,
-        limit: PAGE_SIZE,
-      });
-      void keepLoaded(page.entries);
-      return page;
+      const remote = async () => {
+        const page = await api.entries.list({
+          ...parseStream(o.stream),
+          view: o.view,
+          ...(o.q ? { q: o.q } : { order: o.order }),
+          ...(pageParam && { cursor: pageParam }),
+          content: o.content,
+          limit: PAGE_SIZE,
+        });
+        void keepLoaded(page.entries);
+        return page;
+      };
+      // Search needs the server until the store can search.
+      return networkOrStore(remote, (db) =>
+        o.q
+          ? Promise.resolve(undefined)
+          : localList(db, {
+              stream: parseStream(o.stream),
+              view: o.view,
+              order: o.order,
+              cursor: pageParam || undefined,
+              limit: PAGE_SIZE,
+              content: o.content,
+            }),
+      );
     },
+    networkMode: storeNetworkMode(),
     initialPageParam: '',
     getNextPageParam: (last) => last.cursor ?? undefined,
   });
@@ -52,7 +69,20 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
 export function useEntry(id: MaybeRefOrGetter<number | null>) {
   return useQuery({
     queryKey: computed(() => ['entry', toValue(id)] as const),
-    queryFn: () => api.entries.get(toValue(id) ?? 0),
+    queryFn: async () => {
+      const entryId = toValue(id) ?? 0;
+      // A stored copy with current content opens without asking the server.
+      const db = currentStore();
+      const current = db && (await localEntry(db, entryId, true).catch(() => undefined));
+      return (
+        current ??
+        networkOrStore(
+          () => api.entries.get(entryId),
+          (store) => localEntry(store, entryId),
+        )
+      );
+    },
+    networkMode: storeNetworkMode(),
     enabled: computed(() => toValue(id) !== null),
   });
 }

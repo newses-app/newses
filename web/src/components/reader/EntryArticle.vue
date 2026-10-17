@@ -24,8 +24,11 @@ import { api, ApiError } from '../../api.ts';
 import { useSubscriptions } from '../../composables/useFeeds.ts';
 import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
+import { useStoredImages } from '../../composables/useStoredImages.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
+import { withStoredImages } from '../../lib/offline-content.ts';
+import { connectivity } from '../../offline/connectivity.ts';
 import { isHighScore } from '../../lib/score.ts';
 import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
 import { appServer } from '../../platform/index.ts';
@@ -69,10 +72,16 @@ const showFull = computed(
   () =>
     !!fullContent.value && (choice.value === 'full' || (choice.value === null && optedIn.value)),
 );
+// Images stored on the device show without the network, online too.
+const storedImages = useStoredImages(() => props.entry.id);
 const content = computed(() => {
   const html = showFull.value ? fullContent.value : props.entry.content;
-  return html && resolveContentUrls(html, appServer());
+  return html && resolveContentUrls(withStoredImages(html, storedImages.value), appServer());
 });
+/** Offline, an article whose text was not downloaded shows its excerpt and says so. */
+const notStored = computed(
+  () => !content.value && props.entry.content === null && connectivity.value !== 'online',
+);
 watch(
   () => props.entry.id,
   () => {
@@ -237,6 +246,9 @@ async function toggleFullText() {
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-else-if="content" class="article-content" v-html="content" />
     <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
+    <p v-if="notStored" class="text-body-small text-medium-emphasis">
+      {{ t('offline.notStored') }}
+    </p>
     <v-list v-if="enclosures.length" density="compact" class="mt-4">
       <v-list-subheader>{{ t('entries.attachments') }}</v-list-subheader>
       <v-list-item

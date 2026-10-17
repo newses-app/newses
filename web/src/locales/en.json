@@ -6,7 +6,19 @@
     "retry": "Try again"
   },
   "offline": {
-    "evicted": "The browser cleared the articles kept on this device. They are being downloaded again."
+    "title": "Offline reading",
+    "enable": "Keep articles on this device to read without a connection",
+    "stored": "{entries} articles kept, {contents} with their text, {images} images ({size})",
+    "syncing": "Syncing…",
+    "lastSynced": "Last synced {when}",
+    "neverSynced": "Not synced yet",
+    "lastError": "The last sync failed: {error}",
+    "unsupported": "This server needs an update before articles can be kept offline.",
+    "syncNow": "Sync now",
+    "persisted": "The browser keeps these articles.",
+    "notPersisted": "The browser may clear these articles when it runs low on space.",
+    "evicted": "The browser cleared the articles kept on this device. They are being downloaded again.",
+    "notStored": "This article's text isn't on this device yet. It will download the next time you're online."
   },
   "common": {
     "cancel": "Cancel",

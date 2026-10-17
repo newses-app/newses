@@ -94,6 +94,11 @@ export function openOfflineDb(name: string, onReplaced: () => void = () => undef
     meta: 'key',
     outbox: '++seq',
   });
+  // Versions and sizes read from the indexes alone, without loading content or images.
+  db.version(2).stores({
+    contents: 'id, contentVersion, bytes',
+    images: 'url, *entryIds, bytes',
+  });
   db.on('versionchange', () => {
     db.close();
     onReplaced();
@@ -112,6 +117,15 @@ const storage = () => navigator.storage as StorageManager | undefined;
 export async function requestPersistence(): Promise<boolean> {
   try {
     return (await storage()?.persist()) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the browser keeps the store under storage pressure. */
+export async function persisted(): Promise<boolean> {
+  try {
+    return (await storage()?.persisted()) ?? false;
   } catch {
     return false;
   }

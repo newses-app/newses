@@ -1,6 +1,7 @@
 import type { CreateThemeRequest, Theme, UpdateThemeRequest } from '@newses/shared';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api } from '../api.ts';
+import { storedQuery } from '../offline/local.ts';
 
 export const THEMES_KEY = ['themes'] as const;
 
@@ -11,7 +12,7 @@ export const THEMES_KEY = ['themes'] as const;
 export function useThemes() {
   return useQuery({
     queryKey: THEMES_KEY,
-    queryFn: () => api.themes.list(),
+    ...storedQuery('themes', () => api.themes.list()),
     refetchOnWindowFocus: 'always',
   });
 }

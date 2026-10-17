@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
+import { storedQuery } from '../offline/local.ts';
 
 export const TAGS_KEY = ['tags'] as const;
 
@@ -8,7 +9,7 @@ export const TAGS_KEY = ['tags'] as const;
 export function useTags(enabled: MaybeRefOrGetter<boolean> = true) {
   return useQuery({
     queryKey: TAGS_KEY,
-    queryFn: () => api.tags(),
+    ...storedQuery('tags', () => api.tags()),
     enabled: computed(() => toValue(enabled)),
   });
 }

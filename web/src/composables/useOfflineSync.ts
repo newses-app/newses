@@ -6,11 +6,19 @@ import { api } from '../api.ts';
 import { replaceEntries } from '../lib/entry-cache.ts';
 import { DEFAULT_KEEP, upsertById } from '../lib/offline-keep.ts';
 import { markFilled, wasEvicted } from '../offline/account.ts';
-import { connectivity } from '../offline/connectivity.ts';
+import { connectivity, networkStatus } from '../offline/connectivity.ts';
 import { exclusively } from '../offline/db.ts';
+import { downloadContents, downloadImages } from '../offline/downloads.ts';
+import {
+  describeError,
+  loadStatus,
+  saveStatus,
+  syncRequests,
+  syncStatus,
+} from '../offline/status.ts';
 import { currentStore } from '../offline/store.ts';
 import { pruneStore, supportsOffline, syncStore } from '../offline/sync.ts';
-import { bridge } from '../platform/index.ts';
+import { appServer, bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
 import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY } from './useFeeds.ts';
@@ -77,22 +85,39 @@ export function useOfflineSync(): void {
 
   async function syncOnce(): Promise<void> {
     const db = currentStore();
-    if (!db || connectivity.value !== 'online' || !(await serverSupportsOffline())) return;
-    await exclusively('sync', async () => {
-      const evicted = await wasEvicted(db);
-      const result = await syncStore({
-        api,
-        db,
-        onChanges: (changes) => {
-          patchCaches(queryClient, changes);
-        },
+    if (!db || connectivity.value !== 'online') return;
+    syncStatus.unsupported = !(await serverSupportsOffline());
+    if (syncStatus.unsupported) return;
+    syncStatus.running = true;
+    try {
+      await exclusively('sync', async () => {
+        const evicted = await wasEvicted(db);
+        const result = await syncStore({
+          api,
+          db,
+          onChanges: (changes) => {
+            patchCaches(queryClient, changes);
+          },
+        });
+        await pruneStore(db, Date.now(), DEFAULT_KEEP);
+        if (result === 'bootstrap') {
+          markFilled();
+          if (evicted) ui.notify(t('offline.evicted'));
+        }
+        syncStatus.lastSyncedAt = Date.now();
+        syncStatus.lastError = null;
+        // Text first, so every kept article can be read before any image arrives.
+        const downloads = { api, db, server: appServer() ?? '' };
+        await downloadContents({ ...downloads, images: false });
+        await downloadImages({ ...downloads, images: networkStatus.value.wifi !== false });
       });
-      await pruneStore(db, Date.now(), DEFAULT_KEEP);
-      if (result === 'bootstrap') {
-        markFilled();
-        if (evicted) ui.notify(t('offline.evicted'));
-      }
-    });
+    } catch (error) {
+      syncStatus.lastError = describeError(error);
+      throw error;
+    } finally {
+      syncStatus.running = false;
+      await saveStatus(db).catch(() => undefined);
+    }
   }
 
   /** Runs a sync, or one more after the current one when asked while it runs. */
@@ -138,8 +163,11 @@ export function useOfflineSync(): void {
   const stopOnline = watch(connectivity, (state) => {
     if (state === 'online') run();
   });
+  const stopRequests = watch(syncRequests, run);
 
   onMounted(() => {
+    const db = currentStore();
+    if (db) void loadStatus(db).catch(() => undefined);
     run();
     schedule();
     stopRefresh = bridge.onRefresh(run);
@@ -150,5 +178,6 @@ export function useOfflineSync(): void {
     stopCounters();
     stopRefresh();
     stopOnline();
+    stopRequests();
   });
 }

@@ -5,7 +5,7 @@ import type { Router } from 'vue-router';
 import { useRouter } from 'vue-router';
 import { api, isUnauthenticated, retryable } from '../api.ts';
 import { connectivity } from '../offline/connectivity.ts';
-import { seedQueries } from '../offline/snapshot.ts';
+import { seedQueries, writeQuery } from '../offline/snapshot.ts';
 import { currentStore, storeSignedIn, storeSignedOut } from '../offline/store.ts';
 import { connection, NATIVE } from '../platform/index.ts';
 
@@ -15,6 +15,8 @@ const fetchSession = () => api.auth.session();
 
 /** Set while the app runs on the stored session; the server checks it once it answers. */
 let startedOffline = false;
+/** Set once this launch's session from the server is in the store. */
+let sessionKept = false;
 
 /** Fills the caches from the store, when it holds a snapshot of the signed-in account. */
 async function startOffline(queryClient: QueryClient): Promise<CurrentSession | null> {
@@ -82,6 +84,12 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
     try {
       const session = await currentSession(queryClient);
       await storeSignedIn({ userId: session.user.id, serverUrl: connection.state.serverUrl });
+      // The account is known only now, so the snapshot of its session is written here, once.
+      const db = sessionKept || startedOffline ? null : currentStore();
+      if (db) {
+        sessionKept = true;
+        void writeQuery(db, 'session', session).catch(() => undefined);
+      }
       const mustChange = session.user.passwordChangeRequired;
       if (mustChange && to.name !== 'change-password') return { name: 'change-password' };
       if (!mustChange && to.name === 'change-password') return '/all';

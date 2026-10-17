@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { categorySchema, subscriptionSchema } from './feeds.ts';
 import { labelSchema } from './labels.ts';
-import { MAX_NOTE_LENGTH, MAX_SCORE, MAX_TAG_LENGTH, MAX_TAGS_PER_ENTRY } from './limits.ts';
+import {
+  MAX_CONTENTS_IDS,
+  MAX_NOTE_LENGTH,
+  MAX_SCORE,
+  MAX_TAG_LENGTH,
+  MAX_TAGS_PER_ENTRY,
+} from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
@@ -209,9 +215,6 @@ export type SyncTokenResponse = z.infer<typeof syncTokenResponseSchema>;
 
 export const fullTextResponseSchema = z.object({ content: z.string() });
 export type FullTextResponse = z.infer<typeof fullTextResponseSchema>;
-
-/** Most entries per contents request. */
-export const MAX_CONTENTS_IDS = 100;
 
 export const entryContentsRequestSchema = z.object({
   /** In order of priority; those past the response's size budget come back in `deferred`. */

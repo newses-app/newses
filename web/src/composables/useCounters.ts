@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api } from '../api.ts';
+import { storedQuery } from '../offline/local.ts';
 import { readEventStream } from '../lib/event-stream.ts';
 import { bridge, connection, NATIVE } from '../platform/index.ts';
 
@@ -23,7 +24,11 @@ export const live = ref(false);
 export const pollInBackground = ref(false);
 
 export function useCounters() {
-  return useQuery({ queryKey: COUNTERS_KEY, queryFn: () => api.counters(), staleTime: 10_000 });
+  return useQuery({
+    queryKey: COUNTERS_KEY,
+    ...storedQuery('counters', () => api.counters()),
+    staleTime: 10_000,
+  });
 }
 
 /**

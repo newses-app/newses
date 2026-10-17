@@ -1,4 +1,5 @@
 import type { Entry } from '@newses/shared';
+import Dexie from 'dexie';
 import { ref } from 'vue';
 import { DEFAULT_KEEP } from '../lib/offline-keep.ts';
 import { connection, NATIVE } from '../platform/index.ts';
@@ -16,6 +17,24 @@ export function offlineEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Turns offline reading on or off in this browser. Turning it off deletes the stored copy, so a
+ * shared computer keeps no one's articles. The apps have it on always.
+ */
+export async function setOfflineEnabled(enabled: boolean): Promise<void> {
+  if (NATIVE) return;
+  try {
+    if (enabled) localStorage.setItem(ENABLED_KEY, 'true');
+    else localStorage.removeItem(ENABLED_KEY);
+  } catch {
+    // Storage blocked: the browser cannot keep articles either.
+  }
+  if (enabled) return;
+  const account = lastAccount();
+  closeStore();
+  if (account) await Dexie.delete(account.name);
 }
 
 /** Set when another tab took the store over for a newer schema; this page should reload. */
