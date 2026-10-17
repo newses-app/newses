@@ -18,7 +18,8 @@
     "persisted": "The browser keeps these articles.",
     "notPersisted": "The browser may clear these articles when it runs low on space.",
     "evicted": "The browser cleared the articles kept on this device. They are being downloaded again.",
-    "notStored": "This article's text isn't on this device yet. It will download the next time you're online."
+    "notStored": "This article's text isn't on this device yet. It will download the next time you're online.",
+    "notSaved": "You're offline, so this change wasn't saved."
   },
   "common": {
     "cancel": "Cancel",

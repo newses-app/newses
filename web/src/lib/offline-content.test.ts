@@ -34,6 +34,15 @@ describe('withStoredImages', () => {
     expect(withStoredImages(html, stored)).toBe('<img src="blob:a">');
   });
 
+  it('without a connection, leaves images that are not stored without a source', () => {
+    const html =
+      '<img src="https://img.example/a.png"><picture><source srcset="https://n.example/y.webp"><img src="https://n.example/y.png" srcset="https://n.example/y2.png 2x"></picture><video poster="https://n.example/p.jpg"></video>';
+    expect(withStoredImages(html, stored, true)).toBe(
+      '<img src="blob:a"><picture><img></picture><video></video>',
+    );
+    expect(withStoredImages('<img src="https://n.example/x.png">', new Map(), true)).toBe('<img>');
+  });
+
   it('leaves HTML without stored images untouched', () => {
     expect(withStoredImages('<p>x</p>', new Map())).toBe('<p>x</p>');
     expect(withStoredImages('<img src="https://n.example/x.png">', stored)).toBe(

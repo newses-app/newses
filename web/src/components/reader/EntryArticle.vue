@@ -72,11 +72,15 @@ const showFull = computed(
   () =>
     !!fullContent.value && (choice.value === 'full' || (choice.value === null && optedIn.value)),
 );
-// Images stored on the device show without the network, online too.
-const storedImages = useStoredImages(() => props.entry.id);
+// Images stored on the device show without the network, online too; the HTML waits for them, so
+// the browser does not ask for images it has. Without a connection, the others are left out.
+const { images: storedImages, ready: imagesReady } = useStoredImages(() => props.entry.id);
 const content = computed(() => {
   const html = showFull.value ? fullContent.value : props.entry.content;
-  return html && resolveContentUrls(withStoredImages(html, storedImages.value), appServer());
+  const storedOnly = connectivity.value !== 'online';
+  return (
+    html && resolveContentUrls(withStoredImages(html, storedImages.value, storedOnly), appServer())
+  );
 });
 /** Offline, an article whose text was not downloaded shows its excerpt and says so. */
 const notStored = computed(
@@ -241,7 +245,7 @@ async function toggleFullText() {
     <p v-if="showFull" class="text-body-small text-medium-emphasis mb-2" data-full-text>
       {{ t('entries.fullTextShown') }}
     </p>
-    <v-skeleton-loader v-if="entry.content === undefined" type="paragraph@3" />
+    <v-skeleton-loader v-if="entry.content === undefined || !imagesReady" type="paragraph@3" />
     <!-- Content is sanitised by the server against an allow-list before storage. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-else-if="content" class="article-content" v-html="content" />

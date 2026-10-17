@@ -16,25 +16,37 @@ export function originalImageUrl(src: string): string {
 /**
  * Points images in entry HTML at copies stored on the device (`blob:` URLs), by their original
  * URL whether or not the HTML was proxied. Their `srcset`, `sizes`, and picture sources go, so the
- * browser cannot pick a version that is not stored.
+ * browser cannot pick a version that is not stored. With `storedOnly` (no connection), images
+ * without a stored copy lose their sources too, so nothing is requested.
  */
-export function withStoredImages(html: string, stored: ReadonlyMap<string, string>): string {
-  if (stored.size === 0) return html;
+export function withStoredImages(
+  html: string,
+  stored: ReadonlyMap<string, string>,
+  storedOnly = false,
+): string {
+  if (stored.size === 0 && !storedOnly) return html;
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
   let changed = false;
   for (const img of doc.querySelectorAll('img')) {
     const local = stored.get(originalImageUrl(img.getAttribute('src') ?? ''));
-    if (!local) continue;
-    img.setAttribute('src', local);
+    if (!local && !storedOnly) continue;
+    if (local) img.setAttribute('src', local);
+    else img.removeAttribute('src');
     img.removeAttribute('srcset');
     img.removeAttribute('sizes');
     for (const source of img.closest('picture')?.querySelectorAll('source') ?? []) source.remove();
     changed = true;
   }
+  if (storedOnly)
+    for (const source of doc.querySelectorAll('picture source')) {
+      source.remove();
+      changed = true;
+    }
   for (const video of doc.querySelectorAll('video[poster]')) {
     const local = stored.get(originalImageUrl(video.getAttribute('poster') ?? ''));
-    if (!local) continue;
-    video.setAttribute('poster', local);
+    if (local) video.setAttribute('poster', local);
+    else if (storedOnly) video.removeAttribute('poster');
+    else continue;
     changed = true;
   }
   return changed ? doc.body.innerHTML : html;

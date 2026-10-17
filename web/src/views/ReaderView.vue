@@ -42,6 +42,7 @@ import {
   subscriptionKey,
 } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
+import { connectivity } from '../offline/connectivity.ts';
 import { bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -149,11 +150,17 @@ useDocumentTitle(() =>
 );
 
 function notifyError(error: unknown) {
-  ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+  if (error instanceof ApiError) ui.notify(error.message, true);
+  else ui.notify(t(connectivity.value === 'online' ? 'errors.generic' : 'offline.notSaved'), true);
 }
 
 function change(entries: Entry[], state: EntryState) {
   actions.setState(entries, state).catch(notifyError);
+}
+
+/** Reading marks entries read, but not without a connection, where the change cannot be saved. */
+function readAutomatically(entries: Entry[]) {
+  if (connectivity.value === 'online') change(entries, { unread: false });
 }
 
 // Opening an entry marks it read once; toggling it unread again leaves it unread.
@@ -164,7 +171,7 @@ watch(
     const entry = current.value;
     if (!entry || entry.id !== entryId.value || autoRead === entry.id) return;
     autoRead = entry.id;
-    if (entry.unread) change([entry], { unread: false });
+    if (entry.unread) readAutomatically([entry]);
   },
   { immediate: true },
 );
@@ -609,7 +616,7 @@ const showArticle = computed(
           @load-more="list.fetchNextPage()"
           @select="(entry) => open(entry, entryId !== null)"
           @change="(entry, state) => change([entry], state)"
-          @scrolled-past="(read) => change(read, { unread: false })"
+          @scrolled-past="readAutomatically"
         />
         <HeadlineList
           v-else
