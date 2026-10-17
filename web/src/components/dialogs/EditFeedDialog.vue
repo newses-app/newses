@@ -5,6 +5,8 @@ import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError } from '../../api.ts';
 import { useDurations } from '../../composables/useDurations.ts';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
+import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
+import { useResourceEdits } from '../../composables/useResourceEdits.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatDateTime } from '../../lib/format.ts';
@@ -69,6 +71,9 @@ function changeCategory(id: number | null) {
 
 const { intervalItems, purgeItems } = useDurations();
 
+const { edit } = useResourceEdits();
+const { online, whenOnline } = useOnlineOnly();
+
 async function run(work: () => Promise<unknown>, done?: string) {
   busy.value = true;
   try {
@@ -88,23 +93,27 @@ function save() {
   const moved =
     categoryId.value !== s.categoryId ||
     after.value !== precedingId(inCategory(s.categoryId), s.id);
+  const changes = {
+    title: title.value.trim() || null,
+    updateIntervalMinutes: interval.value,
+    purgeDays: purgeDays.value,
+    fullText: fullText.value,
+  };
   void run(async () => {
-    await api.subscriptions.update(s.id, {
-      title: title.value.trim() || null,
-      updateIntervalMinutes: interval.value,
-      purgeDays: purgeDays.value,
-      fullText: fullText.value,
-    });
+    await edit({ kind: 'subscription.update', id: s.id, changes }, () =>
+      api.subscriptions.update(s.id, changes),
+    );
     if (moved)
       await editing.moveFeed(s.id, categoryId.value, beforeIdAfter(siblings.value, after.value));
     open.value = false;
   });
 }
 
-function refresh() {
+/** Fetching the feed is the server's job. */
+const refresh = whenOnline(() => {
   const s = subscription.value;
   if (s) void run(() => api.subscriptions.refresh(s.id), t('feeds.refreshRequested'));
-}
+});
 
 async function unsubscribe() {
   const s = subscription.value;
@@ -116,7 +125,9 @@ async function unsubscribe() {
   );
   if (!confirmed) return;
   await run(async () => {
-    await api.subscriptions.unsubscribe(s.id);
+    await edit({ kind: 'subscription.delete', id: s.id }, () =>
+      api.subscriptions.unsubscribe(s.id),
+    );
     open.value = false;
     if (route.params.stream === subscriptionKey(s.id)) await router.push('/all');
   });
@@ -177,7 +188,9 @@ async function unsubscribe() {
           <v-btn color="error" :disabled="busy" @click="unsubscribe">{{
             t('feeds.unsubscribe')
           }}</v-btn>
-          <v-btn :disabled="busy" @click="refresh">{{ t('feeds.refresh') }}</v-btn>
+          <v-btn :disabled="busy" :aria-disabled="!online" @click="refresh">
+            {{ t('feeds.refresh') }}
+          </v-btn>
           <v-spacer />
           <v-btn @click="open = false">{{ t('common.cancel') }}</v-btn>
           <v-btn type="submit" color="primary" variant="flat" :loading="busy">{{

@@ -1,7 +1,9 @@
 import type { CreateThemeRequest, Theme, UpdateThemeRequest } from '@newses/shared';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api } from '../api.ts';
+import { pendingTheme, temporaryId } from '../lib/offline-resources.ts';
 import { storedQuery } from '../offline/local.ts';
+import { useResourceEdits } from './useResourceEdits.ts';
 
 export const THEMES_KEY = ['themes'] as const;
 
@@ -17,29 +19,43 @@ export function useThemes() {
   });
 }
 
-/** Theme changes, each followed by refetching the list, so a theme in use updates once saved. */
+/**
+ * Theme changes, each followed by refetching the list once sent, so a theme in use updates; without
+ * a connection they are kept and shown until they can be.
+ */
 export function useThemeActions() {
   const queryClient = useQueryClient();
+  const { edit } = useResourceEdits();
   const refresh = () => queryClient.invalidateQueries({ queryKey: THEMES_KEY });
+  const cached = (id: number) =>
+    queryClient.getQueryData<Theme[]>(THEMES_KEY)?.find((theme) => theme.id === id);
 
+  /** The theme made, or one with a temporary id until the server has it. */
   async function create(theme: CreateThemeRequest): Promise<Theme> {
-    const created = await api.themes.create(theme);
+    const id = temporaryId();
+    const saved = await edit({ kind: 'theme.create', id, body: theme }, () =>
+      api.themes.create(theme),
+    );
+    if (!saved.sent) return cached(id) ?? pendingTheme(id, theme);
     await refresh();
-    return created;
+    return saved.value;
   }
 
-  async function update(id: number, changes: UpdateThemeRequest): Promise<Theme> {
-    const updated = await api.themes.update(id, changes);
+  async function update(id: number, changes: UpdateThemeRequest): Promise<Theme | undefined> {
+    const saved = await edit({ kind: 'theme.update', id, changes }, () =>
+      api.themes.update(id, changes),
+    );
+    if (!saved.sent) return cached(id);
     await refresh();
-    return updated;
+    return saved.value;
   }
 
   async function remove(id: number): Promise<void> {
-    await api.themes.delete(id);
-    await refresh();
+    const saved = await edit({ kind: 'theme.delete', id }, () => api.themes.delete(id));
+    if (saved.sent) await refresh();
   }
 
-  /** Withdraws another user's shared theme (admins). */
+  /** Withdraws another user's shared theme (admins); needs the server. */
   async function unpublish(id: number): Promise<void> {
     await api.admin.unpublishTheme(id);
     await refresh();

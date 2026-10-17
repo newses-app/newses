@@ -1,3 +1,4 @@
+import type { CreateThemeRequest } from '@newses/shared';
 import { ApiError } from '@newses/shared/client';
 import { reactive, ref } from 'vue';
 import type { OfflineDb } from './db.ts';
@@ -17,6 +18,22 @@ export const syncStatus = reactive({
 
 /** Bumped to ask the running sync for one now (settings' Sync now, turning offline on). */
 export const syncRequests = ref(0);
+
+/** Themes created offline that the server refused, kept for the reader to fix or export. */
+export const themeDrafts = ref<CreateThemeRequest[]>([]);
+const DRAFTS_KEY = 'themeDrafts';
+
+export async function loadThemeDrafts(db: OfflineDb): Promise<void> {
+  themeDrafts.value = ((await db.meta.get(DRAFTS_KEY))?.value ?? []) as CreateThemeRequest[];
+}
+
+export async function saveThemeDrafts(db: OfflineDb, drafts: CreateThemeRequest[]): Promise<void> {
+  themeDrafts.value = drafts;
+  await db.meta.put({ key: DRAFTS_KEY, value: JSON.parse(JSON.stringify(drafts)) as unknown });
+}
+
+export const keepThemeDrafts = (db: OfflineDb, drafts: CreateThemeRequest[]) =>
+  saveThemeDrafts(db, [...themeDrafts.value, ...drafts]);
 
 /** Notes changed both on this device and elsewhere, waiting for the reader to settle. */
 export const noteConflicts = ref<NoteConflict[]>([]);

@@ -9,10 +9,13 @@ import { markFilled, wasEvicted } from '../offline/account.ts';
 import { connectivity, networkStatus } from '../offline/connectivity.ts';
 import { exclusively, type OfflineDb } from '../offline/db.ts';
 import { downloadContents, downloadImages, trimToLimit } from '../offline/downloads.ts';
+import { warmThemeFonts } from '../offline/fonts.ts';
 import { flushOutbox, flushRequests, loadPending } from '../offline/outbox.ts';
 import {
   describeError,
+  keepThemeDrafts,
   loadStatus,
+  loadThemeDrafts,
   noteConflicts,
   saveStatus,
   syncRequests,
@@ -21,7 +24,7 @@ import {
 import { currentStore } from '../offline/store.ts';
 import { imagesNow, keepLimits, offlineSettings } from '../offline/settings.ts';
 import { detectsConflicts, pruneStore, supportsOffline, syncStore } from '../offline/sync.ts';
-import { appServer, bridge } from '../platform/index.ts';
+import { appServer, bridge, NATIVE } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
 import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY } from './useFeeds.ts';
@@ -101,7 +104,25 @@ export function useOfflineSync(): void {
     await exclusively('outbox', async () => {
       const result = await flushOutbox(api, db, { conflicts });
       const { sent, refused, stopped } = result;
-      for (const { message } of refused) ui.notify(t('offline.refused', { error: message }), true);
+      for (const { op, code, message } of refused)
+        ui.notify(
+          op.kind === 'subscription.create' && code === 'choose'
+            ? t('offline.subscribeChoose', { url: op.body.url })
+            : t('offline.refused', { error: message }),
+          true,
+        );
+      if (result.themeDrafts.length > 0) {
+        await keepThemeDrafts(db, result.themeDrafts);
+        for (const { name } of result.themeDrafts)
+          ui.notify(t('offline.themeDraft', { name }), true);
+      }
+      // Objects created offline now have the server's ids, or are gone; show what the server has.
+      if (result.created.length > 0 || result.dropped.length > 0)
+        await Promise.all(
+          ['subscriptions', 'categories', 'labels', 'themes', 'prefs', ENTRIES_KEY, 'entry'].map(
+            (name) => queryClient.invalidateQueries({ queryKey: [name] }),
+          ),
+        );
       if (result.overridden > 0)
         ui.notify(t('offline.overridden', { n: result.overridden }, result.overridden));
       noteConflicts.value = [...noteConflicts.value, ...result.noteConflicts];
@@ -125,6 +146,7 @@ export function useOfflineSync(): void {
     syncStatus.unsupported = !offline;
     if (syncStatus.unsupported) return;
     syncStatus.running = true;
+    if (!NATIVE) warmThemeFonts();
     try {
       await flush(db, conflicts);
       await exclusively('sync', async () => {
@@ -209,6 +231,7 @@ export function useOfflineSync(): void {
 
   onMounted(() => {
     const db = currentStore();
+    if (db) void loadThemeDrafts(db).catch(() => undefined);
     if (db) void loadStatus(db).catch(() => undefined);
     if (db) void loadPending(db).catch(() => undefined);
     run();

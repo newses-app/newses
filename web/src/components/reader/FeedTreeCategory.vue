@@ -2,6 +2,7 @@
 import { mdiChevronDown, mdiChevronRight, mdiFolder, mdiFolderOpen } from '@mdi/js';
 import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { isTemporary } from '../../lib/offline-resources.ts';
 import type { CategoryNode } from '../../lib/tree.ts';
 import FeedTreeFeed from './FeedTreeFeed.vue';
 import { TREE_CONTEXT } from './tree-context.ts';
@@ -65,7 +66,12 @@ function onDrop() {
         <span class="toggle-space" />
         <v-icon :icon="collapsed ? mdiFolder : mdiFolderOpen" size="small" class="me-2" />
       </template>
-      <v-list-item-title>{{ node.category.title }}</v-list-item-title>
+      <v-list-item-title>
+        {{ node.category.title }}
+        <span v-if="isTemporary(node.category.id)" class="text-body-small text-medium-emphasis">
+          · {{ t('offline.notSent') }}
+        </span>
+      </v-list-item-title>
       <template v-if="node.unread > 0" #append>
         <UnreadCount :n="node.unread" />
       </template>

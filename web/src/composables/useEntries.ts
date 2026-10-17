@@ -31,6 +31,7 @@ import {
   queueChanges,
   withPending,
 } from '../offline/outbox.ts';
+import { sendOrQueue } from './sendOrQueue.ts';
 import { currentStore, keepLoaded } from '../offline/store.ts';
 import { COUNTERS_KEY, live } from './useCounters.ts';
 import { sessionVerified } from './useSession.ts';
@@ -146,35 +147,11 @@ export function useEntryActions() {
     queryClient.setQueryData(COUNTERS_KEY, adjustCounters(counters, changes, context));
   }
 
-  /**
-   * Sends a change, or keeps it in the outbox: while the server cannot be reached, before the
-   * session is confirmed, and behind changes already waiting, so they reach the server in order.
-   * Throws when the server refuses it, or cannot be reached and there is no store to keep it in.
-   */
   async function save(
     ops: OutboxOp[],
     request: () => Promise<unknown>,
   ): Promise<'sent' | 'queued'> {
-    const db = currentStore();
-    if (!db) {
-      await request();
-      return 'sent';
-    }
-    if (
-      connectivity.value === 'online' &&
-      sessionVerified.value &&
-      (await db.outbox.count()) === 0
-    ) {
-      try {
-        await request();
-        return 'sent';
-      } catch (error) {
-        if (!failedToReach(error)) throw error;
-      }
-    }
-    await queueChanges(db, ops);
-    flushRequests.value++;
-    return 'queued';
+    return (await sendOrQueue(ops, request)).sent ? 'sent' : 'queued';
   }
 
   /** Keeps the store as fresh as the caches, and counts a kept change until the server has it. */

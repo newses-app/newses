@@ -31,6 +31,9 @@ import {
   themeTokens,
 } from '../../lib/appearance.ts';
 import { readThemeFile, themeFile, themeFileName, uniqueName } from '../../lib/theme-files.ts';
+import { isTemporary } from '../../lib/offline-resources.ts';
+import { saveThemeDrafts, themeDrafts } from '../../offline/status.ts';
+import { currentStore } from '../../offline/store.ts';
 import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -308,8 +311,16 @@ async function remove(theme: Theme) {
   }
 }
 
+/** Themes created offline that the server refused; the reader exports or discards them. */
+async function discardDraft(index: number) {
+  const db = currentStore();
+  const drafts = themeDrafts.value.filter((_, i) => i !== index);
+  if (db) await saveThemeDrafts(db, drafts).catch(() => undefined);
+  else themeDrafts.value = drafts;
+}
+
 /** Through the bridge, so the apps save the file where the user chooses. */
-async function exportTheme(theme: Theme) {
+async function exportTheme(theme: Pick<Theme, 'name' | 'base' | 'tokens'>) {
   await run(() =>
     bridge.saveFile({
       name: themeFileName(theme.name),
@@ -399,7 +410,13 @@ async function pick(value: unknown) {
                 <span>
                   {{ option.name }}
                   <span
-                    v-if="option.theme && !option.theme.mine"
+                    v-if="option.theme && isTemporary(option.theme.id)"
+                    class="d-block text-body-small text-medium-emphasis"
+                  >
+                    {{ t('offline.notSent') }}
+                  </span>
+                  <span
+                    v-else-if="option.theme && !option.theme.mine"
                     class="d-block text-body-small text-medium-emphasis"
                   >
                     {{ t('appearance.by', { author: option.theme.owner.login }) }}
@@ -474,6 +491,22 @@ async function pick(value: unknown) {
     <v-btn variant="tonal" :prepend-icon="mdiUpload" @click="fileInput?.click()">
       {{ t('appearance.import') }}
     </v-btn>
+    <template v-if="themeDrafts.length > 0">
+      <h3 class="text-title-medium mt-6 mb-1">{{ t('offline.draftsTitle') }}</h3>
+      <p class="text-body-medium text-medium-emphasis mb-2">{{ t('offline.draftsHint') }}</p>
+      <v-list density="compact">
+        <v-list-item v-for="(draft, i) in themeDrafts" :key="i" :title="draft.name">
+          <template #append>
+            <v-btn size="small" variant="text" @click="exportTheme(draft)">
+              {{ t('appearance.export') }}
+            </v-btn>
+            <v-btn size="small" variant="text" @click="discardDraft(i)">
+              {{ t('offline.discard') }}
+            </v-btn>
+          </template>
+        </v-list-item>
+      </v-list>
+    </template>
     <input
       ref="fileInput"
       type="file"

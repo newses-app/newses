@@ -15,9 +15,12 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
+import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
+import { useResourceEdits } from '../../composables/useResourceEdits.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatRelative } from '../../lib/format.ts';
+import { temporaryId } from '../../lib/offline-resources.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
@@ -57,6 +60,8 @@ const errorCount = computed(
   () => subscriptions.data.value?.filter((s) => s.errorCount > 0 || s.disabled).length ?? 0,
 );
 
+const fileInput = ref<HTMLInputElement | null>(null);
+
 async function run(work: () => Promise<unknown>, done?: string) {
   try {
     await work();
@@ -68,9 +73,16 @@ async function run(work: () => Promise<unknown>, done?: string) {
   }
 }
 
-function refreshFeed(id: number) {
-  void run(() => api.subscriptions.refresh(id), t('feeds.refreshRequested'));
-}
+const { online, whenOnline } = useOnlineOnly();
+/** OPML import and export are the server's. */
+const pickOpml = whenOnline(() => fileInput.value?.click());
+const exportOpmlOnline = whenOnline(() => exportOpml());
+const { edit } = useResourceEdits();
+
+/** Fetching a feed is the server's job. */
+const refreshFeed = whenOnline((id: number) =>
+  run(() => api.subscriptions.refresh(id), t('feeds.refreshRequested')),
+);
 
 // Category create/edit dialog; `after` is the sibling it follows, or null for first.
 const editing = ref<{
@@ -117,14 +129,20 @@ function saveCategory() {
   const beforeId = beforeIdAfter(siblings.value, value.after);
   editing.value = null;
   if (!category) {
-    void run(() => api.categories.create({ title: value.title.trim(), parentId: value.parentId }));
+    const body = { title: value.title.trim(), parentId: value.parentId };
+    void run(() =>
+      edit({ kind: 'category.create', id: temporaryId(), body }, () => api.categories.create(body)),
+    );
     return;
   }
   const moved =
     value.parentId !== category.parentId ||
     value.after !== precedingId(childrenOf(category.parentId), category.id);
   void run(async () => {
-    await api.categories.update(category.id, { title: value.title.trim() });
+    const changes = { title: value.title.trim() };
+    await edit({ kind: 'category.update', id: category.id, changes }, () =>
+      api.categories.update(category.id, changes),
+    );
     if (moved) await tree.moveCategory(category.id, value.parentId, beforeId);
   });
 }
@@ -136,11 +154,14 @@ async function deleteCategory(category: Category) {
       t('common.delete'),
     )
   )
-    await run(() => api.categories.delete(category.id));
+    await run(() =>
+      edit({ kind: 'category.delete', id: category.id, parentId: category.parentId }, () =>
+        api.categories.delete(category.id),
+      ),
+    );
 }
 
 // OPML import and export.
-const fileInput = ref<HTMLInputElement | null>(null);
 const importing = ref(false);
 async function importOpml(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -183,7 +204,8 @@ async function importOpml(event: Event) {
         variant="tonal"
         :prepend-icon="mdiUpload"
         :loading="importing"
-        @click="fileInput?.click()"
+        :aria-disabled="!online"
+        @click="pickOpml"
       >
         {{ t('settings.importOpml') }}
       </v-btn>
@@ -194,7 +216,13 @@ async function importOpml(event: Event) {
         hidden
         @change="importOpml"
       />
-      <v-btn variant="tonal" :prepend-icon="mdiDownload" :loading="exporting" @click="exportOpml">
+      <v-btn
+        variant="tonal"
+        :prepend-icon="mdiDownload"
+        :loading="exporting"
+        :aria-disabled="!online"
+        @click="exportOpmlOnline"
+      >
         {{ t('settings.exportOpml') }}
       </v-btn>
     </div>
@@ -288,6 +316,7 @@ async function importOpml(event: Event) {
               :icon="mdiRefresh"
               size="small"
               :aria-label="t('feeds.refreshNamed', { feed: s.title })"
+              :aria-disabled="!online"
               @click="refreshFeed(s.id)"
             />
             <v-btn

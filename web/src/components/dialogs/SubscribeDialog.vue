@@ -4,6 +4,8 @@ import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { api, ApiError } from '../../api.ts';
+import { useResourceEdits } from '../../composables/useResourceEdits.ts';
+import { temporaryId } from '../../lib/offline-resources.ts';
 import { useCategories, useFeedsRefresh } from '../../composables/useFeeds.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { subscriptionKey } from '../../lib/streams.ts';
@@ -37,13 +39,25 @@ watch(
   { immediate: true },
 );
 
+const { edit } = useResourceEdits();
+
 async function submit() {
   const target = candidates.value.length > 0 ? chosen.value : url.value.trim();
   if (!target) return;
   busy.value = true;
   error.value = null;
   try {
-    const result = await api.subscriptions.subscribe({ url: target, categoryId: categoryId.value });
+    const body = { url: target, categoryId: categoryId.value };
+    const saved = await edit({ kind: 'subscription.create', id: temporaryId(), body }, () =>
+      api.subscriptions.subscribe(body),
+    );
+    // Without a connection the feed shows as waiting, and is subscribed once the server answers.
+    if (!saved.sent) {
+      ui.subscribeOpen = false;
+      ui.notify(t('offline.subscribeKept', { url: target }));
+      return;
+    }
+    const result = saved.value;
     if (result.status === 'choose') {
       candidates.value = result.candidates;
       chosen.value = result.candidates[0]?.url ?? null;

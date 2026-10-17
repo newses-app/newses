@@ -248,6 +248,131 @@ describe('flushOutbox against a server that detects conflicts', () => {
   });
 });
 
+describe('changes to feeds, labels, preferences, and themes', () => {
+  const colours = { fgColor: '#000000', bgColor: '#ffffff' };
+
+  it('sends changes after what they name, with the ids the server gave', async () => {
+    await queueChanges(db, [
+      { kind: 'prefs', changes: { theme: 'dark' } },
+      { kind: 'category.create', id: -1, body: { title: 'New', parentId: null } },
+      { kind: 'subscription.update', id: 5, changes: { categoryId: -1 } },
+      { kind: 'label.create', id: -2, body: { caption: 'Later', ...colours } },
+      { kind: 'labels', id: 9, labelIds: [-2] },
+      // Not merged into the first: it would then go before the theme it names.
+      { kind: 'theme.create', id: -3, body: { name: 'Mine', base: 'original', tokens: {} } },
+      { kind: 'prefs', changes: { appearanceTheme: -3 } },
+    ]);
+    const { api, asked } = server({
+      'PATCH /prefs': () => Response.json({}),
+      'POST /categories': () =>
+        Response.json({ id: 40, title: 'New', parentId: null, sortOrder: 0, collapsed: false }),
+      'PATCH /subscriptions/5': () => Response.json({}),
+      'POST /labels': () => Response.json({ id: 50, caption: 'Later', ...colours }),
+      'POST /themes': () => Response.json({ id: 60 }),
+    });
+    const result = await flushOutbox(api, db);
+    expect(result).toMatchObject({ sent: 7, refused: [], stopped: null });
+    expect(result.created.map((c) => [c.resource, c.tempId, c.value.id])).toEqual([
+      ['category', -1, 40],
+      ['label', -2, 50],
+      ['theme', -3, 60],
+    ]);
+    expect(asked.map((a) => [a.route, a.body])).toEqual([
+      ['PATCH /prefs', { theme: 'dark' }],
+      ['POST /categories', { title: 'New', parentId: null }],
+      ['PATCH /subscriptions/5', { categoryId: 40 }],
+      ['POST /labels', { caption: 'Later', ...colours }],
+      ['PUT /entries/9/labels', { labelIds: [50] }],
+      ['POST /themes', { name: 'Mine', base: 'original', tokens: {} }],
+      ['PATCH /prefs', { appearanceTheme: 60 }],
+    ]);
+  });
+
+  it('forgets what was created offline and deleted before it was sent', async () => {
+    await queueChanges(db, [
+      { kind: 'category.create', id: -1, body: { title: 'Brief', parentId: 3 } },
+      { kind: 'subscription.update', id: 5, changes: { categoryId: -1 } },
+      { kind: 'category.update', id: -1, changes: { title: 'Briefly' } },
+      { kind: 'label.create', id: -2, body: { caption: 'Gone', ...colours } },
+      { kind: 'labels', id: 9, labelIds: [1, -2] },
+    ]);
+    await queueChanges(db, [
+      { kind: 'category.delete', id: -1, parentId: 3 },
+      { kind: 'label.delete', id: -2 },
+    ]);
+    const rows = await db.outbox.orderBy('seq').toArray();
+    expect(rows.map((r) => [r.kind, r.payload])).toEqual([
+      ['subscription.update', { id: 5, changes: { categoryId: 3 } }],
+      ['labels', { id: 9, labelIds: [1] }],
+    ]);
+  });
+
+  it('drops what depends on a refused subscription, and says why', async () => {
+    await queueChanges(db, [
+      { kind: 'subscription.create', id: -1, body: { url: 'https://a.example/' } },
+      { kind: 'subscription.update', id: -1, changes: { title: 'A' } },
+      { kind: 'prefs', changes: { theme: 'dark' } },
+    ]);
+    const { api, asked } = server({
+      'POST /subscriptions': () => Response.json({ status: 'choose', candidates: [] }),
+      'PATCH /prefs': () => Response.json({}),
+    });
+    const result = await flushOutbox(api, db);
+    expect(result).toMatchObject({
+      refused: [{ op: { kind: 'subscription.create' }, code: 'choose' }],
+      dropped: [{ resource: 'subscription', tempId: -1 }],
+    });
+    expect(asked.map((a) => a.route)).toEqual(['POST /subscriptions', 'PATCH /prefs']);
+    expect(await db.outbox.count()).toBe(0);
+  });
+
+  it('numbers a theme name taken meanwhile, and keeps a refused theme as a draft', async () => {
+    await queueChanges(db, [
+      { kind: 'theme.create', id: -1, body: { name: 'Mine', base: 'original', tokens: {} } },
+      { kind: 'theme.create', id: -2, body: { name: 'Fifty-first', base: 'original', tokens: {} } },
+      { kind: 'prefs', changes: { appearanceTheme: -2 } },
+    ]);
+    const { api, asked } = server({
+      'POST /themes': (body) => {
+        const { name } = body as { name: string };
+        if (name === 'Mine')
+          return Response.json({ error: 'conflict', message: 'Taken' }, { status: 409 });
+        if (name === 'Fifty-first')
+          return Response.json(
+            { error: 'invalid_input', message: 'At most 50 themes' },
+            { status: 400 },
+          );
+        return Response.json({ id: 70 });
+      },
+      'GET /themes': () => Response.json([{ id: 1, name: 'Mine', mine: true }]),
+      'PATCH /prefs': () => Response.json({}),
+    });
+    const result = await flushOutbox(api, db);
+    expect(asked.map((a) => [a.route, a.body])).toEqual([
+      ['POST /themes', { name: 'Mine', base: 'original', tokens: {} }],
+      ['GET /themes', undefined],
+      ['POST /themes', { name: 'Mine 2', base: 'original', tokens: {} }],
+      ['POST /themes', { name: 'Fifty-first', base: 'original', tokens: {} }],
+      ['PATCH /prefs', { appearanceTheme: 'original' }],
+    ]);
+    expect(result.themeDrafts).toEqual([{ name: 'Fifty-first', base: 'original', tokens: {} }]);
+  });
+
+  it('takes a label created offline that exists already for that label', async () => {
+    await queueChanges(db, [
+      { kind: 'label.create', id: -1, body: { caption: 'Later', ...colours } },
+      { kind: 'labels', id: 9, labelIds: [-1] },
+    ]);
+    const { api, asked } = server({
+      'POST /labels': () =>
+        Response.json({ error: 'conflict', message: 'Exists' }, { status: 409 }),
+      'GET /labels': () => Response.json([{ id: 12, caption: 'later', ...colours }]),
+    });
+    expect((await flushOutbox(api, db)).created).toMatchObject([{ tempId: -1, value: { id: 12 } }]);
+    expect(asked.at(-1)).toEqual({ route: 'PUT /entries/9/labels', body: { labelIds: [12] } });
+  });
+});
+
 describe('localCatchUp', () => {
   it("marks the stream's unread entries read, older than asked and up to the id", async () => {
     await writeQuery(db, 'subscriptions', [

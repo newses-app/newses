@@ -1,5 +1,5 @@
 import type { BuiltinThemeKey, CreateThemeRequest, Theme } from '@newses/shared';
-import { MAX_THEME_NAME_LENGTH } from '@newses/shared/client';
+import { BUILTIN_THEMES, MAX_THEME_NAME_LENGTH } from '@newses/shared/client';
 
 const FORMAT = 'newses-theme';
 const VERSION = 1;
@@ -22,7 +22,14 @@ export function themeFileName(name: string): string {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** The theme in an exported file, for the server to validate; null when the file is not one. */
+/** Tokens a theme may override: those of the built-in themes. */
+const TOKEN_KEYS: ReadonlySet<string> = new Set(Object.keys(BUILTIN_THEMES.original));
+
+/**
+ * The theme in an exported file, shape-checked here (format, version, base, token keys) so one
+ * imported offline is likely to be accepted later; the server validates the values. Null when the
+ * file is not one.
+ */
 export function readThemeFile(text: string): CreateThemeRequest | null {
   let data: unknown;
   try {
@@ -33,6 +40,8 @@ export function readThemeFile(text: string): CreateThemeRequest | null {
   if (!isRecord(data) || data.format !== FORMAT || data.version !== VERSION) return null;
   const { name, base, tokens } = data;
   if (typeof name !== 'string' || typeof base !== 'string' || !isRecord(tokens)) return null;
+  if (!Object.hasOwn(BUILTIN_THEMES, base)) return null;
+  if (Object.keys(tokens).some((key) => !TOKEN_KEYS.has(key))) return null;
   return { name, base: base as BuiltinThemeKey, tokens };
 }
 

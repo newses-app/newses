@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { mdiAlertCircleOutline, mdiCancel, mdiRss } from '@mdi/js';
+import { mdiAlertCircleOutline, mdiCancel, mdiClockOutline, mdiRss } from '@mdi/js';
 import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useIconSrc } from '../../composables/useIconSrc.ts';
+import { isTemporary } from '../../lib/offline-resources.ts';
 import type { FeedNode } from '../../lib/tree.ts';
 import { TREE_CONTEXT } from './tree-context.ts';
 import UnreadCount from './UnreadCount.vue';
@@ -16,6 +17,8 @@ const over = ref(false);
 const iconFailed = ref(false);
 const iconSrc = useIconSrc();
 const icon = computed(() => iconSrc(props.node.subscription));
+/** Subscribed offline: it opens once the server has it. */
+const pending = computed(() => isTemporary(props.node.subscription.id));
 
 function onDragStart(event: DragEvent) {
   dragged.value = { kind: 'feed', id: props.node.subscription.id };
@@ -41,7 +44,7 @@ function onDrop() {
 <template>
   <div role="listitem">
     <v-list-item
-      :to="`/${node.key}`"
+      :to="pending ? undefined : `/${node.key}`"
       :active="current === node.key"
       draggable="true"
       :class="{ 'drop-before': over, 'text-medium-emphasis': node.subscription.disabled }"
@@ -69,7 +72,11 @@ function onDrop() {
         {{ node.subscription.title }}
       </v-list-item-title>
       <template #append>
-        <template v-if="node.subscription.disabled">
+        <template v-if="pending">
+          <v-icon :icon="mdiClockOutline" size="small" :title="t('offline.notSent')" class="ms-1" />
+          <span class="d-sr-only">{{ t('offline.notSent') }}</span>
+        </template>
+        <template v-else-if="node.subscription.disabled">
           <v-icon
             :icon="mdiCancel"
             size="small"

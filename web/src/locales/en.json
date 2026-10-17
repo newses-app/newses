@@ -50,7 +50,14 @@
     "clearTitle": "Clear this device?",
     "clearText": "The articles kept on this device are deleted, then downloaded again.",
     "clearPending": "{n} change not yet sent is deleted too. | {n} changes not yet sent are deleted too.",
-    "homeScreen": "Safari deletes kept articles after 7 days without a visit. Add Newses to your Home Screen to keep them."
+    "homeScreen": "Safari deletes kept articles after 7 days without a visit. Add Newses to your Home Screen to keep them.",
+    "notSent": "Not sent yet",
+    "subscribeKept": "You'll be subscribed to {url} when you're back online.",
+    "subscribeChoose": "{url} offers several feeds; subscribe again to pick one.",
+    "themeDraft": "The theme \"{name}\" couldn't be saved; it's kept as a draft in Appearance.",
+    "draftsTitle": "Themes not saved",
+    "draftsHint": "Made without a connection, and refused by the server. Export one to fix it and import it again.",
+    "discard": "Discard"
   },
   "common": {
     "cancel": "Cancel",

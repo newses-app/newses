@@ -17,7 +17,7 @@ import {
 } from '../lib/offline-streams.ts';
 import { connectivity } from './connectivity.ts';
 import { fromStoredEntry, type OfflineDb, type StoredContent, toStoredEntry } from './db.ts';
-import { withChange } from './outbox.ts';
+import { withChange, withPendingResources } from './outbox.ts';
 import { readQuery, type SnapshotQuery } from './snapshot.ts';
 import { currentStore } from './store.ts';
 
@@ -50,8 +50,20 @@ export async function networkOrStore<T>(
 
 /** Query options for a snapshot query: the server's answer, or the stored one when it cannot be reached. */
 export function storedQuery<T>(name: SnapshotQuery, remote: () => Promise<T>) {
+  // Changes still waiting show over either answer.
+  const pending = async (data: T) => {
+    const db = currentStore();
+    return db ? withPendingResources(db, name, data) : data;
+  };
   return {
-    queryFn: () => networkOrStore(remote, (db) => readQuery<T>(db, name)),
+    queryFn: () =>
+      networkOrStore(
+        async () => pending(await remote()),
+        async (db) => {
+          const stored = await readQuery<T>(db, name);
+          return stored === undefined ? undefined : pending(stored);
+        },
+      ),
     networkMode: storeNetworkMode(),
   };
 }

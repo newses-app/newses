@@ -10,6 +10,7 @@ import { contrastRatio, MIN_CONTRAST } from '../../lib/appearance.ts';
 import { LABEL_COLORS, nextLabelColors } from '../../lib/labels.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
+import { isTemporary } from '../../lib/offline-resources.ts';
 
 const { t } = useI18n();
 const ui = useUiStore();
@@ -98,6 +99,9 @@ async function deleteLabel(label: Label) {
           <v-icon :icon="mdiLabelOutline" :color="label.bgColor" />
         </template>
         <LabelChip :label="label" />
+        <span v-if="isTemporary(label.id)" class="text-body-small text-medium-emphasis ms-2">
+          {{ t('offline.notSent') }}
+        </span>
         <template #append>
           <v-btn
             :icon="mdiPencil"

@@ -15,7 +15,7 @@ describe('theme files', () => {
     expect(readThemeFile(text)).toEqual(theme);
   });
 
-  it('rejects files that are not themes, leaving token checks to the server', () => {
+  it('rejects files that are not themes, leaving token values to the server', () => {
     for (const text of [
       'not json',
       '[]',
@@ -23,13 +23,27 @@ describe('theme files', () => {
       JSON.stringify({ format: 'newses-theme', version: 2, ...theme }),
       JSON.stringify({ format: 'newses-theme', version: 1, name: 3, base: 'original', tokens: {} }),
       JSON.stringify({ format: 'newses-theme', version: 1, name: 'x', base: 'original' }),
+      JSON.stringify({ format: 'newses-theme', version: 1, name: 'x', base: 'neon', tokens: {} }),
+      JSON.stringify({
+        format: 'newses-theme',
+        version: 1,
+        name: 'x',
+        base: 'original',
+        tokens: { sparkle: true },
+      }),
     ])
       expect(readThemeFile(text)).toBeNull();
     expect(
       readThemeFile(
-        JSON.stringify({ format: 'newses-theme', version: 1, name: 'x', base: 'neon', tokens: {} }),
+        JSON.stringify({
+          format: 'newses-theme',
+          version: 1,
+          name: 'x',
+          base: 'sketch',
+          tokens: { radius: 'nonsense' },
+        }),
       ),
-    ).toEqual({ name: 'x', base: 'neon', tokens: {} });
+    ).toEqual({ name: 'x', base: 'sketch', tokens: { radius: 'nonsense' } });
   });
 
   it('names files after the theme', () => {

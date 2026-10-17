@@ -311,8 +311,9 @@ async function catchUp(olderThanDays?: number) {
   }
 }
 
+/** Reloads the list; online, the server also fetches the feed. */
 async function refresh() {
-  if (subscription.value) {
+  if (subscription.value && online.value) {
     try {
       await api.subscriptions.refresh(subscription.value.id);
       ui.notify(t('feeds.refreshRequested'));
