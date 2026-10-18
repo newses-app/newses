@@ -2,6 +2,13 @@ import type { Entry } from '@newses/shared';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
+/** What the publish dialog opens with (a page shared to the app). */
+export interface PublishDraft {
+  url: string;
+  title?: string | null;
+  text?: string | null;
+}
+
 export interface ConfirmRequest {
   title: string;
   text: string;
@@ -17,6 +24,9 @@ export const useUiStore = defineStore('ui', () => {
   const subscribeOpen = ref(false);
   /** Fills in the subscribe dialog's address when it opens (a URL shared to the app). */
   const subscribeUrl = ref<string | null>(null);
+  const publishOpen = ref(false);
+  /** Fills in the publish dialog when it opens. */
+  const publishDraft = ref<PublishDraft | null>(null);
   const editSubscriptionId = ref<number | null>(null);
   /** The entry whose note is being edited. */
   const noteEntry = ref<Entry | null>(null);
@@ -56,6 +66,8 @@ export const useUiStore = defineStore('ui', () => {
     helpOpen,
     subscribeOpen,
     subscribeUrl,
+    publishOpen,
+    publishDraft,
     editSubscriptionId,
     noteEntry,
     scoreEntry,

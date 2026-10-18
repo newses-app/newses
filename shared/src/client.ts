@@ -34,6 +34,7 @@ import type {
   FullTextResponse,
   MarkReadRequest,
   PublishedFeedResponse,
+  PublishPageRequest,
   ShareResponse,
   SyncResponse,
   SyncTokenResponse,
@@ -388,6 +389,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
     publishedFeed: {
       get: () => request<PublishedFeedResponse>('GET', '/published-feed'),
       regenerate: () => request<PublishedFeedResponse>('POST', '/published-feed/regenerate'),
+      /** Publishes a page from outside the feeds, or updates and republishes it (API 1.5). */
+      publish: (body: PublishPageRequest) =>
+        request<Entry>('POST', '/published-feed/pages', { body }),
     },
 
     /** The user's tags with entry counts. */

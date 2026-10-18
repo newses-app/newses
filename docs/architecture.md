@@ -205,6 +205,7 @@ Updater:
 
 Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, noted, labelled, or shared) are never purged.
+- Deletes user entries without a subscription (pages, kept entries of unsubscribed feeds) that are no longer kept once unchanged (`updated_at`) for the user's purge age, so counted from when they stopped being kept.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
 - Deletes feed sources with no subscriptions and no kept entries, and their favicons; never the pages source.
 - With `ARCHIVE_ENABLED`, entries other than pages go to the archive before they are deleted, in batches of 1,000, for up to 3 minutes per run: unreferenced entries past the grace period, then every entry of a feed source about to be deleted. Each batch's delete re-checks its conditions, so an entry used again meanwhile stays (and is also archived). A source is deleted only once its entries are; the rest waits for the next run.
@@ -234,7 +235,7 @@ Subscription lifecycle:
 - OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines.
 
 Full text:
-- `entry.extract` jobs (one per feed source at a time) take the source's 20 newest entries not tried yet, newest first, and fetch each linked page through the per-host limits (HTML only, at most 5 MB). Readability (`@mozilla/readability` on linkedom) extracts the article, which is sanitised like feed content and stored in `entries.full_content`. Failures are recorded in `full_content_error` and not retried by jobs.
+- `entry.extract` jobs (one per feed source at a time) take the source's 20 newest entries not tried yet, newest first, and fetch each linked page through the per-host limits, unless the host is paused (HTML only, at most 5 MB). Readability (`@mozilla/readability` on linkedom) extracts the article, which is sanitised like feed content and stored in `entries.full_content`. Failures are recorded in `full_content_error` and not retried by jobs.
 - `POST /api/v1/entries/:id/full-text` extracts on demand, retrying earlier failures, and returns the stored text when there is one.
 - Readers see the full text first for subscriptions opted in to it, with a toggle back to the feed's content, and on request for others. TTRSS and Google Reader clients get it in place of the content for opted-in subscriptions. The original content is always kept, and search indexes it only.
 
@@ -365,6 +366,7 @@ Search:
 - State changes and catch-up publish `counters`; rows already in the requested state are not updated.
 - Compare-and-set (API 1.2), for changes sent late: `PATCH /entries` and `PATCH /entries/:id` take `expect`, the values the client saw; a flag changes only where it still has that value, and entries where it has neither that nor the target keep theirs and come back in `conflicts` with their values now. `PATCH /entries/:id/labels` and `/tags` add and remove (unknown labels ignored) and return the result. `PUT /entries/:id/note` with `expected` answers `409 conflict` when the note is neither that nor the new text.
 - `GET /archive/entries` lists past articles of the user's feeds (one subscription, or all), with search (`q`) and a cursor; `GET /archive/entries/:key` returns one with content and enclosures; `POST /archive/entries/:key/restore` takes `PATCH /entries/:id`'s body and returns the restored entry. Keys are opaque: the month of the article's sort time, its feed URL, and GUID.
+- `POST /published-feed/pages` (API 1.5) publishes a page from outside the user's feeds: an http(s) address, and optionally a title and plain-text text, which becomes paragraphs; all sanitised. A missing title or text is read from the page, fetched as full text is; a page that cannot be read is published all the same, titled with its address. The page is the user's own entry in the pages source, read and published, with no subscription. Publishing the same address again replaces what is given, reads the page again for what is not (keeping what was stored when it cannot), republishes it, and moves it to the top. Returns the entry.
 - `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's; only the author can change, publish (`shared`), or delete one. `POST /admin/themes/:id/unpublish` lets admins withdraw anyone's, logged as `theme_unpublished`. Stored tokens a later version no longer accepts are left out of the response. The web app refetches the list when it regains focus, so authors' edits and withdrawn themes reach other users; a theme that no longer resolves shows Original.
 - `GET /admin/sites/rules` lists admins' minimum intervals per host; `PUT /admin/sites/rules/:host` (15 min to 7 days) and `DELETE` set and clear one, logged as `site_interval_set` and `site_interval_cleared`. A host is given with its port when not the default, as in feed URLs. `GET /admin/ops/hosts` shows each host's minimum.
 - `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`. `GET /sync/token` returns a token at the watermark without walking history, for clients that load current state from the headline lists. Entries carry `readAt` and `contentVersion`, an opaque value that changes with the content hash or extracted full text.
@@ -391,7 +393,8 @@ Events stream:
 
 ### TTRSS-compatible API
 
-- Operations: `login`, `logout`, `isLoggedIn`, `getApiLevel`, `getVersion`, `getConfig`, `getPref`, `getUnread`, `getCounters`, `getFeeds`, `getCategories`, `getFeedTree`, `getHeadlines`, `getArticle`, `updateArticle`, `catchupFeed`, `updateFeed`, `getLabels`, `setArticleLabel`, `subscribeToFeed`, `unsubscribeFeed`. `shareToPublished` is not supported.
+- Operations: `login`, `logout`, `isLoggedIn`, `getApiLevel`, `getVersion`, `getConfig`, `getPref`, `getUnread`, `getCounters`, `getFeeds`, `getCategories`, `getFeedTree`, `getHeadlines`, `getArticle`, `updateArticle`, `catchupFeed`, `updateFeed`, `getLabels`, `setArticleLabel`, `subscribeToFeed`, `unsubscribeFeed`, `shareToPublished`.
+- `shareToPublished` publishes `url` as `POST /published-feed/pages` does, with tags stripped from `title` and `content` (as TTRSS does) and values past the limits cut rather than refused.
 - Feed IDs are subscription IDs; special feed IDs:
   - `-1` starred
   - `-2` published

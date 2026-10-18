@@ -5,7 +5,7 @@ import { iso } from '../entries/entries.ts';
 import { plainText } from '../entries/text.ts';
 import type { ArchivedEnclosure, ArchiveRow, ArchiveWriter, BlobStore } from '../ports.ts';
 import { deleteUnusedIcons } from './favicons.ts';
-import { purgeDaysSql } from './ingest.ts';
+import { purgeDaysSql, userPurgeDaysSql } from './ingest.ts';
 import { PAGES_SOURCE_URL } from './pages.ts';
 
 /** Unreferenced entries are deleted only after they have been absent from their feed this long. */
@@ -95,7 +95,9 @@ export class Purger {
   }
 
   /**
-   * Deletes user entries older than their subscription's purge age (never kept ones), then
+   * Deletes user entries older than their subscription's purge age, and those outside any feed
+   * (pages, entries of unsubscribed feeds) unchanged for the user's purge age, so counted from
+   * when they stopped being kept; never kept ones. Then
    * entries nobody references that have left their feed, then feed sources with no subscribers
    * and no kept entries. With an archive, entries are written to it before they are deleted,
    * except pages, which only their user could read. Also forgets expired host cooldowns.
@@ -108,6 +110,13 @@ export class Purger {
         AND NOT ${KEPT_ENTRY}
         AND purge.days > 0
         AND ue.sort_at < now() - make_interval(days => purge.days)`);
+    const unsubscribed = await this.#db.execute(sql`
+      DELETE FROM user_entries ue
+      USING users u CROSS JOIN LATERAL (SELECT ${userPurgeDaysSql(sql`u.id`, this.#settings.purgeDays)} AS days) purge
+      WHERE ue.user_id = u.id AND ue.subscription_id IS NULL
+        AND NOT ${KEPT_ENTRY}
+        AND purge.days > 0
+        AND ue.updated_at < now() - make_interval(days => purge.days)`);
 
     const pages = await this.#db.execute(sql`DELETE FROM entries e WHERE ${ORPHAN} AND ${PAGE}`);
     const deadline = this.#now() + this.#archiveBudgetMs;
@@ -134,7 +143,7 @@ export class Purger {
     await this.#db.execute(sql`DELETE FROM fetch_hosts WHERE blocked_until < now()`);
 
     return {
-      userEntries: userEntries.rowCount ?? 0,
+      userEntries: (userEntries.rowCount ?? 0) + (unsubscribed.rowCount ?? 0),
       entries: (pages.rowCount ?? 0) + orphans.deleted + sourceEntries.deleted,
       feedSources: sources.rows.length,
       archived: orphans.archived + sourceEntries.archived,

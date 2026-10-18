@@ -9,6 +9,7 @@ import {
   labels,
   subscriptions,
   userEntries,
+  userPrefs,
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
@@ -130,6 +131,33 @@ describe('Purger', () => {
       'global-starred',
       'never',
     ]);
+  });
+
+  it('purges entries outside any feed once unchanged for the user’s purge age', async () => {
+    const pages = await pagesSourceId(db);
+    const [bob] = await db.insert(users).values({ login: 'bob', passwordHash: 'x' }).returning();
+    await db.insert(userPrefs).values({ userId: bob?.id ?? 0, key: 'purgeDays', value: 0 });
+    const page = async (owner: number, guid: string, changed: number, starred = false) => {
+      const [entry] = await db
+        .insert(entries)
+        .values({ feedSourceId: pages, guid, contentHash: guid })
+        .returning();
+      // Published long ago; `updated_at` is when it last changed, such as being unpublished.
+      await db.insert(userEntries).values({
+        userId: owner,
+        entryId: entry?.id ?? 0,
+        sortAt: daysAgo(400),
+        updatedAt: daysAgo(changed),
+        starred,
+      });
+    };
+    await page(userId, 'page:unpublished-long-ago', 40);
+    await page(userId, 'page:unpublished-lately', 10);
+    await page(userId, 'page:starred', 400, true);
+    await page(bob?.id ?? 0, 'page:never-purged', 4000);
+
+    expect((await purger.purge()).userEntries).toBe(1);
+    expect(await guids()).toEqual(['page:never-purged', 'page:starred', 'page:unpublished-lately']);
   });
 
   it('deletes unreferenced entries only after they leave the feed', async () => {

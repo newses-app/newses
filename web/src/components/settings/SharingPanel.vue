@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Entry } from '@newses/shared';
-import { mdiLinkOff, mdiOpenInNew, mdiRefresh } from '@mdi/js';
+import { mdiLinkOff, mdiOpenInNew, mdiPlus, mdiRefresh } from '@mdi/js';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -62,6 +62,13 @@ const revoke = (entry: Entry) => run(() => actions.unshare(entry), t('sharing.re
       @click="regenerate"
     >
       {{ t('sharing.regenerate') }}
+    </v-btn>
+  </section>
+  <section class="mb-8">
+    <h2 class="text-title-large mb-2">{{ t('sharing.publishPage') }}</h2>
+    <p class="text-body-medium mb-4">{{ t('sharing.publishPageHint') }}</p>
+    <v-btn variant="tonal" :prepend-icon="mdiPlus" @click="ui.publishOpen = true">
+      {{ t('sharing.publishPage') }}
     </v-btn>
   </section>
   <section>

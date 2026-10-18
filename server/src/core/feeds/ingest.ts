@@ -86,7 +86,11 @@ async function adoptImported(
 
 /** Purge age of subscription `s`: its override, else its user's preference, else the default. */
 export const purgeDaysSql = (defaultDays: number): SQL<number> =>
-  sql`coalesce(s.purge_days, ${userPrefInt(sql`s.user_id`, 'purgeDays')}, ${defaultDays})`;
+  sql`coalesce(s.purge_days, ${userPurgeDaysSql(sql`s.user_id`, defaultDays)})`;
+
+/** A user's purge age: their `purgeDays` preference, else the instance default; 0 never. */
+export const userPurgeDaysSql = (userId: SQL, defaultDays: number): SQL<number> =>
+  sql`coalesce(${userPrefInt(userId, 'purgeDays')}, ${defaultDays})`;
 
 /** Stores parsed entries and hands new ones to every subscriber of the feed source. */
 export class Ingester {

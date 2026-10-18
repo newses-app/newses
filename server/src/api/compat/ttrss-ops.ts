@@ -1,7 +1,14 @@
-import { type Entry, normaliseTag, type Stream } from '@newses/shared';
+import {
+  type Entry,
+  MAX_PAGE_TEXT_LENGTH,
+  MAX_PAGE_TITLE_LENGTH,
+  normaliseTag,
+  type Stream,
+} from '@newses/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import type { EntryServices } from '../../core/entries/index.ts';
 import type { LabelRow } from '../../core/entries/labels.ts';
+import { textOfHtml } from '../../core/entries/text.ts';
 import { DomainError, ThrottledError } from '../../core/errors.ts';
 import type { FeedServices } from '../../core/feeds/index.ts';
 import type { SubscriptionView } from '../../core/feeds/subscriptions.ts';
@@ -563,6 +570,23 @@ export function ttrssOps({ entries: entryServices, feeds, prefs }: TtrssDeps): T
                     : { unread: value },
               );
         return { status: 'OK', updated };
+      },
+    },
+
+    shareToPublished: {
+      async run(context) {
+        const { params } = context;
+        const url = stringParam(params, 'url')?.trim();
+        if (!url) throw new TtrssError('INCORRECT_USAGE');
+        // TTRSS strips tags from the title and content; values too long are cut, not refused.
+        const title = textOfHtml(stringParam(params, 'title') ?? '');
+        const text = textOfHtml(stringParam(params, 'content') ?? '');
+        await feeds.publishedPages.publish(userOf(context), {
+          url,
+          title: title?.slice(0, MAX_PAGE_TITLE_LENGTH) ?? null,
+          text: text?.slice(0, MAX_PAGE_TEXT_LENGTH) ?? null,
+        });
+        return { status: 'OK' };
       },
     },
 

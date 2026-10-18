@@ -15,6 +15,7 @@
 | Custom Themes | Appearance | Users adjust the appearance, save, import, export, and share their own themes, and use the Terminal and Sketch themes in the web, desktop, and Android apps |
 | Offline Reading | Offline use | Family members read and search unread and starred articles with images in the web, desktop, and Android apps without a connection; changes made offline reach the server on reconnect without overriding newer ones; installed Chromium PWAs and the Android app sync in the background; on Docker and AWS |
 | Per-feed Options | Feed control | Family members pause feeds and hide them from All articles in the web, desktop, and Android apps, and see how often each feed is checked and why; feeds of rate-limiting sites slow down on their own, and admins set per-site minimum intervals; on Docker and AWS |
+| Published pages | Sharing | Family members publish any web page to their published feed from the web, desktop, and Android apps, bookmarklets, and TTRSS clients; imported pages stay private to their owner; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -30,7 +31,7 @@
 | Background updates | P1 | Per-feed interval (default global setting); conditional GET via ETag/Last-Modified; exponential backoff on failure; honours `Retry-After`/HTTP 429; manual "update now" |
 | Feed errors | P1 | Last error and time shown per feed; "feeds with errors" view; feed auto-disables after a configurable number of consecutive failures |
 | Favicons | P1 | Fetched per site, cached, shown in tree, headlines, and article headers; fallback icon |
-| Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, labelled, or shared entries |
+| Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, labelled, or shared entries; entries outside any feed (published pages, kept entries of unsubscribed feeds) are purged by age once no longer kept |
 | HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
 | Per-feed options | Per-feed Options | Pause updates: the feed is no longer checked for the user, who still gets what others' checks bring. Hide from All articles: left out of All articles and Fresh, their counts, catch-up, and search, also through the TTRSS and Google Reader APIs. The feed's settings show how often it is checked, why, and when next; a changed interval applies at once |
 | Rate-limit slowdown | Per-feed Options | A feed answering HTTP 429 is checked less often, and back to normal after a run of successful checks; admins set a minimum interval per site on the Operations page |
@@ -85,6 +86,7 @@
 |---|---|---|
 | Published feed | P2 | Per-user public RSS feed of published entries at a secret-key URL; key can be regenerated |
 | Share link | P2 | Per-entry public read-only URL (unguessable UUID); can be revoked |
+| Publish a page | Published pages | Any web page joins the user's published feed with an optional title and text; a missing title or text is taken from the page, and a page that cannot be read is still published; publishing the same address again updates it; works from Settings and TTRSS clients |
 | Bookmarklets | Later | "Subscribe in reader" and "share to published" bookmarklets |
 | Email | Later | Email an article; scheduled digest of unread entries |
 
@@ -119,7 +121,7 @@
 | Native REST API | P1 | Versioned (`/api/v1`), OpenAPI document served; every web app action goes through it |
 | Incremental sync | P1 | A sync endpoint returns categories, subscriptions, labels, and entries changed since a token, including deletions, without missing rows committed late |
 | Web app | P1 | Vue SPA; installable PWA; works in current Chrome, Firefox, Safari |
-| TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe |
+| TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe; TTRSS clients can share pages to the published feed |
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app for Windows (installer, zip) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |

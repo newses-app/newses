@@ -7,6 +7,7 @@ import { CategoryService } from '../categories.ts';
 import { testFeedDeps } from '../../test/fakes.ts';
 import { FetchError } from './http.ts';
 import { createFeedServices } from './index.ts';
+import { pagesSourceId } from './pages.ts';
 import { SubscriptionService } from './subscriptions.ts';
 
 let database: TestDatabase;
@@ -139,7 +140,7 @@ describe('SubscriptionService.subscribe', () => {
 });
 
 describe('SubscriptionService.unsubscribe', () => {
-  it('keeps starred, published, noted, and shared entries and removes the rest', async () => {
+  it('keeps starred, published, noted, and shared entries and removes the rest of the feed’s', async () => {
     fetcher.set('https://u.example/rss', { body: rss('U') });
     const result = await service.subscribe(userId, 'https://u.example/rss');
     if (result.status !== 'subscribed') throw new Error('expected subscription');
@@ -166,6 +167,12 @@ describe('SubscriptionService.unsubscribe', () => {
         shareId: i === 3 ? crypto.randomUUID() : null,
       })),
     );
+    // A page the user unpublished has no subscription either; it is not the feed's.
+    const [page] = await db
+      .insert(entries)
+      .values({ feedSourceId: await pagesSourceId(db), guid: 'page:x', contentHash: 'x' })
+      .returning();
+    await db.insert(userEntries).values({ userId, entryId: page?.id ?? 0, sortAt: new Date() });
 
     await service.unsubscribe(userId, subscription.id);
     const kept = await db.select().from(userEntries);
@@ -177,7 +184,8 @@ describe('SubscriptionService.unsubscribe', () => {
       ]),
     );
     expect(kept.filter((e) => e.shareId !== null)).toHaveLength(1);
-    expect(kept).toHaveLength(4);
+    expect(kept.map((e) => e.entryId)).toContain(page?.id);
+    expect(kept).toHaveLength(5);
     await expect(service.unsubscribe(userId, subscription.id)).rejects.toMatchObject({
       code: 'not_found',
     });

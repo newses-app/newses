@@ -143,15 +143,16 @@ export class SubscriptionService {
   /** Removes the subscription and its entries, except kept ones (see `KEPT_ENTRY`). */
   async unsubscribe(userId: number, id: number): Promise<void> {
     const feedSourceId = await this.#db.transaction(async (tx) => {
+      // Before the subscription goes, while its entries can be told from other entries without
+      // one (pages, earlier unsubscriptions); the foreign key then clears it on the kept ones.
+      await tx.execute(sql`
+        DELETE FROM user_entries ue
+        WHERE ue.user_id = ${userId} AND ue.subscription_id = ${id} AND NOT ${KEPT_ENTRY}`);
       const [deleted] = await tx
         .delete(subscriptions)
         .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
         .returning({ feedSourceId: subscriptions.feedSourceId });
       if (!deleted) throw new DomainError('not_found', 'Subscription not found');
-      // The foreign key has already set subscription_id to null on this user's entries.
-      await tx.execute(sql`
-        DELETE FROM user_entries ue
-        WHERE ue.user_id = ${userId} AND ue.subscription_id IS NULL AND NOT ${KEPT_ENTRY}`);
       return deleted.feedSourceId;
     });
     await this.#updater?.reschedule([feedSourceId]);

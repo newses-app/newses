@@ -315,7 +315,19 @@
     "regenerateConfirm": "The current address stops working, so anyone subscribed to it will need the new one.",
     "regenerated": "Feed address changed",
     "sharedArticles": "Shared articles",
-    "noShares": "No articles are shared."
+    "noShares": "No articles are shared.",
+    "publishPage": "Publish a page",
+    "publishPageHint": "Add any web page to your published feed, whether or not you subscribe to its site."
+  },
+  "publish": {
+    "title": "Publish a page",
+    "url": "Page address",
+    "pageTitle": "Title",
+    "pageTitleHint": "Leave empty to use the page's own title.",
+    "text": "Text",
+    "textHint": "Leave empty to use the article on the page.",
+    "submit": "Publish",
+    "done": "Published {title}."
   },
   "reading": {
     "title": "Article text",

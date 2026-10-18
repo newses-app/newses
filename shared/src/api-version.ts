@@ -5,4 +5,4 @@ export const PRODUCT_NAME = 'newses';
 export const LEGACY_PRODUCT_NAMES: readonly string[] = ['rss-reader'];
 
 /** Revision of `/api/v1`: a new major breaks existing apps; a new minor adds what apps may require. */
-export const API_VERSION = { major: 1, minor: 4 } as const;
+export const API_VERSION = { major: 1, minor: 5 } as const;

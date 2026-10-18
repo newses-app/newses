@@ -1,17 +1,24 @@
-import { entrySchema, publishedFeedResponseSchema, shareResponseSchema } from '@newses/shared';
+import {
+  entrySchema,
+  publishedFeedResponseSchema,
+  publishPageRequestSchema,
+  shareResponseSchema,
+} from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { AccessKeyService } from '../../core/entries/access-keys.ts';
 import type { EntryService } from '../../core/entries/entries.ts';
+import type { PublishedPageService } from '../../core/feeds/published-pages.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 
 const idParams = z.object({ id: z.coerce.number().int() });
 
-/** Share links and the published feed's key; the public side is in `public.ts`. */
+/** Share links, the published feed's key, and published pages; the public side is in `public.ts`. */
 export const sharingRoutes: FastifyPluginAsyncZod<{
   entries: EntryService;
   accessKeys: AccessKeyService;
-}> = (app, { entries, accessKeys }) => {
+  publishedPages: PublishedPageService;
+}> = (app, { entries, accessKeys, publishedPages }) => {
   app.addHook('preHandler', requireUser);
 
   app.put(
@@ -43,6 +50,17 @@ export const sharingRoutes: FastifyPluginAsyncZod<{
     async (request) => ({
       key: await accessKeys.regenerate(requireAuth(request).user.id, 'published'),
     }),
+  );
+
+  app.post(
+    '/published-feed/pages',
+    { schema: { body: publishPageRequestSchema, response: { 200: entrySchema } } },
+    async (request) => {
+      const userId = requireAuth(request).user.id;
+      const id = await publishedPages.publish(userId, request.body);
+      const { content, fullContent, enclosures, ...entry } = await entries.get(userId, id);
+      return entry;
+    },
   );
 
   return Promise.resolve();

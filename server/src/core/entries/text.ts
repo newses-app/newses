@@ -43,3 +43,34 @@ export function excerpt(html: string | null, max = 250): string | null {
   if (!text) return null;
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** HTML of plain text: paragraphs at blank lines, line breaks kept; null when it is blank. */
+export function plainTextToHtml(text: string): string | null {
+  const paragraphs = text
+    .replace(/\r\n?/g, '\n')
+    .split(/\n[ \t]*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (paragraphs.length === 0) return null;
+  return paragraphs
+    .map((p) => `<p>${escapeHtml(p).replace(/[ \t]*\n[ \t]*/g, '<br>')}</p>`)
+    .join('');
+}
+
+/** Plain text of HTML that may be either, keeping paragraphs and line breaks; null when blank. */
+export function textOfHtml(html: string): string | null {
+  const text = html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|blockquote|pre)>/gi, '\n\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#?[a-zA-Z0-9]+);/g, decodeEntity)
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return text || null;
+}

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { extractArticle } from '../core/feeds/fulltext.ts';
+import { extractArticle, readArticle } from '../core/feeds/fulltext.ts';
 import { createDb, type Db } from '../db/client.ts';
 import { entries } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
@@ -80,6 +80,19 @@ describe('full text', () => {
     expect(
       extractArticle('<html><body><script>x()</script></body></html>', 'https://a.example/'),
     ).toBeNull();
+  });
+
+  it('reads the title, byline, and language with the article, else the page title', () => {
+    expect(readArticle(article('Body'), 'https://a.example/post')).toMatchObject({
+      title: 'Page',
+      content: expect.stringContaining('Body with') as string,
+    });
+    expect(
+      readArticle(
+        '<html lang="fr"><head><title> Just a <b>title</b> </title></head><body></body></html>',
+        'https://a.example/',
+      ),
+    ).toEqual({ title: 'Just a title', content: null, author: null, lang: null });
   });
 
   it('extracts on demand, keeping the original content', async () => {

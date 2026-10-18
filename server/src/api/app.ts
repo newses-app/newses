@@ -219,7 +219,10 @@ export function buildApp(deps: AppDeps) {
           entries: services.entries.entries,
         });
         await api.register(tagRoutes, { tags: services.entries.tags });
-        await api.register(sharingRoutes, services.entries);
+        await api.register(sharingRoutes, {
+          ...services.entries,
+          publishedPages: services.feeds.publishedPages,
+        });
         await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs, updater: services.feeds.updater });
         await api.register(themeRoutes, { themes: services.themes });

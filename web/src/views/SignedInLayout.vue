@@ -7,6 +7,7 @@ import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
 import NoteConflictDialog from '../components/dialogs/NoteConflictDialog.vue';
 import NoteDialog from '../components/dialogs/NoteDialog.vue';
+import PublishDialog from '../components/dialogs/PublishDialog.vue';
 import ScoreDialog from '../components/dialogs/ScoreDialog.vue';
 import ShareDialog from '../components/dialogs/ShareDialog.vue';
 import ShortcutHelp from '../components/dialogs/ShortcutHelp.vue';
@@ -92,6 +93,7 @@ useShortcutListener((action) => {
   </v-navigation-drawer>
   <router-view />
   <SubscribeDialog />
+  <PublishDialog />
   <EditFeedDialog />
   <NoteDialog />
   <ScoreDialog />

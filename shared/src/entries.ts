@@ -4,6 +4,9 @@ import { labelSchema } from './labels.ts';
 import {
   MAX_CONTENTS_IDS,
   MAX_NOTE_LENGTH,
+  MAX_PAGE_TEXT_LENGTH,
+  MAX_PAGE_TITLE_LENGTH,
+  MAX_PAGE_URL_LENGTH,
   MAX_SCORE,
   MAX_TAG_LENGTH,
   MAX_TAGS_PER_ENTRY,
@@ -187,6 +190,16 @@ export const shareResponseSchema = z.object({ shareId: z.uuid() });
 /** The secret key in the user's published feed URL (`/public/feeds/<key>`). */
 export const publishedFeedResponseSchema = z.object({ key: z.string() });
 
+/**
+ * A page from outside the user's feeds to publish. Text is plain text. A missing title or text
+ * is taken from the page; publishing the same address again updates and republishes it.
+ */
+export const publishPageRequestSchema = z.object({
+  url: z.string().trim().min(1).max(MAX_PAGE_URL_LENGTH),
+  title: z.string().max(MAX_PAGE_TITLE_LENGTH).nullish(),
+  text: z.string().max(MAX_PAGE_TEXT_LENGTH).nullish(),
+});
+
 export const tagCountSchema = z.object({ tag: z.string(), count: z.number().int() });
 
 export const markReadRequestSchema = streamSchema
@@ -260,6 +273,7 @@ export type EntryNoteRequest = z.infer<typeof entryNoteRequestSchema>;
 export type TagCount = z.infer<typeof tagCountSchema>;
 export type ShareResponse = z.infer<typeof shareResponseSchema>;
 export type PublishedFeedResponse = z.infer<typeof publishedFeedResponseSchema>;
+export type PublishPageRequest = z.infer<typeof publishPageRequestSchema>;
 export type MarkReadRequest = z.infer<typeof markReadRequestSchema>;
 export type Counters = z.infer<typeof countersSchema>;
 export type SyncResponse = z.infer<typeof syncResponseSchema>;

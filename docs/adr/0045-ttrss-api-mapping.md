@@ -1,6 +1,6 @@
 # 0045. TTRSS API mapping
 
-- Status: Accepted
+- Status: Superseded by 0067
 - Date: 2026-10-07
 
 ## Context

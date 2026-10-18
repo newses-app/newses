@@ -2,7 +2,7 @@ import { Readability } from '@mozilla/readability';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { parseHTML } from 'linkedom';
 import type { Db } from '../../db/client.ts';
-import { entries, userEntries } from '../../db/schema.ts';
+import { entries, fetchHosts, userEntries } from '../../db/schema.ts';
 import { DomainError } from '../errors.ts';
 import type { Jobs } from '../jobs.ts';
 import type { JobQueue, Logger } from '../ports.ts';
@@ -10,7 +10,7 @@ import { decodeBody } from './decode.ts';
 import { looksLikeHtml } from './discover.ts';
 import type { HostLimiter } from './host-limiter.ts';
 import { type Fetcher, FetchError } from './http.ts';
-import { sanitizeContent } from './sanitize.ts';
+import { sanitizeContent, sanitizeTitle } from './sanitize.ts';
 
 /** Entries a job extracts for one feed source, newest first. */
 const ENTRIES_PER_JOB = 20;
@@ -25,15 +25,66 @@ export interface FullTextDeps {
   logger: Logger;
 }
 
-/** Extracts the article from an HTML page; null when Readability finds none. */
-export function extractArticle(html: string, url: string): string | null {
+/** What a page says about its article, sanitised; each null when the page does not say. */
+export interface Article {
+  title: string | null;
+  content: string | null;
+  author: string | null;
+  lang: string | null;
+}
+
+/** Reads the article from an HTML page with Readability; the title falls back to `<title>`. */
+export function readArticle(html: string, url: string): Article {
   // linkedom implements the parts of the DOM Readability uses. Both libraries' types refer to
   // DOM types, which the server's compiler settings leave out, so they resolve to `any`.
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const { document } = parseHTML(html);
+  // Read before Readability, which changes the document.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  const pageTitle: unknown = document.title;
   const article = new Readability(document).parse();
-  const content = article?.content ? sanitizeContent(article.content, url) : '';
-  return content || null;
+  return {
+    title: sanitizeTitle(article?.title || (typeof pageTitle === 'string' ? pageTitle : null)),
+    content: article?.content ? sanitizeContent(article.content, url) || null : null,
+    author: article?.byline ? sanitizeTitle(article.byline) : null,
+    lang: article?.lang?.trim().slice(0, 35) || null,
+  };
+}
+
+/** Extracts the article from an HTML page; null when Readability finds none. */
+export const extractArticle = (html: string, url: string): string | null =>
+  readArticle(html, url).content;
+
+/** A fetched HTML page: its address after redirects, and its text. */
+export interface Page {
+  url: string;
+  html: string;
+}
+
+/**
+ * Fetches an HTML page within the per-host limits, unless its host asked to wait. Throws a
+ * DomainError: `fetch_failed` (paused host, failed fetch) or `feed_not_found` (not a web page).
+ */
+export async function fetchPage(
+  { db, fetcher, hosts }: Pick<FullTextDeps, 'db' | 'fetcher' | 'hosts'>,
+  url: string,
+  purpose: 'fulltext' | 'page',
+): Promise<Page> {
+  const host = new URL(url).host;
+  const [paused] = await db
+    .select({ host: fetchHosts.host })
+    .from(fetchHosts)
+    .where(and(eq(fetchHosts.host, host), sql`${fetchHosts.blockedUntil} > now()`));
+  if (paused) throw new DomainError('fetch_failed', 'The site asked to wait before more requests');
+  const page = await hosts
+    .run(host, () => fetcher.fetch(url, { purpose, accept: 'text/html', maxBytes: MAX_PAGE_BYTES }))
+    .catch((err: unknown) => {
+      throw err instanceof FetchError ? new DomainError('fetch_failed', err.message) : err;
+    });
+  const html = decodeBody(page.body, page.contentType);
+  if (!looksLikeHtml(html, page.contentType))
+    throw new DomainError('feed_not_found', 'The article is not a web page');
+  return { url: page.url, html };
 }
 
 /**
@@ -106,22 +157,12 @@ export class FullTextService {
     try {
       if (!entry?.link || !/^https?:\/\//i.test(entry.link))
         throw new DomainError('invalid_input', 'The article has no web address');
-      const link = entry.link;
-      const page = await this.#hosts
-        .run(new URL(link).host, () =>
-          this.#fetcher.fetch(link, {
-            purpose: 'fulltext',
-            accept: 'text/html',
-            maxBytes: MAX_PAGE_BYTES,
-          }),
-        )
-        .catch((err: unknown) => {
-          throw err instanceof FetchError ? new DomainError('fetch_failed', err.message) : err;
-        });
-      const html = decodeBody(page.body, page.contentType);
-      if (!looksLikeHtml(html, page.contentType))
-        throw new DomainError('feed_not_found', 'The article is not a web page');
-      const content = extractArticle(html, page.url);
+      const page = await fetchPage(
+        { db: this.#db, fetcher: this.#fetcher, hosts: this.#hosts },
+        entry.link,
+        'fulltext',
+      );
+      const content = extractArticle(page.html, page.url);
       if (!content) throw new DomainError('feed_not_found', 'No article found on the page');
       await this.#db
         .update(entries)

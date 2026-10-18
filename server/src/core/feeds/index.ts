@@ -12,6 +12,7 @@ import { HostRuleService } from './host-rules.ts';
 import type { Fetcher } from './http.ts';
 import { Ingester } from './ingest.ts';
 import { OpmlService } from './opml.ts';
+import { PublishedPageService } from './published-pages.ts';
 import { Purger } from './purge.ts';
 import { SubscriptionService } from './subscriptions.ts';
 import { FeedUpdater } from './updater.ts';
@@ -66,6 +67,13 @@ export function createFeedServices(deps: FeedDeps) {
     iconTokens: new IconTokens(deps.keys['feed-icons']),
     images: new ImageProxy({ db, fetcher, blobs, hosts, key: deps.keys['image-url'], logger }),
     purger: new Purger(db, blobs, settings, { archive: deps.archive }),
+    publishedPages: new PublishedPageService({
+      db,
+      fetcher,
+      hosts,
+      realtime: deps.realtime,
+      logger,
+    }),
   };
 }
 
