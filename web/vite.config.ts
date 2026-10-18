@@ -60,6 +60,13 @@ export default defineConfig(({ mode }) => ({
                 purpose: 'maskable',
               },
             ],
+            // Installed, the app appears in the share sheet; `/share` offers the page to subscribe
+            // to or publish.
+            share_target: {
+              action: '/share',
+              method: 'GET',
+              params: { title: 'title', text: 'text', url: 'url' },
+            },
           },
           // The service worker is src/worker/sw.ts: the app shell, theme fonts, feed icons, and
           // background sync.

@@ -1,6 +1,11 @@
 import { API_VERSION } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
-import { checkServer, compatibility, normaliseServerUrl } from './server-url.ts';
+import {
+  checkServer,
+  compatibility,
+  normaliseServerUrl,
+  supportsPublishing,
+} from './server-url.ts';
 
 describe('normaliseServerUrl', () => {
   it('keeps the HTTPS origin of what was typed', () => {
@@ -47,6 +52,15 @@ describe('compatibility', () => {
     expect(compatibility(info(1, 0, 'other')).status).toBe('notNewses');
     expect(compatibility({ hello: 'world' }).status).toBe('notNewses');
     expect(compatibility(null).status).toBe('notNewses');
+  });
+});
+
+describe('supportsPublishing', () => {
+  it('needs API 1.5 or a later minor', () => {
+    expect(supportsPublishing(info(1, 5))).toBe(true);
+    expect(supportsPublishing(info(1, 9))).toBe(true);
+    expect(supportsPublishing(info(1, 4))).toBe(false);
+    expect(supportsPublishing(info(2, 5))).toBe(false);
   });
 });
 

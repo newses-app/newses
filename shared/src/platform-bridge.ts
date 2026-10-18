@@ -116,10 +116,11 @@ export interface PlatformBridge {
   getDesktopOptions(): Promise<DesktopOptions | null>;
   setDesktopOptions(options: Partial<DesktopOptions>): Promise<void>;
   /**
-   * Called with text shared to the app from another app (Android's share sheet), including a share
-   * that launched it; replaces the previous handler.
+   * Called with text shared to the app from another app (Android's share sheet), and its subject
+   * (a page's title, from browsers), including a share that launched it; replaces the previous
+   * handler.
    */
-  onShare(handler: (text: string) => void): void;
+  onShare(handler: (text: string, subject: string | null) => void): void;
   /**
    * The app's theme: the reader's mode preference and its background now. Desktop follows the
    * preference (so `system` keeps tracking the OS) and paints its window with the background;

@@ -1,12 +1,15 @@
 import type { Entry } from '@newses/shared';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import type { SharedLink } from '../platform/share.ts';
 
 /** What the publish dialog opens with (a page shared to the app). */
 export interface PublishDraft {
   url: string;
   title?: string | null;
   text?: string | null;
+  /** Close the window once published (a bookmarklet opened it). */
+  closeWindow?: boolean;
 }
 
 export interface ConfirmRequest {
@@ -24,6 +27,8 @@ export const useUiStore = defineStore('ui', () => {
   const subscribeOpen = ref(false);
   /** Fills in the subscribe dialog's address when it opens (a URL shared to the app). */
   const subscribeUrl = ref<string | null>(null);
+  /** A page shared to the app, offered to subscribe to or publish. */
+  const sharedLink = ref<SharedLink | null>(null);
   const publishOpen = ref(false);
   /** Fills in the publish dialog when it opens. */
   const publishDraft = ref<PublishDraft | null>(null);
@@ -66,6 +71,7 @@ export const useUiStore = defineStore('ui', () => {
     helpOpen,
     subscribeOpen,
     subscribeUrl,
+    sharedLink,
     publishOpen,
     publishDraft,
     editSubscriptionId,

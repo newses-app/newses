@@ -21,6 +21,7 @@ const text = ref('');
 const busy = ref(false);
 const error = ref<string | null>(null);
 const restoreFocus = useReturnFocus(() => ui.publishOpen);
+let closeWindow = false;
 
 // Opening starts afresh, or with a page shared to the app, also while open.
 watch(
@@ -30,6 +31,7 @@ watch(
     url.value = draft?.url ?? '';
     title.value = draft?.title ?? '';
     text.value = draft?.text ?? '';
+    closeWindow = draft?.closeWindow ?? false;
     ui.publishDraft = null;
     error.value = null;
   },
@@ -52,6 +54,7 @@ async function publish() {
     ]);
     ui.publishOpen = false;
     ui.notify(t('publish.done', { title: entry.title ?? entry.link ?? '' }));
+    if (closeWindow) window.close();
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : t('errors.generic');
   } finally {

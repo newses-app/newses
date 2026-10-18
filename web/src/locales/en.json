@@ -317,7 +317,18 @@
     "sharedArticles": "Shared articles",
     "noShares": "No articles are shared.",
     "publishPage": "Publish a page",
-    "publishPageHint": "Add any web page to your published feed, whether or not you subscribe to its site."
+    "publishPageHint": "Add any web page to your published feed, whether or not you subscribe to its site.",
+    "bookmarklets": "Bookmarklets",
+    "bookmarkletsHint": "Drag these to your browser's bookmarks bar. On any page, they open Newses ready to publish the page (with the text you selected) or subscribe to its feed.",
+    "publishBookmarklet": "Publish in Newses",
+    "subscribeBookmarklet": "Subscribe in Newses",
+    "bookmarkletCode": "{name} code",
+    "dragHint": "Drag this link to your bookmarks bar, or copy its code into a new bookmark."
+  },
+  "sharedLink": {
+    "title": "Shared page",
+    "subscribe": "Subscribe to its feed",
+    "publish": "Publish the page"
   },
   "publish": {
     "title": "Publish a page",

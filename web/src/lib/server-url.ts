@@ -39,6 +39,12 @@ export function compatibility(
   return { status: minor < required.minor ? 'older' : 'ok', info: server as ServerInfo };
 }
 
+/** The API minor that added publishing pages from outside the feeds. */
+const PUBLISH_API_MINOR = 5;
+
+export const supportsPublishing = ({ apiVersion }: ServerInfo) =>
+  apiVersion.major === API_VERSION.major && apiVersion.minor >= PUBLISH_API_MINOR;
+
 /** Asks `GET /server` at `origin`, without credentials. */
 export async function checkServer(origin: string, fetch?: typeof globalThis.fetch) {
   const api = createApiClient({ baseUrl: origin, token: () => null, ...(fetch && { fetch }) });

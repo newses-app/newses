@@ -2,6 +2,7 @@
 import { watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
+import { api } from '../api.ts';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
@@ -10,6 +11,7 @@ import NoteDialog from '../components/dialogs/NoteDialog.vue';
 import PublishDialog from '../components/dialogs/PublishDialog.vue';
 import ScoreDialog from '../components/dialogs/ScoreDialog.vue';
 import ShareDialog from '../components/dialogs/ShareDialog.vue';
+import SharedLinkDialog from '../components/dialogs/SharedLinkDialog.vue';
 import ShortcutHelp from '../components/dialogs/ShortcutHelp.vue';
 import TagPickerDialog from '../components/dialogs/TagPickerDialog.vue';
 import TagsDialog from '../components/dialogs/TagsDialog.vue';
@@ -23,6 +25,7 @@ import { useOfflineSync } from '../composables/useOfflineSync.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
 import { shares } from '../platform/index.ts';
+import { supportsPublishing } from '../lib/server-url.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { useUiStore } from '../stores/ui.ts';
 
@@ -37,12 +40,20 @@ useLiveCounters();
 useEntryNotifications();
 useOfflineSync();
 
-// A URL shared to the app, now or before signing in, opens the subscribe dialog filled in.
+// A page shared to the app, now or before signing in, is offered to subscribe to or publish;
+// servers that cannot publish pages open the subscribe dialog filled in.
 watch(
   shares.pending,
-  (url) => {
-    if (!url) return;
-    ui.subscribeUrl = shares.take();
+  async (pending) => {
+    if (!pending) return;
+    const link = shares.take();
+    if (!link) return;
+    const publishing = await api.serverInfo().then(supportsPublishing, () => true);
+    if (publishing) {
+      ui.sharedLink = link;
+      return;
+    }
+    ui.subscribeUrl = link.url;
     ui.subscribeOpen = true;
   },
   { immediate: true },
@@ -94,6 +105,7 @@ useShortcutListener((action) => {
   <router-view />
   <SubscribeDialog />
   <PublishDialog />
+  <SharedLinkDialog />
   <EditFeedDialog />
   <NoteDialog />
   <ScoreDialog />

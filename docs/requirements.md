@@ -87,7 +87,8 @@
 | Published feed | P2 | Per-user public RSS feed of published entries at a secret-key URL; key can be regenerated |
 | Share link | P2 | Per-entry public read-only URL (unguessable UUID); can be revoked |
 | Publish a page | Published pages | Any web page joins the user's published feed with an optional title and text; a missing title or text is taken from the page, and a page that cannot be read is still published; publishing the same address again updates it; works from Settings and TTRSS clients |
-| Bookmarklets | Later | "Subscribe in reader" and "share to published" bookmarklets |
+| Bookmarklets | Published pages | "Subscribe in Newses" and "Publish in Newses" bookmarklets in Settings → Sharing open the app's Subscribe or Publish dialog filled in with the page (its title and selected text), through sign-in, without acting on their own |
+| Share to the app | Published pages | Pages shared from other apps to the Android app or an installed web app are offered to subscribe to or publish, with the page's title |
 | Email | Later | Email an article; scheduled digest of unread entries |
 
 ### Content processing
@@ -125,7 +126,7 @@
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app for Windows (installer, zip) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
-| Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share-to-subscribe intent, and a prompt to install newer versions |
+| Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, and a prompt to install newer versions |
 | macOS desktop app | Later | The desktop app, signed and notarised for macOS |
 
 ### Offline

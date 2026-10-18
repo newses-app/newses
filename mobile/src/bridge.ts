@@ -35,7 +35,7 @@ const UPDATE_CHECK_KEY = 'updateCheck';
 const ShareTarget = registerPlugin<{
   addListener(
     event: 'share',
-    listener: (data: { text: string }) => void,
+    listener: (data: { text: string; subject?: string }) => void,
   ): Promise<PluginListenerHandle>;
 }>('ShareTarget');
 
@@ -55,11 +55,11 @@ const BackgroundSync = registerPlugin<{
 }>('BackgroundSync');
 
 /** Shares wait here until the web app sets its handler. */
-let shareHandler: ((text: string) => void) | null = null;
-const sharedTexts: string[] = [];
-void ShareTarget.addListener('share', ({ text }) => {
-  if (shareHandler) shareHandler(text);
-  else sharedTexts.push(text);
+let shareHandler: ((text: string, subject: string | null) => void) | null = null;
+const sharedTexts: { text: string; subject: string | null }[] = [];
+void ShareTarget.addListener('share', ({ text, subject }) => {
+  if (shareHandler) shareHandler(text, subject ?? null);
+  else sharedTexts.push({ text, subject: subject ?? null });
 });
 
 const refreshers = new Set<() => void>();
@@ -187,7 +187,7 @@ const bridge: PlatformBridge = {
   setDesktopOptions: () => Promise.resolve(),
   onShare: (handler) => {
     shareHandler = handler;
-    for (const text of sharedTexts.splice(0)) handler(text);
+    for (const { text, subject } of sharedTexts.splice(0)) handler(text, subject);
   },
   // The app draws edge to edge, so the bars show the page's theme background; over a dark one
   // their icons must be light.
