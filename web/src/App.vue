@@ -25,6 +25,7 @@ watch(
       preference: theme.isSystem.value ? 'system' : theme.current.value.dark ? 'dark' : 'light',
       dark: /^#[0-9a-f]{6}$/.test(background) ? isDark(background) : theme.current.value.dark,
       background,
+      text: String(theme.current.value.colors['on-surface']).toLowerCase(),
     };
   },
   (current) => void bridge.setTheme(current),
@@ -79,6 +80,7 @@ function changeServer() {
       v-if="starting || failed"
       class="d-flex flex-column flex-grow-1 align-center justify-center ga-4 pa-4 text-center"
     >
+      <div class="window-drag-strip" aria-hidden="true" />
       <template v-if="failed">
         <p class="text-body-medium">{{ t('app.unreachable') }}</p>
         <v-btn color="primary" variant="flat" @click="reload">{{ t('app.retry') }}</v-btn>

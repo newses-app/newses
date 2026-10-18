@@ -15,6 +15,7 @@ import { currentStore } from './offline/store.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 import { handleBack } from './platform/back-button.ts';
 import { routeExternalLinks } from './platform/external-links.ts';
+import { trackWindowControls } from './platform/window-controls.ts';
 import { router } from './router.ts';
 import { useUiStore } from './stores/ui.ts';
 import './styles.css';
@@ -23,6 +24,7 @@ import './themes/terminal.css';
 import './themes/sketch.css';
 
 document.documentElement.dataset.platform = bridge.platform;
+trackWindowControls(document.documentElement);
 // The last theme shown here, so a reload doesn't flash Original and signed-out screens are themed.
 const appearance = startAppearance();
 // The apps' server and token come from the shell before the first navigation needs them.

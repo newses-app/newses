@@ -129,3 +129,36 @@ html[data-platform='android'] .v-menu.v-overlay {
 .v-list-item[aria-disabled='true'] {
   opacity: 0.6;
 }
+
+/*
+ * Desktop, without a native title bar: the app bar moves the window (an empty strip on screens
+ * without one), and leaves room for the window controls over its end. Drag areas take every
+ * click under them, so an open overlay or narrow-layout drawer turns them off.
+ */
+.window-drag-strip {
+  display: none;
+}
+html[data-window-controls] .window-drag-strip {
+  display: block;
+  position: fixed;
+  top: env(titlebar-area-y, 0px);
+  left: env(titlebar-area-x, 0px);
+  width: env(titlebar-area-width, 100%);
+  height: env(titlebar-area-height, 0px);
+}
+html[data-window-controls] .v-app-bar .v-toolbar__content {
+  padding-inline-end: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+html[data-window-controls]:not(
+    :has(.v-overlay--active, .v-navigation-drawer--temporary.v-navigation-drawer--active)
+  )
+  :is(.v-app-bar .v-toolbar__content, .window-drag-strip) {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+html[data-window-controls]
+  .v-app-bar
+  :is(a, button, input, textarea, .v-field, .v-tabs, [role='button'], [tabindex]) {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

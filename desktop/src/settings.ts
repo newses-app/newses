@@ -18,6 +18,8 @@ export interface Settings {
   window?: WindowState | undefined;
   /** The app theme's last background, so a new window starts in it rather than flashing. */
   background?: string | undefined;
+  /** The app theme's last text colour, the window controls' symbols in a new window. */
+  text?: string | undefined;
   /** Changed from the defaults in settings (options.ts). */
   options?: Partial<DesktopOptions> | undefined;
 }

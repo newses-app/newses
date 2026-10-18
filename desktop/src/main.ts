@@ -23,10 +23,10 @@ import {
 } from 'electron';
 import { setLaunchAtLogin, setTray } from './background.ts';
 import { DEFAULT_OPTIONS, HIDDEN_ARG, notificationTarget, parseOptions } from './options.ts';
-import { openSettings, type SettingsStore } from './settings.ts';
+import { openSettings, type Settings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
 import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
-import { themeBackground, themeSource } from './theme.ts';
+import { themeBackground, themeSource, themeText } from './theme.ts';
 import { startUpdater, type Updater } from './updater.ts';
 import { centered, onScreen, restoreBounds } from './window-state.ts';
 
@@ -38,6 +38,13 @@ const DEV_SERVER = app.isPackaged ? undefined : process.env.NEWSES_DEV_SERVER;
 const CSP = `${NATIVE_CSP}; frame-ancestors 'none'`;
 /** Renderer permissions the app uses: notifications, and copying share links. */
 const PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write']);
+/**
+ * No native title bar: the web app's app bar moves the window, and the window controls overlay its
+ * end, transparent over it and drawn in the theme's text colour.
+ */
+const CONTROLS_OVERLAY = process.platform === 'win32' || process.platform === 'linux';
+/** Vuetify's compact app bar. */
+const TITLE_BAR_HEIGHT = 48;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -162,10 +169,19 @@ function registerBridge(settings: SettingsStore) {
   // `system` lets Electron follow the OS again; pinning light or dark would stop that for good.
   handle('setTheme', async (theme) => {
     nativeTheme.themeSource = themeSource(theme);
+    const saved = settings.get();
+    const changes: Settings = {};
     const background = themeBackground(theme);
-    if (!background) return;
-    window?.setBackgroundColor(background);
-    if (background !== settings.get().background) await settings.update({ background });
+    if (background) {
+      window?.setBackgroundColor(background);
+      if (background !== saved.background) changes.background = background;
+    }
+    const text = themeText(theme);
+    if (text) {
+      if (CONTROLS_OVERLAY) window?.setTitleBarOverlay({ symbolColor: text });
+      if (text !== saved.text) changes.text = text;
+    }
+    if (Object.keys(changes).length > 0) await settings.update(changes);
   });
   handle('getUpdateStatus', () => updater?.status() ?? { state: 'unsupported' });
   handle('checkForUpdates', () => updater?.check());
@@ -209,6 +225,15 @@ function createWindow(settings: SettingsStore, hidden: boolean) {
     autoHideMenuBar: true,
     backgroundColor:
       themeBackground(settings.get()) ?? (nativeTheme.shouldUseDarkColors ? '#121212' : '#ffffff'),
+    ...(CONTROLS_OVERLAY && {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#00000000',
+        symbolColor:
+          themeText(settings.get()) ?? (nativeTheme.shouldUseDarkColors ? '#ffffff' : '#000000'),
+        height: TITLE_BAR_HEIGHT,
+      },
+    }),
     icon: join(__dirname, 'icon.png'),
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),

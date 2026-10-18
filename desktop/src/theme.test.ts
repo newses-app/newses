@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { themeBackground, themeSource } from './theme.ts';
+import { themeBackground, themeSource, themeText } from './theme.ts';
 
 describe('themeSource', () => {
   it('pins light or dark only when the reader chose it', () => {
@@ -37,5 +37,18 @@ describe('themeBackground', () => {
       { background: 0xffffff },
     ])
       expect(themeBackground(theme)).toBeNull();
+  });
+});
+
+describe('themeText', () => {
+  it('takes a #rrggbb text colour', () => {
+    expect(
+      themeText({ preference: 'dark', dark: true, background: '#0a0e0a', text: '#33ff66' }),
+    ).toBe('#33ff66');
+  });
+
+  it('ignores anything else', () => {
+    for (const theme of [null, {}, { background: '#ffffff' }, { text: 'black' }, { text: '#000' }])
+      expect(themeText(theme)).toBeNull();
   });
 });

@@ -57,6 +57,8 @@ export interface AppTheme {
   dark: boolean;
   /** The appearance theme's background, `#rrggbb`. */
   background: string;
+  /** The appearance theme's text colour, `#rrggbb`; desktop draws the window controls in it. */
+  text: string;
 }
 
 /**

@@ -52,6 +52,7 @@ async function submit() {
 
 <template>
   <v-main>
+    <div class="window-drag-strip" aria-hidden="true" />
     <v-container class="fill-height d-flex align-center justify-center">
       <v-card width="420" class="pa-2" elevation="2">
         <v-card-item>
