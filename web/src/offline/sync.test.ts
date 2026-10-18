@@ -132,6 +132,28 @@ describe('syncStore', () => {
     expect((await db.meta.get('syncToken'))?.value).toBe('T2');
   });
 
+  it('loads the unread of subscriptions hidden from All after All, within its cap', async () => {
+    const { api, asked } = fakeServer({
+      ...LISTS,
+      'GET /subscriptions': () => [
+        { id: 1, title: 'One', hideFromAll: false },
+        { id: 2, title: 'Two', hideFromAll: true },
+      ],
+      'GET /sync/token': () => ({ next: 'T0' }),
+      'GET /entries': (url) =>
+        url.searchParams.get('subscriptionId') === '2'
+          ? { entries: [entry(7, { subscriptionId: 2 })], cursor: null, view: 'unread' }
+          : { entries: [], cursor: null, view: 'all' },
+      'GET /sync': () => changes(),
+    });
+
+    await syncStore({ api, db, now: () => NOW });
+    expect(asked.filter((a) => a.startsWith('GET /entries'))).toContain(
+      'GET /entries?subscriptionId=2&view=unread&limit=200',
+    );
+    expect(await db.entries.toCollection().primaryKeys()).toEqual([7]);
+  });
+
   it('applies changes: state, deletions, and lists, and reports them', async () => {
     await db.entries.bulkPut(
       [1, 2, 3].map((id) => ({

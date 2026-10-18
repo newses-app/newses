@@ -8,6 +8,7 @@ import { FaviconService, IconTokens } from './favicons.ts';
 import { FullTextService } from './fulltext.ts';
 import { HostLimiter } from './host-limiter.ts';
 import { ImageProxy } from './images.ts';
+import { HostRuleService } from './host-rules.ts';
 import type { Fetcher } from './http.ts';
 import { Ingester } from './ingest.ts';
 import { OpmlService } from './opml.ts';
@@ -59,6 +60,7 @@ export function createFeedServices(deps: FeedDeps) {
     opml: new OpmlService(db, categories, subscriptions),
     ingester,
     updater,
+    hostRules: new HostRuleService(db, updater),
     favicons: new FaviconService(db, fetcher, blobs, logger, hosts),
     fullText,
     iconTokens: new IconTokens(deps.keys['feed-icons']),

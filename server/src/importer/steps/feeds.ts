@@ -60,7 +60,7 @@ async function sourceFor(tx: Writer, url: string, title: string, siteUrl: string
 
 /**
  * Feeds: one shared feed source per normalised URL and a subscription per user with the feed's
- * title, category, order, and interval and purge overrides. Feeds with HTTP authentication are
+ * title, category, order, interval and purge overrides, and whether updates were disabled. Feeds with HTTP authentication are
  * skipped; per-feed options with no equivalent are noted.
  */
 export const feedsStep: ImportStep = {
@@ -140,6 +140,8 @@ export const feedsStep: ImportStep = {
               purgeDays: purgeDays(row, (text) => {
                 report.note(login, 'feeds', row.id, text);
               }),
+              // TTRSS's "updates disabled".
+              paused: row.update_interval < 0,
             };
             let targetId: number;
             if (existing) {
@@ -168,14 +170,13 @@ export const feedsStep: ImportStep = {
   },
 };
 
-/** TTRSS `update_interval` (minutes; 0 is the default, -1 disables updates) in seconds. */
+/**
+ * TTRSS `update_interval` (minutes; 0 is the default, -1 disables updates, imported as paused) in
+ * seconds.
+ */
 function updateInterval(row: SourceFeedRow, note: (text: string) => void): number | null {
   const minutes = row.update_interval;
-  if (minutes === 0) return null;
-  if (minutes < 0) {
-    note('updates were disabled in TTRSS; the feed is fetched here');
-    return null;
-  }
+  if (minutes <= 0) return null;
   const allowed = Math.min(Math.max(minutes, MIN_INTERVAL_MINUTES), MAX_INTERVAL_MINUTES);
   if (allowed !== minutes)
     note(`update interval ${String(minutes)} min changed to ${String(allowed)} min`);

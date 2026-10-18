@@ -37,6 +37,11 @@ const feed = (
   updateIntervalMinutes: null,
   purgeDays: null,
   fullText: false,
+  paused: false,
+  hideFromAll: false,
+  effectiveIntervalMinutes: null,
+  intervalReason: null,
+  nextFetchAt: null,
 });
 const counters: Counters = {
   subscriptions: [

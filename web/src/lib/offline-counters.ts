@@ -1,5 +1,5 @@
 import type { Counters, Entry } from '@newses/shared';
-import type { StreamContext } from './offline-streams.ts';
+import { notHiddenFromAll, type StreamContext } from './offline-streams.ts';
 
 /** What counting an entry needs: its flags, place, score, and age. */
 export type CountedEntry = Pick<
@@ -25,14 +25,18 @@ function tally(
   context: StreamContext,
   parents: ReadonlyMap<number, number | null>,
   categoryOf: ReadonlyMap<number, number | null>,
+  inAll: (entry: CountedEntry) => boolean,
 ): void {
   if (!entry.unread) return;
   const add = (key: string) => into.set(key, (into.get(key) ?? 0) + sign);
   // Entries hidden by their score count only where they are listed: Starred, Published, labels.
   if (entry.score >= context.scoreHideBelow) {
-    add('all');
-    const since = new Date(context.now - context.freshMaxAgeHours * HOUR_MS).toISOString();
-    if (entry.sortAt > since) add('fresh');
+    // Subscriptions hidden from All count in neither All nor Fresh.
+    if (inAll(entry)) {
+      add('all');
+      const since = new Date(context.now - context.freshMaxAgeHours * HOUR_MS).toISOString();
+      if (entry.sortAt > since) add('fresh');
+    }
     if (entry.subscriptionId !== null) {
       add(`s${String(entry.subscriptionId)}`);
       const categoryId = categoryOf.get(entry.subscriptionId);
@@ -65,10 +69,11 @@ export function adjustCounters(
 ): Counters {
   const parents = new Map(context.categories.map((c) => [c.id, c.parentId]));
   const categoryOf = new Map(context.subscriptions.map((s) => [s.id, s.categoryId]));
+  const inAll = notHiddenFromAll(context);
   const delta: Tally = new Map();
   for (const { before, after } of changes) {
-    tally(delta, before, -1, context, parents, categoryOf);
-    tally(delta, after, 1, context, parents, categoryOf);
+    tally(delta, before, -1, context, parents, categoryOf, inAll);
+    tally(delta, after, 1, context, parents, categoryOf, inAll);
   }
   if ([...delta.values()].every((d) => d === 0)) return counters;
   const shift = (key: string, unread: number) => Math.max(0, unread + (delta.get(key) ?? 0));

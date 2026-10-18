@@ -33,6 +33,8 @@ export interface HostStats {
   /** Most requests in any one hour of the window. */
   peakHourRequests: number;
   blockedUntil: Date | null;
+  /** Admins' minimum interval between feed checks of the host. */
+  minIntervalSeconds: number | null;
 }
 
 export interface HourlyOutbound {
@@ -175,6 +177,7 @@ export class OpsReports {
       total_ms: number;
       peak: number;
       blocked_until: string | null;
+      min_interval_seconds: number | null;
     }>(sql`
       WITH hourly AS (
         SELECT host, hour, sum(requests) AS requests FROM host_fetch_stats_hourly
@@ -194,7 +197,9 @@ export class OpsReports {
         sum(s.total_ms)::float8 AS total_ms,
         (SELECT max(requests)::int FROM hourly h WHERE h.host = s.host) AS peak,
         (SELECT blocked_until::text FROM fetch_hosts f
-          WHERE f.host = s.host AND f.blocked_until > now()) AS blocked_until
+          WHERE f.host = s.host AND f.blocked_until > now()) AS blocked_until,
+        (SELECT r.min_interval_seconds FROM fetch_host_rules r WHERE r.host = s.host)
+          AS min_interval_seconds
       FROM host_fetch_stats_hourly s
       WHERE s.hour >= ${since(hours)}
       GROUP BY s.host
@@ -227,6 +232,7 @@ export class OpsReports {
         avgMs: Math.round(row.total_ms / row.requests),
         peakHourRequests: row.peak,
         blockedUntil: row.blocked_until ? new Date(row.blocked_until) : null,
+        minIntervalSeconds: row.min_interval_seconds,
       })),
       hourly: hourly.rows.map((row) => ({
         hour: new Date(row.hour),

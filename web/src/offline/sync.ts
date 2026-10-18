@@ -1,4 +1,11 @@
-import type { ApiClient, Entry, EntryListQuery, ServerInfo, SyncResponse } from '@newses/shared';
+import type {
+  ApiClient,
+  Entry,
+  EntryListQuery,
+  ServerInfo,
+  Subscription,
+  SyncResponse,
+} from '@newses/shared';
 import { API_VERSION, ApiError } from '@newses/shared/client';
 import Dexie from 'dexie';
 import {
@@ -128,15 +135,11 @@ async function bootstrap(options: SyncOptions): Promise<void> {
   ];
   const results = await Promise.all(snapshots.map(([, load]) => load()));
   await Promise.all(snapshots.map(([name], i) => writeQuery(db, name, results[i])));
-  const lists: [EntryListQuery, number][] = [
-    [{ special: 'all', view: 'unread' }, limits.unread],
-    [{ special: 'starred', view: 'all' }, limits.starred],
-    [{ special: 'recentlyRead', view: 'all' }, limits.read],
-  ];
-  for (const [query, cap] of lists) {
+  /** Stores up to `cap` entries of the list; returns how many it stored. */
+  const load = async (query: EntryListQuery, cap: number) => {
     let cursor: string | null = null;
     let loaded = 0;
-    do {
+    while (loaded < cap) {
       const page = await api.entries.list({
         ...query,
         limit: Math.min(PAGE_LIMIT, cap - loaded),
@@ -145,8 +148,18 @@ async function bootstrap(options: SyncOptions): Promise<void> {
       await storeEntries(db, page.entries, now, limits);
       loaded += page.entries.length;
       cursor = page.cursor;
-    } while (cursor && loaded < cap);
-  }
+      if (!cursor) break;
+    }
+    return loaded;
+  };
+  // All leaves out subscriptions hidden from it, so their unread load after it, within its cap.
+  const listed = results[snapshots.findIndex(([name]) => name === 'subscriptions')];
+  const hidden = ((listed ?? []) as Subscription[]).filter((s) => s.hideFromAll);
+  let unread = await load({ special: 'all', view: 'unread' }, limits.unread);
+  for (const s of hidden)
+    unread += await load({ subscriptionId: s.id, view: 'unread' }, limits.unread - unread);
+  await load({ special: 'starred', view: 'all' }, limits.starred);
+  await load({ special: 'recentlyRead', view: 'all' }, limits.read);
   await db.meta.put({ key: TOKEN_KEY, value: next });
   await followChanges(options, next);
 }

@@ -79,6 +79,22 @@ describe('localPage', () => {
     expect(ids(stream)).toEqual(expected);
   });
 
+  it('leaves subscriptions hidden from All out of All and Fresh only', () => {
+    const hiding: StreamContext = {
+      ...context,
+      subscriptions: context.subscriptions.map((s) => ({ ...s, hideFromAll: s.id === 1 })),
+    };
+    const shown = (stream: Stream) =>
+      localPage(entries, { stream, view: 'all', order: 'newest', limit: 50 }, hiding).entries.map(
+        (e) => e.id,
+      );
+    expect(shown({ special: 'all' })).toEqual([2, 3, 4, 6]);
+    expect(shown({})).toEqual([2, 3, 4, 6]);
+    expect(shown({ special: 'fresh' })).toEqual([2, 4]);
+    expect(shown({ subscriptionId: 1 })).toEqual([1, 30]);
+    expect(shown({ categoryId: 10 })).toEqual([1, 2, 30]);
+  });
+
   it('lists only unread entries in the unread view, and resolves adaptive', () => {
     expect(ids({ special: 'all' }, 'unread')).toEqual([1, 2, 4, 30]);
     const adaptive = (stream: Stream) =>

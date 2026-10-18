@@ -144,6 +144,47 @@ describe('admin ops API', () => {
   });
 });
 
+describe('admin sites API', () => {
+  it('sets and clears a site minimum, for admins only, in the audit log', async () => {
+    const url = '/api/v1/admin/sites/rules/Example.com';
+    const refused = await app.inject({
+      method: 'PUT',
+      url,
+      headers: user,
+      payload: { minIntervalMinutes: 60 },
+    });
+    expect(refused.statusCode).toBe(403);
+    const invalid = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/admin/sites/rules/${encodeURIComponent('example.com/feed')}`,
+      headers: admin,
+      payload: { minIntervalMinutes: 60 },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const set = await app.inject({
+      method: 'PUT',
+      url,
+      headers: admin,
+      payload: { minIntervalMinutes: 360 },
+    });
+    expect(set.json()).toMatchObject({ host: 'example.com', minIntervalMinutes: 360 });
+    const rules = await app.inject({ url: '/api/v1/admin/sites/rules', headers: admin });
+    expect(rules.json()).toMatchObject([{ host: 'example.com', minIntervalMinutes: 360 }]);
+
+    const cleared = await app.inject({ method: 'DELETE', url, headers: admin });
+    expect(cleared.statusCode).toBe(204);
+    const again = await app.inject({ method: 'DELETE', url, headers: admin });
+    expect(again.statusCode).toBe(404);
+
+    await services.ops.audit.settle();
+    const audit = await app.inject({ url: '/api/v1/admin/ops/audit', headers: admin });
+    expect(audit.json<AuditPage>().events.map((e) => e.event)).toEqual(
+      expect.arrayContaining(['site_interval_set', 'site_interval_cleared']),
+    );
+  });
+});
+
 describe('request traces', () => {
   it('name spans by route and never record URLs, query strings, or credentials', async () => {
     tracing.reset();

@@ -40,6 +40,20 @@ export const opsHostSchema = z.object({
   peakHourRequests: z.number().int(),
   /** The host's Retry-After pause, while it lasts. */
   blockedUntil: z.iso.datetime().nullable(),
+  /** Admins' minimum interval between feed checks of the host. */
+  minIntervalMinutes: z.number().int().nullable(),
+});
+
+/** Admins' minimum interval between feed checks of a host. */
+export const hostRuleSchema = z.object({
+  /** Host and port, e.g. `example.com` or `example.com:8443`. */
+  host: z.string(),
+  minIntervalMinutes: z.number().int(),
+  updatedAt: z.iso.datetime(),
+});
+
+export const setHostRuleRequestSchema = z.object({
+  minIntervalMinutes: z.number().int().min(15).max(10_080),
 });
 
 export const opsHostsResponseSchema = z.object({
@@ -126,6 +140,8 @@ export const auditPageSchema = z.object({
 
 export type OpsSummary = z.infer<typeof opsSummarySchema>;
 export type OpsHost = z.infer<typeof opsHostSchema>;
+export type HostRule = z.infer<typeof hostRuleSchema>;
+export type SetHostRuleRequest = z.infer<typeof setHostRuleRequestSchema>;
 export type OpsHostsResponse = z.infer<typeof opsHostsResponseSchema>;
 export type OpsJobsResponse = z.infer<typeof opsJobsResponseSchema>;
 export type OpsUser = z.infer<typeof opsUserSchema>;

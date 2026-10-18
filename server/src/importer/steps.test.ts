@@ -128,10 +128,13 @@ describe('TTRSS import steps', () => {
       sortOrder: 5,
       updateIntervalSeconds: 3600,
       purgeDays: 0,
+      paused: false,
     });
+    // TTRSS "updates disabled" (-1) is paused here.
     expect(patSubs.find((s) => s.feedSourceId !== one?.id)).toMatchObject({
       updateIntervalSeconds: null,
       purgeDays: 7,
+      paused: true,
     });
     // The admin's subscription shares the source, with its own title and a raised interval.
     expect(subs.find((s) => s.userId !== pat)).toMatchObject({
@@ -154,11 +157,6 @@ describe('TTRSS import steps', () => {
     const notes = report.notes('pat').filter((n) => n.item === 'feeds');
     expect(notes).toEqual([
       { item: 'feeds', sourceId: 1, text: 'options not imported: hide_images' },
-      {
-        item: 'feeds',
-        sourceId: 5,
-        text: 'updates were disabled in TTRSS; the feed is fetched here',
-      },
       { item: 'feeds', sourceId: 5, text: 'options not imported: include_in_digest off' },
     ]);
     expect(report.notes('admin')).toContainEqual(

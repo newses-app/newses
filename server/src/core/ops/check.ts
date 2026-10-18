@@ -249,7 +249,7 @@ export class OpsChecker {
       FROM feed_sources fs
       WHERE fs.disabled_at IS NULL
         AND fs.next_fetch_at < now() - make_interval(hours => ${RULES.staleHours})
-        AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id)`);
+        AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id AND NOT s.paused)`);
     const row = result.rows[0];
     if (!row || row.overdue === 0) return [];
     return [

@@ -301,8 +301,12 @@ async function importOpml(event: Event) {
               <v-icon :icon="mdiAlertCircleOutline" size="small" />
               {{ t('settings.failing', { n: s.errorCount }, s.errorCount) }}
             </span>
+            <span v-else-if="s.paused">{{ t('feeds.pausedStatus') }}</span>
             <span v-else-if="s.lastFetchedAt">{{ formatRelative(s.lastFetchedAt, locale) }}</span>
             <span v-else>{{ t('feeds.neverFetched') }}</span>
+            <div v-if="s.hideFromAll" class="text-medium-emphasis">
+              {{ t('feeds.hiddenStatus') }}
+            </div>
             <div
               v-if="s.lastError"
               class="text-medium-emphasis text-truncate feed-url"

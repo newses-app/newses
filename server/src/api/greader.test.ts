@@ -394,6 +394,23 @@ describe('Google Reader streams', () => {
     expect(titles(viaParam)).toEqual(['apple', 'banana']);
   });
 
+  it('leaves feeds hidden from All out of the reading list and its count', async () => {
+    await db
+      .update(subscriptions)
+      .set({ hideFromAll: true })
+      .where(eq(subscriptions.id, subs.one ?? 0));
+    const all = 'user/-/state/com.google/reading-list';
+    expect(titles(await contents(all))).toEqual(['cherry', 'date', 'elder']);
+    expect(titles(await contents(`feed/${String(subs.one)}`))).toEqual(['apple', 'banana']);
+    const { unreadcounts } = await api<{
+      unreadcounts: { id: string; count: number; newestItemTimestampUsec: string }[];
+    }>('GET', 'unread-count', { query: { output: 'json' } });
+    const list = unreadcounts.find((c) => c.id === all);
+    expect(list?.count).toBe(3);
+    // The newest unread item left is cherry, two hours old, not apple from the hidden feed.
+    expect(Number(list?.newestItemTimestampUsec) / 1000).toBeCloseTo(hoursAgo(2).getTime(), -4);
+  });
+
   it('lists item ids, paging large lists by continuation', async () => {
     const unread = await itemIds('user/-/state/com.google/reading-list', { xt: READ });
     expect(unread.itemRefs.map((r) => Number(r.id))).toEqual([

@@ -79,7 +79,11 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
   app.get(
     '/subscriptions',
     { schema: { response: { 200: z.array(subscriptionSchema) } } },
-    async (request) => (await subscriptions.list(requireAuth(request).user.id)).map(toSubscription),
+    async (request) => {
+      const userId = requireAuth(request).user.id;
+      const interval = await updater.userIntervalSeconds(userId);
+      return (await subscriptions.list(userId)).map((view) => toSubscription(view, interval));
+    },
   );
 
   app.post(
@@ -91,15 +95,20 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
       },
     },
     async (request, reply) => {
+      const userId = requireAuth(request).user.id;
       const result = await subscriptions.subscribe(
-        requireAuth(request).user.id,
+        userId,
         request.body.url,
         request.body.categoryId,
       );
       if (result.status === 'choose') return reply.code(200).send(result);
-      return reply
-        .code(201)
-        .send({ status: 'subscribed', subscription: toSubscription(result.subscription) });
+      return reply.code(201).send({
+        status: 'subscribed',
+        subscription: toSubscription(
+          result.subscription,
+          await updater.userIntervalSeconds(userId),
+        ),
+      });
     },
   );
 
@@ -113,7 +122,15 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
       },
     },
     async (request) => {
-      const { title, categoryId, sortOrder, updateIntervalMinutes, purgeDays } = request.body;
+      const {
+        title,
+        categoryId,
+        sortOrder,
+        updateIntervalMinutes,
+        purgeDays,
+        paused,
+        hideFromAll,
+      } = request.body;
       const userId = requireAuth(request).user.id;
       const before = await subscriptions.get(userId, request.params.id);
       const view = await subscriptions.update(userId, request.params.id, {
@@ -125,11 +142,13 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
         }),
         ...(purgeDays !== undefined && { purgeDays }),
         ...(request.body.fullText !== undefined && { fullText: request.body.fullText }),
+        ...(paused !== undefined && { paused }),
+        ...(hideFromAll !== undefined && { hideFromAll }),
       });
       // Turning full text on extracts the feed's newest entries too.
       if (view.subscription.fullText && !before.subscription.fullText)
         await fullText.queueFor(view.source.id);
-      return toSubscription(view);
+      return toSubscription(view, await updater.userIntervalSeconds(userId));
     },
   );
 

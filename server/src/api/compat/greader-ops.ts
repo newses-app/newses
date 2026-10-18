@@ -439,15 +439,15 @@ export function greaderEndpoints({ entries: entryServices, feeds, prefs, publicU
         counters.newestUnread(userId),
         names(userId),
       ]);
-      const newestOverall = [...newest.values()].reduce(
-        (a, b) => (BigInt(b) > BigInt(a) ? b : a),
-        '0',
-      );
       const newestIn = (subscriptionIds: number[]) =>
         subscriptionIds
           .map((id) => newest.get(id) ?? '0')
           .reduce((a, b) => (BigInt(b) > BigInt(a) ? b : a), '0');
       const views = await feeds.subscriptions.list(userId);
+      // The reading list leaves out subscriptions hidden from All.
+      const newestOverall = newestIn(
+        views.filter((v) => !v.subscription.hideFromAll).map((v) => v.subscription.id),
+      );
       const inFolder = (categoryId: number) => {
         const under = new Set([categoryId]);
         for (let grew = true; grew;) {

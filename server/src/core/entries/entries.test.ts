@@ -336,6 +336,36 @@ describe('EntryService.list', () => {
     expect((await list({ stream: { subscriptionId: subs.one } })).entries).toHaveLength(2);
   });
 
+  it('leaves subscriptions hidden from All out of All, Fresh, and search in All only', async () => {
+    await db
+      .update(subscriptions)
+      .set({ hideFromAll: true })
+      .where(eq(subscriptions.id, subs.two ?? 0));
+    expect(titles((await list()).entries)).not.toContain('Cherry tart');
+    expect(titles((await list({ stream: { special: 'all' } })).entries)).toHaveLength(3);
+    expect(titles((await list({ stream: { special: 'fresh' } })).entries)).toEqual([
+      'Apple pie recipe',
+    ]);
+    expect(titles((await list({ q: 'cherry' })).entries)).toEqual([]);
+    expect(titles((await list({ stream: { categoryId: cats.web } })).entries)).toEqual([
+      'Cherry tart',
+    ]);
+    expect(titles((await list({ stream: { subscriptionId: subs.two } })).entries)).toEqual([
+      'Cherry tart',
+    ]);
+    await services.entries.setState(alice, [ids.cherry ?? 0], { starred: true });
+    expect(titles((await list({ stream: { special: 'starred' } })).entries)).toEqual([
+      'Cherry tart',
+    ]);
+
+    expect(await services.entries.markRead(alice, { special: 'all' }, {})).toBe(3);
+    const [cherry] = await db
+      .select({ unread: userEntries.unread })
+      .from(userEntries)
+      .where(eq(userEntries.id, ids.cherry ?? 0));
+    expect(cherry?.unread).toBe(true);
+  });
+
   it('rejects malformed cursors', async () => {
     await expect(list({ cursor: 'nonsense' })).rejects.toMatchObject({ code: 'invalid_input' });
   });
@@ -442,6 +472,18 @@ describe('CounterService', () => {
     expect(counters.special).toEqual({ all: 3, fresh: 1, starred: 1, published: 0 });
     expect(counters.subscriptions).toContainEqual({ id: subs.one, unread: 1 });
     expect(counters.categories).toContainEqual({ id: cats.tech, unread: 2 });
+  });
+
+  it('leaves subscriptions hidden from All out of the All and Fresh counts only', async () => {
+    await db
+      .update(subscriptions)
+      .set({ hideFromAll: true })
+      .where(eq(subscriptions.id, subs.two ?? 0));
+    await services.entries.setState(alice, [ids.cherry ?? 0], { starred: true });
+    const counters = await services.counters.get(alice);
+    expect(counters.special).toEqual({ all: 3, fresh: 1, starred: 1, published: 0 });
+    expect(counters.subscriptions).toContainEqual({ id: subs.two, unread: 1 });
+    expect(counters.categories).toContainEqual({ id: cats.web, unread: 1 });
   });
 });
 

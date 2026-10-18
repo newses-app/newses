@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { mdiAlertCircleOutline, mdiCancel, mdiClockOutline, mdiRss } from '@mdi/js';
+import {
+  mdiAlertCircleOutline,
+  mdiCancel,
+  mdiClockOutline,
+  mdiEyeOffOutline,
+  mdiPauseCircleOutline,
+  mdiRss,
+} from '@mdi/js';
 import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useIconSrc } from '../../composables/useIconSrc.ts';
@@ -97,6 +104,24 @@ function onDrop() {
           <span class="d-sr-only">{{
             t('settings.failing', { n: node.subscription.errorCount }, node.subscription.errorCount)
           }}</span>
+        </template>
+        <template v-else-if="node.subscription.paused">
+          <v-icon
+            :icon="mdiPauseCircleOutline"
+            size="small"
+            :title="t('feeds.pausedStatus')"
+            class="ms-1 text-medium-emphasis"
+          />
+          <span class="d-sr-only">{{ t('feeds.pausedStatus') }}</span>
+        </template>
+        <template v-if="node.subscription.hideFromAll">
+          <v-icon
+            :icon="mdiEyeOffOutline"
+            size="small"
+            :title="t('feeds.hiddenStatus')"
+            class="ms-1 text-medium-emphasis"
+          />
+          <span class="d-sr-only">{{ t('feeds.hiddenStatus') }}</span>
         </template>
         <UnreadCount v-if="node.unread > 0" :n="node.unread" class="ms-1" />
       </template>

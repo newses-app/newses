@@ -56,6 +56,7 @@ import type { CreateThemeRequest, Theme, UpdateThemeRequest } from './themes.ts'
 import type {
   AuditPage,
   AuditQuery,
+  HostRule,
   OpsAlert,
   OpsHostsResponse,
   OpsJobsResponse,
@@ -248,6 +249,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
         users: () => request<OpsUser[]>('GET', '/admin/ops/users'),
         alerts: () => request<OpsAlert[]>('GET', '/admin/ops/alerts'),
         audit: (query: AuditQuery = {}) => request<AuditPage>('GET', '/admin/ops/audit', { query }),
+      },
+      sites: {
+        rules: () => request<HostRule[]>('GET', '/admin/sites/rules'),
+        setRule: (host: string, minIntervalMinutes: number) =>
+          request<HostRule>('PUT', `/admin/sites/rules/${encodeURIComponent(host)}`, {
+            body: { minIntervalMinutes },
+          }),
+        clearRule: (host: string) =>
+          request<undefined>('DELETE', `/admin/sites/rules/${encodeURIComponent(host)}`),
       },
     },
 

@@ -31,6 +31,8 @@ export interface SubscriptionChanges {
   updateIntervalSeconds?: number | null;
   purgeDays?: number | null;
   fullText?: boolean;
+  paused?: boolean;
+  hideFromAll?: boolean;
 }
 
 type Resolved =
@@ -66,8 +68,11 @@ export class SubscriptionService {
     if (categoryId !== null) await this.#assertCategory(userId, categoryId);
     const url = normalizeFeedUrl(rawUrl);
     const known = await this.#sourceByUrl(url);
-    if (known)
-      return { status: 'subscribed', subscription: await this.#attach(userId, known, categoryId) };
+    if (known) {
+      const view = await this.#attach(userId, known, categoryId);
+      await this.#updater?.reschedule([known.id]);
+      return { status: 'subscribed', subscription: await this.get(userId, view.subscription.id) };
+    }
 
     const resolved = await this.#resolve(url, true);
     if (resolved.kind === 'choose') return { status: 'choose', candidates: resolved.candidates };
@@ -78,8 +83,7 @@ export class SubscriptionService {
     );
     const view = await this.#attach(userId, source, categoryId);
     if (this.#updater && resolved.response && source.lastFetchedAt === null) {
-      const interval = await this.#updater.intervalSeconds(source.id);
-      await this.#updater.applyFetch(source, interval, resolved.response, resolved.feed);
+      await this.#updater.applyFetch(source, resolved.response, resolved.feed);
       return { status: 'subscribed', subscription: await this.get(userId, view.subscription.id) };
     }
     return { status: 'subscribed', subscription: view };
@@ -124,26 +128,33 @@ export class SubscriptionService {
         }),
         ...(changes.purgeDays !== undefined && { purgeDays: changes.purgeDays }),
         ...(changes.fullText !== undefined && { fullText: changes.fullText }),
+        ...(changes.paused !== undefined && { paused: changes.paused }),
+        ...(changes.hideFromAll !== undefined && { hideFromAll: changes.hideFromAll }),
       })
       .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
-      .returning({ id: subscriptions.id });
-    if (updated.length === 0) throw new DomainError('not_found', 'Subscription not found');
+      .returning({ feedSourceId: subscriptions.feedSourceId });
+    const [row] = updated;
+    if (!row) throw new DomainError('not_found', 'Subscription not found');
+    if (changes.updateIntervalSeconds !== undefined || changes.paused !== undefined)
+      await this.#updater?.reschedule([row.feedSourceId]);
     return this.get(userId, id);
   }
 
   /** Removes the subscription and its entries, except kept ones (see `KEPT_ENTRY`). */
   async unsubscribe(userId: number, id: number): Promise<void> {
-    await this.#db.transaction(async (tx) => {
-      const deleted = await tx
+    const feedSourceId = await this.#db.transaction(async (tx) => {
+      const [deleted] = await tx
         .delete(subscriptions)
         .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
-        .returning({ id: subscriptions.id });
-      if (deleted.length === 0) throw new DomainError('not_found', 'Subscription not found');
+        .returning({ feedSourceId: subscriptions.feedSourceId });
+      if (!deleted) throw new DomainError('not_found', 'Subscription not found');
       // The foreign key has already set subscription_id to null on this user's entries.
       await tx.execute(sql`
         DELETE FROM user_entries ue
         WHERE ue.user_id = ${userId} AND ue.subscription_id IS NULL AND NOT ${KEPT_ENTRY}`);
+      return deleted.feedSourceId;
     });
+    await this.#updater?.reschedule([feedSourceId]);
   }
 
   async #resolve(url: string, allowDiscovery: boolean): Promise<Resolved> {

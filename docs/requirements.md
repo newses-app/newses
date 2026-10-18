@@ -14,6 +14,7 @@
 | Observability | Operations insight | Admins follow user activity, load on remote sites, job health, and security events on the Operations page and get alert emails; on Docker they trace requests and jobs in Grafana, on AWS in X-Ray, with a monthly cost budget |
 | Custom Themes | Appearance | Users adjust the appearance, save, import, export, and share their own themes, and use the Terminal and Sketch themes in the web, desktop, and Android apps |
 | Offline Reading | Offline use | Family members read and search unread and starred articles with images in the web, desktop, and Android apps without a connection; changes made offline reach the server on reconnect without overriding newer ones; installed Chromium PWAs and the Android app sync in the background; on Docker and AWS |
+| Per-feed Options | Feed control | Family members pause feeds and hide them from All articles in the web, desktop, and Android apps, and see how often each feed is checked and why; feeds of rate-limiting sites slow down on their own, and admins set per-site minimum intervals; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -31,7 +32,8 @@
 | Favicons | P1 | Fetched per site, cached, shown in tree, headlines, and article headers; fallback icon |
 | Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, labelled, or shared entries |
 | HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
-| Per-feed options | Later | Hide from "All articles", pause updates, always show images |
+| Per-feed options | Per-feed Options | Pause updates: the feed is no longer checked for the user, who still gets what others' checks bring. Hide from All articles: left out of All articles and Fresh, their counts, catch-up, and search, also through the TTRSS and Google Reader APIs. The feed's settings show how often it is checked, why, and when next; a changed interval applies at once |
+| Rate-limit slowdown | Per-feed Options | A feed answering HTTP 429 is checked less often, and back to normal after a run of successful checks; admins set a minimum interval per site on the Operations page |
 | Feed debugger | Later | Dry-run fetch shows raw response, parsed entries, and filter matches |
 | Generated feeds | Later | Secret-key RSS feed for any feed, category, or label |
 | WebSub | Later | Push subscriptions for hubs advertised by feeds |
@@ -151,7 +153,7 @@
 | Runtime portability | P1 | Queue, scheduler, blob storage, and realtime are swappable adapters; no local-disk state outside blob storage |
 | AWS deployment | P1.5 | Serverless compute: Lambda, SQS, EventBridge Scheduler, SPA on S3 + CloudFront; one small RDS PostgreSQL instance shared by the stages, each with its own database. One CDK pipeline (CodePipeline + CodeBuild) per stage runs `pnpm check`, builds the SPA, bundles the Lambdas, and deploys: branch `dev` → `dev`, `main` → `prod` |
 | Operations page | Observability | Admins see, per user, last activity, requests by app, and articles read; per site, requests by outcome, busiest hour, and pauses; job runs, failures, and durations; on Docker and AWS |
-| Audit log | Observability | Sign-ins, failed sign-ins, password, 2FA, app-password, and user-management events kept a year and browsable by admins |
+| Audit log | Observability | Sign-ins, failed sign-ins, password, 2FA, app-password, user-management, and site-minimum events kept a year and browsable by admins |
 | Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured (Docker) or an address subscribes to the stage's alert topic (AWS), and resolve on their own |
 | Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime. On AWS, traces go to X-Ray at a sampling rate set per stage, without CloudWatch metrics or dashboards |
 | Cost budget | Observability | On AWS, one monthly budget over running the project, without its build pipelines (limit set in the infra config), emails its subscribers as spend nears or is forecast past it |

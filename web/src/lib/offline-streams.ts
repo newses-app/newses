@@ -7,7 +7,9 @@ const HOUR_MS = 3_600_000;
 /** What deciding stream membership needs beyond the entries: the tree and two preferences. */
 export interface StreamContext {
   categories: readonly Pick<Category, 'id' | 'parentId'>[];
-  subscriptions: readonly Pick<Subscription, 'id' | 'categoryId'>[];
+  /** `hideFromAll` is missing in snapshots from servers before API 1.4. */
+  subscriptions: readonly (Pick<Subscription, 'id' | 'categoryId'> &
+    Partial<Pick<Subscription, 'hideFromAll'>>)[];
   scoreHideBelow: number;
   freshMaxAgeHours: number;
   now: number;
@@ -33,6 +35,14 @@ function subtree(categories: StreamContext['categories'], root: number): Set<num
       }
   }
   return ids;
+}
+
+/** The test for entries not from a subscription hidden from All articles and Fresh. */
+export function notHiddenFromAll(
+  context: StreamContext,
+): (entry: Pick<Entry, 'subscriptionId'>) => boolean {
+  const hidden = new Set(context.subscriptions.filter((s) => s.hideFromAll).map((s) => s.id));
+  return (e) => e.subscriptionId === null || !hidden.has(e.subscriptionId);
 }
 
 /** The test for entries in `stream`, as `streamCondition` on the server. */
@@ -62,10 +72,11 @@ export function streamFilter(stream: Stream, context: StreamContext): (entry: En
   switch (stream.special) {
     case undefined:
     case 'all':
-      return () => true;
+      return notHiddenFromAll(context);
     case 'fresh': {
+      const shown = notHiddenFromAll(context);
       const since = new Date(context.now - context.freshMaxAgeHours * HOUR_MS).toISOString();
-      return (e) => e.unread && e.sortAt > since;
+      return (e) => e.unread && e.sortAt > since && shown(e);
     }
     case 'starred':
       return (e) => e.starred;

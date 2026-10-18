@@ -21,6 +21,7 @@ import { z } from 'zod';
 import type { EntryServices } from '../../core/entries/index.ts';
 import type { FullTextService } from '../../core/feeds/fulltext.ts';
 import type { ImageProxy } from '../../core/feeds/images.ts';
+import type { FeedUpdater } from '../../core/feeds/updater.ts';
 import type { PrefsService } from '../../core/prefs.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 import { toCategory, toLabel, toSubscription } from '../dto.ts';
@@ -29,8 +30,13 @@ import { proxiedImages } from '../proxied-images.ts';
 const idParams = z.object({ id: z.coerce.number().int() });
 
 export const entryRoutes: FastifyPluginAsyncZod<
-  EntryServices & { prefs: PrefsService; images: ImageProxy; fullText: FullTextService }
-> = (app, { entries, counters, sync, prefs, images, fullText }) => {
+  EntryServices & {
+    prefs: PrefsService;
+    images: ImageProxy;
+    fullText: FullTextService;
+    updater: FeedUpdater;
+  }
+> = (app, { entries, counters, sync, prefs, images, fullText, updater }) => {
   const withImages = proxiedImages(prefs, images);
 
   app.addHook('preHandler', requireUser);
@@ -167,15 +173,13 @@ export const entryRoutes: FastifyPluginAsyncZod<
     '/sync',
     { schema: { querystring: syncQuerySchema, response: { 200: syncResponseSchema } } },
     async (request) => {
-      const result = await sync.changes(
-        requireAuth(request).user.id,
-        request.query.since,
-        request.query.limit,
-      );
+      const userId = requireAuth(request).user.id;
+      const result = await sync.changes(userId, request.query.since, request.query.limit);
+      const interval = await updater.userIntervalSeconds(userId);
       return {
         ...result,
         categories: result.categories.map(toCategory),
-        subscriptions: result.subscriptions.map(toSubscription),
+        subscriptions: result.subscriptions.map((view) => toSubscription(view, interval)),
         labels: result.labels.map(toLabel),
       };
     },

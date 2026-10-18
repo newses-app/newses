@@ -3,6 +3,7 @@ import {
   BUILTIN_THEME_KEYS,
   type BuiltinThemeKey,
   type Category,
+  type IntervalReason,
   type Label,
   partialThemeTokensSchema,
   type Session,
@@ -61,7 +62,32 @@ export function toCategory(row: CategoryRow): Category {
   };
 }
 
-export function toSubscription({ subscription, source }: SubscriptionView): Subscription {
+/** How often the subscription's feed is checked, and why, as its user should see it. */
+function scheduleOf(
+  { subscription, source }: SubscriptionView,
+  userIntervalSeconds: number,
+): Pick<Subscription, 'effectiveIntervalMinutes' | 'intervalReason' | 'nextFetchAt'> {
+  if (subscription.paused)
+    return { effectiveIntervalMinutes: null, intervalReason: 'paused', nextFetchAt: null };
+  if (source.lastFetchedAt === null)
+    return { effectiveIntervalMinutes: null, intervalReason: null, nextFetchAt: null };
+  const own = subscription.updateIntervalSeconds ?? userIntervalSeconds;
+  const seconds = source.fetchIntervalSeconds;
+  const reason = source.fetchIntervalReason;
+  let intervalReason: IntervalReason = 'own';
+  if (reason === 'publisher' || reason === 'slowdown' || reason === 'siteMinimum')
+    intervalReason = reason;
+  else if (seconds < own) intervalReason = 'shared';
+  return {
+    effectiveIntervalMinutes: Math.max(1, Math.round(seconds / 60)),
+    intervalReason,
+    nextFetchAt: source.disabledAt === null ? source.nextFetchAt.toISOString() : null,
+  };
+}
+
+/** `userIntervalSeconds` is the user's default interval (`FeedUpdater.userIntervalSeconds`). */
+export function toSubscription(view: SubscriptionView, userIntervalSeconds: number): Subscription {
+  const { subscription, source } = view;
   return {
     id: subscription.id,
     feedSourceId: source.id,
@@ -84,6 +110,9 @@ export function toSubscription({ subscription, source }: SubscriptionView): Subs
         : Math.round(subscription.updateIntervalSeconds / 60),
     purgeDays: subscription.purgeDays,
     fullText: subscription.fullText,
+    paused: subscription.paused,
+    hideFromAll: subscription.hideFromAll,
+    ...scheduleOf(view, userIntervalSeconds),
   };
 }
 

@@ -99,6 +99,37 @@ describe('feeds API', () => {
       categoryId: null,
     });
 
+    expect(subscribed.json()).toMatchObject({
+      subscription: {
+        paused: false,
+        hideFromAll: false,
+        effectiveIntervalMinutes: 30,
+        intervalReason: 'own',
+        nextFetchAt: expect.any(String) as string,
+      },
+    });
+    const options = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/subscriptions/${String(subscription.id)}`,
+      headers,
+      payload: { paused: true, hideFromAll: true },
+    });
+    // Paused subscriptions say nothing about when others' subscriptions get the feed checked.
+    expect(options.json()).toMatchObject({
+      paused: true,
+      hideFromAll: true,
+      effectiveIntervalMinutes: null,
+      intervalReason: 'paused',
+      nextFetchAt: null,
+    });
+    const longer = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/subscriptions/${String(subscription.id)}`,
+      headers,
+      payload: { paused: false, updateIntervalMinutes: 120 },
+    });
+    expect(longer.json()).toMatchObject({ effectiveIntervalMinutes: 120, intervalReason: 'own' });
+
     const list = await app.inject({ method: 'GET', url: '/api/v1/subscriptions', headers });
     expect(list.json<unknown[]>()).toHaveLength(1);
 

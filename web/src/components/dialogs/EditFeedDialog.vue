@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError } from '../../api.ts';
 import { useDurations } from '../../composables/useDurations.ts';
+import { ENTRIES_KEY } from '../../composables/useEntries.ts';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useResourceEdits } from '../../composables/useResourceEdits.ts';
@@ -11,6 +13,7 @@ import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatDateTime } from '../../lib/format.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
+import { scheduleMessage } from '../../lib/schedule.ts';
 import { subscriptionKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -22,6 +25,7 @@ const subscriptions = useSubscriptions();
 const categories = useCategories();
 const refreshFeeds = useFeedsRefresh();
 const editing = useTreeEditing();
+const queryClient = useQueryClient();
 
 const subscription = computed(() =>
   subscriptions.data.value?.find((s) => s.id === ui.editSubscriptionId),
@@ -39,6 +43,8 @@ const categoryId = ref<number | null>(null);
 const interval = ref<number | null>(null);
 const purgeDays = ref<number | null>(null);
 const fullText = ref(false);
+const paused = ref(false);
+const hideFromAll = ref(false);
 const busy = ref(false);
 /** The feed this one follows in its category, or null for first: the non-drag way to reorder. */
 const after = ref<number | null>(null);
@@ -60,6 +66,8 @@ watch(subscription, (s) => {
   interval.value = s.updateIntervalMinutes;
   purgeDays.value = s.purgeDays;
   fullText.value = s.fullText;
+  paused.value = s.paused;
+  hideFromAll.value = s.hideFromAll;
   after.value = precedingId(inCategory(s.categoryId), s.id);
 });
 
@@ -69,7 +77,23 @@ function changeCategory(id: number | null) {
   after.value = siblings.value.at(-1)?.id ?? null;
 }
 
-const { intervalItems, purgeItems } = useDurations();
+const { duration, intervalItems, purgeItems } = useDurations();
+
+/** Servers before API 1.4 have no per-feed options. */
+const hasOptions = computed(() => subscription.value?.paused !== undefined);
+
+/** How often the feed is checked and when next, as the server last said. */
+const schedule = computed(() => {
+  const s = subscription.value;
+  const message = s && scheduleMessage(s);
+  if (!s || !message) return null;
+  const text = t(message.key, {
+    duration: message.minutes === null ? '' : duration(message.minutes),
+  });
+  return s.nextFetchAt
+    ? `${text} ${t('feeds.nextCheck', { when: formatDateTime(s.nextFetchAt, locale.value) })}`
+    : text;
+});
 
 const { edit } = useResourceEdits();
 const { online, whenOnline } = useOnlineOnly();
@@ -98,13 +122,17 @@ function save() {
     updateIntervalMinutes: interval.value,
     purgeDays: purgeDays.value,
     fullText: fullText.value,
+    ...(hasOptions.value && { paused: paused.value, hideFromAll: hideFromAll.value }),
   };
+  // Hiding a feed from All changes what All and Fresh list, not only their counts.
+  const relist = hasOptions.value && hideFromAll.value !== s.hideFromAll;
   void run(async () => {
     await edit({ kind: 'subscription.update', id: s.id, changes }, () =>
       api.subscriptions.update(s.id, changes),
     );
     if (moved)
       await editing.moveFeed(s.id, categoryId.value, beforeIdAfter(siblings.value, after.value));
+    if (relist) await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
     open.value = false;
   });
 }
@@ -162,6 +190,21 @@ async function unsubscribe() {
             :hint="t('feeds.fullTextHint')"
             persistent-hint
           />
+          <template v-if="hasOptions">
+            <v-checkbox
+              v-model="paused"
+              :label="t('feeds.pause')"
+              :hint="t('feeds.pauseHint')"
+              persistent-hint
+            />
+            <v-checkbox
+              v-model="hideFromAll"
+              :label="t('feeds.hideFromAll')"
+              :hint="t('feeds.hideFromAllHint')"
+              persistent-hint
+            />
+          </template>
+          <p v-if="schedule" class="text-body-small text-medium-emphasis mt-4">{{ schedule }}</p>
           <p class="text-body-small text-medium-emphasis">
             <template v-if="subscription.lastFetchedAt">
               {{

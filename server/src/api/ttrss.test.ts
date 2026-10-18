@@ -302,6 +302,29 @@ describe('TTRSS headlines and articles', () => {
     expect(await headlines({ feed_id: 0 })).toEqual([]);
   });
 
+  it('leaves feeds hidden from All out of All articles, Fresh, and their counts', async () => {
+    await db
+      .update(subscriptions)
+      .set({ hideFromAll: true })
+      .where(eq(subscriptions.id, subs.two ?? 0));
+    expect(titles(await headlines({ feed_id: '-4' }))).toEqual([
+      'apple',
+      'banana',
+      'date',
+      'elder',
+    ]);
+    expect(titles(await headlines({ feed_id: '-3' }))).toEqual(['apple']);
+    expect(titles(await headlines({ feed_id: subs.two }))).toEqual(['cherry']);
+    expect(await call('getUnread')).toEqual({ unread: 4 });
+    const counters = await call<Record<string, unknown>[]>('getCounters', { output_mode: 'fl' });
+    expect(counters).toEqual(
+      expect.arrayContaining([
+        { id: -4, counter: 4, auxcounter: 0 },
+        expect.objectContaining({ id: subs.two, counter: 1 }),
+      ]),
+    );
+  });
+
   it('applies view modes, ordering, since_id, and search', async () => {
     await call('updateArticle', { article_ids: String(ids.apple), mode: 0, field: 2 });
     await call('updateArticle', { article_ids: String(ids.banana), mode: 1, field: 0 });

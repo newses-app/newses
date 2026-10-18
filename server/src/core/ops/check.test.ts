@@ -120,17 +120,19 @@ describe('OpsChecker', () => {
 
   it('flags feeds long overdue as stalled ingestion', async () => {
     const [user] = await db.insert(users).values({ login: 'alice', passwordHash: 'x' }).returning();
-    const [overdue, idle] = await db
+    const [overdue, idle, paused] = await db
       .insert(feedSources)
       .values([
         { url: 'https://a.example/feed', nextFetchAt: sql`now() - interval '3 hours'` },
         { url: 'https://b.example/feed', nextFetchAt: sql`now() - interval '3 hours'` },
+        { url: 'https://c.example/feed', nextFetchAt: sql`now() - interval '3 hours'` },
       ])
       .returning();
-    // Only subscribed feeds are fetched.
-    await db
-      .insert(subscriptions)
-      .values({ userId: user?.id ?? 0, feedSourceId: overdue?.id ?? 0 });
+    // Only feeds with an unpaused subscription are fetched.
+    await db.insert(subscriptions).values([
+      { userId: user?.id ?? 0, feedSourceId: overdue?.id ?? 0 },
+      { userId: user?.id ?? 0, feedSourceId: paused?.id ?? 0, paused: true },
+    ]);
     expect(idle).toBeDefined();
 
     const findings = await checker.evaluate();

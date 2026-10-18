@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import {
   feedSources,
+  fetchHostRules,
   fetchHosts,
   subscriptions,
   userEntries,
@@ -14,7 +15,7 @@ import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { RecordingQueue, testFeedDeps } from '../../test/fakes.ts';
 import { FetchError } from './http.ts';
 import { createFeedServices, type FeedServices } from './index.ts';
-import { backoffSeconds, nextFetchSeconds } from './updater.ts';
+import { backoffSeconds, hintSeconds } from './updater.ts';
 
 let database: TestDatabase;
 let db: Db;
@@ -69,12 +70,12 @@ describe('backoffSeconds', () => {
   });
 });
 
-describe('nextFetchSeconds', () => {
-  it('honours publisher hints up to a day and adds up to 10% jitter', () => {
-    expect(nextFetchSeconds(1800, [null, 600], 0)).toBe(1800);
-    expect(nextFetchSeconds(1800, [7200, null], 0)).toBe(7200);
-    expect(nextFetchSeconds(1800, [10 * 86_400], 0)).toBe(86_400);
-    expect(nextFetchSeconds(1800, [], 1)).toBe(1980);
+describe('hintSeconds', () => {
+  it('takes the longest hint, capped at a day', () => {
+    expect(hintSeconds([null, 600])).toBe(600);
+    expect(hintSeconds([7200, 600])).toBe(7200);
+    expect(hintSeconds([10 * 86_400])).toBe(86_400);
+    expect(hintSeconds([null, 0])).toBeNull();
   });
 });
 
@@ -98,6 +99,18 @@ describe('FeedUpdater.dispatchDue', () => {
       { name: 'feed.fetch', data: { feedSourceIds: [due.id] }, key: 'a.example' },
     ]);
     expect(await feeds.updater.dispatchDue()).toBe(0);
+  });
+
+  it('skips sources whose subscriptions are all paused', async () => {
+    const paused = await addSource(URL_A);
+    await db.update(subscriptions).set({ paused: true });
+    expect(await feeds.updater.dispatchDue()).toBe(0);
+    const [other] = await db
+      .insert(users)
+      .values({ login: 'bob', passwordHash: 'x' })
+      .returning({ id: users.id });
+    await db.insert(subscriptions).values({ userId: other?.id ?? 0, feedSourceId: paused.id });
+    expect(await feeds.updater.dispatchDue()).toBe(1);
   });
 
   it('batches sources by host, at most 20 per job', async () => {
@@ -156,18 +169,39 @@ describe('FeedUpdater.update', () => {
     const created = await addSource(URL_A);
     await db.update(subscriptions).set({ updateIntervalSeconds: 60 });
     await feeds.updater.update(created.id);
-    const { fetchIntervalSeconds } = await source(created.id);
-    expect(fetchIntervalSeconds).toBeGreaterThanOrEqual(300);
-    expect(fetchIntervalSeconds).toBeLessThanOrEqual(330);
+    const after = await source(created.id);
+    expect(after).toMatchObject({ fetchIntervalSeconds: 300, fetchIntervalReason: 'subscribers' });
+    expect(secondsUntil(after.nextFetchAt)).toBeLessThanOrEqual(330);
   });
 
-  it("falls back to the user's preferred interval", async () => {
+  it("falls back to the user's preferred interval, leaving out paused subscriptions", async () => {
     fetcher.set(URL_A, { body: rss('A') });
     const created = await addSource(URL_A);
     await db.insert(userPrefs).values({ userId, key: 'updateIntervalMinutes', value: 120 });
-    expect(await feeds.updater.intervalSeconds(created.id)).toBe(7200);
+    expect(await feeds.updater.schedule(created.id)).toEqual({
+      seconds: 7200,
+      reason: 'subscribers',
+    });
+    expect(await feeds.updater.userIntervalSeconds(userId)).toBe(7200);
     await db.update(subscriptions).set({ updateIntervalSeconds: 900 });
-    expect(await feeds.updater.intervalSeconds(created.id)).toBe(900);
+    expect((await feeds.updater.schedule(created.id)).seconds).toBe(900);
+    await db.update(subscriptions).set({ paused: true });
+    expect((await feeds.updater.schedule(created.id)).reason).toBe('unscheduled');
+  });
+
+  it("applies the site's minimum interval to every feed of the host", async () => {
+    fetcher.set(URL_A, { body: rss('A') });
+    const created = await addSource(URL_A);
+    await feeds.hostRules.set('A.example', 6 * 3600, userId);
+    expect(await feeds.updater.schedule(created.id)).toEqual({
+      seconds: 6 * 3600,
+      reason: 'siteMinimum',
+    });
+    await feeds.updater.update(created.id);
+    expect(secondsUntil((await source(created.id)).nextFetchAt)).toBeGreaterThan(6 * 3600 - 60);
+    await feeds.hostRules.clear('a.example');
+    expect(await db.select().from(fetchHostRules)).toEqual([]);
+    expect((await source(created.id)).fetchIntervalReason).toBe('subscribers');
   });
 
   it('waits longer when the publisher asks via Cache-Control or ttl', async () => {
@@ -213,6 +247,33 @@ describe('FeedUpdater.update', () => {
     expect(postponed.errorCount).toBe(0);
     expect(secondsUntil(postponed.nextFetchAt)).toBeGreaterThan(500);
     expect((await source(first.id)).blockedUntil).not.toBeNull();
+  });
+
+  it('slows a feed down after each 429 and eases back after successful fetches', async () => {
+    const created = await addSource(URL_A);
+    const throttle = new FetchError('http_status', 'HTTP 429', { status: 429 });
+    fetcher.set(URL_A, throttle);
+    await feeds.updater.update(created.id);
+    expect(await source(created.id)).toMatchObject({
+      slowdownSeconds: 3600,
+      fetchIntervalSeconds: 3600,
+      fetchIntervalReason: 'slowdown',
+    });
+    await db.delete(fetchHosts);
+    await feeds.updater.update(created.id);
+    expect((await source(created.id)).slowdownSeconds).toBe(7200);
+
+    await db.delete(fetchHosts);
+    fetcher.set(URL_A, { body: rss('A') });
+    for (let i = 0; i < 4; i++) await feeds.updater.update(created.id);
+    expect(await source(created.id)).toMatchObject({
+      slowdownSeconds: 7200,
+      slowdownOkCount: 4,
+      fetchIntervalReason: 'slowdown',
+      errorCount: 0,
+    });
+    await feeds.updater.update(created.id);
+    expect(await source(created.id)).toMatchObject({ slowdownSeconds: 3600, slowdownOkCount: 0 });
   });
 
   it('backs off on failures and disables after the configured count', async () => {
@@ -284,10 +345,85 @@ describe('FeedUpdater.update', () => {
     expect(queue.jobs).toEqual([]);
   });
 
+  it('runs a manual refresh of a feed whose subscriptions are all paused', async () => {
+    const created = await addSource(URL_A);
+    await db.update(subscriptions).set({ paused: true });
+    const [sub] = await db.select().from(subscriptions);
+    await feeds.updater.refresh(userId, sub?.id ?? 0);
+    expect(queue.jobs).toEqual([
+      { name: 'feed.fetch', data: { feedSourceIds: [created.id] }, key: 'a.example' },
+    ]);
+  });
+
   it('skips disabled sources', async () => {
     const created = await addSource(URL_A);
     await db.update(feedSources).set({ disabledAt: sql`now()` });
     await feeds.updater.update(created.id);
     expect(fetcher.requested).toEqual([]);
+  });
+});
+
+describe('FeedUpdater.reschedule', () => {
+  async function fetched(lastMinutesAgo: number, nextInMinutes: number) {
+    const created = await addSource(URL_A);
+    await db
+      .update(feedSources)
+      .set({
+        lastFetchedAt: new Date(Date.now() - lastMinutesAgo * 60_000),
+        nextFetchAt: new Date(Date.now() + nextInMinutes * 60_000),
+        fetchIntervalSeconds: 7 * 86_400,
+      })
+      .where(eq(feedSources.id, created.id));
+    return created;
+  }
+
+  it('brings a shortened interval forward, but not before now', async () => {
+    const created = await fetched(60, 7 * 24 * 60 - 60);
+    await db.update(subscriptions).set({ updateIntervalSeconds: 2 * 3600 });
+    await feeds.updater.reschedule([created.id]);
+    const after = await source(created.id);
+    expect(after.fetchIntervalSeconds).toBe(7200);
+    expect(secondsUntil(after.nextFetchAt)).toBeGreaterThan(3500);
+    expect(secondsUntil(after.nextFetchAt)).toBeLessThan(4400);
+
+    await db.update(subscriptions).set({ updateIntervalSeconds: 15 * 60 });
+    await feeds.updater.reschedule([created.id]);
+    expect(Math.abs(secondsUntil((await source(created.id)).nextFetchAt))).toBeLessThan(5);
+  });
+
+  it('pushes a lengthened interval back', async () => {
+    const created = await fetched(10, 20);
+    await db.update(subscriptions).set({ updateIntervalSeconds: 86_400 });
+    await feeds.updater.reschedule([created.id]);
+    expect(secondsUntil((await source(created.id)).nextFetchAt)).toBeGreaterThan(86_000 - 600);
+  });
+
+  it('leaves claimed, failing, and never fetched sources at their time', async () => {
+    const claimed = await fetched(60, 10);
+    await feeds.updater.reschedule([claimed.id]);
+    expect(secondsUntil((await source(claimed.id)).nextFetchAt)).toBeGreaterThan(500);
+
+    await db.update(feedSources).set({ nextFetchAt: new Date(Date.now() + 86_400_000) });
+    await db.update(feedSources).set({ errorCount: 2 });
+    await feeds.updater.reschedule([claimed.id]);
+    expect(secondsUntil((await source(claimed.id)).nextFetchAt)).toBeGreaterThan(86_000);
+  });
+
+  it('follows changes to subscriptions and the default interval', async () => {
+    const created = await fetched(60, 7 * 24 * 60);
+    const [sub] = await db.select().from(subscriptions);
+    await feeds.subscriptions.update(userId, sub?.id ?? 0, { updateIntervalSeconds: 3600 });
+    expect(Math.abs(secondsUntil((await source(created.id)).nextFetchAt))).toBeLessThan(400);
+
+    await feeds.subscriptions.update(userId, sub?.id ?? 0, { paused: true });
+    expect((await source(created.id)).fetchIntervalReason).toBe('unscheduled');
+
+    await feeds.subscriptions.update(userId, sub?.id ?? 0, {
+      paused: false,
+      updateIntervalSeconds: null,
+    });
+    await db.insert(userPrefs).values({ userId, key: 'updateIntervalMinutes', value: 240 });
+    await feeds.updater.rescheduleUser(userId);
+    expect((await source(created.id)).fetchIntervalSeconds).toBe(4 * 3600);
   });
 });

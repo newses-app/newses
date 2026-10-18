@@ -113,6 +113,11 @@ export function pendingSubscription(id: number, body: SubscribeRequest): Subscri
     updateIntervalMinutes: null,
     purgeDays: null,
     fullText: false,
+    paused: false,
+    hideFromAll: false,
+    effectiveIntervalMinutes: null,
+    intervalReason: null,
+    nextFetchAt: null,
   };
 }
 

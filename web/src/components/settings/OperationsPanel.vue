@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import type { AuditEvent, OpsWindow } from '@newses/shared';
-import { mdiAlertCircle, mdiAlert, mdiCheckCircle } from '@mdi/js';
-import { useInfiniteQuery, useQuery } from '@tanstack/vue-query';
+import { mdiAlertCircle, mdiAlert, mdiCheckCircle, mdiDelete } from '@mdi/js';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api } from '../../api.ts';
+import { api, ApiError } from '../../api.ts';
+import { useDurations } from '../../composables/useDurations.ts';
 import { formatDateTime, formatRelative } from '../../lib/format.ts';
+import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
+const ui = useUiStore();
+const queryClient = useQueryClient();
+const { duration, intervalItems } = useDurations();
 
 const section = ref<'alerts' | 'hosts' | 'jobs' | 'users' | 'audit'>('alerts');
 const window = ref<OpsWindow>('24h');
@@ -32,6 +37,37 @@ const hosts = useQuery({
   refetchInterval: REFRESH_MS,
   enabled: () => section.value === 'hosts',
 });
+const siteRules = useQuery({
+  queryKey: ['admin', 'sites', 'rules'],
+  queryFn: () => api.admin.sites.rules(),
+  enabled: () => section.value === 'hosts',
+});
+
+/** Admins' minimum interval between feed checks of a site, set from the Sites section. */
+const ruleHost = ref('');
+const ruleMinutes = ref(60);
+const ruleBusy = ref(false);
+const ruleIntervals = computed(() => intervalItems.value.filter((item) => item.value !== null));
+
+async function changeRule(work: () => Promise<unknown>) {
+  ruleBusy.value = true;
+  try {
+    await work();
+    await queryClient.invalidateQueries({ queryKey: ['admin'] });
+  } catch (error) {
+    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+  } finally {
+    ruleBusy.value = false;
+  }
+}
+
+const setRule = () =>
+  changeRule(async () => {
+    await api.admin.sites.setRule(ruleHost.value.trim(), ruleMinutes.value);
+    ruleHost.value = '';
+  });
+const clearRule = (host: string) => changeRule(() => api.admin.sites.clearRule(host));
+
 const jobs = useQuery({
   queryKey: ['admin', 'ops', 'jobs', window],
   queryFn: () => api.admin.ops.jobs(window.value),
@@ -110,6 +146,8 @@ const AUDIT_EVENTS = [
   'user_updated',
   'user_password_reset',
   'user_deleted',
+  'site_interval_set',
+  'site_interval_cleared',
 ];
 </script>
 
@@ -295,6 +333,14 @@ const AUDIT_EVENTS = [
               >
                 {{ t('ops.paused') }}
               </v-chip>
+              <v-chip
+                v-if="host.minIntervalMinutes"
+                size="x-small"
+                class="ms-1"
+                :title="t('ops.siteMinimum')"
+              >
+                {{ t('ops.siteMinimumChip', { duration: duration(host.minIntervalMinutes) }) }}
+              </v-chip>
             </td>
             <td class="text-end">{{ number(host.requests) }}</td>
             <td
@@ -325,6 +371,48 @@ const AUDIT_EVENTS = [
           </tr>
         </tbody>
       </v-table>
+
+      <h3 class="text-title-medium mt-6">{{ t('ops.siteMinimums') }}</h3>
+      <p class="text-body-small text-medium-emphasis mb-2">{{ t('ops.siteMinimumsHint') }}</p>
+      <v-list v-if="siteRules.data.value?.length" density="compact">
+        <v-list-item
+          v-for="rule in siteRules.data.value"
+          :key="rule.host"
+          :title="rule.host"
+          :subtitle="t('ops.siteMinimumChip', { duration: duration(rule.minIntervalMinutes) })"
+        >
+          <template #append>
+            <v-btn
+              :icon="mdiDelete"
+              variant="text"
+              size="small"
+              :disabled="ruleBusy"
+              :aria-label="t('ops.siteMinimumRemove', { host: rule.host })"
+              @click="clearRule(rule.host)"
+            />
+          </template>
+        </v-list-item>
+      </v-list>
+      <v-form class="d-flex flex-wrap align-center ga-2" @submit.prevent="setRule">
+        <v-text-field
+          v-model="ruleHost"
+          :label="t('ops.host')"
+          placeholder="example.com"
+          density="compact"
+          hide-details
+          class="flex-grow-1"
+        />
+        <v-select
+          v-model="ruleMinutes"
+          :label="t('ops.siteMinimum')"
+          :items="ruleIntervals"
+          density="compact"
+          hide-details
+        />
+        <v-btn type="submit" :loading="ruleBusy" :disabled="!ruleHost.trim()">
+          {{ t('ops.siteMinimumSet') }}
+        </v-btn>
+      </v-form>
     </template>
 
     <template v-else-if="section === 'jobs' && jobs.data.value">

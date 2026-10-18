@@ -211,6 +211,20 @@
       "when": 1792270698376,
       "tag": "0029_favicon_content_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792291793257,
+      "tag": "0030_per_feed_options",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792291794031,
+      "tag": "0031_host_rule_triggers",
+      "breakpoints": true
     }
   ]
 }

@@ -87,4 +87,18 @@ describe('adjustCounters', () => {
     expect(out.labels[0]?.unread).toBe(3);
     expect(out.special.all).toBe(6);
   });
+
+  it('leaves subscriptions hidden from All out of the All and Fresh counts', () => {
+    const hiding: StreamContext = {
+      ...context,
+      subscriptions: [
+        { id: 1, categoryId: 11, hideFromAll: true },
+        { id: 2, categoryId: null },
+      ],
+    };
+    const before = entry();
+    const out = adjustCounters(counters, [{ before, after: { ...before, unread: false } }], hiding);
+    expect(out.special).toEqual({ all: 6, fresh: 3, starred: 1, published: 0 });
+    expect(out.subscriptions[0]).toEqual({ id: 1, unread: 4 });
+  });
 });

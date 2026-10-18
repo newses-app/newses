@@ -12,14 +12,20 @@ import type { HostLimiter } from './host-limiter.ts';
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
 import type { Ingester } from './ingest.ts';
 import { FeedParseError, type ParsedFeed, parseFeed } from './parse.ts';
+import {
+  afterSuccess,
+  afterThrottle,
+  effectiveInterval,
+  jittered,
+  MAX_HINT_SECONDS,
+  type Schedule,
+  type ScheduleInputs,
+  sourceHost,
+} from './schedule.ts';
 import { normalizeFeedUrl } from './url.ts';
 
 const MIN_INTERVAL_SECONDS = 5 * 60;
 const MAX_BACKOFF_SECONDS = 24 * 60 * 60;
-/** Publisher hints (Cache-Control, RSS ttl) lengthen the interval up to this. */
-const MAX_HINT_SECONDS = 24 * 60 * 60;
-/** Intervals are stretched by up to this fraction so feeds added together drift apart. */
-const JITTER = 0.1;
 /** A host that answers 429 without Retry-After is left alone this long. */
 const DEFAULT_HOST_COOLDOWN_SECONDS = 10 * 60;
 /** "Update now" is a no-op when the feed was fetched this recently. */
@@ -43,15 +49,10 @@ export function backoffSeconds(
   return Math.max(backoff, retryAfterSeconds ?? 0);
 }
 
-/** Interval stretched by the publisher's hints (capped) and up to 10 % random jitter. */
-export function nextFetchSeconds(
-  intervalSeconds: number,
-  hints: (number | null)[],
-  random = Math.random(),
-): number {
-  const hint = Math.min(MAX_HINT_SECONDS, Math.max(0, ...hints.map((h) => h ?? 0)));
-  const base = Math.max(intervalSeconds, hint);
-  return Math.round(base * (1 + JITTER * random));
+/** The longest of the publisher's hints, capped at a day; null when it gave none. */
+export function hintSeconds(hints: (number | null)[]): number | null {
+  const given = hints.filter((h): h is number => h !== null && h > 0);
+  return given.length === 0 ? null : Math.min(MAX_HINT_SECONDS, Math.max(...given));
 }
 
 const isHostThrottle = (err: FetchError) =>
@@ -89,8 +90,9 @@ export class FeedUpdater {
   }
 
   /**
-   * Claims due, enabled, subscribed sources, at most HOST_BATCH per host, and enqueues one fetch
-   * job per host, so a host's feeds are fetched one after another whichever process runs them.
+   * Claims due, enabled sources with an unpaused subscription, at most HOST_BATCH per host, and
+   * enqueues one fetch job per host, so a host's feeds are fetched one after another whichever
+   * process runs them.
    * Returns the number of sources claimed.
    */
   async dispatchDue(): Promise<number> {
@@ -98,13 +100,13 @@ export class FeedUpdater {
       WITH due AS (
         SELECT fs.id, fs.url, fs.next_fetch_at FROM feed_sources fs
         WHERE fs.next_fetch_at <= now() AND fs.disabled_at IS NULL
-          AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id)
+          AND EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id AND NOT s.paused)
         ORDER BY fs.next_fetch_at
         LIMIT ${DISPATCH_BATCH}
         FOR UPDATE SKIP LOCKED
       ), ranked AS (
         SELECT id, row_number() OVER (
-          PARTITION BY substring(url FROM '^[^:]+://([^/?#]+)') ORDER BY next_fetch_at) AS n
+          PARTITION BY ${sourceHost(sql`url`)} ORDER BY next_fetch_at) AS n
         FROM due
       )
       UPDATE feed_sources fs SET next_fetch_at = now() + make_interval(secs => ${CLAIM_SECONDS})
@@ -175,7 +177,6 @@ export class FeedUpdater {
       .from(feedSources)
       .where(and(eq(feedSources.id, feedSourceId), isNull(feedSources.disabledAt)));
     if (!source) return;
-    const interval = await this.intervalSeconds(source.id);
     const host = new URL(source.url).host;
     await this.#hosts.run(host, async () => {
       const cooldown = await this.#hostCooldownSeconds(host);
@@ -192,21 +193,21 @@ export class FeedUpdater {
         const feed = response.notModified
           ? null
           : parseFeed(decodeBody(response.body, response.contentType), source.url);
-        await this.applyFetch(source, interval, response, feed);
+        await this.applyFetch(source, response, feed);
       } catch (err) {
-        await this.#recordFailure(source, host, interval, err);
+        await this.#recordFailure(source, host, err);
       }
     });
   }
 
   /**
    * Records a successful fetch of `source`: ingests the parsed feed (null when not modified),
-   * stores validators and hints, adopts permanent redirects, and schedules the next fetch.
-   * Subscribing uses this for the fetch it already made, so a new feed is not fetched twice.
+   * stores validators and hints, eases a slowdown, adopts permanent redirects, and schedules the
+   * next fetch. Subscribing uses this for the fetch it already made, so a new feed is not fetched
+   * twice.
    */
   async applyFetch(
     source: FeedSourceRow,
-    interval: number,
     response: FetchResult,
     feed: ParsedFeed | null,
   ): Promise<void> {
@@ -219,7 +220,15 @@ export class FeedUpdater {
       this.#logger.debug({ feedSourceId: source.id, ...result }, 'Feed ingested');
       if (result.inserted > 0) await this.#fullText?.queueFor(source.id);
     }
-    const next = nextFetchSeconds(interval, [ttlSeconds, response.maxAgeSeconds]);
+    const hint = hintSeconds([ttlSeconds, response.maxAgeSeconds]);
+    const inputs = { ...(await this.#inputsOf(source.id)), hint };
+    const eased = afterSuccess(
+      source.slowdownSeconds,
+      source.slowdownOkCount,
+      this.#interval({ ...inputs, slowdown: null }).seconds,
+    );
+    const schedule = this.#interval({ ...inputs, slowdown: eased.slowdown });
+    const next = jittered(schedule.seconds);
     await this.#db
       .update(feedSources)
       .set({
@@ -228,7 +237,11 @@ export class FeedUpdater {
         ttlSeconds,
         etag: response.etag ?? (response.notModified ? source.etag : null),
         lastModified: response.lastModified ?? (response.notModified ? source.lastModified : null),
-        fetchIntervalSeconds: next,
+        hintSeconds: hint,
+        slowdownSeconds: eased.slowdown,
+        slowdownOkCount: eased.okCount,
+        fetchIntervalSeconds: schedule.seconds,
+        fetchIntervalReason: schedule.reason,
         lastFetchedAt: sql`now()`,
         nextFetchAt: sql`now() + make_interval(secs => ${next})`,
         errorCount: 0,
@@ -251,21 +264,114 @@ export class FeedUpdater {
     }
   }
 
+  /** The source's interval in effect, from its subscriptions, stored hint and slowdown, and host. */
+  async schedule(feedSourceId: number): Promise<Schedule> {
+    return this.#interval(await this.#inputsOf(feedSourceId));
+  }
+
+  /** The user's default interval: their preference, else the server's. */
+  async userIntervalSeconds(userId: number): Promise<number> {
+    const { rows } = await this.#db.execute<{ seconds: number | null }>(
+      sql`SELECT ${userPrefInt(sql`${userId}::int`, 'updateIntervalMinutes')} * 60 AS seconds`,
+    );
+    return Math.max(MIN_INTERVAL_SECONDS, rows[0]?.seconds ?? this.#settings.updateIntervalSeconds);
+  }
+
   /**
-   * The source's base interval: the shortest among its subscribers, each taking the subscription's
-   * override, else the user's preference, else the server default; never below five minutes.
+   * Recomputes the sources' intervals after a change of settings. A source fetched normally moves
+   * to its last fetch plus the new interval (not before now); failing, new, and imminent or
+   * claimed sources keep their time.
    */
-  async intervalSeconds(feedSourceId: number): Promise<number> {
-    const [row] = await this.#db
-      .select({
-        seconds: sql<number | null>`min(coalesce(
-          ${subscriptions.updateIntervalSeconds},
-          ${userPrefInt(sql`${subscriptions.userId}`, 'updateIntervalMinutes')} * 60,
-          ${this.#settings.updateIntervalSeconds}))`,
-      })
+  async reschedule(feedSourceIds: number[]): Promise<void> {
+    const inputs = await this.#inputs(feedSourceIds);
+    if (inputs.size === 0) return;
+    const values = [...inputs].map(([id, i]) => {
+      const { seconds, reason } = this.#interval(i);
+      return sql`(${id}::int, ${seconds}::int, ${reason}::text, ${jittered(seconds)}::int)`;
+    });
+    await this.#db.execute(sql`
+      UPDATE feed_sources fs SET
+        fetch_interval_seconds = v.seconds,
+        fetch_interval_reason = v.reason,
+        next_fetch_at = CASE
+          WHEN fs.disabled_at IS NOT NULL OR fs.error_count > 0 OR fs.last_fetched_at IS NULL
+            OR fs.next_fetch_at <= now() + make_interval(secs => ${CLAIM_SECONDS})
+          THEN fs.next_fetch_at
+          ELSE greatest(fs.last_fetched_at + make_interval(secs => v.delay), now(),
+            coalesce(fs.blocked_until, now()))
+        END
+      FROM (VALUES ${sql.join(values, sql`, `)}) AS v(id, seconds, reason, delay)
+      WHERE fs.id = v.id`);
+  }
+
+  /** Reschedules the sources the user subscribes to, after their default interval changed. */
+  async rescheduleUser(userId: number): Promise<void> {
+    const rows = await this.#db
+      .selectDistinct({ id: subscriptions.feedSourceId })
       .from(subscriptions)
-      .where(eq(subscriptions.feedSourceId, feedSourceId));
-    return Math.max(MIN_INTERVAL_SECONDS, row?.seconds ?? this.#settings.updateIntervalSeconds);
+      .where(eq(subscriptions.userId, userId));
+    await this.reschedule(rows.map((r) => r.id));
+  }
+
+  /** Reschedules the sources of a host, after its minimum interval changed. */
+  async rescheduleHost(host: string): Promise<void> {
+    const rows = await this.#db
+      .select({ id: feedSources.id })
+      .from(feedSources)
+      .where(sql`${sourceHost(sql`${feedSources.url}`)} = ${host}`);
+    await this.reschedule(rows.map((r) => r.id));
+  }
+
+  #interval(inputs: ScheduleInputs): Schedule {
+    return effectiveInterval(inputs, this.#settings.updateIntervalSeconds);
+  }
+
+  async #inputsOf(feedSourceId: number): Promise<ScheduleInputs> {
+    return (
+      (await this.#inputs([feedSourceId])).get(feedSourceId) ?? {
+        base: null,
+        hint: null,
+        slowdown: null,
+        siteMinimum: null,
+      }
+    );
+  }
+
+  /**
+   * Each source's schedule inputs. The base is the shortest among its unpaused subscriptions, each
+   * taking the subscription's override, else the user's preference, else the server default;
+   * never below five minutes.
+   */
+  async #inputs(feedSourceIds: number[]): Promise<Map<number, ScheduleInputs>> {
+    if (feedSourceIds.length === 0) return new Map();
+    const { rows } = await this.#db.execute<{
+      id: number;
+      base: number | null;
+      hint: number | null;
+      slowdown: number | null;
+      site_minimum: number | null;
+    }>(sql`
+      SELECT fs.id,
+        (SELECT min(coalesce(s.update_interval_seconds,
+            ${userPrefInt(sql`s.user_id`, 'updateIntervalMinutes')} * 60,
+            ${this.#settings.updateIntervalSeconds}::int))
+          FROM subscriptions s WHERE s.feed_source_id = fs.id AND NOT s.paused) AS base,
+        fs.hint_seconds AS hint, fs.slowdown_seconds AS slowdown,
+        r.min_interval_seconds AS site_minimum
+      FROM feed_sources fs
+      LEFT JOIN fetch_host_rules r ON r.host = ${sourceHost(sql`fs.url`)}
+      WHERE fs.id = ANY(${sql.param(feedSourceIds)}::int[])`);
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        {
+          base: r.base === null ? null : Math.max(MIN_INTERVAL_SECONDS, r.base),
+          hint: r.hint,
+          slowdown: r.slowdown,
+          siteMinimum: r.site_minimum,
+        },
+      ]),
+    );
   }
 
   /** Moves the source to the URL its feed permanently redirected to, unless another source has it. */
@@ -297,25 +403,22 @@ export class FeedUpdater {
 
   /** Reschedules without counting a failure. */
   async #postpone(feedSourceId: number, seconds: number): Promise<void> {
-    const delay = nextFetchSeconds(seconds, []);
+    const delay = jittered(seconds);
     await this.#db
       .update(feedSources)
       .set({ nextFetchAt: sql`now() + make_interval(secs => ${delay})` })
       .where(eq(feedSources.id, feedSourceId));
   }
 
-  async #recordFailure(
-    source: FeedSourceRow,
-    host: string,
-    interval: number,
-    err: unknown,
-  ): Promise<void> {
+  /** Backs off, and on a 429 (or 503 with Retry-After) pauses the host and raises the slowdown. */
+  async #recordFailure(source: FeedSourceRow, host: string, err: unknown): Promise<void> {
     if (!(err instanceof FetchError || err instanceof FeedParseError)) throw err;
     const failures = source.errorCount + 1;
     const gone = err instanceof FetchError && err.status === 410;
     const disable = gone || failures >= this.#settings.disableAfterFailures;
     let retryAfter = err instanceof FetchError ? err.retryAfterSeconds : null;
-    if (err instanceof FetchError && isHostThrottle(err)) {
+    const throttled = err instanceof FetchError && isHostThrottle(err);
+    if (throttled) {
       retryAfter ??= DEFAULT_HOST_COOLDOWN_SECONDS;
       const until = sql`now() + make_interval(secs => ${retryAfter})`;
       await this.#db
@@ -328,7 +431,12 @@ export class FeedUpdater {
     }
     const message =
       err instanceof FeedParseError ? `Not a valid feed: ${err.message}` : err.message;
-    const delay = nextFetchSeconds(backoffSeconds(interval, failures, retryAfter), []);
+    const inputs = await this.#inputsOf(source.id);
+    const slowdown = throttled
+      ? afterThrottle(source.slowdownSeconds, this.#interval({ ...inputs, slowdown: null }).seconds)
+      : source.slowdownSeconds;
+    const schedule = this.#interval({ ...inputs, slowdown });
+    const delay = jittered(backoffSeconds(schedule.seconds, failures, retryAfter));
     await this.#db
       .update(feedSources)
       .set({
@@ -336,7 +444,9 @@ export class FeedUpdater {
         lastError: message.slice(0, 1000),
         lastErrorAt: sql`now()`,
         lastFetchedAt: sql`now()`,
-        fetchIntervalSeconds: interval,
+        fetchIntervalSeconds: schedule.seconds,
+        fetchIntervalReason: schedule.reason,
+        ...(throttled && { slowdownSeconds: slowdown, slowdownOkCount: 0 }),
         nextFetchAt: sql`now() + make_interval(secs => ${delay})`,
         blockedUntil:
           retryAfter === null ? null : sql`now() + make_interval(secs => ${retryAfter})`,

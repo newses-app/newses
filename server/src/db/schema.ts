@@ -171,7 +171,9 @@ export const feedSources = pgTable(
     title: text('title'),
     etag: text('etag'),
     lastModified: text('last_modified'),
+    // The interval in effect, without jitter, and what set it (`IntervalReason`).
     fetchIntervalSeconds: integer('fetch_interval_seconds').notNull().default(1800),
+    fetchIntervalReason: text('fetch_interval_reason').notNull().default('subscribers'),
     nextFetchAt: tstz('next_fetch_at').notNull().defaultNow(),
     lastFetchedAt: tstz('last_fetched_at'),
     errorCount: integer('error_count').notNull().default(0),
@@ -182,6 +184,11 @@ export const feedSources = pgTable(
     ttlSeconds: integer('ttl_seconds'),
     // No fetch, manual or scheduled, before this time (the host's Retry-After).
     blockedUntil: tstz('blocked_until'),
+    // Longest publisher hint of the last successful fetch (ttl, Cache-Control), capped at a day.
+    hintSeconds: integer('hint_seconds'),
+    // Raised by each 429 and eased after a run of successful fetches.
+    slowdownSeconds: integer('slowdown_seconds'),
+    slowdownOkCount: integer('slowdown_ok_count').notNull().default(0),
     faviconKey: text('favicon_key'),
     faviconCheckedAt: tstz('favicon_checked_at'),
     ...timestamps(),
@@ -197,6 +204,14 @@ export const feedSources = pgTable(
 export const fetchHosts = pgTable('fetch_hosts', {
   host: text('host').primaryKey(),
   blockedUntil: tstz('blocked_until').notNull(),
+});
+
+// Admins' minimum interval between feed checks of a host.
+export const fetchHostRules = pgTable('fetch_host_rules', {
+  host: text('host').primaryKey(),
+  minIntervalSeconds: integer('min_interval_seconds').notNull(),
+  updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  ...timestamps(),
 });
 
 export const subscriptions = pgTable(
@@ -215,6 +230,10 @@ export const subscriptions = pgTable(
     purgeDays: integer('purge_days'),
     // New entries get their full text extracted, and readers see it first.
     fullText: boolean('full_text').notNull().default(false),
+    // No longer counts toward the feed's interval; still receives what other subscriptions fetch.
+    paused: boolean('paused').notNull().default(false),
+    // Left out of All articles and Fresh, and their counts.
+    hideFromAll: boolean('hide_from_all').notNull().default(false),
     sortOrder: integer('sort_order').notNull().default(0),
     ...timestamps(),
   },

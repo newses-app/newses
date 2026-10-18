@@ -27,7 +27,7 @@ export class CounterService {
   /**
    * Unread counts per subscription, per category (including subcategories), per label, and per
    * special feed. Entries hidden by their score count only where they are listed: in Starred,
-   * Published, and labels.
+   * Published, and labels; those of subscriptions hidden from All count in neither All nor Fresh.
    */
   async get(userId: number): Promise<Counters> {
     const [counts, subs, cats, labelCounts] = await Promise.all([
@@ -40,7 +40,11 @@ export class CounterService {
         WHERE ue.user_id = ${userId} AND ue.unread
         GROUP BY ue.subscription_id`),
       this.#db
-        .select({ id: subscriptions.id, categoryId: subscriptions.categoryId })
+        .select({
+          id: subscriptions.id,
+          categoryId: subscriptions.categoryId,
+          hideFromAll: subscriptions.hideFromAll,
+        })
         .from(subscriptions)
         .where(eq(subscriptions.userId, userId)),
       this.#db
@@ -58,9 +62,12 @@ export class CounterService {
 
     const special = { all: 0, fresh: 0, starred: 0, published: 0 };
     const bySubscription = new Map<number, number>();
+    const hidden = new Set(subs.filter((s) => s.hideFromAll).map((s) => s.id));
     for (const row of counts.rows) {
-      special.all += Number(row.unread);
-      special.fresh += Number(row.fresh);
+      if (row.subscription_id === null || !hidden.has(row.subscription_id)) {
+        special.all += Number(row.unread);
+        special.fresh += Number(row.fresh);
+      }
       special.starred += Number(row.starred);
       special.published += Number(row.published);
       if (row.subscription_id !== null) bySubscription.set(row.subscription_id, Number(row.unread));

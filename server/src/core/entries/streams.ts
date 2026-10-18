@@ -30,9 +30,9 @@ export function streamCondition(userId: number, stream: Stream): SQL {
   switch (stream.special) {
     case undefined:
     case 'all':
-      return user;
+      return sql`${user} AND ${notHiddenFromAll}`;
     case 'fresh':
-      return sql`${user} AND ue.unread AND ue.sort_at > ${freshSince(userId)}`;
+      return sql`${user} AND ${notHiddenFromAll} AND ue.unread AND ue.sort_at > ${freshSince(userId)}`;
     case 'starred':
       return sql`${user} AND ue.starred`;
     case 'published':
@@ -41,6 +41,10 @@ export function streamCondition(userId: number, stream: Stream): SQL {
       return sql`${user} AND ue.read_at > now() - make_interval(days => ${RECENTLY_READ_DAYS})`;
   }
 }
+
+/** `ue` is not from a subscription hidden from All articles and Fresh; kept entries without one are. */
+const notHiddenFromAll = sql`(ue.subscription_id IS NULL OR NOT EXISTS (
+  SELECT 1 FROM subscriptions hs WHERE hs.id = ue.subscription_id AND hs.hide_from_all))`;
 
 /**
  * `streamCondition` without entries scored below the user's `scoreHideBelow`, for the streams

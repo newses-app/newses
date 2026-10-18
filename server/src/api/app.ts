@@ -29,6 +29,7 @@ import { telemetryEnabled } from '../telemetry/index.ts';
 import { errorHandler } from './errors.ts';
 import { registerOpsTracking } from './ops-tracking.ts';
 import { adminOpsRoutes } from './routes/admin-ops.ts';
+import { adminSiteRoutes } from './routes/admin-sites.ts';
 import { adminThemeRoutes } from './routes/admin-themes.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { archiveRoutes } from './routes/archive.ts';
@@ -198,12 +199,14 @@ export function buildApp(deps: AppDeps) {
         await api.register(adminUserRoutes, services);
         await api.register(adminOpsRoutes, { ops: services.ops });
         await api.register(adminThemeRoutes, { themes: services.themes });
+        await api.register(adminSiteRoutes, { hostRules: services.feeds.hostRules });
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {
           ...services.entries,
           prefs: services.prefs,
           images: services.feeds.images,
           fullText: services.feeds.fullText,
+          updater: services.feeds.updater,
         });
         await api.register(archiveRoutes, {
           archive: services.entries.archive,
@@ -218,7 +221,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(tagRoutes, { tags: services.entries.tags });
         await api.register(sharingRoutes, services.entries);
         await api.register(imageRoutes, { images: services.feeds.images });
-        await api.register(prefsRoutes, { prefs: services.prefs });
+        await api.register(prefsRoutes, { prefs: services.prefs, updater: services.feeds.updater });
         await api.register(themeRoutes, { themes: services.themes });
         if (deps.events === false) await api.register(noEventRoutes);
         else await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });

@@ -33,7 +33,11 @@ export const adminOpsRoutes: FastifyPluginAsyncZod<{ ops: OpsServices }> = (app,
       const { hosts, hourly } = await ops.reports.hosts(HOURS[request.query.window]);
       return {
         hourlyBudget: ops.reports.hostHourlyBudget,
-        hosts: hosts.map((host) => ({ ...host, blockedUntil: iso(host.blockedUntil) })),
+        hosts: hosts.map(({ minIntervalSeconds, ...host }) => ({
+          ...host,
+          blockedUntil: iso(host.blockedUntil),
+          minIntervalMinutes: minIntervalSeconds === null ? null : minIntervalSeconds / 60,
+        })),
         hourly: hourly.map((bucket) => ({ ...bucket, hour: bucket.hour.toISOString() })),
       };
     },
