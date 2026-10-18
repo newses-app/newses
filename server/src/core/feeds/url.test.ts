@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeFeedUrl } from './url.ts';
+import { normalizeFeedUrl, normalizePageUrl } from './url.ts';
 
 describe('normalizeFeedUrl', () => {
   it.each([
@@ -17,6 +17,23 @@ describe('normalizeFeedUrl', () => {
     'rejects %s',
     (input) => {
       expect(() => normalizeFeedUrl(input)).toThrow(/URL/);
+    },
+  );
+});
+
+describe('normalizePageUrl', () => {
+  it.each([
+    ['example.com/post', 'https://example.com/post'],
+    ['HTTP://Example.COM:80/a?b=1#frag', 'http://example.com/a?b=1'],
+    ['  https://example.com/x  ', 'https://example.com/x'],
+  ])('%s → %s', (input, expected) => {
+    expect(normalizePageUrl(input)).toBe(expected);
+  });
+
+  it.each(['feed://example.com/rss', 'newses:pages', 'javascript:alert(1)', 'http://'])(
+    'rejects %s',
+    (input) => {
+      expect(() => normalizePageUrl(input)).toThrow(/URL/);
     },
   );
 });

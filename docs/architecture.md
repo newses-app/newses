@@ -206,8 +206,8 @@ Updater:
 Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, noted, labelled, or shared) are never purged.
 - Deletes entries no user references once they have been absent from their feed for 7 days (`last_seen_at`), so purged entries are not re-ingested as new.
-- Deletes feed sources with no subscriptions and no kept entries, and their favicons.
-- With `ARCHIVE_ENABLED`, entries go to the archive before they are deleted, in batches of 1,000, for up to 3 minutes per run: unreferenced entries past the grace period, then every entry of a feed source about to be deleted. Each batch's delete re-checks its conditions, so an entry used again meanwhile stays (and is also archived). A source is deleted only once its entries are; the rest waits for the next run.
+- Deletes feed sources with no subscriptions and no kept entries, and their favicons; never the pages source.
+- With `ARCHIVE_ENABLED`, entries other than pages go to the archive before they are deleted, in batches of 1,000, for up to 3 minutes per run: unreferenced entries past the grace period, then every entry of a feed source about to be deleted. Each batch's delete re-checks its conditions, so an entry used again meanwhile stays (and is also archived). A source is deleted only once its entries are; the rest waits for the next run.
 
 Archive:
 - Parquet files under the blob root, `archive/entries/month=YYYY-MM/<uuid>.parquet`, one month of `sort_at` per folder, rows sorted by feed URL and `sort_at`, snappy-compressed; files are only added. Layout: `server/src/adapters/archive-format.ts`.
@@ -289,10 +289,10 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `image_cache` | Instance | Blob key, fetch time, size, failed flag |
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
 | `categories` | User | Self-referencing tree (`parent_id`), order |
-| `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error, publisher TTL hint, capped hint, slowdown and successes since, `blocked_until`); interval in effect and its reason; site URL; favicon ref; subscriptions with HTTP-auth credentials get a dedicated source |
+| `feed_sources` | Shared | Unique normalised URL; fetch state (ETag, Last-Modified, next fetch, error count, last error, publisher TTL hint, capped hint, slowdown and successes since, `blocked_until`); interval in effect and its reason; site URL; favicon ref; subscriptions with HTTP-auth credentials get a dedicated source. The pages source (`newses:pages`, disabled) holds pages from outside any feed; nobody can subscribe to it, and it is never fetched or purged |
 | `fetch_host_rules` | Instance | Host (with port), admins' minimum interval, admin who set it. Not synced |
 | `subscriptions` | User | → feed source, category; title override, interval and purge overrides, full-text opt-in, paused, hidden from All, encrypted HTTP-auth credentials. Unique (user, feed source) |
-| `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, extracted full text (with attempt time and error), published/updated times, language, normalised feed categories, `tsvector` (generated, GIN index). Unique (feed source, GUID) |
+| `entries` | Shared | → feed source; GUID, link, title, author, content, content hash, extracted full text (with attempt time and error), published/updated times, language, normalised feed categories, `tsvector` (generated, GIN index). Unique (feed source, GUID). A page is one user's own: GUID `page:` + SHA-256 of the user id and normalised URL; its feed title is the link's host |
 | `enclosures` | Shared | → entry; URL, MIME type, length, dimensions |
 | `user_entries` | User | → entry, subscription (nullable when archived) or archived feed; unread, starred, published, score, plain-text note (null when none), read time, share UUID. Unique (user, entry) |
 | `archived_feeds` | User | Title and URL of an unsubscribed feed that still holds kept entries |

@@ -13,6 +13,7 @@ import {
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { RecordingRealtime } from '../../test/fakes.ts';
+import { pagesSourceId } from '../feeds/pages.ts';
 import { EntryService } from './entries.ts';
 import { createEntryServices, type EntryServices } from './index.ts';
 import { excerpt } from './text.ts';
@@ -189,6 +190,27 @@ describe('EntryService.list', () => {
     expect(page[1]?.feedTitle).toBe('Custom two');
     expect(page[0]?.content).toBeUndefined();
     expect({ cursor, view }).toEqual({ cursor: null, view: 'all' });
+  });
+
+  it('shows the site of a page from outside any feed as its feed title', async () => {
+    const pages = await pagesSourceId(db);
+    for (const [guid, link] of [
+      ['page:a', 'https://me@blog.example:8080/post?x=1'],
+      ['page:b', null],
+    ] as const) {
+      const [entry] = await db
+        .insert(entries)
+        .values({ feedSourceId: pages, guid, title: guid, link, contentHash: guid })
+        .returning();
+      await db
+        .insert(userEntries)
+        .values({ userId: alice, entryId: entry?.id ?? 0, sortAt: new Date(), published: true });
+    }
+    const { entries: page } = await list({ stream: { special: 'published' } });
+    expect(page.map((e) => [e.title, e.feedTitle, e.subscriptionId])).toEqual([
+      ['page:b', 'Web pages', null],
+      ['page:a', 'blog.example', null],
+    ]);
   });
 
   it('paginates with a keyset cursor in every order', async () => {

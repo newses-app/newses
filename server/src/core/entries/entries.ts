@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { Db } from '../../db/client.ts';
 import { enclosures, userEntries } from '../../db/schema.ts';
 import { DomainError } from '../errors.ts';
+import { PAGES_SOURCE_URL } from '../feeds/pages.ts';
 import type { Realtime } from '../ports.ts';
 import { shownCondition, streamCondition } from './streams.ts';
 import { excerpt } from './text.ts';
@@ -125,9 +126,14 @@ const CONTENT_VERSION = sql`left(e.content_hash, 16) || coalesce('.' || CASE
     WHEN e.full_content IS NOT NULL
     THEN floor(extract(epoch FROM e.full_content_at) * 1000)::bigint::text END, '')`;
 
+/** A page's feed title is its site's host. */
+const FEED_TITLE = sql`coalesce(s.title,
+  CASE WHEN fs.url = ${PAGES_SOURCE_URL} THEN substring(e.link FROM '^[a-z]+://(?:[^/?#@]*@)?([^/?#:]+)') END,
+  fs.title, fs.url)`;
+
 /** Headline columns of `user_entries ue` joined as in `HEADLINE_FROM`. */
 export const headlineColumns = (withContent: boolean) => sql`
-  ue.id, ue.entry_id, ue.subscription_id, coalesce(s.title, fs.title, fs.url) AS feed_title,
+  ue.id, ue.entry_id, ue.subscription_id, ${FEED_TITLE} AS feed_title,
   e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
   ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.score, ue.note,
   ue.share_id, ${iso(sql`ue.read_at`)} AS read_at, ${CONTENT_VERSION} AS content_version,

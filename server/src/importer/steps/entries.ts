@@ -3,8 +3,9 @@ import { inArray, sql } from 'drizzle-orm';
 import { plainText } from '../../core/entries/text.ts';
 import { DomainError } from '../../core/errors.ts';
 import { IMPORTED_GUID_PREFIX, purgeDaysSql, sha256 } from '../../core/feeds/ingest.ts';
+import { pageGuid, pagesSourceId } from '../../core/feeds/pages.ts';
 import { sanitizeContent, sanitizeTitle, stripControlChars } from '../../core/feeds/sanitize.ts';
-import { normalizeFeedUrl } from '../../core/feeds/url.ts';
+import { normalizeFeedUrl, normalizePageUrl } from '../../core/feeds/url.ts';
 import type { ArchivedEnclosure, ArchiveRow } from '../../core/ports.ts';
 import { enclosures, entries, userEntries } from '../../db/schema.ts';
 import type { ImportContext, ImportStep } from '../importer.ts';
@@ -144,41 +145,15 @@ async function archivedSources(context: ImportContext, user: ImportedUser) {
   return sources;
 }
 
-/**
- * A feed source for the site of a kept entry that belongs to no feed (a URL shared to the
- * published feed, or a starred entry of a removed feed), by origin. Sources nobody subscribes to
- * are never fetched.
- */
-async function siteSource(
-  { write }: ImportContext,
-  sites: Map<string, number | undefined>,
-  link: string,
-): Promise<number | undefined> {
-  let site: URL;
+/** The normalised address of an article's link, or null when it is not an http(s) URL. */
+function pageUrl(link: string): string | null {
+  if (!link) return null;
   try {
-    site = new URL(stripControlChars(link));
-  } catch {
-    return undefined;
+    return normalizePageUrl(stripControlChars(link));
+  } catch (err) {
+    if (!(err instanceof DomainError)) throw err;
+    return null;
   }
-  if (!sites.has(site.origin)) {
-    let url: string;
-    try {
-      url = normalizeFeedUrl(`${site.origin}/`);
-    } catch (err) {
-      if (!(err instanceof DomainError)) throw err;
-      sites.set(site.origin, undefined);
-      return undefined;
-    }
-    const id = await write(async (tx) => {
-      const result = await tx.execute<{ id: number }>(sql`
-        INSERT INTO feed_sources (url, title, site_url) VALUES (${url}, ${site.hostname}, ${url})
-        ON CONFLICT (url) DO UPDATE SET title = coalesce(feed_sources.title, excluded.title)
-        RETURNING id`);
-      return result.rows[0]?.id;
-    });
-    sites.set(site.origin, id);
-  }
-  return sites.get(site.origin);
 }
 
 /** The shared entry for a TTRSS article, sanitised as ingest stores fetched items. */
@@ -202,6 +177,12 @@ function sharedEntry(row: SourceEntryRow, feedSourceId: number): Prepared['entry
     fetchedAt: row.date_entered,
   };
 }
+
+/** The user's own entry for a kept article that belongs to no feed, in the pages source. */
+const pageEntry = (row: SourceEntryRow, pagesId: number, userId: number, url: string) => ({
+  ...sharedEntry({ ...row, link: url }, pagesId),
+  guid: pageGuid(userId, url),
+});
 
 const enclosureOf = (e: SourceEnclosureRow): ArchivedEnclosure => ({
   url: e.content_url.slice(0, 4000),
@@ -314,6 +295,7 @@ async function writeBatch(
   context: ImportContext,
   tx: Writer,
   userId: number,
+  pagesId: number | null,
   batch: Prepared[],
   enclosureRows: SourceEnclosureRow[],
 ) {
@@ -335,8 +317,11 @@ async function writeBatch(
       if (entryId !== undefined) priorEntries.set(sourceId, entryId);
     }
   }
-  // Others that a fetch here already brought in (same source and link) join that entry.
-  const fresh = batch.filter((p) => !priorEntries.has(p.row.id) && p.entry.link);
+  // Others that a fetch here already brought in (same source and link) join that entry; pages
+  // are each user's own.
+  const fresh = batch.filter(
+    (p) => !priorEntries.has(p.row.id) && p.entry.link && p.feedSourceId !== pagesId,
+  );
   if (fresh.length > 0) {
     const fetched = await tx.execute<{ id: string; feed_source_id: number; link: string }>(sql`
       SELECT DISTINCT ON (e.feed_source_id, e.link) e.id, e.feed_source_id, e.link
@@ -434,13 +419,16 @@ async function writeBatch(
  * instead. Entries purge would delete at once go to the archive when it is on, and are skipped
  * otherwise; with `--since`, older ones are skipped. Kept entries (starred, published, noted,
  * labelled, shared) are always imported.
- * Entries with no feed are kept under their archived feed or, when kept, their site.
+ * Entries with no feed are kept under their archived feed or, when kept, as the user's own page
+ * (in the pages source, one entry per user and link).
  */
 export const entriesStep: ImportStep = {
   name: 'entries',
   async run(context) {
     const { source, map, report, write, options } = context;
     const archiver = context.archive ? new Archiver(context, context.archive) : null;
+    // Created on first use, so imports without pages leave it to the migration.
+    let pagesId: number | null = null;
     for (const user of await importedUsers(context)) {
       const { login } = user.source;
       const userId = user.userId;
@@ -449,7 +437,6 @@ export const entriesStep: ImportStep = {
         archivedSources(context, user),
       ]);
       const skips = new Skips();
-      const sites = new Map<string, number | undefined>();
       const now = Date.now();
       let aged = 0;
       for await (const rows of source.batches<SourceEntryRow>(
@@ -466,6 +453,7 @@ export const entriesStep: ImportStep = {
           const kept = row.marked || row.published || row.marked_otherwise;
           let subscriptionId: number | null = null;
           let feedSourceId: number | undefined;
+          let page: string | null = null;
           if (row.feed_id !== null) {
             subscriptionId = feedSubs.get(row.feed_id) ?? null;
             feedSourceId =
@@ -476,8 +464,10 @@ export const entriesStep: ImportStep = {
             }
           } else {
             feedSourceId = row.orig_feed_id === null ? undefined : archived.get(row.orig_feed_id);
-            if (feedSourceId === undefined && kept && row.link)
-              feedSourceId = await siteSource(context, sites, row.link);
+            if (feedSourceId === undefined && kept) {
+              page = pageUrl(row.link);
+              if (page !== null) feedSourceId = pagesId ??= await write((tx) => pagesSourceId(tx));
+            }
             if (feedSourceId === undefined) {
               skips.add('it belongs to no feed');
               continue;
@@ -501,7 +491,10 @@ export const entriesStep: ImportStep = {
             feedSourceId,
             subscriptionId,
             sortAt,
-            entry: sharedEntry(row, feedSourceId),
+            entry:
+              page === null
+                ? sharedEntry(row, feedSourceId)
+                : pageEntry(row, feedSourceId, userId, page),
           });
         }
         if (archiver) {
@@ -514,7 +507,7 @@ export const entriesStep: ImportStep = {
            FROM ttrss_enclosures WHERE post_id = ANY($1) ORDER BY id`,
           [batch.map((p) => p.row.ref_id)],
         );
-        await write((tx) => writeBatch(context, tx, userId, batch, enclosureRows));
+        await write((tx) => writeBatch(context, tx, userId, pagesId, batch, enclosureRows));
         report.count(login, 'entries', { imported: batch.length });
       }
       await archiver?.flush();

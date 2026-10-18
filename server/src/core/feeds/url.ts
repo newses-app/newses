@@ -8,10 +8,21 @@ export function normalizeFeedUrl(input: string): string {
   let raw = input.trim();
   if (/^feed:\/\//i.test(raw)) raw = raw.replace(/^feed:/i, 'http:');
   else if (/^feed:/i.test(raw)) raw = raw.slice('feed:'.length);
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = `https://${raw}`;
+  return httpHref(raw, input);
+}
+
+/**
+ * Canonical form of a page's address (a published page): http(s) only, scheme defaulted to
+ * https, lower-case host, default port and fragment removed.
+ */
+export function normalizePageUrl(input: string): string {
+  return httpHref(input.trim(), input);
+}
+
+function httpHref(raw: string, input: string): string {
   let url: URL;
   try {
-    url = new URL(raw);
+    url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
   } catch {
     throw new DomainError('invalid_input', `Not a valid URL: ${input}`);
   }

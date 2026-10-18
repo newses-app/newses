@@ -6,6 +6,7 @@ import { plainText } from '../entries/text.ts';
 import type { ArchivedEnclosure, ArchiveRow, ArchiveWriter, BlobStore } from '../ports.ts';
 import { deleteUnusedIcons } from './favicons.ts';
 import { purgeDaysSql } from './ingest.ts';
+import { PAGES_SOURCE_URL } from './pages.ts';
 
 /** Unreferenced entries are deleted only after they have been absent from their feed this long. */
 const ORPHAN_GRACE_DAYS = 7;
@@ -23,8 +24,15 @@ export const KEPT_ENTRY = sql`(ue.starred OR ue.published OR ue.note IS NOT NULL
 
 const UNREFERENCED = sql`NOT EXISTS (SELECT 1 FROM user_entries ue WHERE ue.entry_id = e.id)`;
 
-/** Feed sources (`fs`) with no subscribers and no entries anyone holds. */
-const ABANDONED_SOURCE = sql`NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id)
+/** Entries (`e`) nobody references that have been absent from their feed for the grace period. */
+const ORPHAN = sql`e.last_seen_at < now() - make_interval(days => ${ORPHAN_GRACE_DAYS}) AND ${UNREFERENCED}`;
+
+/** Entries (`e`) of the pages source: one user's own, so never archived. */
+const PAGE = sql`e.feed_source_id IN (SELECT id FROM feed_sources WHERE url = ${PAGES_SOURCE_URL})`;
+
+/** Feed sources (`fs`) with no subscribers and no entries anyone holds; never the pages source. */
+const ABANDONED_SOURCE = sql`fs.url <> ${PAGES_SOURCE_URL}
+  AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.feed_source_id = fs.id)
   AND NOT EXISTS (
     SELECT 1 FROM entries e JOIN user_entries ue ON ue.entry_id = e.id WHERE e.feed_source_id = fs.id
   )`;
@@ -89,8 +97,8 @@ export class Purger {
   /**
    * Deletes user entries older than their subscription's purge age (never kept ones), then
    * entries nobody references that have left their feed, then feed sources with no subscribers
-   * and no kept entries. With an archive, entries are written to it before they are deleted.
-   * Also forgets expired host cooldowns.
+   * and no kept entries. With an archive, entries are written to it before they are deleted,
+   * except pages, which only their user could read. Also forgets expired host cooldowns.
    */
   async purge(): Promise<PurgeResult> {
     const userEntries = await this.#db.execute(sql`
@@ -101,11 +109,9 @@ export class Purger {
         AND purge.days > 0
         AND ue.sort_at < now() - make_interval(days => purge.days)`);
 
+    const pages = await this.#db.execute(sql`DELETE FROM entries e WHERE ${ORPHAN} AND ${PAGE}`);
     const deadline = this.#now() + this.#archiveBudgetMs;
-    const orphans = await this.#deleteEntries(
-      sql`e.last_seen_at < now() - make_interval(days => ${ORPHAN_GRACE_DAYS}) AND ${UNREFERENCED}`,
-      deadline,
-    );
+    const orphans = await this.#deleteEntries(sql`${ORPHAN} AND NOT ${PAGE}`, deadline);
     // Deleting a source deletes its entries, so with an archive they go first, and a source
     // goes only once none are left.
     let sourceEntries = { deleted: 0, archived: 0 };
@@ -129,7 +135,7 @@ export class Purger {
 
     return {
       userEntries: userEntries.rowCount ?? 0,
-      entries: orphans.deleted + sourceEntries.deleted,
+      entries: (pages.rowCount ?? 0) + orphans.deleted + sourceEntries.deleted,
       feedSources: sources.rows.length,
       archived: orphans.archived + sourceEntries.archived,
     };

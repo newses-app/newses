@@ -15,6 +15,7 @@ import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { MemoryArchive, MemoryBlobStore } from '../../test/fakes.ts';
 import type { ArchiveRow } from '../ports.ts';
 import { faviconKey } from './favicons.ts';
+import { PAGES_SOURCE_URL, pagesSourceId } from './pages.ts';
 import { Purger } from './purge.ts';
 
 let database: TestDatabase;
@@ -260,6 +261,19 @@ describe('Purger', () => {
       expect(await purger.purge()).toMatchObject({ entries: 1, archived: 1, feedSources: 1 });
       expect(archive.rows.map((r) => r.guid)).toEqual(['recent']);
       expect(await db.select().from(feedSources)).toHaveLength(0);
+    });
+
+    it('deletes pages nobody holds without archiving them, and keeps the pages source', async () => {
+      const pages = await pagesSourceId(db);
+      await orphan(pages, 'page:gone', 8);
+      await orphan(pages, 'page:recent', 1);
+
+      expect(await purger.purge()).toMatchObject({ entries: 1, archived: 0, feedSources: 0 });
+      expect(archive.rows).toEqual([]);
+      expect((await db.select().from(entries)).map((e) => e.guid)).toEqual(['page:recent']);
+      await db.delete(entries);
+      await purger.purge();
+      expect((await db.select().from(feedSources)).map((s) => s.url)).toEqual([PAGES_SOURCE_URL]);
     });
 
     it('leaves what it has no time to archive for the next run', async () => {

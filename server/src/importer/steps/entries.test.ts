@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Ingester } from '../../core/feeds/ingest.ts';
+import { PAGES_SOURCE_URL, pageGuid } from '../../core/feeds/pages.ts';
 import { createDb, type Db } from '../../db/client.ts';
 import {
   enclosures,
@@ -157,11 +158,16 @@ describe('TTRSS entries import', () => {
     expect(gone?.url).toBe('https://gone.example/rss');
     const shared = pat.get('Shared');
     expect(shared?.ue).toMatchObject({ subscriptionId: null, published: true });
-    const [site] = await db
+    expect(shared?.entry).toMatchObject({
+      guid: pageGuid(await userId('pat'), 'https://shared.example/post/1'),
+      link: 'https://shared.example/post/1',
+    });
+    const [pages] = await db
       .select()
       .from(feedSources)
       .where(eq(feedSources.id, shared?.entry.feedSourceId ?? 0));
-    expect(site).toMatchObject({ url: 'https://shared.example/', title: 'shared.example' });
+    expect(pages?.url).toBe(PAGES_SOURCE_URL);
+    expect(pages?.disabledAt).not.toBeNull();
 
     expect(report.tally('pat', 'entries')).toEqual({ source: 10, imported: 7 });
     expect(
@@ -272,6 +278,45 @@ describe('TTRSS entries import', () => {
       expect(report.tally('pat', 'entries').archived).toBe(1);
       expect(archive.rows).toEqual([]);
       expect(await db.select().from(importMap)).toEqual([]);
+    });
+  });
+
+  describe('with a page two users kept', () => {
+    // sam starred the page pat published, from a copy of the article without a feed.
+    const SAM_SHARED = `
+      INSERT INTO ttrss_entries (id, title, guid, link, updated, content, content_hash,
+          date_entered, date_updated, author) VALUES
+        (13, 'Shared', 'SHA1:g13', 'https://shared.example/post/1#top', ${ago('300 days')}, '', 'h', ${ago('300 days')}, ${ago('300 days')}, '');
+      INSERT INTO ttrss_user_entries (int_id, ref_id, uuid, feed_id, orig_feed_id, owner_uid,
+          marked, published, tag_cache, label_cache, last_read, unread, note) VALUES
+        (13, 13, '', NULL, NULL, 3, true, false, '', '', NULL, false, NULL);`;
+
+    beforeAll(async () => {
+      await sourceDb.pool.query(SAM_SHARED);
+    });
+
+    afterAll(async () => {
+      await sourceDb.pool.query(`
+        DELETE FROM ttrss_user_entries WHERE int_id = 13;
+        DELETE FROM ttrss_entries WHERE id = 13;`);
+    });
+
+    it('gives each user their own page, which a subscriber to the site does not receive', async () => {
+      expect((await run()).reconciled).toBe(true);
+      const pat = (await entriesOf('pat')).get('Shared');
+      const sam = (await entriesOf('sam')).get('Shared');
+      expect(sam?.entry).toMatchObject({
+        guid: pageGuid(await userId('sam'), 'https://shared.example/post/1'),
+        link: 'https://shared.example/post/1',
+        feedSourceId: pat?.entry.feedSourceId,
+      });
+      expect(sam?.entry.id).not.toBe(pat?.entry.id);
+      expect(sam?.ue).toMatchObject({ subscriptionId: null, starred: true, published: false });
+      expect(
+        (await db.select().from(feedSources)).filter((s) => s.url.includes('shared.example')),
+      ).toEqual([]);
+      expect((await run()).reconciled).toBe(true);
+      expect((await entriesOf('sam')).get('Shared')?.entry.id).toBe(sam?.entry.id);
     });
   });
 
