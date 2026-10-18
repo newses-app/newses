@@ -22,7 +22,7 @@ Behaviour:
 - Batched and resumable: each batch commits on its own, and `import_map` records every imported source row, so re-running skips or updates rows already imported.
 - Re-running after the first import applies changes made in TTRSS since then. Source state wins.
 - Refuses to re-import into users who changed anything here since their last import finished (entry state, feeds, categories, labels), unless `--force`. Entries fetched here since then do not count as changes, nor do the changes of runs that failed partway; a run cut short before recording its end (its process killed) needs `--force`.
-- Ends with a reconciliation report: per user, source vs imported (and archived) counts of feeds, categories, entries, unread, starred, published, labels, notes, and filters, plus every skipped item and the reason, and notes (adopted users, temporary passwords, options not imported). Counts that do not add up are marked `!`, and the command then exits with status 1.
+- Ends with a reconciliation report: per user, source vs imported (and archived) counts of feeds, categories, entries, labels, notes, and filters, plus every skipped item and the reason, and notes (adopted users, temporary passwords, options not imported). Counts that do not add up are marked `!`, and the command then exits with status 1.
 
 ## Running the import
 

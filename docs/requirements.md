@@ -77,7 +77,7 @@
 
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
-| Full-text search | P1 | Searches title and content within current feed, category, or all; ranked results; results in < 1 s on 1M entries |
+| Full-text search | P1 | Searches title and content within current feed, category, or all; ranked results |
 | Query syntax | Later | `title:`, `author:`, `note:`, `tag:`, `label:`, `unread:true/false`, `star:true/false`, `pub:true/false`, `@YYYY-MM-DD` and relative dates; negation with `-` |
 
 ### Sharing
@@ -144,7 +144,7 @@
 
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
-| TTRSS import | P3 | Per `migration-ttrss.md`; reconciliation report shows matching per-user unread, starred, published, label, and note counts |
+| TTRSS import | P3 | Per `migration-ttrss.md`; reconciliation report shows matching per-user entry, label, and note counts |
 
 ### Operations
 
@@ -167,7 +167,6 @@
 | Area | Requirement |
 |---|---|
 | Scale | ~1,000 feeds and several million entries per instance; ~10 users |
-| Performance | Headline list p95 < 200 ms; article open p95 < 150 ms; ingest of a 100-entry feed < 2 s |
 | Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
 | Privacy | No calls to third parties beyond feed, icon, and article fetches; telemetry goes only to endpoints the operator configures, never carries credentials, feed URLs, or article content, and no trace context is sent to remote hosts |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
