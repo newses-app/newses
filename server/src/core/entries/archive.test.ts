@@ -11,6 +11,7 @@ import {
 } from '../../db/schema.ts';
 import { archiveRow } from '../../test/archive-reader-contract.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
+import { syncedEntry } from '../../test/sync.ts';
 import { MemoryArchive, RecordingRealtime } from '../../test/fakes.ts';
 import { createEntryServices } from './index.ts';
 
@@ -233,8 +234,9 @@ describe('ArchiveService', () => {
       'Shared apple',
       'Imported',
     ]);
-    const after = await services.sync.changes(alice, before.next, 100);
-    expect(after.entries.map((e) => e.id)).toContain(entry.id);
+    expect((await syncedEntry(services.sync, alice, entry.id, before.next)).entry.starred).toBe(
+      true,
+    );
     // Restoring again changes nothing but the state.
     const again = await services.archive.restore(alice, purged?.key ?? '', { starred: false });
     expect(again).toMatchObject({ id: entry.id, starred: false });

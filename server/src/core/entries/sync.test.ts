@@ -12,6 +12,7 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
+import { syncedEntry as followUntil } from '../../test/sync.ts';
 import { SyncService } from './sync.ts';
 
 let database: TestDatabase;
@@ -33,21 +34,7 @@ async function addEntry(guid: string) {
   return row?.id ?? 0;
 }
 
-/**
- * Follows changes until the entry arrives. The watermark comes from `pg_stat_activity`, which can
- * lag on a busy machine and hold a just-committed row back to the next call, as clients expect.
- */
-async function syncedEntry(id: number, since: string | undefined) {
-  let next = since;
-  for (let call = 0; call < 10; call++) {
-    const result = await sync.changes(userId, next, 100);
-    next = result.next;
-    const entry = result.entries.find((e) => e.id === id);
-    if (entry) return { entry, next };
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-  throw new Error(`Entry ${String(id)} was never synced`);
-}
+const syncedEntry = (id: number, since: string | undefined) => followUntil(sync, userId, id, since);
 
 beforeAll(async () => {
   database = await createTestDatabase();

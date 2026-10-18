@@ -12,6 +12,7 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
+import { syncedEntry } from '../../test/sync.ts';
 import { RecordingRealtime } from '../../test/fakes.ts';
 import { pagesSourceId } from '../feeds/pages.ts';
 import { EntryService } from './entries.ts';
@@ -599,15 +600,15 @@ describe('LabelService', () => {
     expect(full.labels.map((l) => l.caption)).toEqual(['Work']);
 
     await services.labels.setEntryLabels(alice, ids.cherry ?? 0, [work.id]);
-    const assigned = await services.sync.changes(alice, full.next, 100);
-    expect(assigned.entries.map((e) => [e.id, e.labels])).toEqual([[ids.cherry, [work.id]]]);
-    expect(assigned.labels).toEqual([]);
+    const assigned = await syncedEntry(services.sync, alice, ids.cherry ?? 0, full.next);
+    expect(assigned.result.entries.map((e) => [e.id, e.labels])).toEqual([[ids.cherry, [work.id]]]);
+    expect(assigned.result.labels).toEqual([]);
 
     await services.labels.delete(alice, work.id);
-    const removed = await services.sync.changes(alice, assigned.next, 100);
-    expect(removed.deleted.labels).toEqual([work.id]);
     // The cascade removed the label from the entry, which is a change.
-    expect(removed.entries.map((e) => [e.id, e.labels])).toEqual([[ids.cherry, []]]);
+    const removed = await syncedEntry(services.sync, alice, ids.cherry ?? 0, assigned.next);
+    expect(removed.result.deleted.labels).toEqual([work.id]);
+    expect(removed.entry.labels).toEqual([]);
   });
 });
 
@@ -647,10 +648,10 @@ describe('TagService', () => {
   it('syncs entries whose tags changed', async () => {
     const full = await services.sync.changes(alice, undefined, 100);
     await services.tags.setEntryTags(alice, ids.cherry ?? 0, ['tart']);
-    const tagged = await services.sync.changes(alice, full.next, 100);
-    expect(tagged.entries.map((e) => [e.id, e.tags])).toEqual([[ids.cherry, ['tart']]]);
+    const tagged = await syncedEntry(services.sync, alice, ids.cherry ?? 0, full.next);
+    expect(tagged.result.entries.map((e) => [e.id, e.tags])).toEqual([[ids.cherry, ['tart']]]);
     await services.tags.setEntryTags(alice, ids.cherry ?? 0, []);
-    const untagged = await services.sync.changes(alice, tagged.next, 100);
-    expect(untagged.entries.map((e) => [e.id, e.tags])).toEqual([[ids.cherry, []]]);
+    const untagged = await syncedEntry(services.sync, alice, ids.cherry ?? 0, tagged.next);
+    expect(untagged.entry.tags).toEqual([]);
   });
 });
