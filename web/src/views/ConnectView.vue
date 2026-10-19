@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { useQueryClient } from '@tanstack/vue-query';
 import { onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
-import { api } from '../api.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { checkServer, normaliseServerUrl } from '../lib/server-url.ts';
 import { bridge, connection } from '../platform/index.ts';
+import { connectTo } from '../platform/profiles.ts';
 
 const { t } = useI18n();
 const router = useRouter();
-const queryClient = useQueryClient();
 useDocumentTitle(() => t('connect.title'));
 
 /** Set when changing server from settings or the sign-in page. */
@@ -23,11 +21,10 @@ const older = ref<{ origin: string; version: string } | null>(null);
 const addressField = ref<{ focus: () => void } | null>(null);
 onMounted(() => addressField.value?.focus());
 
-/** Switching servers signs out of the old one first. */
+/** Another server moves the app to its profile; the current one stays signed in. */
 async function use(origin: string) {
-  await connection.setServer(origin, () => api.auth.logout());
-  queryClient.clear();
-  await router.replace(connection.state.token ? '/all' : { name: 'login' });
+  if (origin === current) await router.replace(connection.state.token ? '/all' : { name: 'login' });
+  else await connectTo(origin);
 }
 
 async function submit() {

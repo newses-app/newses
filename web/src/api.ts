@@ -22,6 +22,10 @@ export const api = NATIVE
     })
   : createApiClient({ client, fetch });
 
+/** Ends a session on its server, for a profile the app no longer keeps. */
+export const revokeSession = (serverUrl: string, token: string) =>
+  createApiClient({ baseUrl: serverUrl, token, client }).auth.logout();
+
 export const isUnauthenticated = (error: unknown) =>
   error instanceof ApiError && error.status === 401;
 

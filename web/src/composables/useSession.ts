@@ -92,6 +92,7 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
     }
     try {
       const session = await currentSession(queryClient);
+      if (NATIVE && !startedOffline) await connection.remember(session.user);
       await storeSignedIn({ userId: session.user.id, serverUrl: connection.state.serverUrl });
       if (!startedOffline) sessionVerified.value = true;
       // The account is known only now, so the snapshot of its session is written here, once.
@@ -122,8 +123,12 @@ export function useSession() {
   const { t } = useI18n();
   const query = useQuery({ queryKey: SESSION_KEY, queryFn: fetchSession, staleTime: Infinity });
 
+  /**
+   * Keeps the session. In the apps, signing in as another user than the profile's moves the app to
+   * that user's profile; the caller then reloads the app (`connection.state.active` changed).
+   */
   async function signedIn(result: LoggedInResponse): Promise<void> {
-    if (result.token) await connection.signedIn(result.token);
+    if (result.token && (await connection.signedIn(result.token, result.user))) return;
     queryClient.setQueryData<CurrentSession>(SESSION_KEY, {
       user: result.user,
       csrfToken: result.csrfToken ?? null,

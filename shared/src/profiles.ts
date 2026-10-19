@@ -58,7 +58,7 @@ export function profileChanges(value: unknown): ProfileChanges | null {
     if (key === 'userId') {
       if (field !== null && !(Number.isSafeInteger(field) && (field as number) > 0)) return null;
       changes.userId = field as number | null;
-    } else if (key === 'name' || key === 'login' || key === 'label') {
+    } else if (key === 'login' || key === 'label') {
       if (!text(field)) return null;
       changes[key] = field as string | null;
     } else {
@@ -93,7 +93,6 @@ export function createProfiles(
       id: newId(),
       serverUrl,
       userId: null,
-      name: null,
       login: null,
       label: null,
     };
@@ -143,7 +142,6 @@ export function createProfiles(
           id: newId(),
           serverUrl: origin,
           userId: null,
-          name: null,
           login: null,
           label: null,
         };

@@ -2,10 +2,13 @@ import 'fake-indexeddb/auto';
 import type { Entry } from '@newses/shared';
 import Dexie from 'dexie';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { connection } from '../platform/index.ts';
 import {
+  accountOf,
   accountSignedIn,
   accountSignedOut,
   databaseName,
+  deleteProfileStore,
   lastAccount,
   markFilled,
   wasEvicted,
@@ -38,6 +41,7 @@ const entry = (id: number, overrides: Partial<Entry> = {}): Entry => ({
 const exists = async (name: string) => (await Dexie.getDatabaseNames()).includes(name);
 
 afterEach(async () => {
+  connection.state.active = null;
   localStorage.clear();
   for (const name of await Dexie.getDatabaseNames()) await Dexie.delete(name);
 });
@@ -116,6 +120,35 @@ describe('accounts', () => {
     await openOfflineDb('newses-2').open();
     await accountSignedOut();
     expect(await exists('newses-2')).toBe(false);
+    expect(lastAccount()).toBeNull();
+  });
+
+  it('keeps a store per profile in the apps, so switching keeps the one left', async () => {
+    connection.state.active = 'p1';
+    await accountSignedIn({ userId: 1, serverUrl: 'https://a.example' });
+    const one = lastAccount()?.name ?? '';
+    await openOfflineDb(one).open();
+    markFilled();
+    connection.state.active = 'p2';
+    expect(lastAccount()).toBeNull();
+    await accountSignedIn({ userId: 2, serverUrl: 'https://b.example' });
+    const two = openOfflineDb(lastAccount()?.name ?? '');
+    expect(await wasEvicted(two)).toBe(false);
+    two.close();
+    expect(await exists(one)).toBe(true);
+    expect(accountOf('p1')).toMatchObject({ userId: 1, name: one, filled: true });
+
+    await deleteProfileStore('p1');
+    expect(await exists(one)).toBe(false);
+  });
+
+  it('gives the account kept before profiles to the active profile', async () => {
+    await accountSignedIn({ userId: 4, serverUrl: 'https://a.example' });
+    const before = lastAccount();
+    connection.state.active = 'p1';
+    expect(lastAccount()).toEqual(before);
+    expect(localStorage.getItem('newses.offline.account')).toBeNull();
+    connection.state.active = null;
     expect(lastAccount()).toBeNull();
   });
 

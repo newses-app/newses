@@ -4,6 +4,7 @@ import { computed, shallowRef, watch, watchEffect } from 'vue';
 import { useTheme } from 'vuetify';
 import { type Appearance, mergeTokens, resolveAppearance, themeTokens } from '../lib/appearance.ts';
 import { readingStyle } from '../lib/reading.ts';
+import { profileKey } from '../platform/profile-keys.ts';
 import { usePrefs } from './usePrefs.ts';
 import { useThemes } from './useThemes.ts';
 
@@ -18,10 +19,13 @@ export const adjustmentsPreview = shallowRef<PartialThemeTokens | null>(null);
 /** The theme applied at startup, kept until preferences load. */
 let startupTokens: ThemeTokens = BUILTIN_THEMES.original;
 
-/** The theme last applied on this device, so a reload starts with it rather than with Original. */
+/**
+ * The theme last applied on this device (in the apps, on the active profile), so a reload starts
+ * with it rather than with Original.
+ */
 function cachedTokens(): ThemeTokens {
   try {
-    const cached = localStorage.getItem(CACHE_KEY);
+    const cached = localStorage.getItem(profileKey(CACHE_KEY));
     // Over Original, so tokens added since it was cached take their defaults.
     if (cached) return mergeTokens(BUILTIN_THEMES.original, JSON.parse(cached) as ThemeTokens);
   } catch {
@@ -32,7 +36,7 @@ function cachedTokens(): ThemeTokens {
 
 function cacheTokens(tokens: ThemeTokens): void {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(tokens));
+    localStorage.setItem(profileKey(CACHE_KEY), JSON.stringify(tokens));
   } catch {
     // Storage blocked or full: the next reload starts with Original.
   }

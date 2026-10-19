@@ -11,6 +11,7 @@ import { installAuthGuard } from './composables/useSession.ts';
 import { api } from './api.ts';
 import { startConnectivity } from './offline/connectivity.ts';
 import { mirrorQueries } from './offline/snapshot.ts';
+import { loadOfflineSettings } from './offline/settings.ts';
 import { currentStore } from './offline/store.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 import { handleBack } from './platform/back-button.ts';
@@ -25,10 +26,11 @@ import './themes/sketch.css';
 
 document.documentElement.dataset.platform = bridge.platform;
 trackWindowControls(document.documentElement);
+// The apps' profiles and token come from the shell before anything kept per profile is read.
+await connection.load();
+loadOfflineSettings();
 // The last theme shown here, so a reload doesn't flash Original and signed-out screens are themed.
 const appearance = startAppearance();
-// The apps' server and token come from the shell before the first navigation needs them.
-await connection.load();
 // Whether the device has a network, before the first request.
 await startConnectivity(bridge, () => api.serverInfo());
 if (NATIVE) routeExternalLinks(document, (url) => void bridge.openExternal(url));

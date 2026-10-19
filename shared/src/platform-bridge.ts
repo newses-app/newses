@@ -33,7 +33,7 @@ export interface NetworkStatus {
 
 /**
  * A server and a user on it that the apps sign in to. The shells keep several, one of them active,
- * each with its own token; `userId`, `name`, and `login` are unknown until the first sign-in.
+ * each with its own token; `userId` and `login` are unknown until the first sign-in.
  */
 export interface Profile {
   /** A random UUID, given when the profile is added. */
@@ -41,7 +41,6 @@ export interface Profile {
   /** An HTTPS origin. */
   serverUrl: string;
   userId: number | null;
-  name: string | null;
   login: string | null;
   /** Chosen by the reader. */
   label: string | null;
@@ -50,7 +49,7 @@ export interface Profile {
 }
 
 /** What the web app may change of a profile. */
-export type ProfileChanges = Partial<Pick<Profile, 'userId' | 'name' | 'login' | 'label'>>;
+export type ProfileChanges = Partial<Pick<Profile, 'userId' | 'login' | 'label'>>;
 
 export interface ProfileList {
   profiles: Profile[];

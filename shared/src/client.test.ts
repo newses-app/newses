@@ -59,6 +59,14 @@ describe('createApiClient', () => {
     expect(calls[0]?.init.credentials).toBe('omit');
   });
 
+  it('signs in without the bearer token, so a session another profile holds survives', async () => {
+    const { calls, fetch } = fakeFetch([json({ user: {}, token: 't2' }), json({ user: {} })]);
+    const api = createApiClient({ token: 't1', fetch });
+    await api.auth.login({ login: 'a', password: 'b', tokenType: 'bearer' });
+    await api.auth.loginTwoFactor({ challenge: 'c', code: '123456' });
+    expect(calls.map((c) => header(c, 'authorization'))).toEqual([undefined, undefined]);
+  });
+
   it('reads a changing server and token on each request, never sending cookies', async () => {
     const { calls, fetch } = fakeFetch([json({ all: 0 }), json({ all: 0 }), json({})]);
     let server = 'https://one.example';

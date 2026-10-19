@@ -9,10 +9,11 @@ import {
   lastAccount,
   markEmptied,
 } from './account.ts';
-import { type OfflineDb, openOfflineDb } from './db.ts';
+import { afterOthers, type OfflineDb, openOfflineDb } from './db.ts';
 import { outboxPending } from './status.ts';
 import { setPeriodicSync } from './registration.ts';
 import { keepLimits } from './settings.ts';
+import { importStaged } from './staged.ts';
 import { storeEntries } from './sync.ts';
 import { writeWorkerConfig } from './worker-config.ts';
 
@@ -68,6 +69,8 @@ async function stopBackground(): Promise<void> {
 export const storeReplaced = ref(false);
 
 let open: { name: string; db: OfflineDb } | null = null;
+/** Set once the app is leaving the active profile; its store stays closed until the reload. */
+let left = false;
 
 function closeStore(): void {
   open?.db.close();
@@ -76,7 +79,7 @@ function closeStore(): void {
 
 /** The signed-in account's store while offline reading is on; null otherwise. */
 export function currentStore(): OfflineDb | null {
-  if (!offlineEnabled()) return null;
+  if (left || !offlineEnabled()) return null;
   const account = lastAccount();
   if (!account || account.serverUrl !== connection.state.serverUrl) return null;
   if (open?.name !== account.name) {
@@ -118,6 +121,28 @@ export async function storeSignedOut(): Promise<void> {
   closeStore();
   await stopBackground();
   await accountSignedOut();
+}
+
+/**
+ * Leaves the active profile, keeping its store: waits for a sync or send in progress, stores what
+ * the Android job fetched for it, and stops background sync; then runs `next` (choosing another
+ * profile), after which the app reloads. Nothing syncs into the store in between.
+ */
+export async function storeLeaving(next: () => Promise<void>): Promise<void> {
+  await afterOthers('sync', () =>
+    afterOthers('outbox', async () => {
+      const db = currentStore();
+      left = true;
+      if (db && NATIVE) {
+        const pages = await bridge.takeBackgroundSync().catch(() => []);
+        if (pages.length > 0)
+          await importStaged(db, pages, { limits: keepLimits() }).catch(() => undefined);
+      }
+      closeStore();
+      await stopBackground();
+      await next();
+    }),
+  );
 }
 
 /** Keeps entries loaded online in the store too, so it is as fresh as what was last seen. */

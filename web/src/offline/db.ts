@@ -174,6 +174,13 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
   }
 }
 
+/** Runs `task` once no tab of this app is running one under the same name. */
+export async function afterOthers(name: string, task: () => Promise<void>): Promise<void> {
+  const locks = (navigator as { locks?: LockManager }).locks;
+  if (locks) await locks.request(`newses-${name}`, task);
+  else await task();
+}
+
 /**
  * Runs `task` unless another tab of this app is already running it under the same name; returns
  * whether it ran. Without Web Locks every tab runs it.

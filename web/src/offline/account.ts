@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { profileKey } from '../platform/profile-keys.ts';
 import type { OfflineDb } from './db.ts';
 
 /** Whose data a store holds: the user, and in the apps the server (null in the browser). */
@@ -25,28 +26,38 @@ export async function databaseName({ userId, serverUrl }: Account): Promise<stri
   return `newses-${hex}-${String(userId)}`;
 }
 
-/** The account last signed in on this device, so the app can start offline with its store. */
-export function lastAccount(): Remembered | null {
+/** The account whose store a profile keeps: the active one's (or the browser's) unless given. */
+export function accountOf(profileId?: string): Remembered | null {
   try {
-    const value = localStorage.getItem(ACCOUNT_KEY);
+    const value = localStorage.getItem(profileKey(ACCOUNT_KEY, profileId));
     return value ? (JSON.parse(value) as Remembered) : null;
   } catch {
     return null;
   }
 }
 
+/** The account last signed in on the active profile, so the app can start offline with its store. */
+export const lastAccount = (): Remembered | null => accountOf();
+
 function remember(account: Remembered | null): void {
   try {
-    if (account) localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
-    else localStorage.removeItem(ACCOUNT_KEY);
+    if (account) localStorage.setItem(profileKey(ACCOUNT_KEY), JSON.stringify(account));
+    else localStorage.removeItem(profileKey(ACCOUNT_KEY));
   } catch {
     // Storage blocked: the app cannot start offline.
   }
 }
 
+/** Deletes the store a profile keeps, queued changes included, when the profile is removed. */
+export async function deleteProfileStore(profileId: string): Promise<void> {
+  const account = accountOf(profileId);
+  if (account) await Dexie.delete(account.name);
+}
+
 /**
- * Records who is signed in. Another user or server deletes the previous account's store, so one
- * device never shows a reader someone else's articles or sends their queued changes.
+ * Records who is signed in on the active profile. Another user or server deletes the previous
+ * account's store, so the profile never shows a reader someone else's articles or sends their
+ * queued changes; other profiles keep theirs.
  */
 export async function accountSignedIn(account: Account): Promise<void> {
   const previous = lastAccount();

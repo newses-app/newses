@@ -1,62 +1,92 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { memoryBridge } from './bridge.ts';
 import { createConnection } from './connection.ts';
 
+const alice = { id: 1, login: 'alice' };
+const bob = { id: 2, login: 'bob' };
+
+/** A profile on one.example signed in as Alice. */
 async function connected() {
   const bridge = memoryBridge();
   const profile = await bridge.addProfile('https://one.example');
   await bridge.setActiveProfile(profile.id);
   await bridge.setToken('t1');
+  await bridge.updateProfile(profile.id, { userId: alice.id, login: alice.login });
   const connection = createConnection(bridge);
   await connection.load();
-  return { bridge, connection };
+  return { bridge, connection, profile };
 }
 
 describe('createConnection', () => {
-  it('loads the stored server and token', async () => {
-    const { connection } = await connected();
-    expect(connection.state).toEqual({ serverUrl: 'https://one.example', token: 't1' });
+  it('loads the profiles and the active one with its token', async () => {
+    const { connection, profile } = await connected();
+    expect(connection.state.active).toBe(profile.id);
+    expect(connection.state.serverUrl).toBe('https://one.example');
+    expect(connection.state.token).toBe('t1');
+    expect(connection.activeProfile()).toMatchObject({ userId: 1, login: 'alice' });
   });
 
   it('starts at the connect screen on first run', async () => {
     const connection = createConnection(memoryBridge());
     await connection.load();
-    expect(connection.state).toEqual({ serverUrl: null, token: null });
+    expect(connection.state).toMatchObject({ profiles: [], active: null, token: null });
+    expect(connection.state.serverUrl).toBeNull();
   });
 
-  it('keeps the token on sign-in and forgets it when the session ends', async () => {
+  it('keeps a new profile’s first sign-in on it', async () => {
+    const bridge = memoryBridge();
+    const profile = await bridge.addProfile('https://one.example');
+    await bridge.setActiveProfile(profile.id);
+    const connection = createConnection(bridge);
+    await connection.load();
+    expect(await connection.signedIn('t1', alice)).toBe(false);
+    expect(connection.state.token).toBe('t1');
+    expect(await bridge.getToken()).toBe('t1');
+    expect(connection.activeProfile()).toMatchObject({ userId: 1, login: 'alice', signedIn: true });
+  });
+
+  it('forgets the token when the session ends, keeping the profile', async () => {
     const { bridge, connection } = await connected();
-    await connection.signedOut();
-    await connection.signedIn('t2');
-    expect(connection.state.token).toBe('t2');
-    expect(await bridge.getToken()).toBe('t2');
     await connection.signedOut();
     expect(connection.state.token).toBeNull();
     expect(await bridge.getToken()).toBeNull();
+    expect((await bridge.getProfiles()).profiles).toHaveLength(1);
   });
 
-  it('signs out of the old server when changing servers', async () => {
-    const { bridge, connection } = await connected();
-    const revoke = vi.fn(() => Promise.resolve());
-    await connection.setServer('https://two.example', revoke);
-    expect(revoke).toHaveBeenCalledOnce();
-    expect(connection.state).toEqual({ serverUrl: 'https://two.example', token: null });
+  it('moves another user’s sign-in to a profile of their own, leaving the first signed out', async () => {
+    const { bridge, connection, profile } = await connected();
+    await connection.signedOut();
+    expect(await connection.signedIn('t2', bob)).toBe(true);
     const { profiles, active } = await bridge.getProfiles();
-    expect(profiles).toMatchObject([{ id: active, serverUrl: 'https://two.example' }]);
-    expect(await bridge.getToken()).toBeNull();
+    expect(active).not.toBe(profile.id);
+    expect(profiles).toMatchObject([
+      { id: profile.id, userId: 1, signedIn: false },
+      { id: active, serverUrl: 'https://one.example', userId: 2, login: 'bob', signedIn: true },
+    ]);
+    expect(connection.state).toMatchObject({ active, token: 't2' });
   });
 
-  it('changes servers even when the old one cannot revoke the session', async () => {
-    const { connection } = await connected();
-    await connection.setServer('https://two.example', () => Promise.reject(new Error('offline')));
-    expect(connection.state).toEqual({ serverUrl: 'https://two.example', token: null });
+  it('merges a new profile into the one its user already has on that server', async () => {
+    const { bridge, connection, profile } = await connected();
+    const added = await bridge.addProfile('https://one.example');
+    await bridge.setActiveProfile(added.id);
+    await connection.load();
+    expect(await connection.signedIn('t3', alice)).toBe(true);
+    expect(await bridge.getProfiles()).toMatchObject({
+      profiles: [{ id: profile.id, signedIn: true }],
+      active: profile.id,
+    });
+    expect(await bridge.getToken()).toBe('t3');
   });
 
-  it('keeps the session when the same server is chosen again', async () => {
-    const { connection } = await connected();
-    const revoke = vi.fn(() => Promise.resolve());
-    await connection.setServer('https://one.example', revoke);
-    expect(revoke).not.toHaveBeenCalled();
-    expect(connection.state.token).toBe('t1');
+  it('notes the user the server reports only when it changed', async () => {
+    const { bridge, connection, profile } = await connected();
+    await connection.remember({ id: 1, login: 'alice' });
+    await connection.remember({ id: 1, login: 'alice.l' });
+    expect((await bridge.getProfiles()).profiles[0]).toMatchObject({
+      id: profile.id,
+      login: 'alice.l',
+    });
+    expect(connection.activeProfile()?.login).toBe('alice.l');
   });
 });

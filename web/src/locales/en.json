@@ -93,7 +93,7 @@
     "address": "Server address",
     "placeholder": "reader.example.com",
     "submit": "Connect",
-    "changeHint": "Changing server signs you out.",
+    "changeHint": "You stay signed in here, and connecting to this server again comes back to it.",
     "invalid": "Enter an https:// address.",
     "unreachable": "Couldn't reach a Newses server at {host}.",
     "notNewses": "{host} is not a Newses server.",

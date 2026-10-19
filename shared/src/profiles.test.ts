@@ -32,7 +32,6 @@ describe('createProfiles', () => {
           id: ID1,
           serverUrl: 'https://one.example',
           userId: null,
-          name: null,
           login: null,
           label: null,
           signedIn: true,
@@ -98,10 +97,9 @@ describe('createProfiles', () => {
   it('updates what the app learns at sign-in, and refuses anything else', async () => {
     const profiles = createProfiles(memoryProfileStorage(), ids());
     const { id } = await profiles.add('https://one.example');
-    await profiles.update(id, { userId: 7, name: 'Ada', login: 'ada', label: 'Home' });
+    await profiles.update(id, { userId: 7, login: 'ada', label: 'Home' });
     expect((await profiles.list()).profiles[0]).toMatchObject({
       userId: 7,
-      name: 'Ada',
       login: 'ada',
       label: 'Home',
     });
@@ -152,7 +150,7 @@ describe('validation', () => {
     expect(profileChanges({})).toEqual({});
     expect(profileChanges({ userId: 0 })).toBeNull();
     expect(profileChanges({ userId: 1.5 })).toBeNull();
-    expect(profileChanges({ name: 'x'.repeat(257) })).toBeNull();
+    expect(profileChanges({ login: 'x'.repeat(257) })).toBeNull();
     expect(profileChanges({ signedIn: true })).toBeNull();
     expect(profileChanges(null)).toBeNull();
   });

@@ -109,6 +109,8 @@ interface RequestOptions {
   rawBody?: { data: string; contentType: string };
   /** Return the response text instead of parsing JSON. */
   text?: boolean;
+  /** Without the bearer token: a login, which ends whatever session the request carries. */
+  anonymous?: boolean;
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -129,7 +131,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       if (value !== undefined) params.set(key, String(value));
     const search = params.size > 0 ? `?${params.toString()}` : '';
     const headers: Record<string, string> = { accept: 'application/json' };
-    const token = currentToken();
+    const token = opts.anonymous ? null : currentToken();
     if (options.client) headers['x-rss-client'] = options.client;
     if (token) headers.authorization = `Bearer ${token}`;
     else if (!bearer && csrfToken && !SAFE_METHODS.has(method)) headers['x-csrf-token'] = csrfToken;
@@ -182,12 +184,18 @@ export function createApiClient(options: ApiClientOptions = {}) {
     auth: {
       /** Opens a session, or returns a challenge to finish with `loginTwoFactor`. */
       async login(body: z.input<typeof loginRequestSchema>) {
-        const result = await request<LoginResponse>('POST', '/auth/login', { body });
+        const result = await request<LoginResponse>('POST', '/auth/login', {
+          body,
+          anonymous: true,
+        });
         if ('user' in result) csrfToken = result.csrfToken ?? csrfToken;
         return result;
       },
       async loginTwoFactor(body: z.input<typeof loginTwoFactorRequestSchema>) {
-        const result = await request<LoggedInResponse>('POST', '/auth/login/2fa', { body });
+        const result = await request<LoggedInResponse>('POST', '/auth/login/2fa', {
+          body,
+          anonymous: true,
+        });
         csrfToken = result.csrfToken ?? csrfToken;
         return result;
       },

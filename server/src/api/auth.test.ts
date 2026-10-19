@@ -314,6 +314,25 @@ describe('session cookie', () => {
     });
     expect(old.statusCode).toBe(401);
   });
+
+  it('keeps the other sessions of a device whose apps sign in several users', async () => {
+    const bearerLogin = async (login: string, password: string) =>
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/login',
+          payload: { login, password, tokenType: 'bearer' },
+        })
+      ).json<{ token: string }>().token;
+    // The password Alice changed to above.
+    const alice = await bearerLogin('alice', 'alice password 2');
+    await bearerLogin('admin', 'admin password');
+    const session = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { authorization: `Bearer ${alice}` },
+    });
+    expect(session.json<{ user: { login: string } }>().user.login).toBe('alice');
+  });
 });
 
 describe('generated initial password', () => {

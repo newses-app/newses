@@ -1,8 +1,12 @@
 import { reactive } from 'vue';
 import { DEFAULT_KEEP, type KeepLimits } from '../lib/offline-keep.ts';
+import { profileKey } from '../platform/profile-keys.ts';
 import { DEFAULT_STORAGE_LIMIT } from './downloads.ts';
 
-/** What this device keeps for reading offline; set per device, as devices differ in space. */
+/**
+ * What this device keeps for reading offline; set per device, as devices differ in space, and in
+ * the apps per profile.
+ */
 export interface OfflineSettings {
   /** Unread entries kept, newest first; starred and recently read ones are kept as well. */
   unread: number;
@@ -31,21 +35,23 @@ export const DEFAULT_SETTINGS: OfflineSettings = {
   background: true,
 };
 
-function load(): OfflineSettings {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<OfflineSettings>;
-    return { ...DEFAULT_SETTINGS, ...saved };
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
+export const offlineSettings = reactive({ ...DEFAULT_SETTINGS });
 
-export const offlineSettings = reactive(load());
+/** Reads the settings once the active profile is known. */
+export function loadOfflineSettings(): void {
+  let saved: Partial<OfflineSettings> = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(profileKey(KEY)) ?? '{}') as Partial<OfflineSettings>;
+  } catch {
+    // Storage blocked, or an unreadable entry: the defaults apply.
+  }
+  Object.assign(offlineSettings, DEFAULT_SETTINGS, saved);
+}
 
 export function saveSettings(change: Partial<OfflineSettings>): void {
   Object.assign(offlineSettings, change);
   try {
-    localStorage.setItem(KEY, JSON.stringify(offlineSettings));
+    localStorage.setItem(profileKey(KEY), JSON.stringify(offlineSettings));
   } catch {
     // Storage blocked: the settings last until the page closes.
   }

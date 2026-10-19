@@ -7,6 +7,7 @@ import { api, ApiError } from '../api.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSession } from '../composables/useSession.ts';
 import { connection, NATIVE } from '../platform/index.ts';
+import { reloadAt } from '../platform/profiles.ts';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -49,6 +50,7 @@ function startOver(message: string | null = null) {
 async function submit() {
   busy.value = true;
   error.value = null;
+  const profile = connection.state.active;
   try {
     if (challenge.value) {
       await completeLogin(challenge.value, code.value.trim());
@@ -62,9 +64,10 @@ async function submit() {
     }
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/all';
     // Only same-app paths, never another origin.
-    await router.replace(
-      redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/all',
-    );
+    const target = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/all';
+    // Another user's sign-in moved the app to their profile, which it starts over on.
+    if (connection.state.active !== profile) reloadAt(target);
+    else await router.replace(target);
   } catch (err) {
     if (err instanceof ApiError && err.status === 429)
       error.value = t('login.throttled', { seconds: err.retryAfterSeconds ?? 60 });
