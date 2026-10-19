@@ -88,6 +88,8 @@ export interface AppDeps {
   events?: Omit<EventStreamOptions, 'realtime'> | false;
   /** Server build reported to apps; defaults to `dev`. */
   version?: string;
+  /** What the operator calls this server, reported to apps; null or omitted for none. */
+  instanceName?: string | null;
   /** Origin of public links (published feeds); null or omitted uses each request's origin. */
   publicUrl?: string | null;
   /** Log every compatibility-API call, credentials redacted. */
@@ -192,7 +194,10 @@ export function buildApp(deps: AppDeps) {
         await api.register(compress, { encodings: ['br', 'gzip'], threshold: 1024 });
         registerAuth(api, services.sessions);
         api.get('/openapi.json', { schema: { hide: true } }, () => app.swagger());
-        await api.register(serverRoutes, { version: deps.version ?? 'dev' });
+        await api.register(serverRoutes, {
+          version: deps.version ?? 'dev',
+          name: deps.instanceName ?? null,
+        });
         await api.register(authRoutes, {
           ...services,
           iconTokens: services.feeds.iconTokens,

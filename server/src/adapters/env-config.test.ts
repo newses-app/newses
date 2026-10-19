@@ -7,6 +7,7 @@ describe('loadConfig', () => {
   it('applies defaults', () => {
     expect(loadConfig({ DATABASE_URL: 'postgres://u:p@db:5432/app', APP_SECRET })).toEqual({
       version: 'dev',
+      instanceName: null,
       databaseUrl: 'postgres://u:p@db:5432/app',
       http: { host: '0.0.0.0', port: 8080, trustProxy: false },
       logLevel: 'info',
@@ -23,6 +24,12 @@ describe('loadConfig', () => {
       appSecret: APP_SECRET,
       bootstrapAdmin: null,
     });
+  });
+
+  it('names the instance, trimmed and at most 100 characters', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig({ ...base, INSTANCE_NAME: ' Home ' }).instanceName).toBe('Home');
+    expect(() => loadConfig({ ...base, INSTANCE_NAME: 'x'.repeat(101) })).toThrow(ConfigError);
   });
 
   it('trims the public URL and accepts only http(s)', () => {

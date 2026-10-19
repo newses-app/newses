@@ -203,6 +203,18 @@ describe('server info', () => {
     });
   });
 
+  it('names the instance when the operator set a name', async () => {
+    const named = buildApp({
+      logger: pino({ level: 'silent' }),
+      healthChecks: {},
+      services,
+      instanceName: 'Home',
+    });
+    const res = await named.inject({ url: '/api/v1/server' });
+    expect(res.json()).toMatchObject({ product: 'newses', name: 'Home' });
+    await named.close();
+  });
+
   it('is documented as needing no session', async () => {
     const spec = (await app.inject({ url: '/api/v1/openapi.json' })).json<{
       paths: Record<string, { get?: { security?: unknown[] } }>;

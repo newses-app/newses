@@ -23,6 +23,8 @@ export interface OpsSettings {
 export interface AppConfig {
   /** Server build shown to apps (`NEWSES_VERSION`, set at build), or `dev`. */
   version: string;
+  /** What the operator calls this server, shown to apps (`INSTANCE_NAME`); null without one. */
+  instanceName: string | null;
   databaseUrl: string;
   /** `trustProxy` is true, false, a hop count, or comma-separated proxy addresses/CIDRs. */
   http: { host: string; port: number; trustProxy: boolean | number | string };

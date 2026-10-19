@@ -140,6 +140,7 @@ export class AppStack extends Stack {
           ARCHIVE_ATHENA_WORKGROUP: archive.workgroup,
           ARCHIVE_ATHENA_DATABASE: archive.database,
           NEWSES_VERSION: BUILD_VERSION,
+          ...(stage.instanceName && { INSTANCE_NAME: stage.instanceName }),
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,

@@ -22,6 +22,8 @@ export interface StageConfig {
   archive: boolean;
   /** Share of Lambda invocations traced to X-Ray, 0 to 1; 0 leaves the tracing layer off. */
   traceSampling: number;
+  /** What the apps call this server (`INSTANCE_NAME`); omitted for none. */
+  instanceName?: string | undefined;
 }
 
 /** Where the app downloads live, in the downloads bucket and under the stage's domain. */

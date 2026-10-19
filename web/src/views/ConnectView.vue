@@ -19,14 +19,14 @@ const address = ref(current ?? '');
 const busy = ref(false);
 const error = ref<string | null>(null);
 /** A reachable server with an older API, waiting for the user to continue anyway. */
-const older = ref<{ origin: string; version: string } | null>(null);
+const older = ref<{ origin: string; version: string; name: string | null } | null>(null);
 const addressField = ref<{ focus: () => void } | null>(null);
 onMounted(() => addressField.value?.focus());
 
 /** Another server moves the app to its profile; the current one stays signed in. */
-async function use(origin: string) {
+async function use(origin: string, name: string | null) {
   if (origin === current) await router.replace(connection.state.token ? '/all' : { name: 'login' });
-  else await connectTo(origin);
+  else await connectTo(origin, name);
 }
 
 async function submit() {
@@ -40,8 +40,9 @@ async function submit() {
   busy.value = true;
   try {
     const result = await checkServer(origin);
-    if (result.status === 'ok') await use(origin);
-    else if (result.status === 'older') older.value = { origin, version: result.info.version };
+    if (result.status === 'ok') await use(origin, result.info.name ?? null);
+    else if (result.status === 'older')
+      older.value = { origin, version: result.info.version, name: result.info.name ?? null };
     else error.value = t(`connect.${result.status}`, { host: new URL(origin).host });
   } finally {
     busy.value = false;
@@ -91,7 +92,7 @@ async function submit() {
               variant="flat"
               block
               size="large"
-              @click="use(older.origin)"
+              @click="use(older.origin, older.name)"
             >
               {{ t('connect.continue') }}
             </v-btn>

@@ -91,13 +91,17 @@ describe('connectTo', () => {
     await app.connectTo('https://one.example');
     expect((await app.bridge.getProfiles()).active).toBe(one.id);
     expect(signedOut.id).not.toBe(one.id);
-    await app.connectTo('https://two.example');
+    await app.connectTo('https://two.example', 'Work');
     const { profiles, active } = await app.bridge.getProfiles();
     expect(profiles).toHaveLength(3);
     expect(profiles.find((p) => p.id === active)).toMatchObject({
       serverUrl: 'https://two.example',
+      label: 'Work',
       signedIn: false,
     });
+    // A known server keeps its profile's own name.
+    await app.connectTo('https://one.example', 'Home');
+    expect(profiles.find((p) => p.id === one.id)?.label).toBeNull();
   });
 });
 

@@ -17,6 +17,7 @@ const stageSchema = z.object({
   compatTrace: z.boolean(),
   archive: z.boolean(),
   traceSampling: z.number().min(0).max(1),
+  instanceName: z.string().trim().min(1).max(100).optional(),
 }) satisfies z.ZodType<StageConfig>;
 
 const deployConfigSchema = z

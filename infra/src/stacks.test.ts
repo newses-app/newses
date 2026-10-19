@@ -263,6 +263,28 @@ describe('App', () => {
     }
   });
 
+  it('names the instance only when the stage has a name', () => {
+    const variables = (template: Template) =>
+      Object.values(
+        template.findResources('AWS::Lambda::Function', {
+          Properties: {
+            Environment: {
+              Variables: Match.objectLike({ DB_PASSWORD_PARAMETER: Match.anyValue() }),
+            },
+          },
+        }),
+      ).map(
+        (fn) =>
+          (fn as { Properties: { Environment: { Variables: Record<string, unknown> } } }).Properties
+            .Environment.Variables,
+      );
+    for (const env of variables(app)) expect(env).not.toHaveProperty('INSTANCE_NAME');
+    const named = Template.fromStack(
+      new NewsesStage(newApp(), 'Test', { stage: { ...dev, instanceName: 'Home' }, webDir }).app,
+    );
+    for (const env of variables(named)) expect(env).toMatchObject({ INSTANCE_NAME: 'Home' });
+  });
+
   it('publishes operations alerts from tick to the stage topic', () => {
     app.hasResourceProperties('AWS::SNS::Topic', { TopicName: 'newses-dev-alerts' });
     app.hasResourceProperties('AWS::Lambda::Function', {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { passwordSchema } from '@newses/shared';
+import { MAX_INSTANCE_NAME_LENGTH, passwordSchema } from '@newses/shared';
 import type { AppConfig } from '../core/config.ts';
 
 const schema = z
@@ -38,6 +38,7 @@ const schema = z
     ARCHIVE_ATHENA_WORKGROUP: z.string().min(1).optional(),
     ARCHIVE_ATHENA_DATABASE: z.string().min(1).optional(),
     NEWSES_VERSION: z.string().default('dev'),
+    INSTANCE_NAME: z.string().trim().min(1).max(MAX_INSTANCE_NAME_LENGTH).optional(),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
@@ -85,6 +86,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   const e = result.data;
   return {
     version: e.NEWSES_VERSION,
+    instanceName: e.INSTANCE_NAME ?? null,
     databaseUrl: e.DATABASE_URL,
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,
