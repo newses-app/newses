@@ -39,10 +39,11 @@ export function accountOf(profileId?: string): Remembered | null {
 /** The account last signed in on the active profile, so the app can start offline with its store. */
 export const lastAccount = (): Remembered | null => accountOf();
 
-function remember(account: Remembered | null): void {
+function remember(account: Remembered | null, profileId?: string): void {
+  const key = profileKey(ACCOUNT_KEY, profileId);
   try {
-    if (account) localStorage.setItem(profileKey(ACCOUNT_KEY), JSON.stringify(account));
-    else localStorage.removeItem(profileKey(ACCOUNT_KEY));
+    if (account) localStorage.setItem(key, JSON.stringify(account));
+    else localStorage.removeItem(key);
   } catch {
     // Storage blocked: the app cannot start offline.
   }
@@ -80,10 +81,13 @@ export function markFilled(): void {
   if (previous && !previous.filled) remember({ ...previous, filled: true });
 }
 
-/** Notes that the store was emptied on purpose, so the next sync does not report an eviction. */
-export function markEmptied(): void {
-  const previous = lastAccount();
-  if (previous?.filled) remember({ ...previous, filled: false });
+/**
+ * Notes that a profile's store (the active one's unless given) was emptied on purpose, so its next
+ * sync does not report an eviction.
+ */
+export function markEmptied(profileId?: string): void {
+  const previous = accountOf(profileId);
+  if (previous?.filled) remember({ ...previous, filled: false }, profileId);
 }
 
 /** A store that was filled but has no sync token was cleared by the browser (storage pressure, Safari's 7 days). */

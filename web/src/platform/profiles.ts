@@ -1,9 +1,10 @@
 // Moving between the apps' profiles: each starts the app over, on its own server, token, and store.
 import type { Profile } from '@newses/shared';
 import { revokeSession } from '../api.ts';
-import { accountOf, deleteProfileStore } from '../offline/account.ts';
-import { openOfflineDb } from '../offline/db.ts';
-import { storeLeaving } from '../offline/store.ts';
+import { accountOf, deleteProfileStore, markEmptied } from '../offline/account.ts';
+import { type OfflineDb, openOfflineDb } from '../offline/db.ts';
+import { storedBytes } from '../offline/downloads.ts';
+import { clearStore, storeLeaving } from '../offline/store.ts';
 import { bridge, connection } from './index.ts';
 import { forgetProfileKeys } from './profile-keys.ts';
 
@@ -29,18 +30,42 @@ export async function connectTo(serverUrl: string): Promise<void> {
   await switchProfile(profile.id);
 }
 
-/** Changes kept in a profile's store and not yet sent. */
-async function pendingChanges(profile: Profile): Promise<number> {
+/** Reads a profile's store by name, while the app may run on another; null without one. */
+async function readStore<T>(
+  profile: Profile,
+  read: (db: OfflineDb) => Promise<T>,
+): Promise<T | null> {
   const account = accountOf(profile.id);
-  if (!account) return 0;
+  if (!account) return null;
   const db = openOfflineDb(account.name);
   try {
-    return await db.outbox.count();
+    return await read(db);
   } catch {
-    return 0;
+    return null;
   } finally {
     db.close();
   }
+}
+
+/** Changes kept in a profile's store and not yet sent. */
+export const pendingChanges = async (profile: Profile): Promise<number> =>
+  (await readStore(profile, (db) => db.outbox.count())) ?? 0;
+
+/** What a profile's articles and images take on the device; null without a store. */
+export const profileStoredBytes = (profile: Profile): Promise<number | null> =>
+  readStore(profile, storedBytes);
+
+/**
+ * Deletes what a profile keeps for reading offline, changes not yet sent included; it downloads
+ * again when the profile next syncs.
+ */
+export async function clearProfileStore(profile: Profile): Promise<void> {
+  if (profile.id === connection.state.active) {
+    await clearStore();
+    return;
+  }
+  await deleteProfileStore(profile.id);
+  markEmptied(profile.id);
 }
 
 /**

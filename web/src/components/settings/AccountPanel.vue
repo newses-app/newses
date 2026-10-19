@@ -3,13 +3,20 @@ import { mdiDotsVertical, mdiLogout, mdiPlus } from '@mdi/js';
 import type { DesktopOptions, Profile } from '@newses/shared';
 import { MAX_PROFILE_LABEL_LENGTH, profileLabel } from '@newses/shared/client';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useSession } from '../../composables/useSession.ts';
-import { formatRelative } from '../../lib/format.ts';
+import { formatRelative, formatStorage } from '../../lib/format.ts';
+import { syncRequests } from '../../offline/status.ts';
 import { bridge, connection, desktop, NATIVE, updates } from '../../platform/index.ts';
-import { removeProfile, switchProfile } from '../../platform/profiles.ts';
+import {
+  clearProfileStore,
+  pendingChanges,
+  profileStoredBytes,
+  removeProfile,
+  switchProfile,
+} from '../../platform/profiles.ts';
 import { updateSummary } from '../../platform/updates.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import ProfileAvatar from '../profiles/ProfileAvatar.vue';
@@ -41,15 +48,45 @@ async function passwordChanged() {
   await queryClient.invalidateQueries({ queryKey: ['sessions'] });
 }
 
-/** Its server, and whether it is the one in use or signed out. */
-const profileDetails = (profile: Profile) =>
-  [
+/** What each profile's articles and images take on the device; absent without a store. */
+const stored = ref(new Map<string, number>());
+
+async function measure() {
+  const sizes = await Promise.all(
+    connection.state.profiles.map(async (p) => [p.id, await profileStoredBytes(p)] as const),
+  );
+  stored.value = new Map(sizes.filter((entry): entry is [string, number] => entry[1] !== null));
+}
+onMounted(() => {
+  if (NATIVE) void measure();
+});
+
+/** Its server, whether it is the one in use or signed out, and the space it takes. */
+const profileDetails = (profile: Profile) => {
+  const bytes = stored.value.get(profile.id);
+  return [
     new URL(profile.serverUrl).host,
     profile.id === connection.state.active && t('profiles.current'),
     !profile.signedIn && t('profiles.signedOut'),
+    bytes !== undefined && t('profiles.stored', { size: formatStorage(bytes, locale.value) }),
   ]
     .filter(Boolean)
     .join(' · ');
+};
+
+/** Deletes a profile's downloaded articles, which download again when it next syncs. */
+async function clearData(profile: Profile) {
+  const pending = await pendingChanges(profile);
+  const text =
+    pending > 0
+      ? `${t('profiles.clearText')} ${t('offline.clearPending', { n: pending }, pending)}`
+      : t('profiles.clearText');
+  const title = t('profiles.clearTitle', { profile: profileLabel(profile) });
+  if (!(await ui.confirm(title, text, t('profiles.clear')))) return;
+  await clearProfileStore(profile);
+  if (profile.id === connection.state.active) syncRequests.value++;
+  await measure();
+}
 
 const renaming = ref<Profile | null>(null);
 const label = ref('');
@@ -129,6 +166,11 @@ async function revoke(id: number) {
                   @click="switchProfile(profile.id)"
                 />
                 <v-list-item :title="t('profiles.rename')" @click="startRename(profile)" />
+                <v-list-item
+                  v-if="stored.has(profile.id)"
+                  :title="t('profiles.clear')"
+                  @click="clearData(profile)"
+                />
                 <v-list-item :title="t('profiles.remove')" @click="remove(profile)" />
               </v-list>
             </v-menu>

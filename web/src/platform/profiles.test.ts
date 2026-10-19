@@ -141,3 +141,22 @@ describe('removeProfile', () => {
     expect(reload).toHaveBeenCalledOnce();
   });
 });
+
+describe('clearProfileStore', () => {
+  it('deletes another profile’s downloaded articles without reporting an eviction later', async () => {
+    const app = await load();
+    const active = await signedIn(app, 'https://one.example', 1);
+    await app.bridge.setActiveProfile(active.id);
+    await app.connection.load();
+    const other = await signedIn(app, 'https://two.example', 2);
+    app.connection.state.active = other.id;
+    app.markFilled();
+    app.connection.state.active = active.id;
+    expect(await app.profileStoredBytes(other)).toBe(0);
+
+    await app.clearProfileStore(other);
+    expect(await Dexie.exists(other.name)).toBe(false);
+    expect(app.accountOf(other.id)).toMatchObject({ filled: false });
+    expect(await Dexie.exists(active.name)).toBe(true);
+  });
+});

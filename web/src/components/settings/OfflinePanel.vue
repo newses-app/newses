@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { formatRelative } from '../../lib/format.ts';
-import { persisted, requestPersistence } from '../../offline/db.ts';
+import { formatRelative, formatStorage } from '../../lib/format.ts';
+import { persisted, requestPersistence, storageEstimate } from '../../offline/db.ts';
 import {
   LIMIT_CHOICES,
+  limitsOverQuota,
   offlineSettings,
+  profileLimits,
   saveSettings,
   UNREAD_CHOICES,
 } from '../../offline/settings.ts';
@@ -23,7 +25,7 @@ import {
   setOfflineEnabled,
 } from '../../offline/store.ts';
 import { reloadStore } from '../../offline/sync.ts';
-import { bridge, NATIVE } from '../../platform/index.ts';
+import { bridge, connection, NATIVE } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
@@ -61,10 +63,20 @@ const iosBrowser =
     (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1)) &&
   !window.matchMedia('(display-mode: standalone)').matches;
 
+/** In the apps, what every profile's articles take together, approximate in a WebView. */
+const device = ref<{ usage: number; quota: number } | null>(null);
+/** The profiles' limits together pass what the device lets the app keep. */
+const overQuota = computed(
+  () =>
+    device.value !== null &&
+    limitsOverQuota(profileLimits(connection.state.profiles), device.value.quota),
+);
+
 async function refresh() {
   const db = currentStore();
   summary.value = db ? await storeSummary(db).catch(() => null) : null;
   kept.value = await persisted();
+  device.value = NATIVE ? await storageEstimate() : null;
 }
 onMounted(() => void refresh());
 watch(
@@ -75,12 +87,7 @@ watch(
 );
 
 const number = (n: number) => new Intl.NumberFormat(locale.value).format(n);
-const size = (bytes: number) =>
-  new Intl.NumberFormat(locale.value, {
-    style: 'unit',
-    unit: bytes >= 1e9 ? 'gigabyte' : 'megabyte',
-    maximumFractionDigits: 1,
-  }).format(bytes >= 1e9 ? bytes / 1e9 : bytes / 1e6);
+const size = (bytes: number) => formatStorage(bytes, locale.value);
 
 const unreadItems = computed(() =>
   UNREAD_CHOICES.map((n) => ({ value: n, title: t('offline.keepUnread', { n: number(n) }) })),
@@ -208,6 +215,11 @@ async function clear() {
             }}
           </v-list-item-title>
         </v-list-item>
+        <v-list-item v-if="device && connection.state.profiles.length > 1">
+          <v-list-item-title class="text-wrap">
+            {{ t('offline.device', { used: size(device.usage), available: size(device.quota) }) }}
+          </v-list-item-title>
+        </v-list-item>
         <v-list-item v-if="summary && summary.index > 0">
           <v-list-item-title class="text-wrap">
             {{ t('offline.searchIndex', { size: size(summary.index) }) }}
@@ -241,6 +253,9 @@ async function clear() {
           </v-list-item-title>
         </v-list-item>
       </v-list>
+      <v-alert v-if="overQuota" type="warning" variant="tonal" density="compact" class="mb-4">
+        {{ t('offline.overQuota', { size: size(device?.quota ?? 0) }) }}
+      </v-alert>
       <v-alert v-if="iosBrowser" type="info" variant="tonal" density="compact" class="mb-4">
         {{ t('offline.homeScreen') }}
       </v-alert>

@@ -11,6 +11,7 @@ import { installAuthGuard } from './composables/useSession.ts';
 import { api } from './api.ts';
 import { startConnectivity } from './offline/connectivity.ts';
 import { mirrorQueries } from './offline/snapshot.ts';
+import { requestPersistence } from './offline/db.ts';
 import { loadOfflineSettings } from './offline/settings.ts';
 import { currentStore } from './offline/store.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
@@ -30,6 +31,8 @@ trackWindowControls(document.documentElement);
 // The apps' profiles and token come from the shell before anything kept per profile is read.
 await connection.load();
 loadOfflineSettings();
+// The apps keep every profile's articles in one origin; ask that the device keeps them.
+if (NATIVE) void requestPersistence();
 // The last theme shown here, so a reload doesn't flash Original and signed-out screens are themed.
 const appearance = startAppearance();
 // Whether the device has a network, before the first request.

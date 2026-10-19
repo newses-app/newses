@@ -53,6 +53,8 @@
     "backgroundInstall": "Install Newses as an app in Chrome or Edge to sync while it is closed. Until then it syncs while open.",
     "backgroundUnsupported": "This browser syncs only while Newses is open.",
     "clear": "Clear",
+    "device": "All profiles together take {used} of the {available} this device allows the app.",
+    "overQuota": "The storage limits of your profiles add up to more than this device allows the app ({size}). Lower a limit, or the device may delete downloaded articles when space runs low.",
     "clearTitle": "Clear this device?",
     "clearText": "The articles kept on this device are deleted, then downloaded again.",
     "clearPending": "{n} change not yet sent is deleted too. | {n} changes not yet sent are deleted too.",
@@ -121,6 +123,10 @@
     "remove": "Remove",
     "removeTitle": "Remove {profile}?",
     "removeText": "Articles downloaded for it are deleted from this device, and it is signed out.",
+    "stored": "{size} downloaded",
+    "clear": "Remove downloaded data",
+    "clearTitle": "Remove downloaded data for {profile}?",
+    "clearText": "Its articles kept on this device are deleted, and download again when it next syncs.",
     "removePending": "Articles downloaded for it are deleted from this device, and it is signed out. {n} change not yet sent is lost. | Articles downloaded for it are deleted from this device, and it is signed out. {n} changes not yet sent are lost."
   },
   "desktop": {

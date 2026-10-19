@@ -42,3 +42,12 @@ export function safeUrl(url: string | null | undefined): string | null {
     return null;
   }
 }
+
+/** Storage sizes in megabytes, or gigabytes from one. */
+export function formatStorage(bytes: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: bytes >= 1e9 ? 'gigabyte' : 'megabyte',
+    maximumFractionDigits: 1,
+  }).format(bytes >= 1e9 ? bytes / 1e9 : bytes / 1e6);
+}
