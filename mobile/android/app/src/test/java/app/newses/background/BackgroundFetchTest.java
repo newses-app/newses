@@ -39,7 +39,7 @@ public class BackgroundFetchTest {
 
     @Test
     public void followsSyncFromTheStoresTokenAndStagesPagesInOrder() throws Exception {
-        StagedPages pages = new StagedPages(dir, StagedPages.MAX_BYTES);
+        StagedPages pages = new StagedPages(dir, StagedPages.MAX_BYTES, "p1");
         BackgroundFetch.Transport transport = server((request) -> {
             if (request.contains("since=T1")) {
                 return ok("{\"entries\":[{\"id\":1,\"unread\":true},{\"id\":2,\"unread\":false}],\"next\":\"T2\",\"more\":true}");
@@ -62,7 +62,7 @@ public class BackgroundFetchTest {
             ),
             asked
         );
-        List<JSONObject> staged = pages.take();
+        List<JSONObject> staged = pages.take("p1");
         assertEquals(3, staged.size());
         assertEquals("sync", staged.get(0).getString("kind"));
         assertEquals("T1", staged.get(0).getString("since"));
@@ -70,12 +70,12 @@ public class BackgroundFetchTest {
         assertEquals("contents", staged.get(2).getString("kind"));
         assertTrue(staged.get(2).isNull("since"));
         // Taken once.
-        assertEquals(0, pages.take().size());
+        assertEquals(0, pages.take("p1").size());
     }
 
     @Test
     public void stopsWhenSignedOutAndRetriesWhenTheServerFails() throws Exception {
-        StagedPages pages = new StagedPages(dir, StagedPages.MAX_BYTES);
+        StagedPages pages = new StagedPages(dir, StagedPages.MAX_BYTES, "p1");
         BackgroundFetch.Result out = new BackgroundFetch(
             server((request) -> new BackgroundFetch.Response(401, "")),
             pages,
@@ -92,13 +92,13 @@ public class BackgroundFetchTest {
             "t0k"
         ).run("T1");
         assertEquals(BackgroundFetch.Outcome.RETRY, failed.outcome);
-        assertEquals(0, pages.take().size());
+        assertEquals(0, pages.take("p1").size());
     }
 
     @Test
     public void stopsAtTheStagingCapAndCarriesOnFromThere() throws Exception {
         // Room for one page only.
-        StagedPages pages = new StagedPages(dir, 120);
+        StagedPages pages = new StagedPages(dir, 120, "p1");
         BackgroundFetch.Transport transport = server((request) ->
             ok("{\"entries\":[],\"next\":\"" + (request.contains("since=T1") ? "T2" : "T3") + "\",\"more\":true}")
         );
@@ -106,6 +106,27 @@ public class BackgroundFetchTest {
         assertEquals(BackgroundFetch.Outcome.DONE, result.outcome);
         // The second page was not kept, so the next run asks for it again.
         assertEquals("T2", result.syncToken);
-        assertEquals(1, pages.take().size());
+        assertEquals(1, pages.take("p1").size());
+    }
+
+    @Test
+    public void handsPagesOnlyToTheProfileTheyWereFetchedFor() throws Exception {
+        new StagedPages(dir, StagedPages.MAX_BYTES, "p1").add("sync", "T1", "{}");
+        new StagedPages(dir, StagedPages.MAX_BYTES, "p2").add("sync", "T2", "{}");
+        StagedPages taker = new StagedPages(dir, StagedPages.MAX_BYTES, null);
+
+        List<JSONObject> taken = taker.take("p2");
+
+        assertEquals(1, taken.size());
+        assertEquals("T2", taken.get(0).getString("since"));
+        assertTrue(taken.get(0).isNull("profile"));
+        // The other profile's page is gone too: its store cannot take it after a switch.
+        assertEquals(0, taker.take("p1").size());
+    }
+
+    @Test
+    public void handsNothingToAnUnnamedProfile() throws Exception {
+        new StagedPages(dir, StagedPages.MAX_BYTES, null).add("sync", "T1", "{}");
+        assertEquals(0, new StagedPages(dir, StagedPages.MAX_BYTES, null).take(null).size());
     }
 }

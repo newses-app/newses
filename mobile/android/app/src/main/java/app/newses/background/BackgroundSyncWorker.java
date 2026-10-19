@@ -19,8 +19,9 @@ public class BackgroundSyncWorker extends Worker {
         return context.getSharedPreferences("newses-background-sync", Context.MODE_PRIVATE);
     }
 
-    static StagedPages staged(Context context) {
-        return new StagedPages(new File(context.getFilesDir(), "background-sync"), StagedPages.MAX_BYTES);
+    /** Pages fetched for `profile` (null when only taking or clearing them). */
+    static StagedPages staged(Context context, String profile) {
+        return new StagedPages(new File(context.getFilesDir(), "background-sync"), StagedPages.MAX_BYTES, profile);
     }
 
     @NonNull
@@ -37,7 +38,12 @@ public class BackgroundSyncWorker extends Worker {
         }
         try {
             BackgroundFetch.Result result =
-                new BackgroundFetch(new HttpTransport(), staged(context), serverUrl, token).run(syncToken);
+                new BackgroundFetch(
+                    new HttpTransport(),
+                    staged(context, prefs.getString("profileId", null)),
+                    serverUrl,
+                    token
+                ).run(syncToken);
             prefs.edit().putString("syncToken", result.syncToken).apply();
             switch (result.outcome) {
                 case RETRY:

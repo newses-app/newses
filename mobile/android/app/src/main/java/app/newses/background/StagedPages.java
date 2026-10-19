@@ -16,7 +16,8 @@ import org.json.JSONObject;
 
 /**
  * Responses the background job fetched, as files in app storage, in the order fetched, until the
- * web app takes them. Text only, and capped, so a long time closed cannot fill the device.
+ * web app takes them. Text only, and capped, so a long time closed cannot fill the device. Each is
+ * tagged with the profile it was fetched for, so another profile's store never takes it.
  */
 final class StagedPages {
 
@@ -27,10 +28,13 @@ final class StagedPages {
 
     private final File dir;
     private final long maxBytes;
+    /** The profile pages are fetched for; null before the app named one. */
+    private final String profile;
 
-    StagedPages(File dir, long maxBytes) {
+    StagedPages(File dir, long maxBytes, String profile) {
         this.dir = dir;
         this.maxBytes = maxBytes;
+        this.profile = profile;
     }
 
     /** Keeps a page; false (and nothing kept) when it would pass the cap. */
@@ -43,6 +47,7 @@ final class StagedPages {
             byte[] data;
             try {
                 data = new JSONObject()
+                    .put("profile", profile == null ? JSONObject.NULL : profile)
                     .put("kind", kind)
                     .put("since", since == null ? JSONObject.NULL : since)
                     .put("body", body)
@@ -65,14 +70,22 @@ final class StagedPages {
         }
     }
 
-    /** The pages kept, oldest first, removed as they are taken. */
-    List<JSONObject> take() throws IOException {
+    /**
+     * The pages kept for `forProfile`, oldest first; every page is removed, as another profile's
+     * cannot follow this one's store.
+     */
+    List<JSONObject> take(String forProfile) throws IOException {
         synchronized (LOCK) {
             List<JSONObject> pages = new ArrayList<>();
             for (File file : sorted()) {
                 String text = read(file);
                 try {
-                    pages.add(new JSONObject(text));
+                    JSONObject page = new JSONObject(text);
+                    Object tag = page.opt("profile");
+                    if (forProfile != null && forProfile.equals(tag)) {
+                        page.remove("profile");
+                        pages.add(page);
+                    }
                 } catch (JSONException e) {
                     // A damaged page is dropped; the app fetches what it held again.
                 }

@@ -46,11 +46,11 @@ const profiles = createProfiles(
   ),
 );
 
-/** The active profile's server and token, for the background job. */
+/** The active profile, its server, and its token, for the background job. */
 async function activeConnection() {
   const { profiles: list, active } = await profiles.list();
   const serverUrl = list.find((p) => p.id === active)?.serverUrl ?? null;
-  return { serverUrl, token: serverUrl ? await profiles.getToken() : null };
+  return { profileId: active, serverUrl, token: serverUrl ? await profiles.getToken() : null };
 }
 
 /** The app's own plugin (android/…/ShareTargetPlugin.java): text from the share sheet. */
@@ -70,10 +70,12 @@ const BackgroundSync = registerPlugin<{
     enabled: boolean;
     wifiOnly: boolean;
     syncToken: string | null;
+    profileId: string | null;
     serverUrl: string | null;
     token: string | null;
   }): Promise<void>;
-  take(): Promise<{ pages: StagedPage[] }>;
+  /** Pages fetched for the profile; any other profile's are dropped. */
+  take(options: { profileId: string | null }): Promise<{ pages: StagedPage[] }>;
 }>('BackgroundSync');
 
 /** Shares wait here until the web app sets its handler. */
@@ -206,9 +208,12 @@ const bridge: PlatformBridge = {
   setBackgroundSync: async (options) =>
     BackgroundSync.configure({
       ...options,
-      ...(options.enabled ? await activeConnection() : { serverUrl: null, token: null }),
+      ...(options.enabled
+        ? await activeConnection()
+        : { profileId: null, serverUrl: null, token: null }),
     }),
-  takeBackgroundSync: async () => (await BackgroundSync.take()).pages,
+  takeBackgroundSync: async () =>
+    (await BackgroundSync.take({ profileId: (await profiles.list()).active })).pages,
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: (handler) => {
