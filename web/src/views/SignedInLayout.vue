@@ -6,6 +6,7 @@ import { api } from '../api.ts';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
+import FeedDebugDialog from '../components/dialogs/FeedDebugDialog.vue';
 import NoteConflictDialog from '../components/dialogs/NoteConflictDialog.vue';
 import NoteDialog from '../components/dialogs/NoteDialog.vue';
 import PublishDialog from '../components/dialogs/PublishDialog.vue';
@@ -107,6 +108,7 @@ useShortcutListener((action) => {
   <PublishDialog />
   <SharedLinkDialog />
   <EditFeedDialog />
+  <FeedDebugDialog />
   <NoteDialog />
   <ScoreDialog />
   <EntryLabelsDialog />

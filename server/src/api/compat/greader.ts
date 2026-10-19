@@ -81,31 +81,36 @@ export const greaderRoutes: FastifyPluginAsync<GreaderRoutesOptions> = (
     done();
   });
 
-  // POST only: a password in a query string would be written to request logs.
-  app.post('/accounts/ClientLogin', async (request, reply) => {
-    const params = readerParams(request);
-    const login = params.get('Email') ?? '';
-    const password = params.get('Passwd') ?? '';
-    try {
-      if (!login || !password) throw new DomainError('invalid_credentials', 'Missing credentials');
-      const { token, user, session } = await openAppSession(
-        request,
-        services.auth,
-        login,
-        password,
-      );
-      if (user.passwordChangeRequired) {
-        await services.sessions.revoke(user.id, session.id);
-        return await text(reply, 403, 'Error=PasswordChangeRequired\n');
+  // POST only; a password some clients still put in the query string is redacted from logs.
+  app.post(
+    '/accounts/ClientLogin',
+    { config: { logSecrets: ['Passwd'] } },
+    async (request, reply) => {
+      const params = readerParams(request);
+      const login = params.get('Email') ?? '';
+      const password = params.get('Passwd') ?? '';
+      try {
+        if (!login || !password)
+          throw new DomainError('invalid_credentials', 'Missing credentials');
+        const { token, user, session } = await openAppSession(
+          request,
+          services.auth,
+          login,
+          password,
+        );
+        if (user.passwordChangeRequired) {
+          await services.sessions.revoke(user.id, session.id);
+          return await text(reply, 403, 'Error=PasswordChangeRequired\n');
+        }
+        return await text(reply, 200, `SID=${token}\nLSID=null\nAuth=${token}\n`);
+      } catch (err) {
+        if (!(err instanceof DomainError)) throw err;
+        if (err instanceof ThrottledError)
+          void reply.header('retry-after', String(err.retryAfterSeconds));
+        return text(reply, 401, 'Error=BadAuthentication\n');
       }
-      return await text(reply, 200, `SID=${token}\nLSID=null\nAuth=${token}\n`);
-    } catch (err) {
-      if (!(err instanceof DomainError)) throw err;
-      if (err instanceof ThrottledError)
-        void reply.header('retry-after', String(err.retryAfterSeconds));
-      return text(reply, 401, 'Error=BadAuthentication\n');
-    }
-  });
+    },
+  );
 
   void app.register(
     (reader, _opts, done) => {

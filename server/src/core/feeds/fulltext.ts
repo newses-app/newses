@@ -2,13 +2,13 @@ import { Readability } from '@mozilla/readability';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { parseHTML } from 'linkedom';
 import type { Db } from '../../db/client.ts';
-import { entries, fetchHosts, userEntries } from '../../db/schema.ts';
+import { entries, userEntries } from '../../db/schema.ts';
 import { DomainError } from '../errors.ts';
 import type { Jobs } from '../jobs.ts';
 import type { JobQueue, Logger } from '../ports.ts';
+import type { UserRateLimiter } from '../rate-limit.ts';
 import { decodeBody } from './decode.ts';
 import { looksLikeHtml } from './discover.ts';
-import type { HostLimiter } from './host-limiter.ts';
 import { type Fetcher, FetchError } from './http.ts';
 import { sanitizeContent, sanitizeTitle } from './sanitize.ts';
 
@@ -19,10 +19,12 @@ const MAX_PAGE_BYTES = 5 * 1024 * 1024;
 
 export interface FullTextDeps {
   db: Db;
+  /** Polite: within the per-host limits and host pauses. */
   fetcher: Fetcher;
-  hosts: HostLimiter;
   queue: JobQueue<Jobs>;
   logger: Logger;
+  /** Rate limits users' on-demand extractions. */
+  limits: UserRateLimiter;
 }
 
 /** What a page says about its article, sanitised; each null when the page does not say. */
@@ -62,24 +64,22 @@ export interface Page {
 }
 
 /**
- * Fetches an HTML page within the per-host limits, unless its host asked to wait. Throws a
- * DomainError: `fetch_failed` (paused host, failed fetch) or `feed_not_found` (not a web page).
+ * Fetches an HTML page through the polite fetcher. Throws a DomainError: `fetch_failed` (paused
+ * host, failed fetch) or `feed_not_found` (not a web page).
  */
 export async function fetchPage(
-  { db, fetcher, hosts }: Pick<FullTextDeps, 'db' | 'fetcher' | 'hosts'>,
+  { fetcher }: Pick<FullTextDeps, 'fetcher'>,
   url: string,
   purpose: 'fulltext' | 'page',
 ): Promise<Page> {
-  const host = new URL(url).host;
-  const [paused] = await db
-    .select({ host: fetchHosts.host })
-    .from(fetchHosts)
-    .where(and(eq(fetchHosts.host, host), sql`${fetchHosts.blockedUntil} > now()`));
-  if (paused) throw new DomainError('fetch_failed', 'The site asked to wait before more requests');
-  const page = await hosts
-    .run(host, () => fetcher.fetch(url, { purpose, accept: 'text/html', maxBytes: MAX_PAGE_BYTES }))
+  const page = await fetcher
+    .fetch(url, { purpose, accept: 'text/html', maxBytes: MAX_PAGE_BYTES })
     .catch((err: unknown) => {
-      throw err instanceof FetchError ? new DomainError('fetch_failed', err.message) : err;
+      if (!(err instanceof FetchError)) throw err;
+      throw new DomainError(
+        'fetch_failed',
+        err.code === 'host_blocked' ? 'The site asked to wait before more requests' : err.message,
+      );
     });
   const html = decodeBody(page.body, page.contentType);
   if (!looksLikeHtml(html, page.contentType))
@@ -95,14 +95,14 @@ export async function fetchPage(
 export class FullTextService {
   readonly #db: Db;
   readonly #fetcher: Fetcher;
-  readonly #hosts: HostLimiter;
   readonly #queue: JobQueue<Jobs>;
   readonly #logger: Logger;
+  readonly #limits: UserRateLimiter;
 
   constructor(deps: FullTextDeps) {
+    this.#limits = deps.limits;
     this.#db = deps.db;
     this.#fetcher = deps.fetcher;
-    this.#hosts = deps.hosts;
     this.#queue = deps.queue;
     this.#logger = deps.logger;
   }
@@ -145,7 +145,9 @@ export class FullTextService {
       .innerJoin(entries, eq(entries.id, userEntries.entryId))
       .where(and(eq(userEntries.id, userEntryId), eq(userEntries.userId, userId)));
     if (!row) throw new DomainError('not_found', 'Entry not found');
-    return row.fullContent ?? (await this.#extract(row.entryId));
+    if (row.fullContent !== null) return row.fullContent;
+    await this.#limits.take(userId, 'fulltext');
+    return this.#extract(row.entryId);
   }
 
   /** Fetches and extracts the entry's page, recording the result or the failure. */
@@ -157,11 +159,7 @@ export class FullTextService {
     try {
       if (!entry?.link || !/^https?:\/\//i.test(entry.link))
         throw new DomainError('invalid_input', 'The article has no web address');
-      const page = await fetchPage(
-        { db: this.#db, fetcher: this.#fetcher, hosts: this.#hosts },
-        entry.link,
-        'fulltext',
-      );
+      const page = await fetchPage({ fetcher: this.#fetcher }, entry.link, 'fulltext');
       const content = extractArticle(page.html, page.url);
       if (!content) throw new DomainError('feed_not_found', 'No article found on the page');
       await this.#db

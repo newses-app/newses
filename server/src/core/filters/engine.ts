@@ -150,6 +150,17 @@ export class FilterSet {
     return matched !== definition.inverse;
   }
 
+  /** Ids of the filters that apply to `subject`, in order, up to one that says stop. */
+  matching(subject: FilterSubject): number[] {
+    const ids: number[] = [];
+    for (const filter of this.#filters) {
+      if (!FilterSet.#matches(filter, subject)) continue;
+      ids.push(filter.definition.id);
+      if (filter.definition.actions.some((action) => action.type === 'stop')) break;
+    }
+    return ids;
+  }
+
   /** The actions of the filters matching `subject`, combined; null when none matches. */
   plan(subject: FilterSubject): FilterPlan | null {
     let plan: FilterPlan | null = null;

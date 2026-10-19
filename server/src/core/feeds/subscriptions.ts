@@ -2,7 +2,8 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { categories, feedSources, subscriptions } from '../../db/schema.ts';
 import { isUniqueViolation } from '../db-errors.ts';
-import { DomainError } from '../errors.ts';
+import { DomainError, ThrottledError } from '../errors.ts';
+import type { UserRateLimiter } from '../rate-limit.ts';
 import { decodeBody } from './decode.ts';
 import { discoverFeeds, type FeedCandidate, looksLikeHtml } from './discover.ts';
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
@@ -44,16 +45,26 @@ export class SubscriptionService {
   readonly #fetcher: Fetcher;
   readonly #ingester: Ingester | undefined;
   readonly #updater: FeedUpdater | undefined;
+  readonly #limits: UserRateLimiter | undefined;
 
   /**
    * With an ingester, subscribing to an already-fetched feed delivers its existing entries. With an
-   * updater, a new feed's entries are ingested from the fetch that validated it.
+   * updater, a new feed's entries are ingested from the fetch that validated it. With limits,
+   * each user's subscribes to new feeds are rate limited.
    */
-  constructor(db: Db, fetcher: Fetcher, ingester?: Ingester, updater?: FeedUpdater) {
-    this.#db = db;
-    this.#fetcher = fetcher;
-    this.#ingester = ingester;
-    this.#updater = updater;
+  constructor(deps: {
+    db: Db;
+    /** Polite: within the per-host limits and host pauses. */
+    fetcher: Fetcher;
+    ingester?: Ingester;
+    updater?: FeedUpdater;
+    limits?: UserRateLimiter;
+  }) {
+    this.#db = deps.db;
+    this.#fetcher = deps.fetcher;
+    this.#ingester = deps.ingester;
+    this.#updater = deps.updater;
+    this.#limits = deps.limits;
   }
 
   /**
@@ -74,6 +85,8 @@ export class SubscriptionService {
       return { status: 'subscribed', subscription: await this.get(userId, view.subscription.id) };
     }
 
+    // Once per subscribe, though discovery may fetch twice.
+    await this.#limits?.take(userId, 'subscribe');
     const resolved = await this.#resolve(url, true);
     if (resolved.kind === 'choose') return { status: 'choose', candidates: resolved.candidates };
     const source = await this.#upsertSource(
@@ -272,5 +285,10 @@ function fetchFailure(url: string, err: unknown): DomainError {
     case 'timeout':
     case 'network':
       return new DomainError('fetch_failed', `Could not connect to ${url}`);
+    case 'host_blocked':
+      return new ThrottledError(
+        err.retryAfterSeconds ?? 60,
+        'The site asked to wait before more requests',
+      );
   }
 }

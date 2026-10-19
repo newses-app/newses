@@ -79,6 +79,17 @@ describe('filter engine', () => {
     );
   });
 
+  it('names the filters that apply, in order, until one stops', () => {
+    const tagged = filter([rule()], [{ type: 'tag', tag: 'rust' }]);
+    const other = filter([rule({ pattern: 'python' })]);
+    const stopping = filter([rule({ field: 'author', pattern: 'ann' })], [{ type: 'stop' }]);
+    const after = filter([rule()]);
+    expect(new FilterSet([tagged, other, stopping, after], parents).matching(subject())).toEqual([
+      tagged.id,
+      stopping.id,
+    ]);
+  });
+
   it('combines the actions of matching filters in order, until one stops', () => {
     const set = new FilterSet(
       [

@@ -1,6 +1,7 @@
 import {
   categorySchema,
   createCategoryRequestSchema,
+  feedDebugSchema,
   opmlImportResultSchema,
   subscribeRequestSchema,
   subscribeResponseSchema,
@@ -21,7 +22,7 @@ const OPML_TYPES = ['application/xml', 'text/xml', 'text/x-opml', 'application/x
 
 export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
   app,
-  { categories, subscriptions, opml, updater, favicons, fullText },
+  { categories, subscriptions, opml, updater, favicons, fullText, feedDebugger },
 ) => {
   app.addHook('preHandler', requireUser);
 
@@ -159,6 +160,12 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
       await updater.refresh(requireAuth(request).user.id, request.params.id);
       return reply.code(202).send();
     },
+  );
+
+  app.post(
+    '/subscriptions/:id/debug',
+    { schema: { params: idParams, response: { 200: feedDebugSchema } } },
+    (request) => feedDebugger.debug(requireAuth(request).user.id, request.params.id),
   );
 
   app.get(

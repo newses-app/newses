@@ -18,6 +18,8 @@ import { scheduleOpsFlush, trackRun } from './tracking.ts';
 
 /** How long one daily archive compaction may run; the rest waits for the next day. */
 const ARCHIVE_COMPACT_BUDGET_MS = 10 * 60 * 1000;
+/** How long one run may spend keeping kept entries' images. */
+const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
 
 const { config, logger, pool, onShutdown } = createRuntime('worker');
 const db = createDb(pool);
@@ -84,6 +86,10 @@ task('feeds.dispatch', 60, async () => {
   const dispatched = await feeds.updater.dispatchDue();
   if (dispatched > 0) logger.debug({ dispatched }, 'Dispatched feed fetches');
 });
+task('images.keep', 5 * 60, async () => {
+  const kept = await feeds.images.keep(IMAGES_KEEP_BUDGET_MS);
+  if (kept.indexed + kept.fetched > 0) logger.debug(kept, 'Kept images of kept entries');
+});
 task('feeds.purge', 6 * 60 * 60, async () => {
   logger.info(await feeds.purger.purge(), 'Purged old entries');
   logger.info({ images: await feeds.images.purge() }, 'Purged cached images');
@@ -93,6 +99,7 @@ task('feeds.purge', 6 * 60 * 60, async () => {
 task('auth.prune', 60 * 60, async () => {
   await sessions.pruneExpired();
   await throttle.prune();
+  await feeds.rateLimits.prune();
 });
 // Statistics are flushed first, so the rules see the latest counts.
 task('ops.check', 5 * 60, async () => {

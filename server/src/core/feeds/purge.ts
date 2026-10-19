@@ -22,6 +22,14 @@ export const KEPT_ENTRY = sql`(ue.starred OR ue.published OR ue.note IS NOT NULL
   OR ue.share_id IS NOT NULL
   OR EXISTS (SELECT 1 FROM entry_labels el WHERE el.user_entry_id = ue.id))`;
 
+/**
+ * Ids of entries some user keeps, as KEPT_ENTRY says, in a form the kept-entry indexes serve; a
+ * parenthesised subquery.
+ */
+export const KEPT_ENTRY_IDS = sql`(SELECT ue.entry_id FROM user_entries ue
+  WHERE ue.starred OR ue.published OR ue.note IS NOT NULL OR ue.share_id IS NOT NULL
+  UNION SELECT ue.entry_id FROM entry_labels el JOIN user_entries ue ON ue.id = el.user_entry_id)`;
+
 const UNREFERENCED = sql`NOT EXISTS (SELECT 1 FROM user_entries ue WHERE ue.entry_id = e.id)`;
 
 /** Entries (`e`) nobody references that have been absent from their feed for the grace period. */
@@ -140,7 +148,9 @@ export class Purger {
       this.#blobs,
       sources.rows.map((row) => row.favicon_key),
     );
-    await this.#db.execute(sql`DELETE FROM fetch_hosts WHERE blocked_until < now()`);
+    await this.#db.execute(sql`
+      DELETE FROM fetch_hosts
+      WHERE coalesce(blocked_until, '-infinity') < now() AND coalesce(leased_until, '-infinity') < now()`);
 
     return {
       userEntries: (userEntries.rowCount ?? 0) + (unsubscribed.rowCount ?? 0),

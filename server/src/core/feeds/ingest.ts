@@ -16,7 +16,7 @@ export interface IngestResult {
 }
 
 /** At most this many entries are taken from one document, newest first by position. */
-const MAX_ENTRIES_PER_FETCH = 500;
+export const MAX_ENTRIES_PER_FETCH = 500;
 
 /**
  * GUID prefix of entries imported from TTRSS, whose own GUIDs are not the feed's. The first
@@ -26,7 +26,7 @@ export const IMPORTED_GUID_PREFIX = 'ttrss:';
 
 export const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
-interface PreparedEntry {
+export interface PreparedEntry {
   guid: string;
   link: string | null;
   title: string | null;
@@ -39,7 +39,8 @@ interface PreparedEntry {
   enclosures: ParsedEntry['enclosures'];
 }
 
-function prepare(entry: ParsedEntry, siteUrl: string | null): PreparedEntry | null {
+/** An entry as ingest stores it: sanitised, with a GUID; null when nothing identifies it. */
+export function prepare(entry: ParsedEntry, siteUrl: string | null): PreparedEntry | null {
   const title = sanitizeTitle(entry.title);
   const content = entry.content
     ? sanitizeContent(entry.content, entry.link ?? siteUrl) || null

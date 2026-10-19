@@ -53,6 +53,7 @@ const SUBSCRIBE_CODES: Partial<Record<DomainError['code'], number>> = {
   invalid_input: 2,
   feed_not_found: 3,
   fetch_failed: 5,
+  throttled: 5,
 };
 
 // Clients send numbers and booleans as JSON values or as strings.
@@ -733,6 +734,7 @@ export function ttrssConfig({ feeds }: Pick<TtrssDeps, 'feeds'>) {
 export const feedIconRoutes: FastifyPluginAsync<Pick<TtrssDeps, 'feeds'>> = (app, { feeds }) => {
   app.get<{ Params: { token: string; file: string } }>(
     `/${ICONS_PATH}/:token/:file`,
+    { config: { logSecrets: ['token'] } },
     async (request, reply) => {
       const userId = feeds.iconTokens.userOf(request.params.token);
       const id = /^(\d+)\.ico$/.exec(request.params.file)?.[1];

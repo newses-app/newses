@@ -3,13 +3,13 @@ import type { Db } from '../../db/client.ts';
 import { plainTextToHtml } from '../entries/text.ts';
 import { DomainError } from '../errors.ts';
 import type { Logger, Realtime } from '../ports.ts';
+import type { UserRateLimiter } from '../rate-limit.ts';
 import { type Article, fetchPage, readArticle } from './fulltext.ts';
-import type { HostLimiter } from './host-limiter.ts';
 import type { Fetcher } from './http.ts';
 import { sha256 } from './ingest.ts';
 import { pageGuid, pagesSourceId } from './pages.ts';
 import { sanitizeContent, sanitizeTitle } from './sanitize.ts';
-import { normalizePageUrl } from './url.ts';
+import { hostOf, normalizePageUrl } from './url.ts';
 
 export interface PublishPageInput {
   url: string;
@@ -20,10 +20,12 @@ export interface PublishPageInput {
 
 export interface PublishedPageDeps {
   db: Db;
+  /** Polite: within the per-host limits and host pauses. */
   fetcher: Fetcher;
-  hosts: HostLimiter;
   realtime: Realtime;
   logger: Logger;
+  /** Rate limits reading pages for users; past the limit, pages are published unread. */
+  limits: UserRateLimiter;
 }
 
 interface Stored extends Record<string, unknown> {
@@ -56,7 +58,10 @@ export class PublishedPageService {
     const title = sanitizeTitle(input.title ?? null);
     const text = input.text ? plainTextToHtml(input.text) : null;
     const content = text ? sanitizeContent(text, url) || null : null;
-    const read = title === null || content === null ? await this.#read(url) : null;
+    const read =
+      (title === null || content === null) && (await this.#deps.limits.tryTake(userId, 'page'))
+        ? await this.#read(url)
+        : null;
 
     const id = await db.transaction(async (tx) => {
       const sourceId = await pagesSourceId(tx);
@@ -106,8 +111,9 @@ export class PublishedPageService {
       const page = await fetchPage(this.#deps, url, 'page');
       return readArticle(page.html, page.url);
     } catch (err) {
-      if (err instanceof DomainError) logger.debug({ url, err: err.message }, 'Page not read');
-      else logger.warn({ url, err }, 'Page not read');
+      // Page URLs reach the logs only at debug.
+      if (!(err instanceof DomainError)) logger.warn({ host: hostOf(url), err }, 'Page not read');
+      logger.debug({ url, err: err instanceof Error ? err.message : err }, 'Page not read');
       return null;
     }
   }

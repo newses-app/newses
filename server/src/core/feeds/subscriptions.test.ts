@@ -25,7 +25,7 @@ beforeEach(async () => {
   await db.delete(users);
   await db.delete(feedSources);
   fetcher = new FakeFetcher();
-  service = new SubscriptionService(db, fetcher);
+  service = new SubscriptionService({ db, fetcher });
   const [user] = await db.insert(users).values({ login: 'alice', passwordHash: 'x' }).returning();
   userId = user?.id ?? 0;
 });

@@ -51,6 +51,7 @@ import {
   registerRequestDiagnostics,
   type RequestDiagnosticsOptions,
 } from './request-diagnostics.ts';
+import { RequestLogController, requestLogger } from './request-log.ts';
 import { registerWeb } from './web.ts';
 
 export type HealthCheck = () => Promise<void>;
@@ -106,7 +107,8 @@ const trustProxy = (trust: boolean | number | string) =>
 /** Builds the HTTP app without listening, so it can be mounted by listen() or a Lambda adapter. */
 export function buildApp(deps: AppDeps) {
   const app = Fastify({
-    loggerInstance: deps.logger,
+    loggerInstance: requestLogger(deps.logger),
+    logController: new RequestLogController(),
     // Proxied image paths carry the encoded image URL.
     routerOptions: { maxParamLength: 8192 },
     trustProxy: trustProxy(deps.trustProxy ?? false),

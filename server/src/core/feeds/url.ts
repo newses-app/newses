@@ -44,3 +44,15 @@ export function httpUrl(input: string | null | undefined, base?: string | null):
     return null;
   }
 }
+
+/**
+ * The host (and port) of a URL, as host pauses and limits key it, or `invalid`. Logs and traces
+ * show only this: paths and queries of feed URLs may carry private tokens.
+ */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return 'invalid';
+  }
+}

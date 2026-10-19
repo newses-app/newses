@@ -6,9 +6,8 @@ import { sign, verify } from '../crypto.ts';
 import { feedSources, subscriptions } from '../../db/schema.ts';
 import type { Blob, BlobStore, Logger } from '../ports.ts';
 import { decodeBody } from './decode.ts';
-import type { HostLimiter } from './host-limiter.ts';
 import { imageContentType } from './image-type.ts';
-import type { Fetcher, FetchRequest, FetchResult } from './http.ts';
+import { type Fetcher, FetchError, type FetchRequest, type FetchResult } from './http.ts';
 
 const MAX_ICON_BYTES = 256 * 1024;
 /** Icon links sit in <head>, so the rest of a large page is not downloaded. */
@@ -63,22 +62,26 @@ export function iconCandidates(html: string, pageUrl: string): string[] {
   return [...new Set(found)];
 }
 
+const isHostBlocked = (err: unknown) => err instanceof FetchError && err.code === 'host_blocked';
+
 export class FaviconService {
   readonly #db: Db;
   readonly #fetcher: Fetcher;
   readonly #blobs: BlobStore;
   readonly #logger: Logger;
-  readonly #hosts: HostLimiter;
 
-  constructor(db: Db, fetcher: Fetcher, blobs: BlobStore, logger: Logger, hosts: HostLimiter) {
+  /** `fetcher` is polite: within the per-host limits and host pauses. */
+  constructor(db: Db, fetcher: Fetcher, blobs: BlobStore, logger: Logger) {
     this.#db = db;
     this.#fetcher = fetcher;
     this.#blobs = blobs;
     this.#logger = logger;
-    this.#hosts = hosts;
   }
 
-  /** Finds and stores the site's icon. Failures leave the previous icon and are retried later. */
+  /**
+   * Finds and stores the site's icon. Failures leave the previous icon and are retried later; a
+   * paused site is left unchecked, so the next fetch of its feed asks again.
+   */
   async refresh(feedSourceId: number): Promise<void> {
     const [source] = await this.#db
       .select()
@@ -89,7 +92,13 @@ export class FaviconService {
     // A sibling's icon is shared, not copied.
     let key = sibling ? sibling.faviconKey : null;
     if (!sibling) {
-      const icon = await this.#download(feedSourceId, source.siteUrl);
+      let icon: Blob | null;
+      try {
+        icon = await this.#download(feedSourceId, source.siteUrl);
+      } catch (err) {
+        if (isHostBlocked(err)) return;
+        throw err;
+      }
       if (icon) {
         key = faviconKey(icon);
         await this.#blobs.put(key, icon);
@@ -120,9 +129,7 @@ export class FaviconService {
   }
 
   #fetch(url: string, request: FetchRequest): Promise<FetchResult> {
-    return this.#hosts.run(new URL(url).host, () =>
-      this.#fetcher.fetch(url, { ...request, purpose: 'favicon' }),
-    );
+    return this.#fetcher.fetch(url, { ...request, purpose: 'favicon' });
   }
 
   async #download(feedSourceId: number, siteUrl: string): Promise<Blob | null> {
@@ -135,6 +142,7 @@ export class FaviconService {
       });
       candidates = iconCandidates(decodeBody(page.body, page.contentType), page.url);
     } catch (err) {
+      if (isHostBlocked(err)) throw err;
       this.#logger.debug({ err, feedSourceId }, 'Favicon page fetch failed');
     }
 
@@ -149,7 +157,8 @@ export class FaviconService {
         ) {
           return { data: response.body, contentType };
         }
-      } catch {
+      } catch (err) {
+        if (isHostBlocked(err)) throw err;
         // Try the next candidate.
       }
     }

@@ -33,6 +33,8 @@ export const useUiStore = defineStore('ui', () => {
   /** Fills in the publish dialog when it opens. */
   const publishDraft = ref<PublishDraft | null>(null);
   const editSubscriptionId = ref<number | null>(null);
+  /** The subscription whose feed the debugger fetches. */
+  const debugSubscriptionId = ref<number | null>(null);
   /** The entry whose note is being edited. */
   const noteEntry = ref<Entry | null>(null);
   /** The entry whose score is being set. */
@@ -75,6 +77,7 @@ export const useUiStore = defineStore('ui', () => {
     publishOpen,
     publishDraft,
     editSubscriptionId,
+    debugSubscriptionId,
     noteEntry,
     scoreEntry,
     labelsEntry,

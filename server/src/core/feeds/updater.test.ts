@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import {
   feedSources,
@@ -219,10 +219,17 @@ describe('FeedUpdater.update', () => {
 
   it('adopts the URL of a permanent redirect unless another source has it', async () => {
     const moved = 'https://new.example/rss';
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    feeds = createFeedServices(testFeedDeps(db, fetcher, { queue, logger }));
     fetcher.set(URL_A, { body: rss('A'), redirectTo: moved, permanent: true });
     const created = await addSource(URL_A);
     await feeds.updater.update(created.id);
     expect((await source(created.id)).url).toBe(moved);
+    // Feed URLs are logged only at debug.
+    const moves = { feedSourceId: created.id, from: 'a.example', to: 'new.example' };
+    expect(logger.info).toHaveBeenCalledWith(moves, 'Feed moved');
+    expect(JSON.stringify(logger.info.mock.calls)).not.toContain(URL_A);
+    expect(logger.debug).toHaveBeenCalledWith({ ...moves, from: URL_A, to: moved }, 'Feed moved');
 
     const other = await addSource('https://old.example/rss');
     fetcher.set('https://old.example/rss', { body: rss('A'), redirectTo: moved, permanent: true });
@@ -425,5 +432,100 @@ describe('FeedUpdater.reschedule', () => {
     await db.insert(userPrefs).values({ userId, key: 'updateIntervalMinutes', value: 240 });
     await feeds.updater.rescheduleUser(userId);
     expect((await source(created.id)).fetchIntervalSeconds).toBe(4 * 3600);
+  });
+});
+
+describe('FeedUpdater.updateMany', () => {
+  /** Answers after a delay, recording the most requests to one host in flight at once. */
+  class SlowFetcher extends FakeFetcher {
+    inFlight = 0;
+    peak = 0;
+    override async fetch(...args: Parameters<FakeFetcher['fetch']>) {
+      this.inFlight += 1;
+      this.peak = Math.max(this.peak, this.inFlight);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return await super.fetch(...args);
+      } finally {
+        this.inFlight -= 1;
+      }
+    }
+  }
+
+  async function lease() {
+    const [row] = await db.select().from(fetchHosts).where(eq(fetchHosts.host, 'many.example'));
+    return row;
+  }
+
+  it("never lets two processes work through a host's feeds at once", async () => {
+    const slow = new SlowFetcher();
+    const sources = [];
+    for (const n of [1, 2, 3, 4]) {
+      const url = `https://many.example/${String(n)}`;
+      slow.set(url, { body: rss(`Feed ${String(n)}`) });
+      sources.push(await addSource(url));
+    }
+    const ids = sources.map((s) => s.id);
+    // Two processes, each with its own in-process limiter.
+    const first = createFeedServices(testFeedDeps(db, slow, { queue }));
+    const second = createFeedServices(testFeedDeps(db, slow, { queue }));
+    await Promise.all([
+      first.updater.updateMany(ids.slice(0, 2)),
+      second.updater.updateMany(ids.slice(2)),
+    ]);
+    expect(slow.peak).toBe(1);
+    // The job that found the host held waits, its sources still claimed.
+    expect(slow.requested).toHaveLength(2);
+    expect(queue.jobs).toContainEqual(
+      expect.objectContaining({ name: 'feed.fetch', key: 'many.example', delaySeconds: 60 }),
+    );
+    const waiting = (queue.jobs.find((j) => j.name === 'feed.fetch')?.data ?? {}) as {
+      feedSourceIds: number[];
+    };
+    for (const id of waiting.feedSourceIds)
+      expect(secondsUntil((await source(id)).nextFetchAt)).toBeGreaterThan(14 * 60);
+    // The finished job let go of the host.
+    expect((await lease())?.leaseId).toBeNull();
+  });
+
+  it('takes over a lease its holder let lapse', async () => {
+    const created = await addSource('https://many.example/1');
+    fetcher.set('https://many.example/1', { body: rss('A') });
+    await db.insert(fetchHosts).values({
+      host: 'many.example',
+      leaseId: '00000000-0000-4000-8000-000000000000',
+      leasedUntil: new Date(Date.now() - 1000),
+    });
+    await feeds.updater.updateMany([created.id]);
+    expect(fetcher.requested).toEqual(['https://many.example/1']);
+    expect((await lease())?.leaseId).toBeNull();
+  });
+
+  it('leaves sources due when another job already waits for the host', async () => {
+    const created = await addSource('https://many.example/1');
+    await db.insert(fetchHosts).values({
+      host: 'many.example',
+      leaseId: '00000000-0000-4000-8000-000000000000',
+      leasedUntil: new Date(Date.now() + 60_000),
+    });
+    await queue.enqueue('feed.fetch', { feedSourceIds: [created.id] }, { key: 'many.example' });
+    await feeds.updater.updateMany([created.id]);
+    expect(fetcher.requested).toEqual([]);
+    expect(secondsUntil((await source(created.id)).nextFetchAt)).toBeLessThanOrEqual(0);
+  });
+
+  it("keeps a host's pause while holding its lease", async () => {
+    const created = await addSource('https://many.example/1');
+    fetcher.set('https://many.example/1', { body: rss('A') });
+    await db.insert(fetchHosts).values({
+      host: 'many.example',
+      blockedUntil: new Date(Date.now() + 600_000),
+    });
+    await feeds.updater.updateMany([created.id]);
+    expect(fetcher.requested).toEqual([]);
+    const row = await lease();
+    expect(row?.blockedUntil?.getTime()).toBeGreaterThan(Date.now());
+    expect(row?.leaseId).toBeNull();
+    expect((await source(created.id)).errorCount).toBe(0);
   });
 });

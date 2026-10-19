@@ -13,7 +13,9 @@ export type FetchErrorCode =
   | 'too_large'
   | 'timeout'
   | 'http_status'
-  | 'network';
+  | 'network'
+  /** The host asked to wait (HTTP 429, or 503 with Retry-After); nothing was requested. */
+  | 'host_blocked';
 
 export class FetchError extends Error {
   override name = 'FetchError';
@@ -21,16 +23,24 @@ export class FetchError extends Error {
   readonly status: number | null;
   /** Seconds from a Retry-After header, when the server sent one. */
   readonly retryAfterSeconds: number | null;
+  /** The URL that answered with `status`, after redirects; null when no response came. */
+  readonly url: string | null;
 
   constructor(
     code: FetchErrorCode,
     message: string,
-    details: { status?: number; retryAfterSeconds?: number | null; cause?: unknown } = {},
+    details: {
+      status?: number;
+      retryAfterSeconds?: number | null;
+      url?: string;
+      cause?: unknown;
+    } = {},
   ) {
     super(message, { cause: details.cause });
     this.code = code;
     this.status = details.status ?? null;
     this.retryAfterSeconds = details.retryAfterSeconds ?? null;
+    this.url = details.url ?? null;
   }
 }
 
@@ -46,6 +56,11 @@ export interface FetchRequest {
   maxBytes?: number;
   /** Returns the first `maxBytes` of a larger body instead of failing. */
   truncate?: boolean;
+  /**
+   * Returns non-2xx responses with their body instead of failing, except a host asking to wait
+   * (HTTP 429, or 503 with Retry-After), so callers can show what the host answered.
+   */
+  anyStatus?: boolean;
 }
 
 export interface FetchResult {
@@ -60,6 +75,8 @@ export interface FetchResult {
   contentType: string | null;
   etag: string | null;
   lastModified: string | null;
+  /** Response headers, names in lower case. */
+  headers: Record<string, string>;
   body: Uint8Array;
 }
 
@@ -213,7 +230,8 @@ export class HttpFetcher implements Fetcher {
     try {
       parsed = new URL(url);
     } catch {
-      throw new FetchError('invalid_url', `Invalid URL: ${url}`);
+      // The URL itself stays out of the message, which reaches logs, traces, and feed errors.
+      throw new FetchError('invalid_url', 'Invalid URL');
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       throw new FetchError('invalid_url', `Unsupported scheme: ${parsed.protocol}`);
@@ -257,17 +275,24 @@ export class HttpFetcher implements Fetcher {
       contentType: response.headers.get('content-type'),
       etag: response.headers.get('etag'),
       lastModified: response.headers.get('last-modified'),
+      headers: Object.fromEntries(response.headers),
     };
     if (response.status === 304) {
       await response.body?.cancel();
       return { ...base, notModified: true, body: new Uint8Array() };
     }
     if (response.status < 200 || response.status > 299) {
-      await response.body?.cancel();
-      throw new FetchError('http_status', `HTTP ${String(response.status)}`, {
-        status: response.status,
-        retryAfterSeconds: parseRetryAfter(response.headers.get('retry-after')),
-      });
+      const retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'));
+      const throttle =
+        response.status === 429 || (response.status === 503 && retryAfterSeconds !== null);
+      if (!request.anyStatus || throttle) {
+        await response.body?.cancel();
+        throw new FetchError('http_status', `HTTP ${String(response.status)}`, {
+          status: response.status,
+          retryAfterSeconds,
+          url,
+        });
+      }
     }
     const declared = Number(response.headers.get('content-length'));
     if (declared > maxBytes && !request.truncate) {

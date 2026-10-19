@@ -9,6 +9,9 @@ type Route =
   | {
       body: string | Uint8Array;
       contentType?: string;
+      /** Answered as is with `anyStatus`; otherwise fails with HTTP `status`. */
+      status?: number;
+      headers?: Record<string, string>;
       redirectTo?: string;
       /** The redirect is permanent (301/308). */
       permanent?: boolean;
@@ -32,16 +35,26 @@ export class FakeFetcher implements Fetcher {
     const route = this.routes.get(url);
     if (!route) return Promise.reject(new FetchError('http_status', 'HTTP 404', { status: 404 }));
     if (route instanceof FetchError) return Promise.reject(route);
+    const status = route.status ?? 200;
+    if ((status < 200 || status > 299) && !request.anyStatus)
+      return Promise.reject(
+        new FetchError('http_status', `HTTP ${String(status)}`, { status, url }),
+      );
     const notModified = route.etag !== undefined && request.etag === route.etag;
     return Promise.resolve({
       url: route.redirectTo ?? url,
       permanentUrl: route.permanent ? (route.redirectTo ?? null) : null,
       maxAgeSeconds: route.maxAge ?? null,
-      status: notModified ? 304 : 200,
+      status: notModified ? 304 : status,
       notModified,
       contentType: route.contentType ?? 'application/rss+xml',
       etag: route.etag ?? null,
       lastModified: null,
+      headers: {
+        'content-type': route.contentType ?? 'application/rss+xml',
+        ...(route.etag !== undefined && { etag: route.etag }),
+        ...route.headers,
+      },
       body: notModified
         ? new Uint8Array()
         : typeof route.body === 'string'

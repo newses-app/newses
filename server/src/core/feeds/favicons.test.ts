@@ -6,7 +6,6 @@ import { FakeFetcher } from '../../test/fake-fetcher.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { MemoryBlobStore, silentLogger } from '../../test/fakes.ts';
 import { FaviconService, faviconKey, iconCandidates } from './favicons.ts';
-import { HostLimiter } from './host-limiter.ts';
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -51,7 +50,7 @@ describe('FaviconService', () => {
       })
       .set('https://site.example/ok.png', { body: PNG, contentType: 'image/png' });
     const blobs = new MemoryBlobStore();
-    const service = new FaviconService(db, fetcher, blobs, silentLogger, new HostLimiter(2));
+    const service = new FaviconService(db, fetcher, blobs, silentLogger);
     const [source] = await db
       .insert(feedSources)
       .values({ url: 'https://site.example/rss', siteUrl: 'https://site.example/' })
@@ -85,13 +84,7 @@ describe('FaviconService', () => {
       body: new Uint8Array([0, 0, 1, 0, 1]),
       contentType: 'application/octet-stream',
     });
-    const service = new FaviconService(
-      db,
-      fetcher,
-      new MemoryBlobStore(),
-      silentLogger,
-      new HostLimiter(2),
-    );
+    const service = new FaviconService(db, fetcher, new MemoryBlobStore(), silentLogger);
     const [found] = await db
       .insert(feedSources)
       .values({ url: 'https://plain.example/rss', siteUrl: 'https://plain.example/' })
@@ -115,7 +108,7 @@ describe('FaviconService', () => {
       contentType: 'image/png',
     });
     const blobs = new MemoryBlobStore();
-    const service = new FaviconService(db, fetcher, blobs, silentLogger, new HostLimiter(2));
+    const service = new FaviconService(db, fetcher, blobs, silentLogger);
     const [first, second] = await db
       .insert(feedSources)
       .values([
@@ -143,7 +136,7 @@ describe('FaviconService', () => {
     const blobs = new MemoryBlobStore();
     await blobs.put(faviconKey(old), old);
     await blobs.put('favicons/1', old);
-    const service = new FaviconService(db, fetcher, blobs, silentLogger, new HostLimiter(2));
+    const service = new FaviconService(db, fetcher, blobs, silentLogger);
     const [moved, other, legacy] = await db
       .insert(feedSources)
       .values([

@@ -58,7 +58,12 @@ export class RecordingRealtime implements Realtime {
 
 /** Records enqueued jobs; the dedupe key semantics match the real queue's "one queued per key". */
 export class RecordingQueue implements JobQueue<Jobs> {
-  readonly jobs: { name: keyof Jobs; data: object; key: string | undefined }[] = [];
+  readonly jobs: {
+    name: keyof Jobs;
+    data: object;
+    key: string | undefined;
+    delaySeconds?: number | undefined;
+  }[] = [];
 
   enqueue<N extends keyof Jobs>(
     name: N,
@@ -71,7 +76,7 @@ export class RecordingQueue implements JobQueue<Jobs> {
     ) {
       return Promise.resolve(false);
     }
-    this.jobs.push({ name, data, key: options.key });
+    this.jobs.push({ name, data, key: options.key, delaySeconds: options.delaySeconds });
     return Promise.resolve(true);
   }
 

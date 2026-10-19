@@ -15,6 +15,8 @@ export type TickEvent =
 
 /** Compaction stops starting months after this, within the function's 5-minute timeout. */
 const ARCHIVE_COMPACT_BUDGET_MS = 3 * 60 * 1000;
+/** Kept entries' images, within the dispatch tick's 5-minute timeout. */
+const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
 
 const TASK_NAMES = {
   dispatch: 'feeds.dispatch',
@@ -39,6 +41,17 @@ async function run(event: TickEvent): Promise<void> {
       // Rides the dispatch schedule rather than a schedule of its own.
       await ops.recorder.flush();
       await trackRun(ops.recorder, 'ops.check', () => ops.checker.run(), { kind: 'task' });
+      await trackRun(
+        ops.recorder,
+        'images.keep',
+        async () => {
+          logger.info(
+            await feeds.images.keep(IMAGES_KEEP_BUDGET_MS),
+            'Kept images of kept entries',
+          );
+        },
+        { kind: 'task' },
+      );
       return;
     }
     case 'purge':
@@ -50,6 +63,7 @@ async function run(event: TickEvent): Promise<void> {
     case 'auth.prune':
       await sessions.pruneExpired();
       await throttle.prune();
+      await feeds.rateLimits.prune();
       return;
     case 'archive.compact': {
       const months = (await archive?.compact(Date.now() + ARCHIVE_COMPACT_BUDGET_MS)) ?? 0;

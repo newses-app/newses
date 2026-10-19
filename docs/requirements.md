@@ -16,6 +16,7 @@
 | Offline Reading | Offline use | Family members read and search unread and starred articles with images in the web, desktop, and Android apps without a connection; changes made offline reach the server on reconnect without overriding newer ones; installed Chromium PWAs and the Android app sync in the background; on Docker and AWS |
 | Per-feed Options | Feed control | Family members pause feeds and hide them from All articles in the web, desktop, and Android apps, and see how often each feed is checked and why; feeds of rate-limiting sites slow down on their own, and admins set per-site minimum intervals; on Docker and AWS |
 | Published pages | Sharing | Family members publish any web page to their published feed from the web, desktop, and Android apps, bookmarklets, and TTRSS clients; imported pages stay private to their owner; on Docker and AWS |
+| Missing requirements | Conformance | Feed errors show when they happened; logs below debug carry no secret keys or feed URLs; every fetch honours host pauses and a host's feeds are never fetched by two processes at once; family members debug feeds and keep the images of kept entries; OWASP ASVS L1 verified again; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -35,7 +36,7 @@
 | HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
 | Per-feed options | Per-feed Options | Pause updates: the feed is no longer checked for the user, who still gets what others' checks bring. Hide from All articles: left out of All articles and Fresh, their counts, catch-up, and search, also through the TTRSS and Google Reader APIs. The feed's settings show how often it is checked, why, and when next; a changed interval applies at once |
 | Rate-limit slowdown | Per-feed Options | A feed answering HTTP 429 is checked less often, and back to normal after a run of successful checks; admins set a minimum interval per site on the Operations page |
-| Feed debugger | Later | Dry-run fetch shows raw response, parsed entries, and filter matches |
+| Feed debugger | Missing requirements | Dry-run fetch shows raw response, parsed entries, and filter matches |
 | Generated feeds | Later | Secret-key RSS feed for any feed, category, or label |
 | WebSub | Later | Push subscriptions for hubs advertised by feeds |
 
@@ -99,7 +100,7 @@
 | Full text | P3 | Readability extraction on demand per article and automatically per opted-in feed; original content kept |
 | Image proxy | P1.6 | Optional per user; entry images served through the server (privacy, mixed content); responses cached; tracking pixels (1×1 images, known trackers) stripped |
 | Lazy images | Later | Article images load lazily |
-| Starred image cache | Later | Images of starred entries stored permanently |
+| Kept image cache | Missing requirements | Images of starred, published, noted, labelled, or shared entries stored permanently |
 | Site rewrites | Later | Per-site content transforms (comics, Reddit/Imgur embeds) |
 
 ### Users and security
@@ -168,7 +169,7 @@
 |---|---|
 | Scale | ~1,000 feeds and several million entries per instance; ~10 users |
 | Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
-| Privacy | No calls to third parties beyond feed, icon, and article fetches; telemetry goes only to endpoints the operator configures, never carries credentials, feed URLs, or article content, and no trace context is sent to remote hosts |
+| Privacy | No calls to third parties beyond feed, icon, and article fetches; telemetry goes only to endpoints the operator configures, never carries credentials, secret keys, or article content, and carries feed URLs only when the operator turns on debug logging or the compatibility trace; no trace context is sent to remote hosts |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
 | Dependencies | High and critical advisories in production dependencies fail the pipeline (`pnpm audit`) and are fixed before the next deployment, at most 7 days after disclosure; moderate ones within 30 days; other dependency updates at least every 90 days |
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls; single-key shortcuts can be turned off; every drag action has a non-drag alternative |

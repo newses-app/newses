@@ -47,7 +47,10 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
 
   app.get(
     '/share/:id',
-    { schema: { params: z.object({ id: z.string().max(100) }), hide: true } },
+    {
+      schema: { params: z.object({ id: z.string().max(100) }), hide: true },
+      config: { logSecrets: ['id'] },
+    },
     async (request, reply) => {
       const shared = UUID.test(request.params.id)
         ? await entries.getShared(request.params.id)
@@ -61,7 +64,10 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
 
   app.get(
     '/feeds/:key',
-    { schema: { params: z.object({ key: z.string().max(100) }), hide: true } },
+    {
+      schema: { params: z.object({ key: z.string().max(100) }), hide: true },
+      config: { logSecrets: ['key'] },
+    },
     async (request, reply) => {
       const userId = await accessKeys.resolve(request.params.key, 'published');
       void reply.header('x-robots-tag', 'noindex').header('cache-control', 'no-cache');
@@ -107,6 +113,7 @@ export const legacyPublicRoutes: FastifyPluginAsyncZod = (app) => {
         }),
         hide: true,
       },
+      config: { logSecrets: ['key'] },
     },
     (request, reply) => {
       const { op, id, key } = request.query;

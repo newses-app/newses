@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { useQueryClient } from '@tanstack/vue-query';
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError } from '../../api.ts';
+import FeedErrorNote from '../feeds/FeedErrorNote.vue';
 import { useDurations } from '../../composables/useDurations.ts';
 import { ENTRIES_KEY } from '../../composables/useEntries.ts';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
@@ -14,6 +15,7 @@ import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { formatDateTime } from '../../lib/format.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { scheduleMessage } from '../../lib/schedule.ts';
+import { supportsFeedDebugger } from '../../lib/server-url.ts';
 import { subscriptionKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
@@ -78,6 +80,16 @@ function changeCategory(id: number | null) {
 }
 
 const { duration, intervalItems, purgeItems } = useDurations();
+
+/** Servers before API 1.6 have no feed debugger. */
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+});
+const debuggable = computed(() =>
+  serverInfo.data.value ? supportsFeedDebugger(serverInfo.data.value) : false,
+);
 
 /** Servers before API 1.4 have no per-feed options. */
 const hasOptions = computed(() => subscription.value?.paused !== undefined);
@@ -220,11 +232,11 @@ async function unsubscribe() {
             density="compact"
             class="mt-2"
           >
-            {{
-              subscription.disabled
-                ? t('feeds.disabled', { error: subscription.lastError })
-                : subscription.lastError
-            }}
+            <FeedErrorNote
+              :error="subscription.lastError"
+              :at="subscription.lastErrorAt"
+              :disabled="subscription.disabled"
+            />
           </v-alert>
         </v-card-text>
         <v-card-actions class="flex-wrap">
@@ -233,6 +245,9 @@ async function unsubscribe() {
           }}</v-btn>
           <v-btn :disabled="busy" :aria-disabled="!online" @click="refresh">
             {{ t('feeds.refresh') }}
+          </v-btn>
+          <v-btn v-if="debuggable" @click="ui.debugSubscriptionId = subscription.id">
+            {{ t('feedDebug.open') }}
           </v-btn>
           <v-spacer />
           <v-btn @click="open = false">{{ t('common.cancel') }}</v-btn>

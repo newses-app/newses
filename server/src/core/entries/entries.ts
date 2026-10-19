@@ -119,10 +119,10 @@ export interface HeadlineRow extends Record<string, unknown> {
 }
 
 /**
- * Changes when the entry's title, link, or content does, or its full text is extracted again;
+ * An entry's (`e`) content version. Changes when the entry's title, link, or content does, or its full text is extracted again;
  * clients compare it to decide whether a stored copy of the content is current.
  */
-const CONTENT_VERSION = sql`left(e.content_hash, 16) || coalesce('.' || CASE
+export const CONTENT_VERSION = sql`left(e.content_hash, 16) || coalesce('.' || CASE
     WHEN e.full_content IS NOT NULL
     THEN floor(extract(epoch FROM e.full_content_at) * 1000)::bigint::text END, '')`;
 

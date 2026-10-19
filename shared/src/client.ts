@@ -43,6 +43,7 @@ import type {
 import type {
   Category,
   CreateCategoryRequest,
+  FeedDebug,
   OpmlImportResult,
   SubscribeRequest,
   SubscribeResponse,
@@ -284,6 +285,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Rejects with `throttled` while the feed's host has asked not to be fetched. */
       refresh: (subscriptionId: number) =>
         request<undefined>('POST', `/subscriptions/${id(subscriptionId)}/refresh`),
+      /** Fetches the feed without storing anything; API 1.6. Rejects with `throttled` past the limit. */
+      debug: (subscriptionId: number) =>
+        request<FeedDebug>('POST', `/subscriptions/${id(subscriptionId)}/debug`),
     },
 
     opml: {

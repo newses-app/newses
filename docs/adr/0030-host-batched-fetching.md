@@ -1,6 +1,6 @@
 # 0030. Host-batched fetching and persisted host cooldowns
 
-- Status: Accepted
+- Status: Superseded by 0071
 - Date: 2026-10-05
 - Supersedes 0026
 

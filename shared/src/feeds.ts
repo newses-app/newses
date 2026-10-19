@@ -112,6 +112,61 @@ export const opmlImportResultSchema = z.object({
   invalid: z.array(z.object({ url: z.string(), reason: z.string() })),
 });
 
+/** A dry-run fetch of a subscribed feed: nothing is stored, and the feed's state is left alone. */
+export const feedDebugSchema = z.object({
+  url: z.string(),
+  /** Why nothing was answered: the fetch failed, or the site asked to wait. */
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      status: z.number().int().nullable(),
+      retryAfterSeconds: z.number().int().nullable(),
+    })
+    .nullable(),
+  response: z
+    .object({
+      status: z.number().int(),
+      /** After redirects. */
+      url: z.string(),
+      /** Reached through permanent redirects only; the feed moves there after a fetch. */
+      permanentUrl: z.string().nullable(),
+      contentType: z.string().nullable(),
+      headers: z.array(z.object({ name: z.string(), value: z.string() })),
+      bytes: z.number().int(),
+      /** The body as text, cut to its first 256 KB. */
+      body: z.string(),
+      truncated: z.boolean(),
+    })
+    .nullable(),
+  feed: z
+    .object({
+      format: z.enum(['rss', 'atom', 'rdf', 'json']),
+      title: z.string().nullable(),
+      siteUrl: z.string().nullable(),
+      ttlSeconds: z.number().int().nullable(),
+    })
+    .nullable(),
+  parseError: z.string().nullable(),
+  /** Feeds a web page advertises, when the answer was one. */
+  discovered: z.array(feedCandidateSchema),
+  /** The entries as they would be stored, at most 500, each with the user's filters it matches. */
+  entries: z.array(
+    z.object({
+      guid: z.string(),
+      title: z.string().nullable(),
+      link: z.string().nullable(),
+      author: z.string().nullable(),
+      publishedAt: z.iso.datetime().nullable(),
+      updatedAt: z.iso.datetime().nullable(),
+      tags: z.array(z.string()),
+      contentLength: z.number().int(),
+      /** The user's enabled filters that would apply, in order, up to one that stops. */
+      filterIds: z.array(z.number().int()),
+    }),
+  ),
+});
+
 export type Category = z.infer<typeof categorySchema>;
 export type Subscription = z.infer<typeof subscriptionSchema>;
 export type IntervalReason = z.infer<typeof intervalReasonSchema>;
@@ -123,3 +178,4 @@ export type UpdateAllCategoriesRequest = z.infer<typeof updateAllCategoriesReque
 export type SubscribeRequest = z.input<typeof subscribeRequestSchema>;
 export type SubscribeResponse = z.infer<typeof subscribeResponseSchema>;
 export type OpmlImportResult = z.infer<typeof opmlImportResultSchema>;
+export type FeedDebug = z.infer<typeof feedDebugSchema>;

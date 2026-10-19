@@ -232,6 +232,27 @@
       "when": 1792328547213,
       "tag": "0032_pages_source",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792371102826,
+      "tag": "0033_fetch_host_leases",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792371210106,
+      "tag": "0034_rate_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792371915140,
+      "tag": "0035_kept_images",
+      "breakpoints": true
     }
   ]
 }

@@ -2,8 +2,9 @@ import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { extractArticle, readArticle } from '../core/feeds/fulltext.ts';
+import { FETCH_LIMITS } from '../core/rate-limit.ts';
 import { createDb, type Db } from '../db/client.ts';
-import { entries } from '../db/schema.ts';
+import { entries, rateLimits } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { FakeFetcher, rss } from '../test/fake-fetcher.ts';
 import { reader, readerLogin } from '../test/compat.ts';
@@ -127,6 +128,20 @@ describe('full text', () => {
       headers,
     });
     expect(others.statusCode).toBe(404);
+  });
+
+  it('rate limits extracting on demand, not reading what was extracted', async () => {
+    await db.delete(rateLimits);
+    const three = (await entryNamed('Three')).id;
+    const extract = (id: number) =>
+      app.inject({ method: 'POST', url: `/api/v1/entries/${String(id)}/full-text`, headers });
+    for (let n = 0; n < FETCH_LIMITS.fulltext; n++)
+      expect((await extract(three)).statusCode).toBe(502);
+    const refused = await extract(three);
+    expect(refused.statusCode).toBe(429);
+    expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);
+    // Stored full text needs no fetch.
+    expect((await extract((await entryNamed('One')).id)).statusCode).toBe(200);
   });
 
   it('queues extraction for opted-in feeds and records each result', async () => {

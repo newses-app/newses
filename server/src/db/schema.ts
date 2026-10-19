@@ -116,6 +116,8 @@ export const imageCache = pgTable(
     fetchedAt: tstz('fetched_at').notNull().defaultNow(),
     size: integer('size').notNull().default(0),
     failed: boolean('failed').notNull().default(false),
+    // Failed fetches in a row; kept images are not asked for again after a few.
+    attempts: integer('attempts').notNull().default(0),
   },
   (t) => [index('image_cache_fetched_at_idx').on(t.fetchedAt)],
 );
@@ -126,6 +128,13 @@ export const loginAttempts = pgTable('login_attempts', {
   failures: integer('failures').notNull().default(0),
   lockedUntil: tstz('locked_until'),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+// Requests per user and action (`fetch:<action>:<user id>`) in the current window.
+export const rateLimits = pgTable('rate_limits', {
+  key: text('key').primaryKey(),
+  windowStart: tstz('window_start').notNull(),
+  count: integer('count').notNull(),
 });
 
 export const userPrefs = pgTable(
@@ -200,10 +209,13 @@ export const feedSources = pgTable(
   ],
 );
 
-// Hosts that asked for no requests before `blocked_until` (429, or 503 with Retry-After).
+// Hosts that asked for no requests before `blocked_until` (429, or 503 with Retry-After), and
+// the feed fetch job working through a host's feeds, which holds `lease_id` until `leased_until`.
 export const fetchHosts = pgTable('fetch_hosts', {
   host: text('host').primaryKey(),
-  blockedUntil: tstz('blocked_until').notNull(),
+  blockedUntil: tstz('blocked_until'),
+  leaseId: uuid('lease_id'),
+  leasedUntil: tstz('leased_until'),
 });
 
 // Admins' minimum interval between feed checks of a host.
@@ -292,6 +304,28 @@ export const entries = pgTable(
   ],
 );
 
+// Images in kept entries' content and full text (as offline clients list them), kept in the
+// image cache while the entry is kept.
+export const entryImages = pgTable(
+  'entry_images',
+  {
+    entryId: bigint('entry_id', { mode: 'number' })
+      .notNull()
+      .references(() => entries.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    url: text('url').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.entryId, t.key] }), index('entry_images_key_idx').on(t.key)],
+);
+
+// The content version whose images `entry_images` lists, per kept entry.
+export const entryImageSets = pgTable('entry_image_sets', {
+  entryId: bigint('entry_id', { mode: 'number' })
+    .primaryKey()
+    .references(() => entries.id, { onDelete: 'cascade' }),
+  version: text('version').notNull(),
+});
+
 export const enclosures = pgTable(
   'enclosures',
   {
@@ -353,6 +387,12 @@ export const userEntries = pgTable(
       .on(t.userId, t.readAt.desc())
       .where(sql`${t.readAt} IS NOT NULL`),
     index('user_entries_user_updated_idx').on(t.userId, t.updatedAt),
+    // Entries someone keeps (labels aside), whose images are kept.
+    index('user_entries_kept_entry_idx')
+      .on(t.entryId)
+      .where(
+        sql`${t.starred} OR ${t.published} OR ${t.note} IS NOT NULL OR ${t.shareId} IS NOT NULL`,
+      ),
     // Expression index over the few rows with notes, so search pays nothing for the rest.
     index('user_entries_note_search_idx')
       .using('gin', sql`to_tsvector('simple', ${t.note})`)

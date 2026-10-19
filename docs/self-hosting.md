@@ -19,7 +19,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | — | Database credentials; also used to build `DATABASE_URL` |
 | `APP_SECRET` | — | At least 32 characters; keys for encrypting stored 2FA secrets and feed passwords and for signing tokens. Back it up with the database: changing or losing it disables 2FA for every user and clears feed passwords |
 | `HTTP_PORT` | `8080` | Host port for the server |
-| `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
+| `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error`, `fatal`; `debug` and `trace` log request, feed, page, and image URLs (secret keys stay redacted), which reach OTLP too when it is on |
 | `PUBLIC_URL` | unset | The address readers use, e.g. `https://reader.example.com`; makes published-feed links absolute. Unset uses each request's address, which needs a proxy that forwards `Host` |
 | `COMPAT_TRACE` | `false` | `true` logs every TTRSS and Google Reader API call with its parameters (credentials redacted), to diagnose a client |
 | `TRUST_PROXY` | `false` | `true`, the number of proxy hops, or the reverse proxy's address/CIDR, so client IPs (login throttling) and HTTPS (secure cookies) come from forwarded headers |

@@ -9,7 +9,8 @@ const params = z.object({ signature: z.string().max(64), url: z.string().max(800
  * may be cached by the browser and CloudFront.
  */
 export const imageRoutes: FastifyPluginAsyncZod<{ images: ImageProxy }> = (app, { images }) => {
-  app.get('/images/:signature/:url', { schema: { params, hide: true } }, async (request, reply) => {
+  const options = { schema: { params, hide: true }, config: { logSecrets: ['signature'] } };
+  app.get('/images/:signature/:url', options, async (request, reply) => {
     // Any origin may read them, as the signed URL already allows; the apps fetch them to store
     // offline, and CloudFront caches one response for every origin.
     void reply.header('access-control-allow-origin', '*');

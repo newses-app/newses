@@ -14,6 +14,7 @@ import {
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
+import FeedErrorNote from '../feeds/FeedErrorNote.vue';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useResourceEdits } from '../../composables/useResourceEdits.ts';
@@ -312,7 +313,7 @@ async function importOpml(event: Event) {
               class="text-medium-emphasis text-truncate feed-url"
               :title="s.lastError"
             >
-              {{ s.lastError }}
+              <FeedErrorNote :error="s.lastError" :at="s.lastErrorAt" />
             </div>
           </td>
           <td class="text-no-wrap text-end">

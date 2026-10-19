@@ -45,6 +45,12 @@ const PUBLISH_API_MINOR = 5;
 export const supportsPublishing = ({ apiVersion }: ServerInfo) =>
   apiVersion.major === API_VERSION.major && apiVersion.minor >= PUBLISH_API_MINOR;
 
+/** The API minor that added the feed debugger. */
+const FEED_DEBUG_API_MINOR = 6;
+
+export const supportsFeedDebugger = ({ apiVersion }: ServerInfo) =>
+  apiVersion.major === API_VERSION.major && apiVersion.minor >= FEED_DEBUG_API_MINOR;
+
 /** Asks `GET /server` at `origin`, without credentials. */
 export async function checkServer(origin: string, fetch?: typeof globalThis.fetch) {
   const api = createApiClient({ baseUrl: origin, token: () => null, ...(fetch && { fetch }) });

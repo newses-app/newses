@@ -82,10 +82,14 @@ export function redact(params: Record<string, unknown>): Record<string, unknown>
   );
 }
 
-/** Records a call a client made that the server does not implement, so gaps show in the logs. */
+/**
+ * Records a call a client made that the server does not implement, so gaps show in the logs;
+ * Google Reader `feed/<url>` stream ids keep only their kind, as feed URLs stay out of the logs.
+ */
 export function logUnsupported(request: FastifyRequest, protocol: CompatProtocol, call: string) {
+  const unsupported = call.replace(/feed\/\S+/g, 'feed/…');
   request.log.warn(
-    { compat: protocol, unsupported: call, userAgent: request.headers['user-agent'] },
+    { compat: protocol, unsupported, userAgent: request.headers['user-agent'] },
     'Unsupported compatibility call',
   );
 }

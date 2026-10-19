@@ -1,6 +1,6 @@
 # 0037. Image proxy
 
-- Status: Accepted
+- Status: Superseded by 0073
 - Date: 2026-10-06
 
 ## Context

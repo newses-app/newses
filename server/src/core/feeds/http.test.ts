@@ -34,7 +34,7 @@ beforeAll(async () => {
     if (path === '/big') return res.writeHead(200).end('x'.repeat(2048));
     if (path === '/busy') return res.writeHead(429, { 'retry-after': '120' }).end();
     if (path === '/slow') return void setTimeout(() => res.writeHead(200).end('late'), 2000);
-    res.writeHead(404).end();
+    res.writeHead(404, { 'content-type': 'text/html' }).end('<h1>Gone fishing</h1>');
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
@@ -144,6 +144,17 @@ describe('HttpFetcher', () => {
     });
     expect(await failure(local().fetch('ftp://example.com/'))).toMatchObject({
       code: 'invalid_url',
+    });
+  });
+
+  it('answers HTTP errors with their headers and body when asked, but never a 429', async () => {
+    const missing = await local().fetch(`${base}/nothing`, { anyStatus: true });
+    expect(missing.status).toBe(404);
+    expect(missing.headers['content-type']).toBe('text/html');
+    expect(new TextDecoder().decode(missing.body)).toBe('<h1>Gone fishing</h1>');
+    expect(await failure(local().fetch(`${base}/busy`, { anyStatus: true }))).toMatchObject({
+      status: 429,
+      url: `${base}/busy`,
     });
   });
 });

@@ -3,7 +3,6 @@ import type { Db } from '../../db/client.ts';
 import { FakeFetcher } from '../../test/fake-fetcher.ts';
 import { MemoryBlobStore, silentLogger } from '../../test/fakes.ts';
 import { deriveKey, verify } from '../crypto.ts';
-import { HostLimiter } from './host-limiter.ts';
 import { ImageProxy } from './images.ts';
 
 const key = deriveKey('a test secret that is at least thirty-two characters', 'image-url');
@@ -12,7 +11,6 @@ const proxy = new ImageProxy({
   db: {} as Db,
   fetcher: new FakeFetcher(),
   blobs: new MemoryBlobStore(),
-  hosts: new HostLimiter(2),
   key,
   logger: silentLogger,
 });

@@ -5,17 +5,9 @@ import {
   type FetchRequest,
   type FetchResult,
 } from '../core/feeds/http.ts';
+import { hostOf } from '../core/feeds/url.ts';
 import type { FetchOutcome, OpsRecorder } from '../core/ops/recorder.ts';
 import { getInstruments, withSpan } from '../telemetry/index.ts';
-
-/** Host and port only: paths and queries of feed URLs may carry private tokens. */
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return 'invalid';
-  }
-}
 
 export function outcomeOf(err: unknown): FetchOutcome {
   if (!(err instanceof FetchError)) return 'other';
