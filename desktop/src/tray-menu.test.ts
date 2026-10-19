@@ -7,6 +7,7 @@ const profile = (id: string, signedIn = true, login: string | null = 'ada'): Pro
   serverUrl: `https://${id}.example`,
   userId: 1,
   login,
+  serverName: id === 'one' ? 'Home' : null,
   label: null,
   signedIn,
 });
@@ -38,7 +39,7 @@ describe('trayMenu', () => {
     const submenu = menu.find((item) => item.label === 'Profiles')?.submenu;
     if (!Array.isArray(submenu)) throw new Error('No Profiles submenu');
     expect(submenu.map(({ label, type, checked }) => ({ label, type, checked }))).toEqual([
-      { label: 'ada @ one.example', type: 'radio', checked: true },
+      { label: 'ada @ Home', type: 'radio', checked: true },
       { label: 'two.example (signed out)', type: 'radio', checked: false },
     ]);
     const click = (i: number) => {

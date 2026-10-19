@@ -96,12 +96,10 @@ describe('connectTo', () => {
     expect(profiles).toHaveLength(3);
     expect(profiles.find((p) => p.id === active)).toMatchObject({
       serverUrl: 'https://two.example',
-      label: 'Work',
+      serverName: 'Work',
+      label: null,
       signedIn: false,
     });
-    // A known server keeps its profile's own name.
-    await app.connectTo('https://one.example', 'Home');
-    expect(profiles.find((p) => p.id === one.id)?.label).toBeNull();
   });
 });
 

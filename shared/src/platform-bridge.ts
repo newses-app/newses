@@ -42,14 +42,16 @@ export interface Profile {
   serverUrl: string;
   userId: number | null;
   login: string | null;
-  /** Chosen by the reader. */
+  /** What the server calls itself (`GET /server`'s `name`); null when it gives none. */
+  serverName: string | null;
+  /** Chosen by the reader; replaces the name made from the user and server. */
   label: string | null;
   /** Whether the shell holds a token for it. */
   signedIn: boolean;
 }
 
 /** What the web app may change of a profile. */
-export type ProfileChanges = Partial<Pick<Profile, 'userId' | 'login' | 'label'>>;
+export type ProfileChanges = Partial<Pick<Profile, 'userId' | 'login' | 'serverName' | 'label'>>;
 
 export interface ProfileList {
   profiles: Profile[];

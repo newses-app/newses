@@ -16,6 +16,7 @@ const profile = (id: string): Profile => ({
   serverUrl: `https://${id}.example`,
   userId: 1,
   login: 'ada',
+  serverName: null,
   label: null,
   signedIn: true,
 });

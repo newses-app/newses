@@ -41,7 +41,7 @@ import {
 } from '../offline/sync.ts';
 import { importStaged } from '../offline/staged.ts';
 import { writeWorkerConfig } from '../offline/worker-config.ts';
-import { appServer, bridge, NATIVE } from '../platform/index.ts';
+import { appServer, bridge, connection, NATIVE } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { COUNTERS_KEY, pollInBackground } from './useCounters.ts';
 import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY } from './useFeeds.ts';
@@ -76,6 +76,8 @@ function serverSupport(): Promise<ServerSupport | null> {
   };
   const answer = api.serverInfo().then(
     (info) => {
+      // Profiles show the name the server gives itself, which its operator may change.
+      if (NATIVE) void connection.rememberServerName(info.name ?? null).catch(() => undefined);
       const offline = supportsOffline(info);
       if (!offline) forget();
       return { offline, conflicts: detectsConflicts(info) };

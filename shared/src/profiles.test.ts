@@ -34,6 +34,7 @@ describe('createProfiles', () => {
           serverUrl: 'https://one.example',
           userId: null,
           login: null,
+          serverName: null,
           label: null,
           signedIn: true,
         },
@@ -124,6 +125,13 @@ describe('createProfiles', () => {
     expect(await profiles.remove(two.id)).toBeNull();
   });
 
+  it('reads profiles saved before a field was added with its default', async () => {
+    const storage = memoryProfileStorage();
+    const old = { id: ID1, serverUrl: 'https://one.example', userId: 1, login: 'ada', label: null };
+    await storage.save({ profiles: [old as never], active: ID1 });
+    expect((await createProfiles(storage, ids()).list()).profiles[0]?.serverName).toBeNull();
+  });
+
   it('runs calls one at a time, so concurrent adds are all kept', async () => {
     const profiles = createProfiles(memoryProfileStorage(), ids());
     await Promise.all([1, 2, 3].map((n) => profiles.add(`https://${String(n)}.example`)));
@@ -133,10 +141,17 @@ describe('createProfiles', () => {
 
 describe('profileLabel', () => {
   it('names a profile by its label, else its user and server', () => {
-    const profile = { serverUrl: 'https://one.example:8443', login: null, label: null };
+    const profile = {
+      serverUrl: 'https://one.example:8443',
+      login: null,
+      serverName: null,
+      label: null,
+    };
     expect(profileLabel(profile)).toBe('one.example:8443');
     expect(profileLabel({ ...profile, login: 'ada' })).toBe('ada @ one.example:8443');
-    expect(profileLabel({ ...profile, login: 'ada', label: 'Home' })).toBe('Home');
+    expect(profileLabel({ ...profile, login: 'ada', serverName: 'Home' })).toBe('ada @ Home');
+    expect(profileLabel({ ...profile, serverName: 'Home' })).toBe('Home');
+    expect(profileLabel({ ...profile, login: 'ada', label: 'Mine' })).toBe('Mine');
   });
 });
 
@@ -157,6 +172,7 @@ describe('validation', () => {
 
   it('checks each changed field', () => {
     expect(profileChanges({ userId: 3, label: null })).toEqual({ userId: 3, label: null });
+    expect(profileChanges({ serverName: 'Home' })).toEqual({ serverName: 'Home' });
     expect(profileChanges({})).toEqual({});
     expect(profileChanges({ userId: 0 })).toBeNull();
     expect(profileChanges({ userId: 1.5 })).toBeNull();

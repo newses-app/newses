@@ -29,7 +29,7 @@ export interface ProfileStorage {
   removeLegacy(): Promise<void>;
 }
 
-/** The longest login or label a profile keeps. */
+/** The longest login, server name, or label a profile keeps. */
 export const MAX_PROFILE_LABEL_LENGTH = 256;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -44,11 +44,16 @@ export function httpsOrigin(value: unknown): string | null {
   }
 }
 
-/** How a profile is named in menus: its label, else its user and server. */
-export function profileLabel(profile: Pick<Profile, 'serverUrl' | 'login' | 'label'>): string {
+/**
+ * How a profile is named in menus: the reader's label, else `user @ server`, the server by its own
+ * name or else its host, so several users of one server tell apart.
+ */
+export function profileLabel(
+  profile: Pick<Profile, 'serverUrl' | 'login' | 'serverName' | 'label'>,
+): string {
   if (profile.label) return profile.label;
-  const host = new URL(profile.serverUrl).host;
-  return profile.login ? `${profile.login} @ ${host}` : host;
+  const server = profile.serverName ?? new URL(profile.serverUrl).host;
+  return profile.login ? `${profile.login} @ ${server}` : server;
 }
 
 /** A profile id as the shells give them; else null. */
@@ -66,7 +71,7 @@ export function profileChanges(value: unknown): ProfileChanges | null {
     if (key === 'userId') {
       if (field !== null && !(Number.isSafeInteger(field) && (field as number) > 0)) return null;
       changes.userId = field as number | null;
-    } else if (key === 'login' || key === 'label') {
+    } else if (key === 'login' || key === 'serverName' || key === 'label') {
       if (!text(field)) return null;
       changes[key] = field as string | null;
     } else {
@@ -75,6 +80,24 @@ export function profileChanges(value: unknown): ProfileChanges | null {
   }
   return changes;
 }
+
+const newProfile = (id: string, serverUrl: string): SavedProfile => ({
+  id,
+  serverUrl,
+  userId: null,
+  login: null,
+  serverName: null,
+  label: null,
+});
+
+/** Profiles saved by an earlier version lack fields added since. */
+const withDefaults = ({ profiles, active }: SavedProfiles): SavedProfiles => ({
+  profiles: profiles.map((p) => ({
+    ...p,
+    serverName: (p as Partial<SavedProfile>).serverName ?? null,
+  })),
+  active,
+});
 
 /**
  * The bridge's profile methods over a shell's storage. Calls run one at a time, so concurrent
@@ -97,13 +120,7 @@ export function createProfiles(
       if (legacy) await storage.removeLegacy();
       return { profiles: [], active: null };
     }
-    const profile: SavedProfile = {
-      id: newId(),
-      serverUrl,
-      userId: null,
-      login: null,
-      label: null,
-    };
+    const profile = newProfile(newId(), serverUrl);
     // Written before the old keys go, so a crash in between migrates again rather than losing them.
     if (legacy?.token) await storage.setToken(profile.id, legacy.token);
     const migrated = { profiles: [profile], active: profile.id };
@@ -115,7 +132,7 @@ export function createProfiles(
   /** Runs after every earlier call, with the profiles loaded. */
   function run<T>(task: (current: SavedProfiles) => Promise<T>): Promise<T> {
     const result = queue.then(async () => {
-      saved ??= await migrate();
+      saved ??= withDefaults(await migrate());
       return task(saved);
     });
     queue = result.catch(() => undefined);
@@ -146,13 +163,7 @@ export function createProfiles(
       run(async (current): Promise<Profile> => {
         const origin = httpsOrigin(serverUrl);
         if (!origin) throw new Error('Not an HTTPS origin');
-        const profile: SavedProfile = {
-          id: newId(),
-          serverUrl: origin,
-          userId: null,
-          login: null,
-          label: null,
-        };
+        const profile = newProfile(newId(), origin);
         await save({ ...current, profiles: [...current.profiles, profile] });
         return { ...profile, signedIn: false };
       }),

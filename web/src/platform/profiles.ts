@@ -22,14 +22,14 @@ export async function switchProfile(id: string, path = '/all'): Promise<void> {
 
 /**
  * Moves the app to the server chosen at the connect screen: to its profile, a signed-in one first,
- * or to a new one, named by the server's instance name when it has one, which signs in next.
+ * or to a new one, which keeps the server's name when it gives one, and signs in next.
  */
 export async function connectTo(serverUrl: string, name: string | null = null): Promise<void> {
   const known = connection.state.profiles.filter((p) => p.serverUrl === serverUrl);
   let profile = known.find((p) => p.signedIn) ?? known[0];
   if (!profile) {
     profile = await bridge.addProfile(serverUrl);
-    if (name) await bridge.updateProfile(profile.id, { label: name });
+    if (name) await bridge.updateProfile(profile.id, { serverName: name });
   }
   await switchProfile(profile.id);
 }

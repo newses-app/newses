@@ -62,10 +62,23 @@ export function createConnection(bridge: PlatformBridge) {
       }
       if (target.id !== current.id) await bridge.setActiveProfile(target.id);
       await bridge.setToken(token);
-      await bridge.updateProfile(target.id, { userId: user.id, login: user.login });
+      await bridge.updateProfile(target.id, {
+        userId: user.id,
+        login: user.login,
+        serverName: target.serverName ?? current.serverName,
+      });
       await refresh();
       state.token = token;
       return target.id !== current.id;
+    },
+
+    /** Notes the name the active profile's server gives itself on its profiles, when it changed. */
+    async rememberServerName(name: string | null): Promise<void> {
+      const server = state.serverUrl;
+      const stale = state.profiles.filter((p) => p.serverUrl === server && p.serverName !== name);
+      if (stale.length === 0) return;
+      for (const { id } of stale) await bridge.updateProfile(id, { serverName: name });
+      await refresh();
     },
 
     /** Notes the active profile's user, as the server reports it, when it changed. */
