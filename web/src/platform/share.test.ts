@@ -54,4 +54,13 @@ describe('createShares', () => {
     shares.offer({ url: 'https://example.com/b', title: null });
     expect(shares.take()?.url).toBe('https://example.com/b');
   });
+
+  it('offers a page carried across a reload onto another profile, once', () => {
+    const link = { url: 'https://example.com/post', title: 'A good read' };
+    createShares(webBridge).carry(link);
+    expect(createShares(webBridge).pending.value).toEqual(link);
+    expect(createShares(webBridge).pending.value).toBeNull();
+    sessionStorage.setItem('newses.share', JSON.stringify({ url: 'javascript:alert(1)' }));
+    expect(createShares(webBridge).pending.value).toBeNull();
+  });
 });

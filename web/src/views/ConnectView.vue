@@ -9,7 +9,9 @@ import { connectTo } from '../platform/profiles.ts';
 
 const { t } = useI18n();
 const router = useRouter();
-useDocumentTitle(() => t('connect.title'));
+/** With a profile already, the screen adds another server, or goes to a known one's profile. */
+const title = connection.state.profiles.length > 0 ? t('connect.addTitle') : t('connect.title');
+useDocumentTitle(() => title);
 
 /** Set when changing server from settings or the sign-in page. */
 const current = connection.state.serverUrl;
@@ -55,7 +57,7 @@ async function submit() {
         <v-card-item>
           <div class="d-flex align-center ga-3">
             <img src="/favicon.svg" alt="" width="40" height="40" />
-            <v-card-title tag="h1" class="pa-0">{{ t('connect.title') }}</v-card-title>
+            <v-card-title tag="h1" class="pa-0">{{ title }}</v-card-title>
           </div>
         </v-card-item>
         <v-form @submit.prevent="submit">

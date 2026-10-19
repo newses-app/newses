@@ -47,6 +47,7 @@ export const webBridge: PlatformBridge = {
   updateProfile: noProfiles,
   setActiveProfile: noProfiles,
   removeProfile: noProfiles,
+  onProfileSelected: () => undefined,
   getToken: () => Promise.resolve(null),
   setToken: () => Promise.resolve(),
   clearToken: () => Promise.resolve(),

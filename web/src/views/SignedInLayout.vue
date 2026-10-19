@@ -18,6 +18,7 @@ import TagPickerDialog from '../components/dialogs/TagPickerDialog.vue';
 import TagsDialog from '../components/dialogs/TagsDialog.vue';
 import SubscribeDialog from '../components/dialogs/SubscribeDialog.vue';
 import OfflineStatus from '../components/OfflineStatus.vue';
+import ProfileMenu from '../components/profiles/ProfileMenu.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
 import { useAppearance } from '../composables/useAppearance.ts';
 import { useLiveCounters } from '../composables/useCounters.ts';
@@ -25,7 +26,7 @@ import { useEntryNotifications } from '../composables/useEntryNotifications.ts';
 import { useOfflineSync } from '../composables/useOfflineSync.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
-import { shares } from '../platform/index.ts';
+import { NATIVE, shares } from '../platform/index.ts';
 import { supportsPublishing } from '../lib/server-url.ts';
 import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -101,6 +102,9 @@ useShortcutListener((action) => {
 <template>
   <a href="#main" class="skip-link" @click.prevent="skipToMain">{{ t('nav.skipToContent') }}</a>
   <v-navigation-drawer v-model="ui.drawer" width="300">
+    <template v-if="NATIVE" #prepend>
+      <v-list density="compact" nav class="pb-0"><ProfileMenu manage /></v-list>
+    </template>
     <FeedTree />
   </v-navigation-drawer>
   <router-view />

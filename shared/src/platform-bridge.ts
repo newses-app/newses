@@ -117,6 +117,8 @@ export interface PlatformBridge {
   setActiveProfile(id: string): Promise<void>;
   /** Removes a profile and its token, returning the token once so its session can be revoked. */
   removeProfile(id: string): Promise<string | null>;
+  /** Called with a profile picked outside the app (the desktop tray); replaces the previous handler. */
+  onProfileSelected(handler: (id: string) => void): void;
   /** The active profile's bearer token from OS secure storage; null when signed out or not kept. */
   getToken(): Promise<string | null>;
   /** Keeps the active profile's token; fails without an active profile. */

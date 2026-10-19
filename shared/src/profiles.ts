@@ -29,7 +29,8 @@ export interface ProfileStorage {
   removeLegacy(): Promise<void>;
 }
 
-const MAX_TEXT = 256;
+/** The longest login or label a profile keeps. */
+export const MAX_PROFILE_LABEL_LENGTH = 256;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** An HTTPS origin, as the connect screen chooses; else null. */
@@ -43,12 +44,19 @@ export function httpsOrigin(value: unknown): string | null {
   }
 }
 
+/** How a profile is named in menus: its label, else its user and server. */
+export function profileLabel(profile: Pick<Profile, 'serverUrl' | 'login' | 'label'>): string {
+  if (profile.label) return profile.label;
+  const host = new URL(profile.serverUrl).host;
+  return profile.login ? `${profile.login} @ ${host}` : host;
+}
+
 /** A profile id as the shells give them; else null. */
 export const profileId = (value: unknown): string | null =>
   typeof value === 'string' && UUID.test(value) ? value : null;
 
 const text = (value: unknown) =>
-  value === null || (typeof value === 'string' && value.length <= MAX_TEXT);
+  value === null || (typeof value === 'string' && value.length <= MAX_PROFILE_LABEL_LENGTH);
 
 /** Changes the web app may make to a profile, checked field by field; null when any is invalid. */
 export function profileChanges(value: unknown): ProfileChanges | null {

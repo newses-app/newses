@@ -44,16 +44,16 @@ async function pendingChanges(profile: Profile): Promise<number> {
 }
 
 /**
- * Removes a profile, its store, and what else the device kept for it, once `confirm` accepts the
- * changes it would lose; ends its session on the server, when it answers. Removing the active
- * profile moves the app to another, or to the connect screen. Returns whether it was removed.
+ * Removes a profile, its store, and what else the device kept for it, once `confirm` accepts,
+ * told how many changes would be lost; ends its session on the server, when it answers. Removing
+ * the active profile moves the app to another, or to the connect screen. Returns whether it was
+ * removed.
  */
 export async function removeProfile(
   profile: Profile,
   confirm: (pending: number) => Promise<boolean>,
 ): Promise<boolean> {
-  const pending = await pendingChanges(profile);
-  if (pending > 0 && !(await confirm(pending))) return false;
+  if (!(await confirm(await pendingChanges(profile)))) return false;
   const active = profile.id === connection.state.active;
   const remove = async () => {
     const token = await bridge.removeProfile(profile.id);

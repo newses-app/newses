@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { api, ApiError } from '../api.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
+import ProfileMenu from '../components/profiles/ProfileMenu.vue';
 import { useSession } from '../composables/useSession.ts';
 import { connection, NATIVE } from '../platform/index.ts';
 import { reloadAt } from '../platform/profiles.ts';
@@ -26,8 +27,10 @@ const serverHost = computed(() =>
   connection.state.serverUrl ? new URL(connection.state.serverUrl).host : '',
 );
 
-const name = ref('');
+// A profile signed out by the server signs in again as its user.
+const name = ref(connection.activeProfile()?.login ?? '');
 const password = ref('');
+const passwordField = ref<{ focus: () => void } | null>(null);
 /** Set once the password is accepted and an authentication code is needed. */
 const challenge = ref<string | null>(null);
 const code = ref('');
@@ -37,7 +40,7 @@ const error = ref<string | null>(null);
 // Vuetify's autofocus waits for an IntersectionObserver callback, which can land after typing has
 // started and pull focus back to this field; focusing on mount happens before any input.
 const nameField = ref<{ focus: () => void } | null>(null);
-onMounted(() => nameField.value?.focus());
+onMounted(() => (name.value ? passwordField : nameField).value?.focus());
 
 function startOver(message: string | null = null) {
   challenge.value = null;
@@ -103,7 +106,14 @@ async function submit() {
                   : serverHost
               }}
             </span>
-            <v-btn variant="text" size="small" :to="{ name: 'connect' }">
+            <ProfileMenu v-if="connection.state.profiles.length > 1">
+              <template #activator="{ props: menu }">
+                <v-btn variant="text" size="small" v-bind="menu">
+                  {{ t('profiles.useAnother') }}
+                </v-btn>
+              </template>
+            </ProfileMenu>
+            <v-btn v-else variant="text" size="small" :to="{ name: 'connect' }">
               {{ t('connect.change') }}
             </v-btn>
           </div>
@@ -132,6 +142,7 @@ async function submit() {
               required
             />
             <v-text-field
+              ref="passwordField"
               v-model="password"
               :label="t('login.password')"
               type="password"

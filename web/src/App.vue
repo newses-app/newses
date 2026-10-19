@@ -7,9 +7,10 @@ import { useTheme } from 'vuetify';
 import { isDark } from './lib/appearance.ts';
 import { slow } from './lib/slow-requests.ts';
 import { connectivity } from './offline/connectivity.ts';
+import ProfileMenu from './components/profiles/ProfileMenu.vue';
 import UpdatePrompt from './components/UpdatePrompt.vue';
 import { themeDefaults } from './composables/useAppearance.ts';
-import { bridge, NATIVE } from './platform/index.ts';
+import { bridge, connection, NATIVE } from './platform/index.ts';
 import { useUiStore } from './stores/ui.ts';
 
 const { t } = useI18n();
@@ -84,7 +85,14 @@ function changeServer() {
       <template v-if="failed">
         <p class="text-body-medium">{{ t('app.unreachable') }}</p>
         <v-btn color="primary" variant="flat" @click="reload">{{ t('app.retry') }}</v-btn>
-        <v-btn v-if="NATIVE" variant="text" @click="changeServer">{{ t('connect.change') }}</v-btn>
+        <ProfileMenu v-if="NATIVE && connection.state.profiles.length > 1">
+          <template #activator="{ props: menu }">
+            <v-btn variant="text" v-bind="menu">{{ t('profiles.useAnother') }}</v-btn>
+          </template>
+        </ProfileMenu>
+        <v-btn v-else-if="NATIVE" variant="text" @click="changeServer">
+          {{ t('connect.change') }}
+        </v-btn>
       </template>
       <template v-else>
         <v-progress-circular indeterminate color="primary" :aria-label="t('common.loading')" />

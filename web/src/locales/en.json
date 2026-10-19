@@ -100,11 +100,28 @@
     "incompatible": "The server at {host} runs a version of Newses this app doesn't support. Update the app or the server.",
     "older": "This server runs an older version of Newses ({version}). Some features may not work until it is updated.",
     "continue": "Continue anyway",
-    "server": "Server",
     "serverVersion": "{host}, version {version}",
     "change": "Change server",
+    "addTitle": "Add a server",
     "app": "App",
     "appVersion": "App version {version}"
+  },
+  "profiles": {
+    "title": "Profiles",
+    "switch": "{profile}, switch profile",
+    "useAnother": "Use another profile",
+    "add": "Add server",
+    "manage": "Manage profiles",
+    "current": "In use",
+    "signedOut": "Signed out",
+    "actions": "Actions for {profile}",
+    "switchTo": "Switch to this profile",
+    "rename": "Rename",
+    "label": "Name",
+    "remove": "Remove",
+    "removeTitle": "Remove {profile}?",
+    "removeText": "Articles downloaded for it are deleted from this device, and it is signed out.",
+    "removePending": "Articles downloaded for it are deleted from this device, and it is signed out. {n} change not yet sent is lost. | Articles downloaded for it are deleted from this device, and it is signed out. {n} changes not yet sent are lost."
   },
   "desktop": {
     "notifications": "Notify me about new entries while the app is in the background",
@@ -328,7 +345,9 @@
   "sharedLink": {
     "title": "Shared page",
     "subscribe": "Subscribe to its feed",
-    "publish": "Publish the page"
+    "publish": "Publish the page",
+    "to": "In {profile}",
+    "switch": "Use another profile"
   },
   "publish": {
     "title": "Publish a page",

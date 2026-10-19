@@ -3,6 +3,7 @@ import {
   createProfiles,
   httpsOrigin,
   memoryProfileStorage,
+  profileLabel,
   profileChanges,
   profileId,
   type ProfileStorage,
@@ -127,6 +128,15 @@ describe('createProfiles', () => {
     const profiles = createProfiles(memoryProfileStorage(), ids());
     await Promise.all([1, 2, 3].map((n) => profiles.add(`https://${String(n)}.example`)));
     expect((await profiles.list()).profiles).toHaveLength(3);
+  });
+});
+
+describe('profileLabel', () => {
+  it('names a profile by its label, else its user and server', () => {
+    const profile = { serverUrl: 'https://one.example:8443', login: null, label: null };
+    expect(profileLabel(profile)).toBe('one.example:8443');
+    expect(profileLabel({ ...profile, login: 'ada' })).toBe('ada @ one.example:8443');
+    expect(profileLabel({ ...profile, login: 'ada', label: 'Home' })).toBe('Home');
   });
 });
 

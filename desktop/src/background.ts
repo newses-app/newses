@@ -1,42 +1,43 @@
 // Running in the background: the tray icon (while closing to the tray is on) and launch at login.
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { ProfileList } from '@newses/shared';
 import { app, Menu, nativeImage, Tray } from 'electron';
 import { autostartEntry, HIDDEN_ARG } from './options.ts';
-
-export interface TrayActions {
-  open: () => void;
-  checkNow: () => void;
-}
+import { type TrayActions, trayMenu } from './tray-menu.ts';
 
 let tray: Tray | null = null;
+let profiles: ProfileList = { profiles: [], active: null };
 
-/** Shows or removes the tray icon. */
-export function setTray(enabled: boolean, actions: TrayActions) {
+function setMenu(actions: Omit<TrayActions, 'quit'>) {
+  tray?.setContextMenu(
+    Menu.buildFromTemplate(
+      trayMenu(profiles, {
+        ...actions,
+        quit: () => {
+          app.quit();
+        },
+      }),
+    ),
+  );
+}
+
+/** Shows or removes the tray icon; its menu lists the profiles to move between. */
+export function setTray(enabled: boolean, actions: Omit<TrayActions, 'quit'>, list = profiles) {
+  profiles = list;
   if (!enabled) {
     tray?.destroy();
     tray = null;
     return;
   }
-  if (tray) return;
-  const icon = nativeImage.createFromPath(join(__dirname, 'icon.png')).resize({ width: 32 });
-  tray = new Tray(icon);
-  tray.setToolTip('Newses');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open', click: actions.open },
-      { label: 'Check now', click: actions.checkNow },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          app.quit();
-        },
-      },
-    ]),
-  );
-  // Windows opens the menu on right click only; a left click opens the app.
-  tray.on('click', actions.open);
+  if (!tray) {
+    const icon = nativeImage.createFromPath(join(__dirname, 'icon.png')).resize({ width: 32 });
+    tray = new Tray(icon);
+    tray.setToolTip('Newses');
+    // Windows opens the menu on right click only; a left click opens the app.
+    tray.on('click', actions.open);
+  }
+  setMenu(actions);
 }
 
 /** Registers or removes the login item; Linux uses an XDG autostart entry. */

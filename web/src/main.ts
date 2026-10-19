@@ -15,6 +15,7 @@ import { loadOfflineSettings } from './offline/settings.ts';
 import { currentStore } from './offline/store.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 import { handleBack } from './platform/back-button.ts';
+import { switchProfile } from './platform/profiles.ts';
 import { routeExternalLinks } from './platform/external-links.ts';
 import { trackWindowControls } from './platform/window-controls.ts';
 import { router } from './router.ts';
@@ -68,6 +69,11 @@ bridge.onBackButton(() =>
 
 // A clicked notification opens its feed or category.
 bridge.onNavigate((target) => void router.push(target));
+
+// A profile picked in the desktop tray.
+bridge.onProfileSelected((id) => {
+  if (id !== connection.state.active) void switchProfile(id);
+});
 
 // A no-op in the native build, which has no service worker.
 registerSW({ immediate: true });

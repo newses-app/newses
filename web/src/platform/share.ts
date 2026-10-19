@@ -37,12 +37,27 @@ export function sharedLink(text: string, subject: string | null = null): SharedL
   return { url, title: words || null };
 }
 
+const CARRIED_KEY = 'newses.share';
+
+/** A page carried across the reload onto another profile, once. */
+function carried(): SharedLink | null {
+  try {
+    const value = sessionStorage.getItem(CARRIED_KEY);
+    sessionStorage.removeItem(CARRIED_KEY);
+    const link = value ? (JSON.parse(value) as Partial<SharedLink>) : null;
+    if (typeof link?.url !== 'string' || firstUrl(link.url) !== link.url) return null;
+    return { url: link.url, title: typeof link.title === 'string' ? link.title : null };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Pages shared to the app wait here until someone is signed in, then are offered to subscribe to
  * or publish.
  */
 export function createShares(bridge: PlatformBridge) {
-  const pending = ref<SharedLink | null>(null);
+  const pending = ref<SharedLink | null>(carried());
   bridge.onShare((text, subject) => {
     const link = sharedLink(text, subject);
     if (link) pending.value = link;
@@ -52,6 +67,14 @@ export function createShares(bridge: PlatformBridge) {
     /** Offers a page shared some other way (an installed web app's share target). */
     offer(link: SharedLink) {
       pending.value = link;
+    },
+    /** Keeps a page for the app to offer again after it reloads on another profile. */
+    carry(link: SharedLink) {
+      try {
+        sessionStorage.setItem(CARRIED_KEY, JSON.stringify(link));
+      } catch {
+        // Storage blocked: the page is not offered there.
+      }
     },
     /** The waiting page, once. */
     take() {

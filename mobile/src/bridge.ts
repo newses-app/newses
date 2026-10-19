@@ -178,6 +178,8 @@ const bridge: PlatformBridge = {
   updateProfile: (id, changes) => profiles.update(id, changes),
   setActiveProfile: (id) => profiles.setActive(id),
   removeProfile: (id) => profiles.remove(id),
+  // Profiles are picked in the app only.
+  onProfileSelected: () => undefined,
   getToken: () => profiles.getToken(),
   setToken: (token) => profiles.setToken(token),
   clearToken: () => profiles.clearToken(),

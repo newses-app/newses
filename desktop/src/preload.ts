@@ -25,11 +25,15 @@ const invoke = <T>(method: string, ...args: unknown[]) =>
 
 const VERSION_ARG = '--newses-version=';
 
-// A single handler, replaced by later registrations.
+// Single handlers, replaced by later registrations.
 let navigate: (target: string) => void = () => undefined;
+let selectProfile: (id: string) => void = () => undefined;
 const refreshers = new Set<() => void>();
 ipcRenderer.on('bridge:navigate', (_event, target: string) => {
   navigate(target);
+});
+ipcRenderer.on('bridge:selectProfile', (_event, id: string) => {
+  selectProfile(id);
 });
 ipcRenderer.on('bridge:refresh', () => {
   for (const listener of refreshers) listener();
@@ -48,6 +52,9 @@ const bridge: PlatformBridge = {
     invoke<undefined>('updateProfile', id, changes),
   setActiveProfile: (id: string) => invoke<undefined>('setActiveProfile', id),
   removeProfile: (id: string) => invoke<string | null>('removeProfile', id),
+  onProfileSelected: (handler) => {
+    selectProfile = handler;
+  },
   getToken: () => invoke<string | null>('getToken'),
   setToken: (token: string) => invoke<undefined>('setToken', token),
   clearToken: () => invoke<undefined>('clearToken'),

@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { mdiLogout } from '@mdi/js';
-import type { DesktopOptions } from '@newses/shared';
+import { mdiDotsVertical, mdiLogout, mdiPlus } from '@mdi/js';
+import type { DesktopOptions, Profile } from '@newses/shared';
+import { MAX_PROFILE_LABEL_LENGTH, profileLabel } from '@newses/shared/client';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { bridge, connection, desktop, NATIVE, updates } from '../../platform/index.ts';
+import { removeProfile, switchProfile } from '../../platform/profiles.ts';
 import { updateSummary } from '../../platform/updates.ts';
 import { useUiStore } from '../../stores/ui.ts';
+import ProfileAvatar from '../profiles/ProfileAvatar.vue';
 import AppPasswordsSection from './AppPasswordsSection.vue';
 import PasswordForm from './PasswordForm.vue';
 import TwoFactorSection from './TwoFactorSection.vue';
@@ -38,6 +41,43 @@ async function passwordChanged() {
   await queryClient.invalidateQueries({ queryKey: ['sessions'] });
 }
 
+/** Its server, and whether it is the one in use or signed out. */
+const profileDetails = (profile: Profile) =>
+  [
+    new URL(profile.serverUrl).host,
+    profile.id === connection.state.active && t('profiles.current'),
+    !profile.signedIn && t('profiles.signedOut'),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+const renaming = ref<Profile | null>(null);
+const label = ref('');
+
+function startRename(profile: Profile) {
+  renaming.value = profile;
+  label.value = profile.label ?? '';
+}
+
+async function rename() {
+  const profile = renaming.value;
+  renaming.value = null;
+  if (!profile) return;
+  await bridge.updateProfile(profile.id, { label: label.value.trim() || null });
+  await connection.refresh();
+}
+
+/** Removing deletes what the device kept for the profile; the reader confirms, told what is lost. */
+async function remove(profile: Profile) {
+  await removeProfile(profile, (pending) =>
+    ui.confirm(
+      t('profiles.removeTitle', { profile: profileLabel(profile) }),
+      pending > 0 ? t('profiles.removePending', { n: pending }, pending) : t('profiles.removeText'),
+      t('profiles.remove'),
+    ),
+  );
+}
+
 async function revoke(id: number) {
   try {
     await api.auth.revokeSession(id);
@@ -62,15 +102,75 @@ async function revoke(id: number) {
     </div>
 
     <template v-if="NATIVE">
-      <h2 class="text-title-large mb-2">{{ t('connect.app') }}</h2>
-      <v-list density="compact" class="mb-6">
-        <v-list-item :title="t('connect.server')" :subtitle="connection.state.serverUrl ?? ''">
+      <h2 class="text-title-large mb-2">{{ t('profiles.title') }}</h2>
+      <v-list density="compact" class="mb-2">
+        <v-list-item
+          v-for="profile in connection.state.profiles"
+          :key="profile.id"
+          :title="profileLabel(profile)"
+          :subtitle="profileDetails(profile)"
+        >
+          <template #prepend><ProfileAvatar :profile="profile" class="me-3" /></template>
           <template #append>
-            <v-btn variant="tonal" size="small" :to="{ name: 'connect' }">
-              {{ t('connect.change') }}
-            </v-btn>
+            <v-menu>
+              <template #activator="{ props: menu }">
+                <v-btn
+                  :icon="mdiDotsVertical"
+                  variant="text"
+                  size="small"
+                  :aria-label="t('profiles.actions', { profile: profileLabel(profile) })"
+                  v-bind="menu"
+                />
+              </template>
+              <v-list density="compact">
+                <v-list-item
+                  v-if="profile.id !== connection.state.active"
+                  :title="t('profiles.switchTo')"
+                  @click="switchProfile(profile.id)"
+                />
+                <v-list-item :title="t('profiles.rename')" @click="startRename(profile)" />
+                <v-list-item :title="t('profiles.remove')" @click="remove(profile)" />
+              </v-list>
+            </v-menu>
           </template>
         </v-list-item>
+      </v-list>
+      <v-btn
+        variant="tonal"
+        size="small"
+        class="mb-6"
+        :prepend-icon="mdiPlus"
+        :to="{ name: 'connect' }"
+      >
+        {{ t('profiles.add') }}
+      </v-btn>
+      <v-dialog
+        :model-value="renaming !== null"
+        max-width="420"
+        @update:model-value="renaming = null"
+      >
+        <v-card :title="t('profiles.rename')">
+          <v-form @submit.prevent="rename">
+            <v-card-text>
+              <v-text-field
+                v-model="label"
+                :label="t('profiles.label')"
+                :placeholder="renaming ? profileLabel({ ...renaming, label: null }) : undefined"
+                :maxlength="MAX_PROFILE_LABEL_LENGTH"
+                autofocus
+              />
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn @click="renaming = null">{{ t('common.cancel') }}</v-btn>
+              <v-btn type="submit" color="primary" variant="flat">{{ t('common.save') }}</v-btn>
+            </v-card-actions>
+          </v-form>
+        </v-card>
+      </v-dialog>
+
+      <h2 class="text-title-large mb-2">{{ t('connect.app') }}</h2>
+      <v-list density="compact" class="mb-6">
         <!-- The action sits below the text, so narrow screens never cover the version. -->
         <v-list-item v-if="bridge.appVersion">
           <v-list-item-title class="text-wrap">

@@ -80,8 +80,18 @@ function showWindow() {
 /** Asks the app to refresh its counters now. */
 const refresh = () => window?.webContents.send('bridge:refresh');
 
+const trayActions = {
+  open: showWindow,
+  checkNow: refresh,
+  /** The app moves there itself, after any sync in progress. */
+  selectProfile: (id: string) => {
+    showWindow();
+    window?.webContents.send('bridge:selectProfile', id);
+  },
+};
+
 function applyBackground(settings: SettingsStore) {
-  setTray(options(settings).closeToTray, { open: showWindow, checkNow: refresh });
+  setTray(options(settings).closeToTray, trayActions);
 }
 
 async function serveApp(request: Request): Promise<Response> {
@@ -118,19 +128,38 @@ function checked<T>(value: T | null, what: string): T {
   return value;
 }
 
+/** Answers the app's bridge calls; returns a function that shows the profiles in the tray. */
 function registerBridge(settings: SettingsStore) {
   const tokens = createTokenStore(settings, safeStorage, process.platform);
   const profiles = createProfiles(settingsProfileStorage(settings, tokens));
+  const showProfiles = async () => {
+    setTray(options(settings).closeToTray, trayActions, await profiles.list());
+  };
+  /** A change to the profiles, or whether one is signed in, shows in the tray. */
+  const changing = async <T>(change: Promise<T>): Promise<T> => {
+    try {
+      return await change;
+    } finally {
+      void showProfiles();
+    }
+  };
   handle('getProfiles', () => profiles.list());
-  handle('addProfile', (url) => profiles.add(checked(httpsOrigin(url), 'server')));
+  handle('addProfile', (url) => changing(profiles.add(checked(httpsOrigin(url), 'server'))));
   handle('updateProfile', (id, changes) =>
-    profiles.update(checked(profileId(id), 'profile'), checked(profileChanges(changes), 'changes')),
+    changing(
+      profiles.update(
+        checked(profileId(id), 'profile'),
+        checked(profileChanges(changes), 'changes'),
+      ),
+    ),
   );
-  handle('setActiveProfile', (id) => profiles.setActive(checked(profileId(id), 'profile')));
-  handle('removeProfile', (id) => profiles.remove(checked(profileId(id), 'profile')));
+  handle('setActiveProfile', (id) =>
+    changing(profiles.setActive(checked(profileId(id), 'profile'))),
+  );
+  handle('removeProfile', (id) => changing(profiles.remove(checked(profileId(id), 'profile'))));
   handle('getToken', () => profiles.getToken());
-  handle('setToken', (token) => profiles.setToken(checked(text(token, 1024), 'token')));
-  handle('clearToken', () => profiles.clearToken());
+  handle('setToken', (token) => changing(profiles.setToken(checked(text(token, 1024), 'token'))));
+  handle('clearToken', () => changing(profiles.clearToken()));
   handle('openExternal', async (url) => {
     const target = externalUrl(text(url, 8192) ?? '');
     if (target) await shell.openExternal(target);
@@ -151,6 +180,8 @@ function registerBridge(settings: SettingsStore) {
     const { title, body, target } = (value ?? {}) as Record<string, unknown>;
     if (!Notification.isSupported()) return;
     const path = notificationTarget(target);
+    // The target is a path in this profile's data; after a move to another it only opens the app.
+    const profile = settings.get().activeProfile;
     const notification = new Notification({
       title: text(title, 256) ?? '',
       body: text(body, 1024) ?? '',
@@ -158,7 +189,8 @@ function registerBridge(settings: SettingsStore) {
     notifications.add(notification);
     notification.on('click', () => {
       showWindow();
-      if (path) window?.webContents.send('bridge:navigate', path);
+      if (path && settings.get().activeProfile === profile)
+        window?.webContents.send('bridge:navigate', path);
     });
     notification.on('close', () => notifications.delete(notification));
     notification.show();
@@ -191,6 +223,7 @@ function registerBridge(settings: SettingsStore) {
   handle('getUpdateStatus', () => updater?.status() ?? { state: 'unsupported' });
   handle('checkForUpdates', () => updater?.check());
   handle('installUpdate', () => updater?.install());
+  return showProfiles;
 }
 
 function buildMenu() {
@@ -309,12 +342,13 @@ if (!app.requestSingleInstanceLock()) {
       PERMISSIONS.has(permission),
     );
     protocol.handle(APP_SCHEME, serveApp);
-    registerBridge(settings);
+    const showProfiles = registerBridge(settings);
     buildMenu();
     // Started at login: straight to the tray, when there is one.
     const hidden = process.argv.includes(HIDDEN_ARG) && options(settings).closeToTray;
     window = createWindow(settings, hidden);
     applyBackground(settings);
+    void showProfiles();
     // Re-registered, so a moved AppImage or a reinstall still starts at login.
     if (options(settings).launchAtLogin) void setLaunchAtLogin(true);
     powerMonitor.on('resume', refresh);
