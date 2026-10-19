@@ -13,6 +13,7 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { type ConnectionStatus, Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { Share } from '@capacitor/share';
+import { createProfiles } from '@newses/shared/profiles';
 import type {
   NetworkStatus,
   PlatformBridge,
@@ -20,16 +21,37 @@ import type {
   StagedPage,
   UpdateStatus,
 } from '@newses/shared';
+import { capacitorProfileStorage } from './profiles.ts';
 import { type AndroidUpdate, androidUpdate, checkDue, parseCheckRecord } from './updates.ts';
 
 declare const APP_VERSION: string;
 /** The stage's downloads, from the release build; empty in local builds, which never update. */
 declare const DOWNLOADS_URL: string;
 
-const SERVER_KEY = 'serverUrl';
-/** In Android Keystore-backed storage, not Preferences. */
-const TOKEN_KEY = 'token';
 const UPDATE_CHECK_KEY = 'updateCheck';
+
+/** Profiles in Preferences; their tokens in Android Keystore-backed storage. */
+const profiles = createProfiles(
+  capacitorProfileStorage(
+    {
+      get: async (key) => (await Preferences.get({ key })).value,
+      set: (key, value) => Preferences.set({ key, value }),
+      remove: (key) => Preferences.remove({ key }),
+    },
+    {
+      get: (key) => SecureStorage.getItem(key),
+      set: (key, value) => SecureStorage.setItem(key, value),
+      remove: (key) => SecureStorage.removeItem(key),
+    },
+  ),
+);
+
+/** The active profile's server and token, for the background job. */
+async function activeConnection() {
+  const { profiles: list, active } = await profiles.list();
+  const serverUrl = list.find((p) => p.id === active)?.serverUrl ?? null;
+  return { serverUrl, token: serverUrl ? await profiles.getToken() : null };
+}
 
 /** The app's own plugin (android/…/ShareTargetPlugin.java): text from the share sheet. */
 const ShareTarget = registerPlugin<{
@@ -151,11 +173,14 @@ void checkAtLaunch();
 const bridge: PlatformBridge = {
   platform: 'android',
   appVersion: APP_VERSION,
-  getServerUrl: async () => (await Preferences.get({ key: SERVER_KEY })).value,
-  setServerUrl: (url) => Preferences.set({ key: SERVER_KEY, value: url }),
-  getToken: () => SecureStorage.getItem(TOKEN_KEY),
-  setToken: (token) => SecureStorage.setItem(TOKEN_KEY, token),
-  clearToken: () => SecureStorage.removeItem(TOKEN_KEY),
+  getProfiles: () => profiles.list(),
+  addProfile: (serverUrl) => profiles.add(serverUrl),
+  updateProfile: (id, changes) => profiles.update(id, changes),
+  setActiveProfile: (id) => profiles.setActive(id),
+  removeProfile: (id) => profiles.remove(id),
+  getToken: () => profiles.getToken(),
+  setToken: (token) => profiles.setToken(token),
+  clearToken: () => profiles.clearToken(),
   // Custom Tabs: the system browser, over the app.
   openExternal: (url) => Browser.open({ url }),
   saveFile,
@@ -179,8 +204,7 @@ const bridge: PlatformBridge = {
   setBackgroundSync: async (options) =>
     BackgroundSync.configure({
       ...options,
-      serverUrl: options.enabled ? (await Preferences.get({ key: SERVER_KEY })).value : null,
-      token: options.enabled ? await SecureStorage.getItem(TOKEN_KEY) : null,
+      ...(options.enabled ? await activeConnection() : { serverUrl: null, token: null }),
     }),
   takeBackgroundSync: async () => (await BackgroundSync.take()).pages,
   getDesktopOptions: () => Promise.resolve(null),

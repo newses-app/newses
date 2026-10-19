@@ -31,6 +31,33 @@ export interface NetworkStatus {
   wifi: boolean | null;
 }
 
+/**
+ * A server and a user on it that the apps sign in to. The shells keep several, one of them active,
+ * each with its own token; `userId`, `name`, and `login` are unknown until the first sign-in.
+ */
+export interface Profile {
+  /** A random UUID, given when the profile is added. */
+  id: string;
+  /** An HTTPS origin. */
+  serverUrl: string;
+  userId: number | null;
+  name: string | null;
+  login: string | null;
+  /** Chosen by the reader. */
+  label: string | null;
+  /** Whether the shell holds a token for it. */
+  signedIn: boolean;
+}
+
+/** What the web app may change of a profile. */
+export type ProfileChanges = Partial<Pick<Profile, 'userId' | 'name' | 'login' | 'label'>>;
+
+export interface ProfileList {
+  profiles: Profile[];
+  /** The profile the app runs on; null on first run, or after the active one was removed. */
+  active: string | null;
+}
+
 /** The Android background job's settings; the bridge adds the server and token itself. */
 export interface BackgroundSyncOptions {
   /** False stops the job and deletes what it staged and was given. */
@@ -84,11 +111,16 @@ export interface PlatformBridge {
   readonly platform: 'web' | 'desktop' | 'android';
   /** The app's version; empty in a browser. */
   readonly appVersion: string;
-  /** The server chosen at the connect screen; null until one is. */
-  getServerUrl(): Promise<string | null>;
-  setServerUrl(url: string): Promise<void>;
-  /** The bearer session token from OS secure storage; null when signed out or not kept. */
+  getProfiles(): Promise<ProfileList>;
+  /** Adds a signed-out profile for an HTTPS origin, without making it active. */
+  addProfile(serverUrl: string): Promise<Profile>;
+  updateProfile(id: string, changes: ProfileChanges): Promise<void>;
+  setActiveProfile(id: string): Promise<void>;
+  /** Removes a profile and its token, returning the token once so its session can be revoked. */
+  removeProfile(id: string): Promise<string | null>;
+  /** The active profile's bearer token from OS secure storage; null when signed out or not kept. */
   getToken(): Promise<string | null>;
+  /** Keeps the active profile's token; fails without an active profile. */
   setToken(token: string): Promise<void>;
   clearToken(): Promise<void>;
   /** Opens an http(s) URL in the system browser. */

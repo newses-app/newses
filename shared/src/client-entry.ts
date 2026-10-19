@@ -6,3 +6,4 @@ export * from './prefs-defaults.ts';
 export * from './themes-builtin.ts';
 export * from './filter-options.ts';
 export * from './api-version.ts';
+export * from './profiles.ts';

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
+import { appFilePath, externalUrl, isAppUrl } from './urls.ts';
 
 const WEB = '/opt/newses/web';
 
@@ -42,14 +42,5 @@ describe('externalUrl', () => {
     expect(externalUrl('file:///etc/passwd')).toBeNull();
     expect(externalUrl('javascript:alert(1)')).toBeNull();
     expect(externalUrl('not a url')).toBeNull();
-  });
-});
-
-describe('httpsOrigin', () => {
-  it('accepts HTTPS origins only', () => {
-    expect(httpsOrigin('https://rr.example.com')).toBe('https://rr.example.com');
-    expect(httpsOrigin('https://rr.example.com/path')).toBeNull();
-    expect(httpsOrigin('http://rr.example.com')).toBeNull();
-    expect(httpsOrigin(42)).toBeNull();
   });
 });

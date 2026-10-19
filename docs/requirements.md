@@ -17,6 +17,7 @@
 | Per-feed Options | Feed control | Family members pause feeds and hide them from All articles in the web, desktop, and Android apps, and see how often each feed is checked and why; feeds of rate-limiting sites slow down on their own, and admins set per-site minimum intervals; on Docker and AWS |
 | Published pages | Sharing | Family members publish any web page to their published feed from the web, desktop, and Android apps, bookmarklets, and TTRSS clients; imported pages stay private to their owner; on Docker and AWS |
 | Missing requirements | Conformance | Feed errors show when they happened; logs below debug carry no secret keys or feed URLs; every fetch honours host pauses and a host's feeds are never fetched by two processes at once; family members debug feeds and keep the images of kept entries; OWASP ASVS L1 verified again; on Docker and AWS |
+| Multiple Server Profiles | Native apps | Family members keep several servers and accounts in the desktop and Android apps and switch between them without signing in again, keeping each one's offline articles and waiting changes; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -128,6 +129,7 @@
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app for Windows (installer, zip) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, and a prompt to install newer versions |
+| Server profiles | Multiple Server Profiles | The desktop and Android apps keep several profiles (a server and a user), one active, each with its token in secure storage and its own offline store; the app bar, settings, and the desktop tray switch between them |
 | macOS desktop app | Later | The desktop app, signed and notarised for macOS |
 
 ### Offline

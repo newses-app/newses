@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { DesktopOptions } from '@newses/shared';
+import type { SavedProfile } from '@newses/shared/profiles';
 
 export interface WindowState {
   x: number;
@@ -12,8 +13,12 @@ export interface WindowState {
 
 /** What the app keeps in `settings.json` in its user data folder. */
 export interface Settings {
+  profiles?: SavedProfile[] | undefined;
+  activeProfile?: string | null | undefined;
+  /** Each profile's session token, encrypted with the OS key store (base64). */
+  tokens?: Record<string, string> | undefined;
+  /** The single server and its encrypted token from before profiles; moved into a profile. */
   serverUrl?: string | undefined;
-  /** The session token, encrypted with the OS key store (base64). */
   token?: string | undefined;
   window?: WindowState | undefined;
   /** The app theme's last background, so a new window starts in it rather than flashing. */

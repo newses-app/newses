@@ -5,6 +5,9 @@ import type {
   DesktopOptions,
   NetworkStatus,
   PlatformBridge,
+  Profile,
+  ProfileChanges,
+  ProfileList,
   SaveFile,
   UpdateStatus,
 } from '@newses/shared';
@@ -39,8 +42,12 @@ const bridge: PlatformBridge = {
   platform: 'desktop',
   appVersion:
     process.argv.find((arg) => arg.startsWith(VERSION_ARG))?.slice(VERSION_ARG.length) ?? '',
-  getServerUrl: () => invoke<string | null>('getServerUrl'),
-  setServerUrl: (url: string) => invoke<undefined>('setServerUrl', url),
+  getProfiles: () => invoke<ProfileList>('getProfiles'),
+  addProfile: (serverUrl: string) => invoke<Profile>('addProfile', serverUrl),
+  updateProfile: (id: string, changes: ProfileChanges) =>
+    invoke<undefined>('updateProfile', id, changes),
+  setActiveProfile: (id: string) => invoke<undefined>('setActiveProfile', id),
+  removeProfile: (id: string) => invoke<string | null>('removeProfile', id),
   getToken: () => invoke<string | null>('getToken'),
   setToken: (token: string) => invoke<undefined>('setToken', token),
   clearToken: () => invoke<undefined>('clearToken'),

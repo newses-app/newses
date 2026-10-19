@@ -36,14 +36,3 @@ export function externalUrl(url: string): string | null {
     return null;
   }
 }
-
-/** An HTTPS origin, as the connect screen chooses; else null. */
-export function httpsOrigin(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && url.origin === value ? url.origin : null;
-  } catch {
-    return null;
-  }
-}

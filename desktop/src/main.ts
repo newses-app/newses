@@ -2,6 +2,7 @@
 import { join } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { createProfiles, httpsOrigin, profileChanges, profileId } from '@newses/shared/profiles';
 import { NATIVE_CSP } from '@newses/shared/web-csp';
 import {
   app,
@@ -23,9 +24,10 @@ import {
 } from 'electron';
 import { setLaunchAtLogin, setTray } from './background.ts';
 import { DEFAULT_OPTIONS, HIDDEN_ARG, notificationTarget, parseOptions } from './options.ts';
+import { settingsProfileStorage } from './profiles.ts';
 import { openSettings, type Settings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
-import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, httpsOrigin, isAppUrl } from './urls.ts';
+import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, isAppUrl } from './urls.ts';
 import { themeBackground, themeSource, themeText } from './theme.ts';
 import { startUpdater, type Updater } from './updater.ts';
 import { centered, onScreen, restoreBounds } from './window-state.ts';
@@ -111,21 +113,24 @@ function handle(channel: string, listener: (...args: unknown[]) => unknown) {
 const text = (value: unknown, max: number) =>
   typeof value === 'string' && value.length <= max ? value : null;
 
+function checked<T>(value: T | null, what: string): T {
+  if (value === null) throw new Error(`Invalid ${what}`);
+  return value;
+}
+
 function registerBridge(settings: SettingsStore) {
   const tokens = createTokenStore(settings, safeStorage, process.platform);
-  handle('getServerUrl', () => settings.get().serverUrl ?? null);
-  handle('setServerUrl', async (url) => {
-    const origin = httpsOrigin(url);
-    if (!origin) throw new Error('Not an HTTPS origin');
-    await settings.update({ serverUrl: origin });
-  });
-  handle('getToken', () => tokens.get());
-  handle('setToken', async (token) => {
-    const value = text(token, 1024);
-    if (!value) throw new Error('Invalid token');
-    await tokens.set(value);
-  });
-  handle('clearToken', () => tokens.clear());
+  const profiles = createProfiles(settingsProfileStorage(settings, tokens));
+  handle('getProfiles', () => profiles.list());
+  handle('addProfile', (url) => profiles.add(checked(httpsOrigin(url), 'server')));
+  handle('updateProfile', (id, changes) =>
+    profiles.update(checked(profileId(id), 'profile'), checked(profileChanges(changes), 'changes')),
+  );
+  handle('setActiveProfile', (id) => profiles.setActive(checked(profileId(id), 'profile')));
+  handle('removeProfile', (id) => profiles.remove(checked(profileId(id), 'profile')));
+  handle('getToken', () => profiles.getToken());
+  handle('setToken', (token) => profiles.setToken(checked(text(token, 1024), 'token')));
+  handle('clearToken', () => profiles.clearToken());
   handle('openExternal', async (url) => {
     const target = externalUrl(text(url, 8192) ?? '');
     if (target) await shell.openExternal(target);

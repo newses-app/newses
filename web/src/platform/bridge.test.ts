@@ -12,12 +12,16 @@ describe('selectBridge', () => {
     expect(selectBridge(undefined, false)).toBe(webBridge);
   });
 
-  it('keeps the server and token in memory for the native build outside a shell', async () => {
+  it('keeps profiles and tokens in memory for the native build outside a shell', async () => {
     const bridge = selectBridge(undefined, true);
     expect(bridge).not.toBe(webBridge);
-    await bridge.setServerUrl('https://reader.example');
+    const profile = await bridge.addProfile('https://reader.example');
+    await bridge.setActiveProfile(profile.id);
     await bridge.setToken('t0k');
-    expect(await bridge.getServerUrl()).toBe('https://reader.example');
+    expect(await bridge.getProfiles()).toMatchObject({
+      profiles: [{ serverUrl: 'https://reader.example', signedIn: true }],
+      active: profile.id,
+    });
     expect(await bridge.getToken()).toBe('t0k');
     await bridge.clearToken();
     expect(await bridge.getToken()).toBeNull();
@@ -28,7 +32,8 @@ describe('webBridge', () => {
   it('keeps no server or token: the page origin and cookie apply', async () => {
     await webBridge.setToken('t0k');
     expect(await webBridge.getToken()).toBeNull();
-    expect(await webBridge.getServerUrl()).toBeNull();
+    expect(await webBridge.getProfiles()).toEqual({ profiles: [], active: null });
+    await expect(webBridge.addProfile('https://reader.example')).rejects.toThrow();
   });
 });
 
@@ -46,7 +51,7 @@ describe('webBridge network', () => {
 
 describe('memoryBridge', () => {
   it('starts empty each time', async () => {
-    await memoryBridge().setToken('one');
-    expect(await memoryBridge().getToken()).toBeNull();
+    await memoryBridge().addProfile('https://reader.example');
+    expect(await memoryBridge().getProfiles()).toEqual({ profiles: [], active: null });
   });
 });

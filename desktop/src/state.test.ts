@@ -39,34 +39,36 @@ describe('openSettings', () => {
 });
 
 describe('token store', () => {
-  it('keeps the token encrypted in settings', async () => {
+  it('keeps each profile token encrypted in settings', async () => {
     const file = join(dir, 'settings.json');
     const tokens = createTokenStore(await openSettings(file), encryption(), 'linux');
-    await tokens.set('t0k');
+    await tokens.set('a', 't0k');
+    await tokens.set('b', 't1k');
     expect(await readFile(file, 'utf8')).not.toContain('"t0k"');
     const reopened = createTokenStore(await openSettings(file), encryption(), 'linux');
-    expect(reopened.get()).toBe('t0k');
-    await reopened.clear();
-    expect(reopened.get()).toBeNull();
-    expect(createTokenStore(await openSettings(file), encryption(), 'linux').get()).toBeNull();
+    expect(reopened.get('a')).toBe('t0k');
+    await reopened.clear('a');
+    expect(reopened.get('a')).toBeNull();
+    const again = createTokenStore(await openSettings(file), encryption(), 'linux');
+    expect([again.get('a'), again.get('b')]).toEqual([null, 't1k']);
   });
 
-  it('keeps the token in memory only without a Linux keyring', async () => {
+  it('keeps tokens in memory only without a Linux keyring', async () => {
     expect(canKeepToken(encryption('basic_text'), 'linux')).toBe(false);
     expect(canKeepToken(encryption('basic_text'), 'win32')).toBe(true);
     expect(canKeepToken(encryption('dpapi', false), 'win32')).toBe(false);
     const file = join(dir, 'settings.json');
     const tokens = createTokenStore(await openSettings(file), encryption('basic_text'), 'linux');
-    await tokens.set('t0k');
-    expect(tokens.get()).toBe('t0k');
+    await tokens.set('a', 't0k');
+    expect(tokens.get('a')).toBe('t0k');
     const reopened = createTokenStore(await openSettings(file), encryption('basic_text'), 'linux');
-    expect(reopened.get()).toBeNull();
+    expect(reopened.get('a')).toBeNull();
   });
 
-  it('asks for sign-in when the token cannot be decrypted', async () => {
+  it('asks for sign-in when a token cannot be decrypted', async () => {
     const settings = await openSettings(join(dir, 'settings.json'));
-    await settings.update({ token: Buffer.from('other').toString('base64') });
-    expect(createTokenStore(settings, encryption(), 'win32').get()).toBeNull();
+    await settings.update({ tokens: { a: Buffer.from('other').toString('base64') } });
+    expect(createTokenStore(settings, encryption(), 'win32').get('a')).toBeNull();
   });
 });
 

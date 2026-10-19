@@ -1,4 +1,5 @@
 import type { NetworkStatus, PlatformBridge, SaveFile, StagedPage } from '@newses/shared';
+import { createProfiles, memoryProfileStorage } from '@newses/shared/client';
 
 export type { NetworkStatus, PlatformBridge, SaveFile, StagedPage };
 
@@ -35,12 +36,17 @@ function onBrowserNetworkChange(listener: (status: NetworkStatus) => void): () =
   };
 }
 
+const noProfiles = () => Promise.reject(new Error('The browser uses its own server'));
+
 /** The browser: same-origin server, cookie session, new tabs, and downloads. */
 export const webBridge: PlatformBridge = {
   platform: 'web',
   appVersion: '',
-  getServerUrl: () => Promise.resolve(null),
-  setServerUrl: () => Promise.resolve(),
+  getProfiles: () => Promise.resolve({ profiles: [], active: null }),
+  addProfile: noProfiles,
+  updateProfile: noProfiles,
+  setActiveProfile: noProfiles,
+  removeProfile: noProfiles,
   getToken: () => Promise.resolve(null),
   setToken: () => Promise.resolve(),
   clearToken: () => Promise.resolve(),
@@ -70,26 +76,19 @@ export const webBridge: PlatformBridge = {
   installUpdate: () => Promise.resolve(),
 };
 
-/** The native build outside a shell (development, tests): like the browser, but remembers the server and token until reload. */
+/** The native build outside a shell (development, tests): like the browser, but remembers profiles and tokens until reload. */
 export function memoryBridge(): PlatformBridge {
-  let serverUrl: string | null = null;
-  let token: string | null = null;
+  const profiles = createProfiles(memoryProfileStorage());
   return {
     ...webBridge,
-    getServerUrl: () => Promise.resolve(serverUrl),
-    setServerUrl: (url) => {
-      serverUrl = url;
-      return Promise.resolve();
-    },
-    getToken: () => Promise.resolve(token),
-    setToken: (value) => {
-      token = value;
-      return Promise.resolve();
-    },
-    clearToken: () => {
-      token = null;
-      return Promise.resolve();
-    },
+    getProfiles: () => profiles.list(),
+    addProfile: (serverUrl) => profiles.add(serverUrl),
+    updateProfile: (id, changes) => profiles.update(id, changes),
+    setActiveProfile: (id) => profiles.setActive(id),
+    removeProfile: (id) => profiles.remove(id),
+    getToken: () => profiles.getToken(),
+    setToken: (token) => profiles.setToken(token),
+    clearToken: () => profiles.clearToken(),
   };
 }
 

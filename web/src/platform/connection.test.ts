@@ -4,7 +4,8 @@ import { createConnection } from './connection.ts';
 
 async function connected() {
   const bridge = memoryBridge();
-  await bridge.setServerUrl('https://one.example');
+  const profile = await bridge.addProfile('https://one.example');
+  await bridge.setActiveProfile(profile.id);
   await bridge.setToken('t1');
   const connection = createConnection(bridge);
   await connection.load();
@@ -24,8 +25,8 @@ describe('createConnection', () => {
   });
 
   it('keeps the token on sign-in and forgets it when the session ends', async () => {
-    const bridge = memoryBridge();
-    const connection = createConnection(bridge);
+    const { bridge, connection } = await connected();
+    await connection.signedOut();
     await connection.signedIn('t2');
     expect(connection.state.token).toBe('t2');
     expect(await bridge.getToken()).toBe('t2');
@@ -40,7 +41,8 @@ describe('createConnection', () => {
     await connection.setServer('https://two.example', revoke);
     expect(revoke).toHaveBeenCalledOnce();
     expect(connection.state).toEqual({ serverUrl: 'https://two.example', token: null });
-    expect(await bridge.getServerUrl()).toBe('https://two.example');
+    const { profiles, active } = await bridge.getProfiles();
+    expect(profiles).toMatchObject([{ id: active, serverUrl: 'https://two.example' }]);
     expect(await bridge.getToken()).toBeNull();
   });
 
