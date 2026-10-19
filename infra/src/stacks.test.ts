@@ -278,11 +278,13 @@ describe('App', () => {
           (fn as { Properties: { Environment: { Variables: Record<string, unknown> } } }).Properties
             .Environment.Variables,
       );
-    for (const env of variables(app)) expect(env).not.toHaveProperty('INSTANCE_NAME');
-    const named = Template.fromStack(
-      new NewsesStage(newApp(), 'Test', { stage: { ...dev, instanceName: 'Home' }, webDir }).app,
-    );
-    for (const env of variables(named)) expect(env).toMatchObject({ INSTANCE_NAME: 'Home' });
+    const stage = (instanceName: string | undefined) =>
+      Template.fromStack(
+        new NewsesStage(newApp(), 'Test', { stage: { ...dev, instanceName }, webDir }).app,
+      );
+    for (const env of variables(stage(undefined))) expect(env).not.toHaveProperty('INSTANCE_NAME');
+    for (const env of variables(stage('Home')))
+      expect(env).toMatchObject({ INSTANCE_NAME: 'Home' });
   });
 
   it('publishes operations alerts from tick to the stage topic', () => {
