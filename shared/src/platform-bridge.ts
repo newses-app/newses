@@ -20,8 +20,11 @@ export interface DesktopOptions {
   notifications: boolean;
   /** Closing the window keeps the app in the tray. */
   closeToTray: boolean;
-  /** Starts with the user's session (in the tray when `closeToTray`). */
-  launchAtLogin: boolean;
+  /**
+   * Starts with the user's session (in the tray when `closeToTray`); absent where the app does not
+   * offer it (the Windows portable exe).
+   */
+  launchAtLogin?: boolean;
 }
 
 /** The device's network as the OS sees it; the server may still be unreachable over it. */

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { autostartEntry, notificationTarget, parseOptions } from './options.ts';
+import {
+  autostartEntry,
+  DEFAULT_OPTIONS,
+  notificationTarget,
+  parseOptions,
+  shownOptions,
+} from './options.ts';
 
 describe('parseOptions', () => {
   it('accepts known options with boolean values', () => {
@@ -14,6 +20,21 @@ describe('parseOptions', () => {
     expect(parseOptions({ closeToTray: 'yes' })).toBeNull();
     expect(parseOptions({ serverUrl: 'https://x' })).toBeNull();
     expect(parseOptions(null)).toBeNull();
+  });
+
+  it('refuses launch at login from the portable exe', () => {
+    expect(parseOptions({ launchAtLogin: true }, true)).toBeNull();
+    expect(parseOptions({ closeToTray: true }, true)).toEqual({ closeToTray: true });
+  });
+});
+
+describe('shownOptions', () => {
+  it("leaves launch at login out of the portable exe's settings", () => {
+    expect(shownOptions(DEFAULT_OPTIONS, false)).toEqual(DEFAULT_OPTIONS);
+    expect(shownOptions(DEFAULT_OPTIONS, true)).toEqual({
+      notifications: true,
+      closeToTray: false,
+    });
   });
 });
 

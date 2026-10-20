@@ -1,4 +1,5 @@
-# Unsigned builds: `pnpm build:win` (per-user NSIS, zip) and `pnpm build:linux` (AppImage, deb).
+# Unsigned builds: `pnpm build:win` (per-user NSIS, zip, portable exe) and `pnpm build:linux`
+# (AppImage, deb).
 appId: app.newses
 productName: Newses
 copyright: Copyright © Newses contributors
@@ -33,12 +34,22 @@ win:
     # The unpacked app, to run without installing; not updated by electron-updater.
     - target: zip
       arch: [x64]
+    # One exe that unpacks the app on each launch and keeps its data beside it (portable.ts); not
+    # updated by electron-updater.
+    - target: portable
+      arch: [x64]
   artifactName: newses-${version}-windows-${arch}.${ext}
 
 nsis:
   oneClick: true
   perMachine: false
   artifactName: newses-${version}-windows-setup.${ext}
+
+portable:
+  artifactName: newses-${version}-windows-portable.${ext}
+  # A new folder for each launch: by default each build unpacks to one fixed folder, which a second
+  # launch would delete while the first still runs from it.
+  unpackDirName: false
 
 linux:
   target:

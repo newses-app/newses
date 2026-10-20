@@ -34,8 +34,12 @@ const checking = computed(() => updates.status.value.state === 'checking');
 
 const desktopOptions = computed(() => desktop.options.value);
 const DESKTOP_OPTIONS: (keyof DesktopOptions)[] = ['notifications', 'closeToTray', 'launchAtLogin'];
+/** The options this install offers: the Windows portable exe does not start at login. */
+const shownDesktopOptions = computed(() =>
+  DESKTOP_OPTIONS.filter((key) => desktopOptions.value?.[key] !== undefined),
+);
 
-function setOption(key: keyof DesktopOptions, value: boolean | null) {
+function setOption(key: keyof DesktopOptions, value: boolean | null | undefined) {
   void desktop.set({ [key]: value === true });
 }
 
@@ -235,9 +239,9 @@ async function revoke(id: number) {
       </v-list>
       <div v-if="desktopOptions" class="mb-6">
         <v-switch
-          v-for="key in DESKTOP_OPTIONS"
+          v-for="key in shownDesktopOptions"
           :key="key"
-          :model-value="desktopOptions[key]"
+          :model-value="desktopOptions[key] === true"
           :label="t(`desktop.${key}`)"
           color="primary"
           density="compact"

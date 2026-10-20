@@ -15,7 +15,10 @@ export interface Updater {
 }
 
 /** Null when this build has no update feed (development and local builds). */
-export function startUpdater(onStatus: (status: UpdateStatus) => void): Updater | null {
+export function startUpdater(
+  onStatus: (status: UpdateStatus) => void,
+  portable: boolean,
+): Updater | null {
   const feed = join(process.resourcesPath, 'app-update.yml');
   if (!app.isPackaged || !existsSync(feed)) return null;
   const config = parseUpdateConfig(readFileSync(feed, 'utf8'));
@@ -24,6 +27,7 @@ export function startUpdater(onStatus: (status: UpdateStatus) => void): Updater 
     platform: process.platform,
     appImage: process.env.APPIMAGE,
     hasUninstaller: existsSync(join(dirname(process.execPath), `Uninstall ${app.getName()}.exe`)),
+    portable,
     config,
   });
 

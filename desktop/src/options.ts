@@ -10,12 +10,23 @@ export const DEFAULT_OPTIONS: DesktopOptions = {
 /** Launched at login: starts in the tray when `closeToTray` is on. */
 export const HIDDEN_ARG = '--hidden';
 
+/** The Windows portable exe leaves no login item behind, so it does not offer launch at login. */
+const offered = (key: string, portable: boolean) =>
+  key in DEFAULT_OPTIONS && !(portable && key === 'launchAtLogin');
+
+/** The options settings show: those this install offers. */
+export function shownOptions(options: DesktopOptions, portable: boolean): DesktopOptions {
+  if (!portable) return options;
+  const { launchAtLogin: _notOffered, ...shown } = options;
+  return shown;
+}
+
 /** The booleans the renderer may change; null when anything else is sent. */
-export function parseOptions(value: unknown): Partial<DesktopOptions> | null {
+export function parseOptions(value: unknown, portable = false): Partial<DesktopOptions> | null {
   if (typeof value !== 'object' || value === null) return null;
   const options: Partial<DesktopOptions> = {};
   for (const [key, setting] of Object.entries(value)) {
-    if (!(key in DEFAULT_OPTIONS) || typeof setting !== 'boolean') return null;
+    if (!offered(key, portable) || typeof setting !== 'boolean') return null;
     options[key as keyof DesktopOptions] = setting;
   }
   return options;

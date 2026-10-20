@@ -1,6 +1,6 @@
 # The release pipeline's Windows leg (infra/src/release-stack.ts): the signed NSIS installer,
-# its block map and latest.yml, and the zip of the signed app, handed to the publish leg under
-# releases/<tag>/.
+# its block map and latest.yml, the zip of the signed app, and the signed portable exe, handed to
+# the publish leg under releases/<tag>/.
 # RELEASE_TAG comes from the pipeline or scripts/try-release.sh; the rest from the project.
 #
 # Each command is one PowerShell block in `& { }`: CodeBuild replays a command's session
@@ -74,7 +74,8 @@ phases:
             "desktop\release\newses-$version-windows-setup.exe",
             "desktop\release\newses-$version-windows-setup.exe.blockmap",
             "desktop\release\latest.yml",
-            "desktop\release\newses-$version-windows-x64.zip"
+            "desktop\release\newses-$version-windows-x64.zip",
+            "desktop\release\newses-$version-windows-portable.exe"
           )
           foreach ($file in $files) {
             if (-not (Test-Path $file)) { throw "missing $file" }

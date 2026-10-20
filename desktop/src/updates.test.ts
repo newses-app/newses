@@ -37,27 +37,59 @@ describe('updateMode', () => {
         platform: 'linux',
         appImage: '/home/me/newses.AppImage',
         hasUninstaller: false,
+        portable: false,
         config: signed,
       }),
     ).toBe('auto');
     expect(
-      updateMode({ platform: 'win32', appImage: undefined, hasUninstaller: true, config: signed }),
+      updateMode({
+        platform: 'win32',
+        appImage: undefined,
+        hasUninstaller: true,
+        portable: false,
+        config: signed,
+      }),
     ).toBe('auto');
   });
 
   it('links a deb, a Windows zip, and an unsigned Windows build to the download', () => {
     expect(
-      updateMode({ platform: 'linux', appImage: undefined, hasUninstaller: false, config: signed }),
+      updateMode({
+        platform: 'linux',
+        appImage: undefined,
+        hasUninstaller: false,
+        portable: false,
+        config: signed,
+      }),
     ).toBe('manual');
     expect(
-      updateMode({ platform: 'win32', appImage: undefined, hasUninstaller: false, config: signed }),
+      updateMode({
+        platform: 'win32',
+        appImage: undefined,
+        hasUninstaller: false,
+        portable: false,
+        config: signed,
+      }),
     ).toBe('manual');
     expect(
       updateMode({
         platform: 'win32',
         appImage: undefined,
         hasUninstaller: true,
+        portable: false,
         config: { ...signed, publisherName: null },
+      }),
+    ).toBe('manual');
+  });
+
+  it('links the Windows portable exe to the download', () => {
+    expect(
+      updateMode({
+        platform: 'win32',
+        appImage: undefined,
+        hasUninstaller: false,
+        portable: true,
+        config: signed,
       }),
     ).toBe('manual');
   });

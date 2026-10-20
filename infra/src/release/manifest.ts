@@ -25,6 +25,7 @@ export interface Upload {
 export const installerNames = (version: string): Record<Installer, string> => ({
   windows: `newses-${version}-windows-setup.exe`,
   windowsZip: `newses-${version}-windows-x64.zip`,
+  windowsPortable: `newses-${version}-windows-portable.exe`,
   appImage: `newses-${version}-linux-x86_64.AppImage`,
   deb: `newses-${version}-linux-amd64.deb`,
   android: `newses-${version}-android.apk`,
@@ -36,7 +37,7 @@ export const FEEDS = ['latest.yml', 'latest-linux.yml'];
 /** The NSIS installer's block map, for differential updates. */
 const blockmapName = (version: string) => `${installerNames(version).windows}.blockmap`;
 
-type Installer = 'windows' | 'windowsZip' | 'appImage' | 'deb' | 'android';
+type Installer = 'windows' | 'windowsZip' | 'windowsPortable' | 'appImage' | 'deb' | 'android';
 type ReleaseSbom = 'desktop' | 'mobile';
 
 /**
@@ -44,7 +45,7 @@ type ReleaseSbom = 'desktop' | 'mobile';
  * desktop's packages are the same on every platform.
  */
 const RELEASE_SBOMS: [ReleaseSbom, Installer[]][] = [
-  ['desktop', ['windows', 'windowsZip', 'appImage', 'deb']],
+  ['desktop', ['windows', 'windowsZip', 'windowsPortable', 'appImage', 'deb']],
   ['mobile', ['android']],
 ];
 export const sbomNames = (version: string) =>
@@ -149,7 +150,11 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
     version: input.version,
     prerelease: input.prerelease,
     published: input.published.toISOString(),
-    windows: { installer: file(names.windows), zip: file(names.windowsZip) },
+    windows: {
+      installer: file(names.windows),
+      zip: file(names.windowsZip),
+      portable: file(names.windowsPortable),
+    },
     linux: { appImage: file(names.appImage), deb: file(names.deb) },
     android: { ...file(names.android), versionCode: input.versionCode },
   };
@@ -197,6 +202,7 @@ export function installCommands(kind: Installer | 'sbom', file: ReleaseFile) {
   const name = fileName(file.url);
   switch (kind) {
     case 'windows':
+    case 'windowsPortable':
       return [...fetchAndCheck(file, 'powershell'), `.\\${name}`];
     case 'windowsZip':
       return [
@@ -240,6 +246,12 @@ export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom
       'Zip of the app (x64), to run without installing; does not update itself',
       'windowsZip',
       manifest.windows.zip,
+    ],
+    [
+      'Windows',
+      'Single exe of the app (x64), to run without installing, from a USB drive too; keeps its data in a Newses Data folder beside it, starts a few seconds slower, and does not update itself',
+      'windowsPortable',
+      manifest.windows.portable,
     ],
     ['Linux', 'Debian and Ubuntu package (x64)', 'deb', manifest.linux.deb],
     [

@@ -81,7 +81,13 @@ describe('sbomArtifacts', () => {
     expect(sbomArtifacts(version)).toEqual([
       {
         name: sboms[0],
-        describes: [names.windows, names.windowsZip, names.appImage, names.deb],
+        describes: [
+          names.windows,
+          names.windowsZip,
+          names.windowsPortable,
+          names.appImage,
+          names.deb,
+        ],
       },
       { name: sboms[1], describes: [names.android] },
     ]);
@@ -91,10 +97,10 @@ describe('sbomArtifacts', () => {
 describe('renderChecksums', () => {
   it("lists the build legs' versioned files, in sha256sum's format", () => {
     const lines = renderChecksums(version, files).trimEnd().split('\n');
-    expect(lines).toHaveLength(8);
+    expect(lines).toHaveLength(9);
     expect(lines[0]).toBe(`hash0  ${names.windows}`);
     expect(lines.some((line) => line.endsWith('latest.yml'))).toBe(false);
-    expect(lines.at(-1)).toBe(`hash7  ${sboms[1] ?? ''}`);
+    expect(lines.at(-1)).toBe(`hash8  ${sboms[1] ?? ''}`);
   });
 
   it('refuses a missing file', () => {
@@ -124,6 +130,19 @@ describe('installCommands', () => {
     expect(commands.at(-1)).toBe(`.\\${names.windows}`);
   });
 
+  it('runs the portable exe where it was downloaded', () => {
+    const commands = installCommands('windowsPortable', {
+      ...file,
+      url: `${folder}${names.windowsPortable}`,
+    });
+    expect(commands).toEqual([
+      `curl.exe -fLO ${folder}${names.windowsPortable}`,
+      '# True when the file is intact',
+      `(Get-FileHash ${names.windowsPortable} -Algorithm SHA256).Hash -eq 'abc123'`,
+      `.\\${names.windowsPortable}`,
+    ]);
+  });
+
   it('only downloads and checks an SBOM', () => {
     expect(installCommands('sbom', file)).toHaveLength(2);
   });
@@ -143,12 +162,17 @@ describe('buildManifest', () => {
           sha256: 'hash0',
         },
         zip: expect.objectContaining({ size: 1 }) as unknown,
+        portable: {
+          url: `https://reader-dev.example.com/downloads/${version}/${names.windowsPortable}`,
+          size: 2,
+          sha256: 'hash2',
+        },
       },
       linux: {
-        appImage: expect.objectContaining({ size: 2 }) as unknown,
-        deb: expect.objectContaining({ size: 3 }) as unknown,
+        appImage: expect.objectContaining({ size: 3 }) as unknown,
+        deb: expect.objectContaining({ size: 4 }) as unknown,
       },
-      android: expect.objectContaining({ versionCode: 10203, size: 4 }) as unknown,
+      android: expect.objectContaining({ versionCode: 10203, size: 5 }) as unknown,
     });
   });
 });
@@ -159,13 +183,14 @@ describe('renderIndex', () => {
 
   it('links each installer and SBOM with its hash and commands', () => {
     expect(page).toContain(`<a href="${manifest.windows.zip.url}">`);
+    expect(page).toContain(`<a href="${manifest.windows.portable.url}">`);
     expect(page).toContain(`<a href="${manifest.android.url}">`);
     expect(page).toContain(`<a href="${folder}${sboms[1] ?? ''}">`);
     expect(page).toContain(`<a href="${folder}SHA256SUMS">SHA256SUMS</a>`);
-    expect(page).toContain('<code>SHA-256 hash6</code>');
+    expect(page).toContain('<code>SHA-256 hash7</code>');
     // Commands are escaped: the shell quotes and pipe survive as text.
-    expect(page).toContain(`echo &#39;hash3  ${names.deb}&#39; | sha256sum -c`);
-    expect(page.match(/<details>/g)).toHaveLength(7);
+    expect(page).toContain(`echo &#39;hash4  ${names.deb}&#39; | sha256sum -c`);
+    expect(page.match(/<details>/g)).toHaveLength(8);
   });
 });
 
@@ -175,6 +200,7 @@ describe('uploadPlan', () => {
     expect(plan.map((u) => u.key)).toEqual([
       `downloads/${version}/${names.windows}`,
       `downloads/${version}/${names.windowsZip}`,
+      `downloads/${version}/${names.windowsPortable}`,
       `downloads/${version}/${names.appImage}`,
       `downloads/${version}/${names.deb}`,
       `downloads/${version}/${names.android}`,

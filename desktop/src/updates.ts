@@ -35,16 +35,23 @@ export interface Install {
   appImage: string | undefined;
   /** NSIS installs keep their uninstaller beside the app; a zip does not. */
   hasUninstaller: boolean;
+  /** The Windows portable exe, which runs from a temporary folder (portable.ts). */
+  portable: boolean;
   config: UpdateConfig;
 }
 
 /**
- * AppImages and signed NSIS installs replace themselves; a deb (installed by the package manager)
- * and the Windows zip link to the download instead.
+ * AppImages and signed NSIS installs replace themselves; a deb (installed by the package manager),
+ * the Windows zip, and the portable exe link to the download instead.
  */
 export function updateMode(install: Install): UpdateMode {
   if (install.platform === 'linux') return install.appImage ? 'auto' : 'manual';
-  if (install.platform === 'win32' && install.hasUninstaller && install.config.publisherName) {
+  if (
+    install.platform === 'win32' &&
+    !install.portable &&
+    install.hasUninstaller &&
+    install.config.publisherName
+  ) {
     return 'auto';
   }
   return 'manual';

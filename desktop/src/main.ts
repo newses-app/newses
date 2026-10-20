@@ -1,5 +1,6 @@
 // The desktop app: the native web build in a hardened window, served from app://newses.
 import { join } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createProfiles, httpsOrigin, profileChanges, profileId } from '@newses/shared/profiles';
@@ -23,7 +24,14 @@ import {
   shell,
 } from 'electron';
 import { setLaunchAtLogin, setTray } from './background.ts';
-import { DEFAULT_OPTIONS, HIDDEN_ARG, notificationTarget, parseOptions } from './options.ts';
+import {
+  DEFAULT_OPTIONS,
+  HIDDEN_ARG,
+  notificationTarget,
+  parseOptions,
+  shownOptions,
+} from './options.ts';
+import { portableDataDir } from './portable.ts';
 import { settingsProfileStorage } from './profiles.ts';
 import { openSettings, type Settings, type SettingsStore } from './settings.ts';
 import { createTokenStore } from './token.ts';
@@ -47,6 +55,22 @@ const PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write']);
 const CONTROLS_OVERLAY = process.platform === 'win32' || process.platform === 'linux';
 /** Vuetify's compact app bar. */
 const TITLE_BAR_HEIGHT = 48;
+
+/** The Windows portable exe: its data folder beside it, or null for any other install. */
+const PORTABLE_DATA = portableDataDir(process.env, process.platform);
+const PORTABLE = PORTABLE_DATA !== null;
+// Before the single-instance lock, which, like every path the app keeps data in, follows userData.
+if (PORTABLE_DATA) {
+  try {
+    mkdirSync(PORTABLE_DATA, { recursive: true });
+    const probe = join(PORTABLE_DATA, '.write-check');
+    writeFileSync(probe, '');
+    rmSync(probe);
+    app.setPath('userData', PORTABLE_DATA);
+  } catch {
+    // A read-only folder: the data stays in the user's profile, as for the zip.
+  }
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -195,9 +219,9 @@ function registerBridge(settings: SettingsStore) {
     notification.on('close', () => notifications.delete(notification));
     notification.show();
   });
-  handle('getDesktopOptions', () => options(settings));
+  handle('getDesktopOptions', () => shownOptions(options(settings), PORTABLE));
   handle('setDesktopOptions', async (value) => {
-    const changes = parseOptions(value);
+    const changes = parseOptions(value, PORTABLE);
     if (!changes) throw new Error('Invalid options');
     await settings.update({ options: { ...settings.get().options, ...changes } });
     applyBackground(settings);
@@ -350,12 +374,12 @@ if (!app.requestSingleInstanceLock()) {
     applyBackground(settings);
     void showProfiles();
     // Re-registered, so a moved AppImage or a reinstall still starts at login.
-    if (options(settings).launchAtLogin) void setLaunchAtLogin(true);
+    if (!PORTABLE && options(settings).launchAtLogin) void setLaunchAtLogin(true);
     powerMonitor.on('resume', refresh);
     powerMonitor.on('unlock-screen', refresh);
     updater = startUpdater((status) => {
       window?.webContents.send('bridge:updateStatus', status);
-    });
+    }, PORTABLE);
   });
 
   app.on('window-all-closed', () => {
