@@ -4,6 +4,9 @@ import { users } from '../../db/schema.ts';
 import { FakeFetcher } from '../../test/fake-fetcher.ts';
 import { testFeedDeps } from '../../test/fakes.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
+import { MAX_OPML_DEPTH, MAX_OPML_OUTLINES } from '@newses/shared';
+import { ThrottledError } from '../errors.ts';
+import { RATE_LIMITS } from '../rate-limit.ts';
 import { createFeedServices, type FeedServices } from './index.ts';
 
 let database: TestDatabase;
@@ -113,4 +116,61 @@ describe('OpmlService', () => {
       code: 'invalid_input',
     });
   });
+
+  it('imports a file at the limit in one go, the first outline of a feed naming it', async () => {
+    // 50 folders of 39 feeds: 2,000 outlines; folder 1 repeats a feed of folder 0.
+    const folders = Array.from({ length: 50 }, (_, f) =>
+      folder(
+        `Folder ${String(f)}`,
+        Array.from({ length: 39 }, (_, n) =>
+          feed(`https://f${String(f)}.example/${String(n)}`, `Feed ${String(f)}.${String(n)}`),
+        ).join(''),
+      ),
+    );
+    folders[1] = folder(
+      'Folder 1',
+      `${feed('https://f0.example/0', 'Again')}${Array.from({ length: 38 }, (_, n) =>
+        feed(`https://f1.example/${String(n)}`, 'x'),
+      ).join('')}`,
+    );
+    const started = Date.now();
+    expect(await services.opml.import(alice, opml(folders.join('')))).toEqual({
+      categoriesCreated: 50,
+      subscribed: 1949,
+      alreadySubscribed: 1,
+      invalid: [],
+    });
+    expect(Date.now() - started).toBeLessThan(10_000);
+    const [first] = (await services.subscriptions.list(alice)).filter(
+      (s) => s.source.url === 'https://f0.example/0',
+    );
+    expect(first?.source.title).toBe('Feed 0.0');
+  });
+
+  it('refuses files over the limits before writing anything', async () => {
+    const many = Array.from({ length: MAX_OPML_OUTLINES + 1 }, (_, n) =>
+      feed(`https://many.example/${String(n)}`, 'x'),
+    ).join('');
+    await expect(services.opml.import(alice, opml(many))).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    let deep = feed('https://deep.example/', 'Deep');
+    for (let n = 0; n < MAX_OPML_DEPTH; n++) deep = folder(`Level ${String(n)}`, deep);
+    await expect(services.opml.import(alice, opml(deep))).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    expect(await tree(alice)).toEqual({ categories: [], feeds: [] });
+  });
+
+  it('limits how often a user imports', async () => {
+    for (let n = 0; n < RATE_LIMITS.import; n++) await services.opml.import(bob, TTRSS_EXPORT);
+    await expect(services.opml.import(bob, TTRSS_EXPORT)).rejects.toBeInstanceOf(ThrottledError);
+  });
 });
+
+const feed = (url: string, title: string) =>
+  `<outline type="rss" text="${title}" xmlUrl="${url}"/>`;
+const folder = (title: string, children: string) =>
+  `<outline text="${title}">${children}</outline>`;
+const opml = (body: string) =>
+  `<?xml version="1.0"?><opml version="2.0"><head/><body>${body}</body></opml>`;

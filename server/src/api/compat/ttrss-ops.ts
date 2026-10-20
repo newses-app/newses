@@ -744,7 +744,7 @@ export const feedIconRoutes: FastifyPluginAsync<Pick<TtrssDeps, 'feeds'>> = (app
           : await feeds.subscriptions.get(userId, Number(id)).catch(() => null);
       const icon =
         view && userId !== null ? await feeds.favicons.getForUser(userId, view.source.id) : null;
-      if (!icon) return reply.code(404).type('text/plain').send('Not found\n');
+      if (!icon) return reply.code(404).type('text/plain; charset=utf-8').send('Not found\n');
       return sendIcon(reply, icon);
     },
   );

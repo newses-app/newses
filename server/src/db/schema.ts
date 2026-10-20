@@ -130,7 +130,7 @@ export const loginAttempts = pgTable('login_attempts', {
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
 
-// Requests per user and action (`fetch:<action>:<user id>`) in the current window.
+// Requests per user and action (`<action>:<user id>`) in the current window.
 export const rateLimits = pgTable('rate_limits', {
   key: text('key').primaryKey(),
   windowStart: tstz('window_start').notNull(),

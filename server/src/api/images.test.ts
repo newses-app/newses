@@ -178,4 +178,16 @@ describe('image proxy', () => {
     expect(await services.feeds.images.purge()).toBe(2);
     expect([...blobs.blobs.keys()].filter((k) => k.startsWith('images/'))).toEqual([]);
   });
+
+  it('serves SVG with its charset', async () => {
+    fetcher.set('https://img.example/logo.svg', {
+      body: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+      contentType: 'image/svg+xml',
+    });
+    const svg = await app.inject({
+      url: services.feeds.images.path('https://img.example/logo.svg'),
+    });
+    expect(svg.statusCode).toBe(200);
+    expect(svg.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
+  });
 });

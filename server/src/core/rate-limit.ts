@@ -3,22 +3,26 @@ import type { Db } from '../db/client.ts';
 import { rateLimits } from '../db/schema.ts';
 import { ThrottledError } from './errors.ts';
 
-/** User actions that make the server fetch from a remote host. */
-export type FetchAction = 'fulltext' | 'subscribe' | 'page' | 'debug';
+/**
+ * User actions limited per user: those that make the server fetch from a remote host, and OPML
+ * imports, which write many rows at once.
+ */
+export type LimitedAction = 'fulltext' | 'subscribe' | 'page' | 'debug' | 'import';
 
 /** Each action's requests per user per WINDOW_SECONDS. */
-export const FETCH_LIMITS: Record<FetchAction, number> = {
+export const RATE_LIMITS: Record<LimitedAction, number> = {
   fulltext: 20,
   subscribe: 10,
   page: 10,
   debug: 5,
+  import: 5,
 };
 
 const WINDOW_SECONDS = 60;
 
 /**
- * Limits how often each user makes the server fetch on their behalf, in fixed windows counted in
- * Postgres, so the limit holds across processes.
+ * Limits how often each user takes costly actions, such as making the server fetch on their
+ * behalf, in fixed windows counted in Postgres, so the limit holds across processes.
  */
 export class UserRateLimiter {
   readonly #db: Db;
@@ -28,13 +32,13 @@ export class UserRateLimiter {
   }
 
   /** Counts a request; throws ThrottledError, with the seconds left in the window, past the limit. */
-  async take(userId: number, action: FetchAction): Promise<void> {
+  async take(userId: number, action: LimitedAction): Promise<void> {
     const wait = await this.#count(userId, action);
     if (wait > 0) throw new ThrottledError(wait, 'Too many requests; try again shortly');
   }
 
   /** Counts a request; false past the limit. */
-  async tryTake(userId: number, action: FetchAction): Promise<boolean> {
+  async tryTake(userId: number, action: LimitedAction): Promise<boolean> {
     return (await this.#count(userId, action)) === 0;
   }
 
@@ -46,11 +50,11 @@ export class UserRateLimiter {
   }
 
   /** Seconds left in the window when the request is over the limit, else 0. */
-  async #count(userId: number, action: FetchAction): Promise<number> {
+  async #count(userId: number, action: LimitedAction): Promise<number> {
     const window = sql`date_bin(make_interval(secs => ${WINDOW_SECONDS}), now(), 'epoch'::timestamptz)`;
     const [row] = await this.#db
       .insert(rateLimits)
-      .values({ key: `fetch:${action}:${String(userId)}`, windowStart: window, count: 1 })
+      .values({ key: `${action}:${String(userId)}`, windowStart: window, count: 1 })
       .onConflictDoUpdate({
         target: rateLimits.key,
         set: {
@@ -64,6 +68,6 @@ export class UserRateLimiter {
         wait: sql<number>`ceil(extract(epoch FROM ${rateLimits.windowStart}
           + make_interval(secs => ${WINDOW_SECONDS}) - now()))::int`,
       });
-    return (row?.count ?? 0) > FETCH_LIMITS[action] ? Math.max(1, row?.wait ?? WINDOW_SECONDS) : 0;
+    return (row?.count ?? 0) > RATE_LIMITS[action] ? Math.max(1, row?.wait ?? WINDOW_SECONDS) : 0;
   }
 }

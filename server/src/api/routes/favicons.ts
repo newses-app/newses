@@ -17,7 +17,7 @@ export const faviconRoutes: FastifyPluginAsyncZod<{ favicons: FaviconService }> 
 ) => {
   app.get('/favicons/:name', { schema: { params, hide: true } }, async (request, reply) => {
     const icon = await favicons.byKey(`favicons/${request.params.name}`);
-    if (!icon) return reply.code(404).type('text/plain').send('Not found\n');
+    if (!icon) return reply.code(404).type('text/plain; charset=utf-8').send('Not found\n');
     return sendIcon(reply, icon, 'public, max-age=31536000, immutable');
   });
   return Promise.resolve();

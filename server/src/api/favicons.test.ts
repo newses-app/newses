@@ -61,6 +61,7 @@ describe('feed icons', () => {
   it('serves only icons a feed source shows', async () => {
     const missing = await app.inject({ url: `/favicons/${'0'.repeat(64)}` });
     expect(missing.statusCode).toBe(404);
+    expect(missing.headers['content-type']).toBe('text/plain; charset=utf-8');
     expect((await app.inject({ url: '/favicons/unshown' })).statusCode).toBe(400);
     expect((await app.inject({ url: '/favicons/..%2Fimages%2Fsecret' })).statusCode).toBe(400);
   });

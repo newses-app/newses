@@ -13,6 +13,8 @@ beforeAll(() => {
   mkdirSync(join(dir, 'assets'));
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>app</title>');
   writeFileSync(join(dir, 'assets', 'app-abc123.js'), 'console.log(1)');
+  writeFileSync(join(dir, 'manifest.webmanifest'), '{"name":"app"}');
+  writeFileSync(join(dir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   app = buildApp({ logger: pino({ level: 'silent' }), healthChecks: {}, webDir: dir });
 });
 
@@ -31,6 +33,13 @@ describe('web app serving', () => {
       expect(response.headers['referrer-policy']).toBe('no-referrer');
       expect(response.headers['cache-control']).toBe('no-cache');
     }
+  });
+
+  it('serves the manifest and SVG as UTF-8', async () => {
+    const manifest = await app.inject({ method: 'GET', url: '/manifest.webmanifest' });
+    expect(manifest.headers['content-type']).toBe('application/manifest+json; charset=utf-8');
+    const svg = await app.inject({ method: 'GET', url: '/favicon.svg' });
+    expect(svg.headers['content-type']).toBe('image/svg+xml; charset=utf-8');
   });
 
   it('caches fingerprinted assets and keeps API 404s as JSON', async () => {

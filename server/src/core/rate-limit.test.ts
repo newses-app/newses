@@ -4,7 +4,7 @@ import { createDb, type Db } from '../db/client.ts';
 import { rateLimits } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { ThrottledError } from './errors.ts';
-import { FETCH_LIMITS, UserRateLimiter } from './rate-limit.ts';
+import { RATE_LIMITS, UserRateLimiter } from './rate-limit.ts';
 
 let database: TestDatabase;
 let db: Db;
@@ -26,7 +26,7 @@ afterAll(async () => {
 
 describe('UserRateLimiter', () => {
   it('allows each action its limit per user per minute, then says how long to wait', async () => {
-    for (let n = 0; n < FETCH_LIMITS.subscribe; n++) await limits.take(1, 'subscribe');
+    for (let n = 0; n < RATE_LIMITS.subscribe; n++) await limits.take(1, 'subscribe');
     const refused = await limits.take(1, 'subscribe').catch((err: unknown) => err);
     expect(refused).toBeInstanceOf(ThrottledError);
     const wait = (refused as ThrottledError).retryAfterSeconds;
@@ -39,7 +39,7 @@ describe('UserRateLimiter', () => {
   });
 
   it('starts counting again in the next window', async () => {
-    for (let n = 0; n < FETCH_LIMITS.debug; n++) await limits.take(1, 'debug');
+    for (let n = 0; n < RATE_LIMITS.debug; n++) await limits.take(1, 'debug');
     expect(await limits.tryTake(1, 'debug')).toBe(false);
     await db.update(rateLimits).set({ windowStart: sql`window_start - interval '1 minute'` });
     expect(await limits.tryTake(1, 'debug')).toBe(true);
@@ -51,10 +51,10 @@ describe('UserRateLimiter', () => {
     await db
       .update(rateLimits)
       .set({ windowStart: sql`now() - interval '2 hours'` })
-      .where(sql`key = 'fetch:page:1'`);
+      .where(sql`key = 'page:1'`);
     await limits.prune();
     expect((await db.select({ key: rateLimits.key }).from(rateLimits)).map((r) => r.key)).toEqual([
-      'fetch:page:2',
+      'page:2',
     ]);
   });
 });

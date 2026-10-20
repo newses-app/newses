@@ -2,7 +2,7 @@ import type { FeedDebug } from '@newses/shared';
 import { eq, sql } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { FETCH_LIMITS } from '../core/rate-limit.ts';
+import { RATE_LIMITS } from '../core/rate-limit.ts';
 import { createDb, type Db } from '../db/client.ts';
 import { entries, feedSources, fetchHosts, rateLimits } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
@@ -142,7 +142,7 @@ describe('feed debugger', () => {
 
   it("is only for the feed's subscriber, and rate limited", async () => {
     expect((await debug(bob)).statusCode).toBe(404);
-    for (let n = 0; n < FETCH_LIMITS.debug; n++) expect((await debug(alice)).statusCode).toBe(200);
+    for (let n = 0; n < RATE_LIMITS.debug; n++) expect((await debug(alice)).statusCode).toBe(200);
     const refused = await debug(alice);
     expect(refused.statusCode).toBe(429);
     expect(Number(refused.headers['retry-after'])).toBeGreaterThan(0);

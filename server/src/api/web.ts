@@ -5,6 +5,9 @@ import { WEB_CSP } from '@newses/shared/web-csp';
 /** API, compatibility-API, public, and icon paths, which never fall back to the app; the service worker's navigation denylist in web/src/worker/sw.ts must match. */
 const NOT_SPA = /^\/(api|public|healthz|accounts|reader|feed-icons|favicons)(\/|$)|^\/public\.php$/;
 
+/** Text types of the build that send leaves without a charset: the manifest, SVG, and XML. */
+const UTF8_TEXT = /^(image\/svg\+xml|application\/(manifest\+json|xml))\b/i;
+
 /** Serves the built SPA from `root`, falling back to index.html for client-side routes. */
 export function registerWeb(app: FastifyInstance, root: string): void {
   void app.register(fastifyStatic, {
@@ -17,6 +20,10 @@ export function registerWeb(app: FastifyInstance, root: string): void {
         'cache-control',
         path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
       );
+      // send adds a charset to text/*, JavaScript, and JSON only; the build's text is all UTF-8.
+      const type = String(reply.getHeader('content-type') ?? '');
+      if (UTF8_TEXT.test(type) && !/charset=/i.test(type))
+        void reply.header('content-type', `${type}; charset=utf-8`);
     },
   });
 

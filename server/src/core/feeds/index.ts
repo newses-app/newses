@@ -63,7 +63,7 @@ export function createFeedServices(deps: FeedDeps) {
     categories,
     subscriptions,
     feedDebugger: new FeedDebugger({ db, fetcher, limits, subscriptions }),
-    opml: new OpmlService(db, categories, subscriptions),
+    opml: new OpmlService(db, categories, subscriptions, limits),
     ingester,
     updater,
     hostRules: new HostRuleService(db, updater),

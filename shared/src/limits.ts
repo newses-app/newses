@@ -16,6 +16,10 @@ export const MAX_PAGE_URL_LENGTH = 2048;
 export const MAX_PAGE_TITLE_LENGTH = 1000;
 export const MAX_PAGE_TEXT_LENGTH = 100_000;
 
+/** OPML import: most feeds and folders together, and deepest folder nesting, per file. */
+export const MAX_OPML_OUTLINES = 2000;
+export const MAX_OPML_DEPTH = 10;
+
 export const MAX_THEME_NAME_LENGTH = 60;
 export const MAX_THEMES_PER_USER = 50;
 

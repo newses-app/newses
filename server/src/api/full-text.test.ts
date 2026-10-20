@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { extractArticle, readArticle } from '../core/feeds/fulltext.ts';
-import { FETCH_LIMITS } from '../core/rate-limit.ts';
+import { RATE_LIMITS } from '../core/rate-limit.ts';
 import { createDb, type Db } from '../db/client.ts';
 import { entries, rateLimits } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
@@ -135,7 +135,7 @@ describe('full text', () => {
     const three = (await entryNamed('Three')).id;
     const extract = (id: number) =>
       app.inject({ method: 'POST', url: `/api/v1/entries/${String(id)}/full-text`, headers });
-    for (let n = 0; n < FETCH_LIMITS.fulltext; n++)
+    for (let n = 0; n < RATE_LIMITS.fulltext; n++)
       expect((await extract(three)).statusCode).toBe(502);
     const refused = await extract(three);
     expect(refused.statusCode).toBe(429);

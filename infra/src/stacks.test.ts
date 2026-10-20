@@ -77,6 +77,7 @@ describe('NewsesStage', () => {
     edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'newses-dev-spa-routes' });
     edge.hasResourceProperties('AWS::CloudFront::Function', {
       Name: 'newses-dev-utf8-charset',
+      FunctionCode: Match.stringLikeRegexp('image\\\\/svg'),
     });
   });
 

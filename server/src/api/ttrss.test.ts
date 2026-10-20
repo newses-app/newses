@@ -182,8 +182,11 @@ describe('TTRSS config and tree', () => {
       `/${config.icons_url}/${String(subs.two)}.ico`,
       `/${config.icons_url}/${String(subs.bob)}.ico`,
       `/feed-icons/${String(pat)}.forged/${String(subs.one)}.ico`,
-    ])
-      expect((await app.inject({ method: 'GET', url })).statusCode).toBe(404);
+    ]) {
+      const missing = await app.inject({ method: 'GET', url });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.headers['content-type']).toBe('text/plain; charset=utf-8');
+    }
   });
 
   it('lists feeds by category id, with special and label feeds', async () => {

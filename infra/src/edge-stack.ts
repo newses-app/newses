@@ -64,14 +64,14 @@ const DOWNLOADS_CSP = [
 /** Superseded prereleases are tagged by the release pipeline and expire. */
 export const SUPERSEDED_TAG = { key: 'superseded', value: 'true' };
 
-/** S3 stores text files without a charset; browsers must not guess one. */
+/** S3 stores text files (the build's are UTF-8) without a charset; browsers must not guess one. */
 const UTF8_CHARSET = `function handler(event) {
   var response = event.response;
   var type = response.headers['content-type'];
   if (
     type &&
     !/charset=/i.test(type.value) &&
-    /^(text\\/|application\\/(javascript|json|manifest\\+json))/i.test(type.value)
+    /^(text\\/|image\\/svg\\+xml|application\\/(javascript|json|manifest\\+json|xml))/i.test(type.value)
   ) {
     type.value += '; charset=utf-8';
   }
