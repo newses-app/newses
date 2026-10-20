@@ -1,4 +1,10 @@
-import { type FilterAction, type FilterField, MAX_SCORE, normaliseTag } from '@newses/shared';
+import {
+  type FilterAction,
+  type FilterField,
+  MAX_FILTER_TITLE_LENGTH,
+  MAX_SCORE,
+  normaliseTag,
+} from '@newses/shared';
 import { and, eq } from 'drizzle-orm';
 import { DomainError } from '../../core/errors.ts';
 import { compilePattern } from '../../core/filters/engine.ts';
@@ -209,7 +215,7 @@ export const filtersStep: ImportStep = {
           if (problems.length > 0)
             report.note(login, 'filters', row.id, `imported disabled: ${problems.join('; ')}`);
           const values = {
-            title: row.title.trim().slice(0, 200) || `Filter ${String(row.id)}`,
+            title: row.title.trim().slice(0, MAX_FILTER_TITLE_LENGTH) || `Filter ${String(row.id)}`,
             enabled,
             matchAny: row.match_any_rule,
             inverse: row.inverse,

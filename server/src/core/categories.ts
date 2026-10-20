@@ -1,7 +1,8 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { categories, subscriptions } from '../db/schema.ts';
-import { DomainError } from './errors.ts';
+import { MAX_CATEGORY_TITLE_LENGTH } from '@newses/shared';
+import { assertMaxLength, DomainError } from './errors.ts';
 import { isUniqueViolation } from './db-errors.ts';
 
 export type CategoryRow = typeof categories.$inferSelect;
@@ -33,6 +34,7 @@ export class CategoryService {
     title: string,
     parentId: number | null = null,
   ): Promise<CategoryRow> {
+    assertMaxLength(title, MAX_CATEGORY_TITLE_LENGTH, 'A category name');
     if (parentId !== null) await this.#owned(userId, parentId);
     return this.#unique(title, async () => {
       const [row] = await this.#db
@@ -45,6 +47,7 @@ export class CategoryService {
   }
 
   async update(userId: number, id: number, changes: CategoryChanges): Promise<CategoryRow> {
+    assertMaxLength(changes.title, MAX_CATEGORY_TITLE_LENGTH, 'A category name');
     const current = await this.#owned(userId, id);
     if (changes.parentId != null) await this.#assertNotDescendant(userId, id, changes.parentId);
     return this.#unique(changes.title ?? current.title, async () => {

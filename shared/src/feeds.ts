@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+  MAX_CATEGORY_TITLE_LENGTH,
+  MAX_FEED_URL_LENGTH,
+  MAX_SUBSCRIPTION_TITLE_LENGTH,
+} from './limits.ts';
 
 export const categorySchema = z.object({
   id: z.number().int(),
@@ -9,12 +14,12 @@ export const categorySchema = z.object({
 });
 
 export const createCategoryRequestSchema = z.object({
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(MAX_CATEGORY_TITLE_LENGTH),
   parentId: z.number().int().nullable().default(null),
 });
 
 export const updateCategoryRequestSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(MAX_CATEGORY_TITLE_LENGTH).optional(),
   parentId: z.number().int().nullable().optional(),
   sortOrder: z.number().int().optional(),
   collapsed: z.boolean().optional(),
@@ -75,7 +80,7 @@ export const subscriptionSchema = z.object({
 });
 
 export const subscribeRequestSchema = z.object({
-  url: z.string().trim().min(1).max(2048),
+  url: z.string().trim().min(1).max(MAX_FEED_URL_LENGTH),
   categoryId: z.number().int().nullable().default(null),
 });
 
@@ -93,7 +98,7 @@ export const subscribeResponseSchema = z.discriminatedUnion('status', [
 
 export const updateSubscriptionRequestSchema = z.object({
   /** Null clears the custom title. */
-  title: z.string().trim().min(1).max(500).nullable().optional(),
+  title: z.string().trim().min(1).max(MAX_SUBSCRIPTION_TITLE_LENGTH).nullable().optional(),
   categoryId: z.number().int().nullable().optional(),
   sortOrder: z.number().int().optional(),
   /** Null inherits the user's default. */

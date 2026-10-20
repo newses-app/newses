@@ -1,3 +1,4 @@
+import { MAX_CATEGORY_TITLE_LENGTH } from '@newses/shared';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { categories } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';
@@ -5,7 +6,6 @@ import type { Writer } from '../import-map.ts';
 import { importedUsers } from './common.ts';
 
 export const CATEGORIES = 'ttrss_feed_categories';
-const MAX_TITLE = 200;
 
 interface SourceCategoryRow {
   id: number;
@@ -85,7 +85,7 @@ export const categoriesStep: ImportStep = {
       await write(async (tx) => {
         for (const { row, parent } of parentsFirst(rows)) {
           const parentId = parent === null ? null : (mapped.get(parent) ?? null);
-          const title = row.title.trim().slice(0, MAX_TITLE) || 'Untitled';
+          const title = row.title.trim().slice(0, MAX_CATEGORY_TITLE_LENGTH) || 'Untitled';
           const values = { title, parentId, sortOrder: row.order_id, collapsed: row.collapsed };
           let targetId = mapped.get(row.id);
           if (targetId !== undefined) {

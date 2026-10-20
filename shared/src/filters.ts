@@ -7,7 +7,7 @@ import {
   MAX_FILTER_PATTERN,
   MAX_FILTER_RULES,
 } from './filter-options.ts';
-import { MAX_SCORE } from './limits.ts';
+import { MAX_FILTER_TITLE_LENGTH, MAX_SCORE } from './limits.ts';
 
 export const filterFieldSchema = z.enum(FILTER_FIELDS);
 export const filterActionTypeSchema = z.enum(FILTER_ACTIONS);
@@ -33,7 +33,7 @@ export const filterActionSchema = z.discriminatedUnion('type', [
 ]);
 
 const filterFields = {
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(MAX_FILTER_TITLE_LENGTH),
   enabled: z.boolean().default(true),
   /** Matches when any rule matches, else when all do. */
   matchAny: z.boolean().default(false),

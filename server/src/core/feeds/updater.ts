@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { MAX_FEED_TITLE_LENGTH } from '@newses/shared';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { feedSources, fetchHosts, subscriptions } from '../../db/schema.ts';
@@ -275,7 +276,8 @@ export class FeedUpdater {
   ): Promise<void> {
     let { title, siteUrl, ttlSeconds } = source;
     if (feed) {
-      title = feed.title ?? title;
+      // Feeds name themselves, so long titles are cut rather than refused.
+      title = feed.title?.slice(0, MAX_FEED_TITLE_LENGTH) ?? title;
       siteUrl = feed.siteUrl ?? siteUrl;
       ttlSeconds = feed.ttlSeconds;
       const result = await this.#ingester.ingest(source.id, siteUrl, feed.entries);

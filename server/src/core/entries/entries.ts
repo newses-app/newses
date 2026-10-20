@@ -1,10 +1,17 @@
-import type { Enclosure, Entry, EntryState, StateConflict, Stream } from '@newses/shared';
+import {
+  type Enclosure,
+  type Entry,
+  type EntryState,
+  MAX_NOTE_LENGTH,
+  type StateConflict,
+  type Stream,
+} from '@newses/shared';
 import { and, eq, inArray, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 import type { Db } from '../../db/client.ts';
 import { enclosures, userEntries } from '../../db/schema.ts';
-import { DomainError } from '../errors.ts';
+import { assertMaxLength, DomainError } from '../errors.ts';
 import { PAGES_SOURCE_URL } from '../feeds/pages.ts';
 import type { Realtime } from '../ports.ts';
 import { shownCondition, streamCondition } from './streams.ts';
@@ -564,6 +571,7 @@ export class EntryService {
     expected?: string | null,
   ): Promise<void> {
     const text = note?.trim() || null;
+    assertMaxLength(text, MAX_NOTE_LENGTH, 'A note');
     const mine = and(eq(userEntries.userId, userId), eq(userEntries.id, id));
     const unchanged =
       expected === undefined

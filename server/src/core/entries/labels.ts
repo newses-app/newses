@@ -1,9 +1,13 @@
-import type { CreateLabelRequest, UpdateLabelRequest } from '@newses/shared';
+import {
+  type CreateLabelRequest,
+  MAX_LABEL_CAPTION_LENGTH,
+  type UpdateLabelRequest,
+} from '@newses/shared';
 import { and, asc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { entryLabels, labels, userEntries } from '../../db/schema.ts';
 import { isUniqueViolation } from '../db-errors.ts';
-import { DomainError } from '../errors.ts';
+import { assertMaxLength, DomainError } from '../errors.ts';
 import type { Realtime } from '../ports.ts';
 
 export type LabelRow = typeof labels.$inferSelect;
@@ -27,6 +31,7 @@ export class LabelService {
   }
 
   async create(userId: number, label: CreateLabelRequest): Promise<LabelRow> {
+    assertMaxLength(label.caption, MAX_LABEL_CAPTION_LENGTH, 'A label caption');
     return this.#unique(label.caption, async () => {
       const [row] = await this.#db
         .insert(labels)
@@ -38,6 +43,7 @@ export class LabelService {
   }
 
   async update(userId: number, id: number, changes: UpdateLabelRequest): Promise<LabelRow> {
+    assertMaxLength(changes.caption, MAX_LABEL_CAPTION_LENGTH, 'A label caption');
     const owned = and(eq(labels.id, id), eq(labels.userId, userId));
     return this.#unique(changes.caption ?? '', async () => {
       const [row] =

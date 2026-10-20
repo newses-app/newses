@@ -3,8 +3,14 @@ import { generateOpml, parseOpml, type Opml } from 'feedsmith';
 import type { Db } from '../../db/client.ts';
 import { categories, feedSources, subscriptions } from '../../db/schema.ts';
 import type { CategoryService } from '../categories.ts';
-import { MAX_OPML_DEPTH, MAX_OPML_OUTLINES } from '@newses/shared';
-import { DomainError } from '../errors.ts';
+import {
+  MAX_CATEGORY_TITLE_LENGTH,
+  MAX_FEED_TITLE_LENGTH,
+  MAX_FEED_URL_LENGTH,
+  MAX_OPML_DEPTH,
+  MAX_OPML_OUTLINES,
+} from '@newses/shared';
+import { assertMaxLength, DomainError } from '../errors.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import type { SubscriptionService } from './subscriptions.ts';
 import { httpUrl, normalizeFeedUrl } from './url.ts';
@@ -60,11 +66,13 @@ function readOutlines(outlines: Outline[]) {
       const title = (outline.title ?? outline.text ?? '').trim();
       if (outline.xmlUrl) {
         try {
+          assertMaxLength(outline.xmlUrl, MAX_FEED_URL_LENGTH, 'The address');
           const url = normalizeFeedUrl(outline.xmlUrl);
-          feeds.push({ url, title, siteUrl: httpUrl(outline.htmlUrl), parent, index });
+          const named = title.slice(0, MAX_FEED_TITLE_LENGTH);
+          feeds.push({ url, title: named, siteUrl: httpUrl(outline.htmlUrl), parent, index });
         } catch (err) {
           invalid.push({
-            url: outline.xmlUrl,
+            url: outline.xmlUrl.slice(0, MAX_FEED_URL_LENGTH),
             reason: err instanceof Error ? err.message : 'invalid',
           });
         }
@@ -74,7 +82,9 @@ function readOutlines(outlines: Outline[]) {
         walk(outline.outlines ?? [], parent, nesting + 1);
         continue;
       }
-      const folder = { title, parent, depth: (parent?.depth ?? 0) + 1, index };
+      // Names are cut to fit, as the TTRSS importer does, rather than failing the import.
+      const name = title.slice(0, MAX_CATEGORY_TITLE_LENGTH).trim();
+      const folder = { title: name, parent, depth: (parent?.depth ?? 0) + 1, index };
       folders.push(folder);
       walk(outline.outlines ?? [], folder, nesting + 1);
     }

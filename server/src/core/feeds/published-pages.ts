@@ -1,7 +1,8 @@
 import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { plainTextToHtml } from '../entries/text.ts';
-import { DomainError } from '../errors.ts';
+import { MAX_PAGE_TEXT_LENGTH, MAX_PAGE_TITLE_LENGTH, MAX_PAGE_URL_LENGTH } from '@newses/shared';
+import { assertMaxLength, DomainError } from '../errors.ts';
 import type { Logger, Realtime } from '../ports.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import { type Article, fetchPage, readArticle } from './fulltext.ts';
@@ -54,6 +55,9 @@ export class PublishedPageService {
    */
   async publish(userId: number, input: PublishPageInput): Promise<number> {
     const { db, realtime } = this.#deps;
+    assertMaxLength(input.url, MAX_PAGE_URL_LENGTH, "A page's address");
+    assertMaxLength(input.title, MAX_PAGE_TITLE_LENGTH, "A page's title");
+    assertMaxLength(input.text, MAX_PAGE_TEXT_LENGTH, "A page's text");
     const url = normalizePageUrl(input.url);
     const title = sanitizeTitle(input.title ?? null);
     const text = input.text ? plainTextToHtml(input.text) : null;

@@ -2,6 +2,16 @@
 
 export const MAX_NOTE_LENGTH = 10_000;
 
+/** Names users give: categories, labels, a feed's own title, and filters. */
+export const MAX_CATEGORY_TITLE_LENGTH = 200;
+export const MAX_LABEL_CAPTION_LENGTH = 100;
+export const MAX_SUBSCRIPTION_TITLE_LENGTH = 500;
+export const MAX_FILTER_TITLE_LENGTH = 200;
+
+/** Feed addresses; titles feeds give themselves are cut to the second. */
+export const MAX_FEED_URL_LENGTH = 2048;
+export const MAX_FEED_TITLE_LENGTH = 1000;
+
 /** Scores and score thresholds lie within ±this. */
 export const MAX_SCORE = 1_000_000;
 

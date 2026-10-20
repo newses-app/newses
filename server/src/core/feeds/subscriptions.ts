@@ -2,7 +2,12 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { categories, feedSources, subscriptions } from '../../db/schema.ts';
 import { isUniqueViolation } from '../db-errors.ts';
-import { DomainError, ThrottledError } from '../errors.ts';
+import {
+  MAX_FEED_TITLE_LENGTH,
+  MAX_FEED_URL_LENGTH,
+  MAX_SUBSCRIPTION_TITLE_LENGTH,
+} from '@newses/shared';
+import { assertMaxLength, DomainError, ThrottledError } from '../errors.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import { decodeBody } from './decode.ts';
 import { discoverFeeds, type FeedCandidate, looksLikeHtml } from './discover.ts';
@@ -76,6 +81,7 @@ export class SubscriptionService {
     rawUrl: string,
     categoryId: number | null = null,
   ): Promise<SubscribeResult> {
+    assertMaxLength(rawUrl, MAX_FEED_URL_LENGTH, 'A feed address');
     if (categoryId !== null) await this.#assertCategory(userId, categoryId);
     const url = normalizeFeedUrl(rawUrl);
     const known = await this.#sourceByUrl(url);
@@ -129,6 +135,7 @@ export class SubscriptionService {
     id: number,
     changes: SubscriptionChanges,
   ): Promise<SubscriptionView> {
+    assertMaxLength(changes.title, MAX_SUBSCRIPTION_TITLE_LENGTH, "A feed's title");
     if (changes.categoryId != null) await this.#assertCategory(userId, changes.categoryId);
     const updated = await this.#db
       .update(subscriptions)
@@ -222,7 +229,8 @@ export class SubscriptionService {
   ): Promise<FeedSourceRow> {
     const [row] = await this.#db
       .insert(feedSources)
-      .values({ url, title, siteUrl })
+      // Titles come from the feed, so they are cut rather than refused.
+      .values({ url, title: title?.slice(0, MAX_FEED_TITLE_LENGTH) ?? null, siteUrl })
       .onConflictDoUpdate({
         target: feedSources.url,
         set: {

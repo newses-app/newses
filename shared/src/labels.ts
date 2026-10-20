@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_LABEL_CAPTION_LENGTH } from './limits.ts';
 
 const color = z.string().regex(/^#[0-9a-f]{6}$/i, 'Expected a #rrggbb colour');
 
@@ -12,7 +13,7 @@ export const labelSchema = z.object({
 });
 
 export const createLabelRequestSchema = z.object({
-  caption: z.string().trim().min(1).max(100),
+  caption: z.string().trim().min(1).max(MAX_LABEL_CAPTION_LENGTH),
   fgColor: color,
   bgColor: color,
 });

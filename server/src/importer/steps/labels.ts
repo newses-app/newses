@@ -1,3 +1,4 @@
+import { MAX_LABEL_CAPTION_LENGTH } from '@newses/shared';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { entryLabels, labels } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';
@@ -6,7 +7,6 @@ import { importedUsers } from './common.ts';
 import { USER_ENTRIES } from './entries.ts';
 
 export const LABELS = 'ttrss_labels2';
-const MAX_CAPTION = 100;
 /** Colours for labels whose TTRSS colours are not hex: the web app's first label colour. */
 const DEFAULT_COLOURS = { fgColor: '#ffffff', bgColor: '#1565c0' };
 /** Label assignments written per statement. */
@@ -67,12 +67,12 @@ export const labelsStep: ImportStep = {
             report.skip(login, 'labels', row.id, 'empty caption');
             continue;
           }
-          if (caption.length > MAX_CAPTION)
+          if (caption.length > MAX_LABEL_CAPTION_LENGTH)
             report.note(
               login,
               'labels',
               row.id,
-              `caption shortened to ${String(MAX_CAPTION)} characters`,
+              `caption shortened to ${String(MAX_LABEL_CAPTION_LENGTH)} characters`,
             );
           const fgColor = hexColour(row.fg_color);
           const bgColor = hexColour(row.bg_color);
@@ -84,7 +84,7 @@ export const labelsStep: ImportStep = {
               `colours ${row.fg_color}/${row.bg_color} replaced`,
             );
           const values = {
-            caption: caption.slice(0, MAX_CAPTION),
+            caption: caption.slice(0, MAX_LABEL_CAPTION_LENGTH),
             fgColor: fgColor ?? DEFAULT_COLOURS.fgColor,
             bgColor: bgColor ?? DEFAULT_COLOURS.bgColor,
           };

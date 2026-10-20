@@ -29,3 +29,9 @@ export class ThrottledError extends DomainError {
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
+
+/** Refuses text longer than `max` characters, wherever it came from; `what` names it. */
+export function assertMaxLength(text: string | null | undefined, max: number, what: string) {
+  if (text && text.length > max)
+    throw new DomainError('invalid_input', `${what} is longer than ${String(max)} characters`);
+}
