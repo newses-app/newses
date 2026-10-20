@@ -204,9 +204,9 @@ Updater:
 - Per user and minute, on-demand full text (20), subscribing to a feed not yet fetched (10), reading a page to publish (10), the feed debugger (5), and OPML imports (5) are counted in `rate_limits`; past the limit they get 429 with `Retry-After`, except publishing, which publishes the page unread.
 - "Update now" clears errors, re-enables the source, and enqueues a fetch. It is a no-op within a minute of the last fetch and refused (`throttled`) while `blocked_until` is in the future.
 - A permanent redirect (301/308 from the first hop on) moves the source to the new URL after a successful fetch, unless another source already has that URL.
-- Image proxy (per-user `proxyImages` preference): when an entry is served to such a user, `img` `src`/`srcset`, picture `source` `srcset`, and video `poster` URLs become `/api/v1/images/<hmac>/<base64url URL>`, signed with the `image-url` key. The route needs no session; it refuses unsigned URLs, then serves from `BlobStore` (`images/<sha256 of URL>`) or fetches once through `PoliteFetcher`, up to 4 MB, accepting only images (declared or sniffed). Failures are not retried for 24 h. Responses are `public, max-age` 30 days, immutable, with a sandboxing CSP and `Access-Control-Allow-Origin: *` (also on 403 and 404), so the apps can read them whatever CloudFront cached.
+- Image proxy (per-user `proxyImages` preference): when an entry is served to such a user, `img` `src`/`srcset`, picture `source` `srcset`, and video `poster` URLs become `/api/v1/images/<hmac>/<base64url URL>`, signed with the `image-url` key. The route serves from `BlobStore` (`images/<sha256 of URL>`) or fetches once through `PoliteFetcher`, up to 4 MB, accepting only images (declared or sniffed). Failures are not retried for 24 h. Responses are `public, max-age` 30 days, immutable, with a sandboxing CSP and `Access-Control-Allow-Origin: *` (also on 403 and 404), so the apps can read them whatever CloudFront cached.
 - Kept images: a sweep (every 5 minutes on Docker, after each dispatch on AWS, at most 2 minutes) lists the images of entries someone keeps (starred, published, noted, labelled, or shared) in `entry_images`: those of the content and full text, at most 30, as `POST /entries/contents` lists them, again when the content version changes (`entry_image_sets`). It then fetches listed images not cached, 4 at a time across hosts, and failed ones again after 24 h, at most 3 times in a row; a paused host's wait for the next run.
-- Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits. Stored in `BlobStore` as `favicons/<sha256 of type and bytes>`, so sources showing the same icon share one blob, deleted once no source shows it. `iconUrl` is `/<key>`: no session, `public, max-age` 1 year, immutable, with a sandboxing CSP, and only for keys a source shows.
+- Favicons: declared `<link rel="icon">`/`apple-touch-icon`, else `/favicon.ico`; the first 3 candidates only; page read up to 512 KB, icons up to 256 KB; reused from another source of the same site checked within 30 days instead of refetched; share the per-host limits. Stored in `BlobStore` as `favicons/<sha256 of type and bytes>`, so sources showing the same icon share one blob, deleted once no source shows it. `iconUrl` is `/<key>`: `public, max-age` 1 year, immutable, with a sandboxing CSP.
 
 Purge (every 6 h):
 - Deletes user entries older than the purge age: the subscription's `purge_days`, else the user's `purgeDays` preference, else `FEED_PURGE_DAYS`; 0 never. Kept entries (starred, published, noted, labelled, or shared) are never purged.
@@ -333,9 +333,9 @@ Search:
 | TTRSS / Google Reader clients | App password → `api` session | App passwords bypass TOTP |
 
 - Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days, bearer and `api` sessions 90 days, all sliding on use. Logging in ends the session the client sent, if any.
-- `api` sessions are opened only by an app-password login through a compatibility API and belong to that app password: revoking it ends them, and each keeps its 10 most recent. `/api/v1` ignores them; the compatibility APIs accept nothing else.
+- `api` sessions are opened only by an app-password login through a compatibility API and belong to that app password: revoking it ends them, and each keeps its 10 most recent.
 - The cookie is `__Host-rss_session` (Secure) over HTTPS and `rss_session` over plain HTTP; HTTPS is taken from `X-Forwarded-Proto` only when `TRUST_PROXY` trusts the proxy.
-- A user created with a generated password (the AWS bootstrap admin, users the TTRSS importer creates) has `password_change_required`: until they change it, every authenticated request other than session, login, logout, and password change gets 403 `password_change_required`, and the web app shows only the password change.
+- A user created with a generated password (the AWS bootstrap admin, users the TTRSS importer creates) has `password_change_required` until they change it, and the web app shows only the password change.
 - A generated password expires 7 days after it is set (`password_expires_at`). Past that, it no longer signs in: login answers 401 `password_expired`, counted as a failed login and logged as `login_failed` with that reason, and the user's sessions end. Changing or resetting the password clears both. On AWS, the migrate function's `reissue-admin` task gives the first admin a new generated password in SSM, and enables it, but only while no other admin is active.
 - The first admin's login may not contain `admin`, `root`, or `superuser`, nor be `sa` with only digits and separators besides (`isReservedAdminLogin` in `shared`). Bootstrapping into a database without users refuses one, and startup logs a `security` warning while an enabled admin has one.
 - Cookie-session requests other than GET/HEAD/OPTIONS must send the session's CSRF token in `X-CSRF-Token`. Login accepts JSON only, so cross-site form posts cannot log a browser in.
@@ -345,21 +345,53 @@ Search:
 - TOTP (RFC 6238: SHA-1, 6 digits, 30 s, ±1 step) is optional per user. With it on, a correct password returns a signed 5-minute challenge instead of a session; `POST /auth/login/2fa` exchanges it with a TOTP code or one of 10 single-use recovery codes. A code from a time step at or before the last accepted one is refused. Code failures count against the account and IP like password failures.
 - Starting enrolment and turning 2FA off re-check the password; turning off and regenerating recovery codes need a code. Enabling 2FA signs out the user's other sessions. Admins (`POST /admin/users/:id/2fa/reset`) and `cli user reset-2fa` turn it off and sign the user out everywhere.
 - App passwords are 160-bit random values shown once (`xxxx-xxxx-…`; case and dashes ignored), stored as SHA-256 hashes, at most 50 per user. Creating one re-checks the account password. `AuthService.authenticateAppPassword` is the only check that accepts them: it skips TOTP, refuses account passwords, shares the login throttle, and records last use at most hourly. `/auth/login` never accepts them. An admin password reset revokes them; a disabled user's are refused.
-- Changing or resetting a password, or disabling a user, revokes their other sessions. The last active admin cannot be demoted, disabled, or deleted.
+- Changing or resetting a password, or disabling a user, revokes their other sessions.
 - `APP_SECRET` (Docker env; SSM `app-secret` on AWS) is the root of per-purpose keys derived with HKDF-SHA256 (`server/src/core/crypto.ts`). Stored secrets are sealed with AES-256-GCM as `v1.<iv>.<ciphertext>.<tag>`, authenticated against their owning row; tokens are signed with HMAC-SHA256. A new secret voids every sealed value and signature; there is no rotation.
+
+### Authorization
+
+Function level:
+
+| Surface | Who may call it | Enforced by |
+|---|---|---|
+| Web app files, `/healthz`, `GET /api/v1/server`, `GET /api/v1/openapi.json` | Anyone | — |
+| `POST /api/v1/auth/login`, `POST /api/v1/auth/login/2fa` | Anyone; the code step only with the challenge its login returned | Login throttle; signed challenge |
+| Other `/api/v1/*` | A cookie or bearer session of an enabled user; `api` sessions are ignored. While `password_change_required`, only session, login, logout, and password change; others get 403 `password_change_required` | `registerAuth` and `requireUser` (`server/src/api/auth.ts`) |
+| `/api/v1/admin/*` | Admins | `requireAdmin` |
+| `GET /api/v1/images/<hmac>/<url>` | Anyone with the signed address | Image URL signature |
+| `/favicons/<sha256>` | Anyone, for keys a feed source shows | Content key |
+| `/feed-icons/<segment>/<id>.ico` | Anyone with the user's signed segment, for that user's subscriptions only | Segment signature |
+| `/public/feeds/<key>`, `/public/share/<uuid>` | Anyone with the key or share id, while the owner is enabled; else 404 | `access_keys`, `user_entries.share_id` |
+| `/public.php` | Anyone; redirects only | — |
+| TTRSS `/api/`, Google Reader `/accounts/ClientLogin` and `/reader/api/0/*` | Login: anyone, with an app password. Everything else: an `api` session from that login | `server/src/api/compat/common.ts` |
+
+Disabling a user ends their sessions, and session checks refuse disabled users, so every row above requiring a session excludes them.
+
+Data level:
+- A row with a user id belongs to that user. Services scope every read and write to the caller's id, so another user's rows answer 404.
+- Feed sources and entries are shared between subscribers. A user reaches them only through their own subscriptions and user entries, and never sees who else subscribes.
+- The archive of a feed is open to its current subscribers only.
+- Themes: every user reads shared ones; only the author changes, publishes, or deletes one; admins may unpublish anyone's.
+- A published feed or shared entry is readable by anyone holding its key or share id; only the owner regenerates the key or revokes the share.
+
+Admins:
+- Manage users (create, change role, disable, delete, reset password or 2FA), set per-site minimum intervals, and unpublish themes. The last active admin cannot be demoted, disabled, or deleted.
+- See each user's login, role, status, last sign-in, and activity (requests by client, entries read) on the Operations page, per-site fetch statistics for all users together, and the audit log. They do not see other users' feeds, entries, notes, labels, filters, or preferences.
+- Can sign in as a user by resetting their password. The reset is audited, ends the user's sessions and app passwords, and stops the user's own password working, so it does not go unnoticed.
+- Operators with access to the database, the host, or the AWS account are outside these rules.
 
 ## APIs
 
 | Surface | Path | Notes |
 |---|---|---|
-| Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`, no session: the input rules (types, required fields, lengths, ranges), generated from the `shared` Zod schemas; typed client in `shared` |
-| Server info | `/api/v1/server` | Product, build, API version, and instance name; no session |
+| Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`: the input rules (types, required fields, lengths, ranges), generated from the `shared` Zod schemas; typed client in `shared` |
+| Server info | `/api/v1/server` | Product, build, API version, and instance name |
 | Events | `/api/v1/events` | SSE: `counters` invalidation events |
-| Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
-| Public | `/public/*` | Published feeds and share links (no auth, secret key/UUID) |
+| Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images |
+| Public | `/public/*` | Published feeds and share links |
 | TTRSS-compatible | `/api/`, `/api/index.php` (POST, `op`) | See below |
-| Icons | `/favicons/<sha256>` | Subscriptions' `iconUrl`; no session; from the blob bucket through CloudFront on AWS |
-| Feed icons | `/feed-icons/<user segment>/<id>.ico` | Signed per-user path, no session, for TTRSS clients and the apps (`iconsPath`); see below |
+| Icons | `/favicons/<sha256>` | Subscriptions' `iconUrl`; from the blob bucket through CloudFront on AWS |
+| Feed icons | `/feed-icons/<user segment>/<id>.ico` | For TTRSS clients and the apps (`iconsPath`); see below |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*`; also under `/api/greader.php` | See below |
 
 ### Native REST API
@@ -378,7 +410,7 @@ Search:
 - `GET /archive/entries` lists past articles of the user's feeds (one subscription, or all), with search (`q`) and a cursor; `GET /archive/entries/:key` returns one with content and enclosures; `POST /archive/entries/:key/restore` takes `PATCH /entries/:id`'s body and returns the restored entry. Keys are opaque: the month of the article's sort time, its feed URL, and GUID.
 - `POST /published-feed/pages` (API 1.5) publishes a page from outside the user's feeds: an http(s) address, and optionally a title and plain-text text, which becomes paragraphs; all sanitised. A missing title or text is read from the page, fetched as full text is; a page that cannot be read is published all the same, titled with its address. The page is the user's own entry in the pages source, read and published, with no subscription. Publishing the same address again replaces what is given, reads the page again for what is not (keeping what was stored when it cannot), republishes it, and moves it to the top. Returns the entry.
 - `POST /subscriptions/:id/debug` (API 1.6) fetches a subscribed feed through the polite fetcher without validators and stores nothing: status, final and permanent URLs, headers without `set-cookie`, the body as text (first 256 KB), the parse result or error with any feeds an HTML page advertises, and up to 500 entries as ingest would store them, each with the user's enabled filters that would apply, in order up to one that stops. A paused host is reported, not asked; fetch failures say what failed without network detail.
-- `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's; only the author can change, publish (`shared`), or delete one. `POST /admin/themes/:id/unpublish` lets admins withdraw anyone's, logged as `theme_unpublished`. Stored tokens a later version no longer accepts are left out of the response. The web app refetches the list when it regains focus, so authors' edits and withdrawn themes reach other users; a theme that no longer resolves shows Original.
+- `GET /themes` returns the user's themes and those others share, each with its author and whether it is the user's. Publishing sets `shared`; `POST /admin/themes/:id/unpublish` withdraws one, logged as `theme_unpublished`. Stored tokens a later version no longer accepts are left out of the response. The web app refetches the list when it regains focus, so authors' edits and withdrawn themes reach other users; a theme that no longer resolves shows Original.
 - `GET /admin/sites/rules` lists admins' minimum intervals per host; `PUT /admin/sites/rules/:host` (15 min to 7 days) and `DELETE` set and clear one, logged as `site_interval_set` and `site_interval_cleared`. A host is given with its port when not the default, as in feed URLs. `GET /admin/ops/hosts` shows each host's minimum.
 - `GET /sync` returns categories, subscriptions, labels, and entries (without content) changed since a token, and deleted ids. Each call only covers changes before the start of the oldest transaction still open in the database, so rows committed late are never skipped. Entries page by (`updated_at`, id); `more` asks for another call. Tokens older than the 30-day tombstone retention get `410 resync_required`. `GET /sync/token` returns a token at the watermark without walking history, for clients that load current state from the headline lists. Entries carry `readAt` and `contentVersion`, an opaque value that changes with the content hash or extracted full text.
 - `POST /entries/contents` takes up to 100 ids in priority order and returns each entry's stored content, full text, enclosures, and content version, with its images (at most 30) mapped to signed proxy paths whatever the user's `proxyImages`; ids the user does not hold come back as `missing`, and those past the size budget (never the first) as `deferred`.
@@ -398,7 +430,7 @@ Events stream:
 - `/public/share/<uuid>`: a shared entry as a server-rendered HTML page. `user_entries.share_id` is a random UUID set when the user shares the entry and cleared when they revoke it.
 - `/public/feeds/<key>`: RSS 2.0 of the user's 50 newest published entries, with content. The key is 32 random bytes (base64url) in `access_keys`, stored as is so the address can be shown again; regenerating replaces it.
 - `/public.php?op=rss&id=-2&key=<key>` and `/public.php?op=share&key=<uuid>`, TTRSS's addresses for the same pages, redirect (301) to them; other `public.php` requests answer 404.
-- The share and feed pages answer 404 for unknown ids and for disabled owners. Pages send their own CSP (no scripts, frames only from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and `X-Robots-Tag: noindex`.
+- The share and feed pages answer 404 for unknown ids. Pages send their own CSP (no scripts, frames only from the sanitiser's video hosts), `Referrer-Policy: no-referrer`, and `X-Robots-Tag: noindex`.
 - Images go through the image proxy when the owner has it on. Feed URLs are absolute, from `PUBLIC_URL`, else the request's origin.
 - The feed carries a weak ETag over its items and answers `If-None-Match` with 304.
 
@@ -418,7 +450,7 @@ Events stream:
 - `getHeadlines` pages by `limit` (at most 200) and `skip`; `view_mode` `unread`, `adaptive`, and `marked` (starred) apply, others list all; `order_by=date_reverse` lists oldest first; `search` uses full-text search, across all feeds with `search_mode=all_feeds`.
 - `updateArticle` fields: 0 starred, 1 published, 2 unread, 3 note (`data`); modes 0 clear, 1 set, 2 toggle.
 - `subscribeToFeed` codes: 0 already subscribed, 1 added (`feed_id`), 2 invalid URL, 3 no feed found, 4 several feeds found (`feeds`: URL → title), 5 fetch failed.
-- `getConfig` (also `config` in the `login` answer) gives `icons_url` `feed-icons/<user segment>`: icons are served at `/feed-icons/<segment>/<subscription id>.ico`, the segment being the user ID signed with the `feed-icons` key, and only for that user's subscriptions.
+- `getConfig` (also `config` in the `login` answer) gives `icons_url` `feed-icons/<user segment>`: icons are served at `/feed-icons/<segment>/<subscription id>.ico`, the segment being the user ID signed with the `feed-icons` key.
 - Content goes through the image proxy for users who turned it on. `getPref` answers the TTRSS preferences that have an equivalent here and `null` for others, which are logged.
 - Requests are POSTs whose body is JSON, whatever its declared type, or form-encoded; query strings are ignored, so passwords never appear in logged URLs. `sid` is an `api` session token; `login` accepts app passwords only and reports API level 20.
 - Parameters are typed as TTRSS clients send them: numbers and booleans as JSON values or strings, id lists as arrays or comma-separated. Values past `/api/v1`'s length limits answer `INCORRECT_USAGE`, or code 2 from `subscribeToFeed`.
