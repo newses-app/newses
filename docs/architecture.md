@@ -237,7 +237,7 @@ Subscription lifecycle:
 - Subscribing to a new source ingests the response that validated it, so the feed is not fetched twice. OPML import creates sources and subscriptions only; their entries arrive with the first scheduled fetch. Subscribing to a source that already has entries delivers those within the purge window immediately.
 - Unsubscribing deletes the user's entries from that feed except kept ones, which stay with no subscription. Feed sources without subscriptions are left for purge.
 - Deleting a category moves its feeds and child categories to its parent.
-- OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines. A file with more than 2,000 feeds and folders, or folders nested more than 10 deep, is refused before anything is written; the rest is written in a few statements, in one transaction.
+- OPML import reuses categories with the same name and parent, and existing subscriptions, so re-importing is a no-op. It skips TTRSS's `tt-rss-prefs`, `tt-rss-labels`, and `tt-rss-filters` outlines. A file with more than 2,000 feeds and folders, or folders nested more than 10 deep, is refused before anything is written; the rest is written in a few statements, in one transaction. Feeds with addresses past `/api/v1`'s length limit are listed as invalid; longer folder names and feed titles are cut.
 
 Full text:
 - `entry.extract` jobs (one per feed source at a time) take the source's 20 newest entries not tried yet, newest first, and fetch each linked page through the per-host limits, unless the host is paused (HTML only, at most 5 MB). Readability (`@mozilla/readability` on linkedom) extracts the article, which is sanitised like feed content and stored in `entries.full_content`. Failures are recorded in `full_content_error` and not retried by jobs.
@@ -350,7 +350,7 @@ Search:
 
 | Surface | Path | Notes |
 |---|---|---|
-| Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`; typed client in `shared` |
+| Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`, no session: the input rules (types, required fields, lengths, ranges), generated from the `shared` Zod schemas; typed client in `shared` |
 | Server info | `/api/v1/server` | Product, build, API version, and instance name; no session |
 | Events | `/api/v1/events` | SSE: `counters` invalidation events |
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images; signed, no session |
@@ -363,6 +363,7 @@ Search:
 ### Native REST API
 
 - `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), and the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
+- Names, titles, notes, and addresses have one set of length limits (`shared/src/limits.ts`). The schemas check them, and the services check them again, so the compatibility APIs and OPML import hold to them too. Titles a feed gives itself are cut to the limit instead.
 - `/api/v1` responses over 1 KB are compressed for clients that accept it (Brotli at quality 4, else gzip), except event streams and images. On AWS, CloudFront's API behaviour does not cache, so it forwards `Accept-Encoding` to the API and passes compressed responses through, and the Lambda adapter returns them base64-encoded, which keeps large sync and content pages under Lambda's 6 MB response limit.
 - CORS on `/api/v1/*` allows the app origins `app://newses` (Electron) and `https://localhost` (Capacitor Android): requests with `Authorization` and `Content-Type`, `Retry-After` exposed, preflights cached for a day. Credentials are never allowed, so apps use bearer tokens and cookie sessions stay same-origin. Other origins get no CORS headers. CORS is applied before authentication, so apps can read errors too.
 - Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), a label, a tag, or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
@@ -402,7 +403,7 @@ Events stream:
 ### TTRSS-compatible API
 
 - Operations: `login`, `logout`, `isLoggedIn`, `getApiLevel`, `getVersion`, `getConfig`, `getPref`, `getUnread`, `getCounters`, `getFeeds`, `getCategories`, `getFeedTree`, `getHeadlines`, `getArticle`, `updateArticle`, `catchupFeed`, `updateFeed`, `getLabels`, `setArticleLabel`, `subscribeToFeed`, `unsubscribeFeed`, `shareToPublished`.
-- `shareToPublished` publishes `url` as `POST /published-feed/pages` does, with tags stripped from `title` and `content` (as TTRSS does) and values past the limits cut rather than refused.
+- `shareToPublished` publishes `url` as `POST /published-feed/pages` does, with tags stripped from `title` and `content` (as TTRSS does), and `title` and `content` past the limits cut rather than refused.
 - Feed IDs are subscription IDs; special feed IDs:
   - `-1` starred
   - `-2` published
@@ -418,6 +419,7 @@ Events stream:
 - `getConfig` (also `config` in the `login` answer) gives `icons_url` `feed-icons/<user segment>`: icons are served at `/feed-icons/<segment>/<subscription id>.ico`, the segment being the user ID signed with the `feed-icons` key, and only for that user's subscriptions.
 - Content goes through the image proxy for users who turned it on. `getPref` answers the TTRSS preferences that have an equivalent here and `null` for others, which are logged.
 - Requests are POSTs whose body is JSON, whatever its declared type, or form-encoded; query strings are ignored, so passwords never appear in logged URLs. `sid` is an `api` session token; `login` accepts app passwords only and reports API level 20.
+- Parameters are typed as TTRSS clients send them: numbers and booleans as JSON values or strings, id lists as arrays or comma-separated. Values past `/api/v1`'s length limits answer `INCORRECT_USAGE`, or code 2 from `subscribeToFeed`.
 - Every answer is HTTP 200 `{seq, status, content}`, `seq` echoing the request. Errors have status 1 and `content.error`: `NOT_LOGGED_IN`, `LOGIN_ERROR`, `API_DISABLED` (password must be changed), `UNKNOWN_METHOD` (with `method`), `INCORRECT_USAGE`, `FEED_NOT_FOUND`.
 
 ### Google Reader API
@@ -447,6 +449,7 @@ Events stream:
 - `mark-all-as-read` marks the stream read, with `ts` (microseconds) only entries delivered to the user by then.
 - Items carry `categories` with their states, folder, and tags; `origin.streamId` is the subscription; `summary.content` goes through the image proxy for users who turned it on. `subscription/list` gives `iconUrl` from the feed icon path, absolute from `PUBLIC_URL` or the request's origin.
 - `quickadd` subscribes to the first feed a page advertises.
+- Names, titles, and addresses past `/api/v1`'s length limits answer 400; `quickadd` answers `numResults: 0`.
 
 Both compatibility APIs log each unsupported call with the client's user agent. `COMPAT_TRACE` logs every call and its parameters, credentials redacted; it is on for the AWS `dev` stage.
 

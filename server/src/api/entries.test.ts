@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
-import { createApiClient } from '@newses/shared';
+import { API_VERSION, createApiClient, MAX_CATEGORY_TITLE_LENGTH } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db/client.ts';
@@ -388,7 +388,14 @@ describe('entries API', () => {
   it('serves the OpenAPI document', async () => {
     const doc = await app.inject({ method: 'GET', url: '/api/v1/openapi.json' });
     expect(doc.statusCode).toBe(200);
-    const spec = doc.json<{ openapi: string; paths: Record<string, unknown> }>();
+    const spec = doc.json<{
+      openapi: string;
+      info: { version: string };
+      paths: Record<
+        string,
+        Record<string, { requestBody?: { content: Record<string, { schema: unknown }> } }>
+      >;
+    }>();
     expect(spec.openapi).toMatch(/^3\./);
     expect(Object.keys(spec.paths)).toEqual(
       expect.arrayContaining([
@@ -402,6 +409,15 @@ describe('entries API', () => {
         '/api/v1/archive/entries',
       ]),
     );
+    expect(spec.info.version).toBe(`${String(API_VERSION.major)}.${String(API_VERSION.minor)}`);
+    // The compatibility routes have no schemas to describe.
+    expect(Object.keys(spec.paths).filter((path) => !path.startsWith('/api/v1/'))).toEqual([]);
+    const body = (path: string, method: string) =>
+      spec.paths[path]?.[method]?.requestBody?.content ?? {};
+    expect(body('/api/v1/categories', 'post')['application/json']?.schema).toMatchObject({
+      properties: { title: { maxLength: MAX_CATEGORY_TITLE_LENGTH } },
+    });
+    expect(Object.keys(body('/api/v1/opml', 'post'))).toContain('text/x-opml');
   });
 });
 

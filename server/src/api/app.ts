@@ -2,6 +2,7 @@ import compress from '@fastify/compress';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
+import { API_VERSION } from '@newses/shared';
 import Fastify, { type FastifyBaseLogger } from 'fastify';
 import {
   jsonSchemaTransform,
@@ -162,7 +163,12 @@ export function buildApp(deps: AppDeps) {
     void app.register(cookie);
     void app.register(swagger, {
       openapi: {
-        info: { title: 'Newses API', version: '1' },
+        info: {
+          title: 'Newses API',
+          version: `${String(API_VERSION.major)}.${String(API_VERSION.minor)}`,
+          description:
+            'The native API. Its schemas are the rules every input is checked against; length limits hold for the compatibility APIs and OPML import too.',
+        },
         components: {
           securitySchemes: {
             cookie: {
@@ -176,7 +182,11 @@ export function buildApp(deps: AppDeps) {
         },
         security: [{ cookie: [] }, { bearer: [] }],
       },
-      transform: jsonSchemaTransform,
+      // Only `/api/v1` is described by schemas; the other routes would show as empty operations.
+      transform: (data) =>
+        data.url.startsWith('/api/v1/')
+          ? jsonSchemaTransform(data)
+          : { schema: { hide: true }, url: data.url },
     });
     void app.register(
       async (api) => {

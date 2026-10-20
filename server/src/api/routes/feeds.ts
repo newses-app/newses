@@ -2,6 +2,9 @@ import {
   categorySchema,
   createCategoryRequestSchema,
   feedDebugSchema,
+  MAX_FEED_URL_LENGTH,
+  MAX_OPML_DEPTH,
+  MAX_OPML_OUTLINES,
   opmlImportResultSchema,
   subscribeRequestSchema,
   subscribeResponseSchema,
@@ -195,7 +198,14 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
 
     opmlApp.post(
       '/opml',
-      { schema: { body: z.string(), response: { 200: opmlImportResultSchema } } },
+      {
+        schema: {
+          consumes: OPML_TYPES,
+          description: `An OPML file of at most 5 MiB, ${MAX_OPML_OUTLINES.toLocaleString('en')} feeds and folders, and ${String(MAX_OPML_DEPTH)} levels of folders, else refused before anything is written. Feeds whose address is longer than ${MAX_FEED_URL_LENGTH.toLocaleString('en')} characters are listed as invalid; longer folder names and feed titles are cut.`,
+          body: z.string(),
+          response: { 200: opmlImportResultSchema },
+        },
+      },
       async (request) => opml.import(requireAuth(request).user.id, request.body),
     );
 
