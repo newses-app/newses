@@ -49,8 +49,10 @@ public class BackgroundSyncWorker extends Worker {
                 case RETRY:
                     return Result.retry();
                 case SIGNED_OUT:
-                    // Until the app signs in again and hands over a new token.
+                    // Until the app signs in again and hands over a new token; what was fetched
+                    // for the ended session goes with it.
                     TokenVault.clear(prefs);
+                    staged(context, null).clear();
                     return Result.success();
                 default:
                     return Result.success();

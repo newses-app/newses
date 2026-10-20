@@ -1,7 +1,7 @@
 import type { CreateThemeRequest } from '@newses/shared';
-import { createApiClient } from '@newses/shared/client';
+import { ApiError, createApiClient } from '@newses/shared/client';
 import { DEFAULT_KEEP } from '../lib/offline-keep.ts';
-import { exclusively, type OfflineDb, openOfflineDb } from './db.ts';
+import { clearReadable, exclusively, type OfflineDb, openOfflineDb } from './db.ts';
 import { downloadContents, indexStoredContents, trimToLimit } from './downloads.ts';
 import { type FlushResult, flushOutbox, type NoteConflict } from './outbox.ts';
 import {
@@ -11,7 +11,7 @@ import {
   supportsOffline,
   syncStore,
 } from './sync.ts';
-import { readWorkerConfig } from './worker-config.ts';
+import { readWorkerConfig, writeWorkerConfig } from './worker-config.ts';
 
 /**
  * What the service worker did that the reader should hear about, kept in the store until a page
@@ -94,7 +94,17 @@ export async function runInBackground(
     const info = await api.serverInfo();
     if (!supportsOffline(info)) return;
     // Confirms the session is still there, and gives the CSRF token changes need.
-    await api.auth.session();
+    try {
+      await api.auth.session();
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) throw error;
+      // The session ended: what a reader could see goes, changes not yet sent stay for the
+      // next sign-in, and nothing syncs until a page signs in again.
+      await clearReadable(db);
+      await writeWorkerConfig(null);
+      if (typeof caches !== 'undefined') await caches.delete('favicons').catch(() => false);
+      return;
+    }
     await exclusively('outbox', async () => {
       await keepReport(db, await flushOutbox(api, db, { conflicts: detectsConflicts(info) }));
     });

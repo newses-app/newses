@@ -7,7 +7,12 @@ import { useRouter } from 'vue-router';
 import { api, isUnauthenticated, retryable } from '../api.ts';
 import { connectivity } from '../offline/connectivity.ts';
 import { seedQueries, writeQuery } from '../offline/snapshot.ts';
-import { currentStore, storeSignedIn, storeSignedOut } from '../offline/store.ts';
+import {
+  currentStore,
+  storeSessionEnded,
+  storeSignedIn,
+  storeSignedOut,
+} from '../offline/store.ts';
 import { outboxPending } from '../offline/status.ts';
 import { connection, NATIVE } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -25,6 +30,17 @@ let startedOffline = false;
 export const sessionVerified = ref(false);
 /** Set once this launch's session from the server is in the store. */
 let sessionKept = false;
+
+/**
+ * The server ended the session without a sign-out here (a 401): the token is forgotten, and the
+ * store keeps only changes not yet sent (`storeSessionEnded`).
+ */
+export async function sessionEnded(): Promise<void> {
+  sessionVerified.value = false;
+  sessionKept = false;
+  await connection.signedOut();
+  await storeSessionEnded();
+}
 
 /** Fills the caches from the store, when it holds a snapshot of the signed-in account. */
 async function startOffline(queryClient: QueryClient): Promise<CurrentSession | null> {
@@ -78,8 +94,8 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
         startedOffline = true;
         return;
       }
-      await connection.signedOut();
       queryClient.clear();
+      await sessionEnded();
       await router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
     }
   });
@@ -107,8 +123,7 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
       return true;
     } catch (error) {
       if (isUnauthenticated(error)) {
-        sessionVerified.value = false;
-        await connection.signedOut();
+        await sessionEnded();
         return { name: 'login', query: { redirect: to.fullPath } };
       }
       throw error;

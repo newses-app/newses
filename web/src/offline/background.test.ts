@@ -6,7 +6,7 @@ import { runInBackground, takeWorkerReport } from './background.ts';
 import { openOfflineDb, type OfflineDb } from './db.ts';
 import { queueChanges } from './outbox.ts';
 import { storedSyncToken } from './sync.ts';
-import { writeWorkerConfig } from './worker-config.ts';
+import { readWorkerConfig, writeWorkerConfig } from './worker-config.ts';
 
 const NAME = 'newses-background';
 let db: OfflineDb;
@@ -88,6 +88,21 @@ describe('runInBackground', () => {
     expect(asked).toContain('GET /sync');
     expect(await storedSyncToken(db)).toBe('T2');
     expect((await db.meta.get('syncStatus'))?.value).toMatchObject({ lastError: null });
+  });
+
+  it('keeps only unsent changes, and stops, when the session has ended', async () => {
+    await queueChanges(db, [{ kind: 'note', id: 1, note: 'Kept' }]);
+    await db.meta.put({ key: 'syncToken', value: 'T1' });
+    const { fetch, asked } = server({
+      ...common,
+      'GET /auth/session': () =>
+        Response.json({ error: 'unauthenticated', message: 'No' }, { status: 401 }),
+    });
+    await runInBackground('sync', fetch);
+    expect(asked).toEqual(['GET /server', 'GET /auth/session']);
+    expect(await db.meta.count()).toBe(0);
+    expect(await db.outbox.count()).toBe(1);
+    expect(await readWorkerConfig()).toBeUndefined();
   });
 
   it('does nothing while offline reading is off', async () => {

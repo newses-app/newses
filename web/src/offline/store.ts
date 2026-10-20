@@ -9,7 +9,7 @@ import {
   lastAccount,
   markEmptied,
 } from './account.ts';
-import { afterOthers, type OfflineDb, openOfflineDb } from './db.ts';
+import { afterOthers, clearReadable, type OfflineDb, openOfflineDb } from './db.ts';
 import { outboxPending } from './status.ts';
 import { setPeriodicSync } from './registration.ts';
 import { keepLimits } from './settings.ts';
@@ -117,10 +117,47 @@ export async function storeSignedIn(account: Account): Promise<void> {
   await accountSignedIn(account);
 }
 
+/** The service worker's cache of feed icons, which shows what the reader subscribes to. */
+async function forgetIcons(): Promise<void> {
+  if (NATIVE) return;
+  try {
+    await caches.delete('favicons');
+  } catch {
+    // No Cache API, or blocked: nothing was kept.
+  }
+}
+
 export async function storeSignedOut(): Promise<void> {
   closeStore();
   await stopBackground();
   await accountSignedOut();
+  await forgetIcons();
+}
+
+/**
+ * The server ended the active profile's session without a sign-out here (a 401: it expired, was
+ * revoked, or the password was reset). What a reader could see goes; changes not yet sent stay
+ * for the same user to send after signing in again, and the store downloads again then. Without
+ * any, the store goes too.
+ */
+export async function storeSessionEnded(): Promise<void> {
+  await stopBackground();
+  await forgetIcons();
+  await afterOthers('sync', () =>
+    afterOthers('outbox', async () => {
+      const db = currentStore();
+      if (!db) return;
+      const pending = await db.outbox.count().catch(() => 0);
+      if (pending === 0) {
+        closeStore();
+        await accountSignedOut();
+        return;
+      }
+      await clearReadable(db);
+      // Empty by choice, so the next sync does not report an eviction.
+      markEmptied();
+    }),
+  );
 }
 
 /**

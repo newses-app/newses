@@ -174,6 +174,21 @@ export async function storageEstimate(): Promise<{ usage: number; quota: number 
   }
 }
 
+/**
+ * Deletes everything in a store a reader could see (entries, text, images, snapshots, where sync
+ * stands), keeping the changes not yet sent.
+ */
+export async function clearReadable(db: OfflineDb): Promise<void> {
+  await db.transaction('rw', [db.entries, db.contents, db.images, db.meta], async () => {
+    await Promise.all([
+      db.entries.clear(),
+      db.contents.clear(),
+      db.images.clear(),
+      db.meta.clear(),
+    ]);
+  });
+}
+
 /** Runs `task` once no tab of this app is running one under the same name. */
 export async function afterOthers(name: string, task: () => Promise<void>): Promise<void> {
   const locks = (navigator as { locks?: LockManager }).locks;
