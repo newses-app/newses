@@ -29,7 +29,7 @@ Commands run from the repository root. `C` stands for `docker compose -f docker/
 | `ARCHIVE_ENABLED` | `true` | Keeps entries that purge deletes in a cold-storage archive in the `blobs` volume, where users browse and restore them; `false` deletes them for good |
 | `FEED_DISABLE_AFTER_FAILURES` | `20` | Consecutive failed fetches after which a feed is disabled until refreshed |
 | `FETCH_ALLOW_PRIVATE_NETWORKS` | unset | Feeds on private or loopback addresses are blocked; set `true` or comma-separated CIDRs (e.g. `192.168.1.0/24`) to allow LAN feeds |
-| `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created |
+| `ADMIN_LOGIN`, `ADMIN_PASSWORD` | unset | First admin, created at startup only while no users exist; remove once created. Well-known logins such as `admin` and `root` are refused |
 | `BACKUP_RETENTION_DAYS` | `14` | Days of nightly dumps kept by the `backup` service |
 | `OPS_RETENTION_DAYS` | `90` | Days of activity, request, site, and job statistics, and resolved alerts, kept for the Operations page |
 | `AUDIT_RETENTION_DAYS` | `365` | Days of audit events kept |

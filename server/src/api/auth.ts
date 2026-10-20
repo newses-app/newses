@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { passwordExpired } from '../core/auth/auth-service.ts';
 import {
   type SessionRow,
   type SessionService,
@@ -80,6 +81,16 @@ export function registerAuth(app: FastifyInstance, sessions: SessionService): vo
     if (!result) {
       if (!bearer) clearSessionCookie(reply);
       return;
+    }
+    // Sessions opened with a generated password end when it expires unchanged.
+    if (passwordExpired(result.user)) {
+      await sessions.revokeAll(result.user.id);
+      if (!bearer) clearSessionCookie(reply);
+      throw new HttpError(
+        401,
+        'password_expired',
+        'This password has expired; ask an admin for a new one',
+      );
     }
     // App-password sessions reach only the compatibility APIs.
     if (result.session.kind === 'api') return;

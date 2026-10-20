@@ -1,8 +1,10 @@
 import { API_VERSION } from '@newses/shared';
+import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { HttpFetcher } from '../core/feeds/http.ts';
 import { createDb } from '../db/client.ts';
+import { users } from '../db/schema.ts';
 import { createTestServices } from '../test/services.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { buildApp } from './app.ts';
@@ -372,6 +374,38 @@ describe('generated initial password', () => {
     );
     const user = await services.users.findByLogin('fresh');
     await services.users.delete(user?.id ?? 0);
+  });
+
+  it('stops signing in once expired unchanged, ending its sessions, until an admin resets it', async () => {
+    const stale = await services.users.create('stale', 'generated password', 'user', true);
+    const signedIn = await loginWithCookie('stale', 'generated password');
+    await createDb(database.pool)
+      .update(users)
+      .set({ passwordExpiresAt: new Date(Date.now() - 1000) })
+      .where(eq(users.id, stale.id));
+
+    const ended = await app.inject({
+      url: '/api/v1/auth/session',
+      headers: { cookie: signedIn.cookie },
+    });
+    expect(ended.statusCode).toBe(401);
+    expect(ended.json()).toMatchObject({ error: 'password_expired' });
+    expect(
+      (
+        await app.inject({ url: '/api/v1/auth/session', headers: { cookie: signedIn.cookie } })
+      ).json(),
+    ).toMatchObject({ error: 'unauthenticated' });
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'stale', password: 'generated password' },
+    });
+    expect(refused.statusCode).toBe(401);
+    expect(refused.json()).toMatchObject({ error: 'password_expired' });
+
+    await services.auth.resetPassword(stale.id, 'a password from the admin');
+    await loginWithCookie('stale', 'a password from the admin');
+    await services.users.delete(stale.id);
   });
 });
 

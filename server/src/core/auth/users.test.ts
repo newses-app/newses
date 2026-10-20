@@ -5,6 +5,9 @@ import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { TEST_APP_SECRET } from '../../test/fakes.ts';
 import { createAuthServices, type AuthServices } from './index.ts';
 import { verifyPassword } from './passwords.ts';
+import { GENERATED_PASSWORD_DAYS } from './users.ts';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 let database: TestDatabase;
 let services: AuthServices;
@@ -39,14 +42,51 @@ describe('UserService', () => {
   });
 
   it('bootstraps an admin only into an empty database', async () => {
-    expect(await services.users.bootstrapAdmin('root', 'password1', true)).toBe(true);
+    expect(await services.users.bootstrapAdmin('pat', 'password1', true)).toBe(true);
     expect(await services.users.bootstrapAdmin('other', 'password1')).toBe(false);
     expect(
       (await services.users.list()).map((u) => [u.login, u.role, u.passwordChangeRequired]),
-    ).toEqual([['root', 'admin', true]]);
-    const root = await services.users.findByLogin('root');
-    await services.users.setPassword(root?.id ?? 0, 'a chosen password');
-    expect((await services.users.findByLogin('root'))?.passwordChangeRequired).toBe(false);
+    ).toEqual([['pat', 'admin', true]]);
+    const pat = await services.users.findByLogin('pat');
+    const expiresIn = (pat?.passwordExpiresAt?.getTime() ?? 0) - Date.now();
+    expect(expiresIn).toBeGreaterThan(GENERATED_PASSWORD_DAYS * DAY_MS - 60_000);
+    expect(expiresIn).toBeLessThanOrEqual(GENERATED_PASSWORD_DAYS * DAY_MS);
+    await services.users.setPassword(pat?.id ?? 0, 'a chosen password');
+    expect(await services.users.findByLogin('pat')).toMatchObject({
+      passwordChangeRequired: false,
+      passwordExpiresAt: null,
+    });
+  });
+
+  it('refuses a well-known login for the first admin, but not once users exist', async () => {
+    await expect(services.users.bootstrapAdmin('Admin', 'password1', true)).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    expect(await services.users.list()).toEqual([]);
+    await services.users.create('admin', 'password1', 'admin');
+    expect(await services.users.bootstrapAdmin('admin', 'password1')).toBe(false);
+    expect(await services.users.reservedAdminLogins()).toEqual(['admin']);
+  });
+
+  it('reissues the first admin a password only while no other admin is active', async () => {
+    const first = await services.users.create('pat', 'password1', 'admin', true);
+    const session = await services.sessions.create(first.id, 'cookie', null);
+    await services.users.reissueAdmin('PAT', 'a new generated password');
+    const pat = await services.users.findByLogin('pat');
+    expect(await verifyPassword(pat?.passwordHash ?? '', 'a new generated password')).toBe(true);
+    expect(pat).toMatchObject({
+      passwordChangeRequired: true,
+      passwordExpiresAt: expect.any(Date) as Date,
+    });
+    expect(await services.sessions.validate(session.token)).toBeNull();
+
+    await services.users.create('lee', 'password1', 'admin');
+    await expect(services.users.reissueAdmin('pat', 'another password')).rejects.toMatchObject({
+      code: 'conflict',
+    });
+    await expect(services.users.reissueAdmin('nobody', 'another password')).rejects.toMatchObject({
+      code: 'not_found',
+    });
   });
 
   it('keeps at least one active admin', async () => {

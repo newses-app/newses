@@ -47,7 +47,7 @@ Behaviour:
 The script:
 - Restores the dump (`pg_dump -Fc`, `.sql`, or `.sql.gz`) into a temporary PostgreSQL container, removed when the script exits.
 - Runs a dry run and prints its report, then asks before importing.
-- Saves the import's report to `ttrss-import-<target>-<time>.txt` (mode 600) in the current directory and prints it with temporary passwords hidden. Hand the passwords out from the file, then delete it.
+- Saves the import's report to `ttrss-import-<target>-<time>.txt` (mode 600) in the current directory and prints it with temporary passwords hidden. Hand the passwords out from the file before they expire, then delete it.
 - On AWS, builds the image from the checkout and runs it locally against the database instance's public TLS endpoint, as the stage's role with its password and `APP_SECRET` from SSM; nothing runs in AWS. When the stage has the archive on (its `tick` function's `ARCHIVE_ENABLED`), the import writes it to the stage's blob bucket (the data stack's `BlobBucket` output) with the caller's credentials, which must last the whole import. The checkout must match the deployed version.
 
 ### Without a dump
@@ -67,7 +67,7 @@ Use the values from the TTRSS `.env`. The import only reads, in one read-only tr
 
 | TTRSS | Imported as | Notes |
 |---|---|---|
-| `ttrss_users` | `users` | `access_level` ≥ 10 → `admin`. A new user gets a temporary password, printed once in the report, which must be changed at first sign-in. A user here with the same login (any case) is adopted, keeping its password and role. Logins not allowed here are skipped. Users already imported are left unchanged on re-runs. TOTP and password hashes are not carried over |
+| `ttrss_users` | `users` | `access_level` ≥ 10 → `admin`. A new user gets a temporary password, printed once in the report with its expiry, which must be changed at first sign-in and expires after 7 days; an admin resets an expired one in Settings → Users. A user here with the same login (any case) is adopted, keeping its password and role. Logins not allowed here are skipped. Users already imported are left unchanged on re-runs. TOTP and password hashes are not carried over |
 | `ttrss_feed_categories` | `categories` | `parent_cat` → `parent_id`; `order_id` and `collapsed` kept. A title already used under the same parent merges into that category |
 | `ttrss_feeds` | `feed_sources` + `subscriptions` | One feed source per normalised `feed_url` across all users, first fetched within 30 minutes of the import. Per user: title, category, `order_id`, `update_interval` (minutes, held to 15 min–7 days; `-1`, updates off, → paused), `purge_interval` (`-1` → never). Feeds with `auth_login` and invalid URLs are skipped; a user's second feed with the same normalised URL is skipped as a duplicate. Re-runs keep an imported subscription on its feed source, whose URL may have moved here since (permanent redirect), so a `feed_url` changed in TTRSS is not applied. Options with no equivalent (`hidden`, `cache_images`, `hide_images`, `always_display_enclosures`, `mark_unread_on_update`, `update_on_checksum_change`, `strip_images`, `rtl_content`, `cache_content`, `private`, `include_in_digest` off) are noted |
 | `ttrss_entries` | `entries` | Title, link, author, content (sanitised as fetched items are), `updated` → published time, `date_entered` → fetch time, `lang`. TTRSS keeps a copy per user; copies with the same feed source, title, link, and content become one entry, whose GUID is `ttrss:` and that content hash. Times are read as UTC |

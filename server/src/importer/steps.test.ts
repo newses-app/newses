@@ -78,6 +78,8 @@ afterAll(async () => {
   await target.drop();
 });
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 describe('TTRSS import steps', () => {
   it('imports users with temporary passwords, adopting a local user with the same login', async () => {
     const report = await run();
@@ -87,6 +89,9 @@ describe('TTRSS import steps', () => {
     const note = report.notes('pat').find((n) => n.item === 'users')?.text ?? '';
     const password = /temporary password (\S+)/.exec(note)?.[1] ?? '';
     expect(await verifyPassword(pat?.passwordHash ?? '', password)).toBe(true);
+    const expires = pat?.passwordExpiresAt?.toISOString().slice(0, 16).replace('T', ' ') ?? '';
+    expect(note).toContain(`expires ${expires} UTC`);
+    expect((pat?.passwordExpiresAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(6 * DAY_MS);
     expect(await userNamed('Admin')).toMatchObject({ passwordHash: adminHash, role: 'admin' });
     expect(report.notes('admin')).toContainEqual(
       expect.objectContaining({ text: 'adopted the existing user with this login' }),

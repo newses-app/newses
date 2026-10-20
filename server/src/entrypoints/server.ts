@@ -9,7 +9,7 @@ import { PrefsService } from '../core/prefs.ts';
 import { ThemeService } from '../core/themes.ts';
 import { createDb } from '../db/client.ts';
 import { createArchiveReader, createFeedDeps, PG_BOSS_TELEMETRY } from './feed-deps.ts';
-import { createRuntime, processSnapshot } from './runtime.ts';
+import { bootstrapAdmin, createRuntime, processSnapshot } from './runtime.ts';
 import { scheduleOpsFlush } from './tracking.ts';
 
 const { config, logger, pool, onShutdown } = createRuntime('server');
@@ -46,12 +46,7 @@ const services = {
   realtime,
   ops,
 };
-if (config.bootstrapAdmin) {
-  const { login, password } = config.bootstrapAdmin;
-  if (await services.users.bootstrapAdmin(login, password)) {
-    logger.info({ login }, 'Created initial admin user');
-  }
-}
+await bootstrapAdmin(services.users, config, logger);
 
 const app = buildApp({
   logger,

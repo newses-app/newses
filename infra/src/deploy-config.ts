@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isReservedAdminLogin, loginNameSchema } from '@newses/shared';
 import { z } from 'zod';
 import { REPO_ROOT, type StageConfig } from './config.ts';
 
@@ -20,7 +21,7 @@ const stageSchema = z.object({
   instanceName: z.string().trim().min(1).max(100).optional(),
 }) satisfies z.ZodType<StageConfig>;
 
-const deployConfigSchema = z
+export const deployConfigSchema = z
   .object({
     /** Prefix of every physical name, tag, and parameter path in the account. */
     resourcePrefix: z.string().regex(/^[a-z][a-z0-9-]*$/),
@@ -45,6 +46,10 @@ const deployConfigSchema = z
      * merged to `main`.
      */
     budgetUsd: z.number().positive(),
+    /** Login of each stage's first admin, created with a generated password. */
+    adminLogin: loginNameSchema.refine((login) => !isReservedAdminLogin(login), {
+      message: 'too well known for the first admin; choose another login',
+    }),
     stages: z.array(stageSchema).min(1),
   })
   .superRefine((config, ctx) => {
@@ -82,6 +87,7 @@ export const CERTIFICATE_ARN = config.certificateArn;
 export const HOSTED_ZONE = config.hostedZone;
 export const ADOT_LAYER_ARN = config.adotLayerArn;
 export const BUDGET_USD = config.budgetUsd;
+export const ADMIN_LOGIN = config.adminLogin;
 export const STAGES: StageConfig[] = config.stages;
 
 /**

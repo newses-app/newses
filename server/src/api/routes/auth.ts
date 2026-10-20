@@ -55,7 +55,10 @@ async function logFailure<T>(
     return await work();
   } catch (err) {
     if (err instanceof DomainError) {
-      logSecurity(request, err.code === 'throttled' ? 'login_throttled' : event, fields);
+      logSecurity(request, err.code === 'throttled' ? 'login_throttled' : event, {
+        ...fields,
+        ...(err.code === 'password_expired' && { reason: err.code }),
+      });
     }
     throw err;
   }

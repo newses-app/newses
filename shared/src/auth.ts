@@ -8,6 +8,18 @@ export const loginNameSchema = z
   .max(64)
   .regex(/^[\p{L}\p{N}._@-]+$/u, 'Use letters, digits, and . _ @ - only');
 
+/**
+ * Logins too well known for the first admin: `admin`, `root`, or `superuser` anywhere in them, or
+ * `sa` with only digits and separators besides. Other users may still be called anything.
+ */
+export function isReservedAdminLogin(login: string): boolean {
+  const name = login.trim().toLowerCase();
+  return (
+    ['admin', 'root', 'superuser'].some((part) => name.includes(part)) ||
+    name.replace(/[\d._@-]/g, '') === 'sa'
+  );
+}
+
 export const passwordSchema = z
   .string()
   .min(8)

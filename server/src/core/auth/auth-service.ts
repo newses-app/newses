@@ -38,6 +38,10 @@ export type LoggedIn = NewSession & { user: UserRow };
 /** A login either opens a session or, with 2FA on, returns a challenge for the code step. */
 export type LoginResult = LoggedIn | { challenge: string; user: UserRow };
 
+/** A generated initial password past its expiry no longer signs in. */
+export const passwordExpired = (user: UserRow) =>
+  user.passwordExpiresAt !== null && user.passwordExpiresAt <= new Date();
+
 const accountKey = (login: string) => `login:${login.trim().toLowerCase()}`;
 
 export class AuthService {
@@ -74,6 +78,14 @@ export class AuthService {
       await this.#throttle.recordFailure(account, ACCOUNT_RULE);
       await this.#throttle.recordFailure(ipKey, IP_RULE);
       throw new DomainError('invalid_credentials', 'Invalid login or password');
+    }
+    if (passwordExpired(user)) {
+      await this.#throttle.recordFailure(account, ACCOUNT_RULE);
+      await this.#throttle.recordFailure(ipKey, IP_RULE);
+      throw new DomainError(
+        'password_expired',
+        'This password has expired; ask an admin for a new one',
+      );
     }
 
     if (user.totpEnabledAt !== null) {

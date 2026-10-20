@@ -1,3 +1,4 @@
+import { isReservedAdminLogin } from '@newses/shared';
 import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { users } from '../../db/schema.ts';
@@ -7,6 +8,13 @@ import { hashPassword } from './passwords.ts';
 import type { SessionService, UserRow } from './sessions.ts';
 
 export type UserRole = 'admin' | 'user';
+
+/** Days a generated initial password signs in for, unless changed. */
+export const GENERATED_PASSWORD_DAYS = 7;
+
+/** When a generated password set now expires. */
+export const generatedPasswordExpiry = () =>
+  new Date(Date.now() + GENERATED_PASSWORD_DAYS * 24 * 60 * 60 * 1000);
 
 export interface UserChanges {
   role?: UserRole;
@@ -44,13 +52,19 @@ export class UserService {
     login: string,
     password: string,
     role: UserRole = 'user',
-    passwordChangeRequired = false,
+    generated = false,
   ): Promise<UserRow> {
     const passwordHash = await hashPassword(password);
     try {
       const [user] = await this.#db
         .insert(users)
-        .values({ login, passwordHash, role, passwordChangeRequired })
+        .values({
+          login,
+          passwordHash,
+          role,
+          passwordChangeRequired: generated,
+          passwordExpiresAt: generated ? generatedPasswordExpiry() : null,
+        })
         .returning();
       if (!user) throw new Error('User insert returned no row');
       return user;
@@ -62,11 +76,18 @@ export class UserService {
 
   /**
    * Creates the first admin when the database has no users. Returns whether it did. A
-   * `generated` password must be changed at first sign-in.
+   * `generated` password must be changed at first sign-in, and expires. Well-known logins are
+   * refused (`isReservedAdminLogin`).
    */
   async bootstrapAdmin(login: string, password: string, generated = false): Promise<boolean> {
     const [row] = await this.#db.select({ n: count() }).from(users);
     if (row && row.n > 0) return false;
+    if (isReservedAdminLogin(login)) {
+      throw new DomainError(
+        'invalid_input',
+        `"${login}" is too well known for the first admin's login; choose another`,
+      );
+    }
     try {
       await this.create(login, password, 'admin', generated);
       return true;
@@ -119,11 +140,56 @@ export class UserService {
     const passwordHash = await hashPassword(password);
     const updated = await this.#db
       .update(users)
-      .set({ passwordHash, passwordChangeRequired: false })
+      .set({ passwordHash, passwordChangeRequired: false, passwordExpiresAt: null })
       .where(eq(users.id, id))
       .returning({ id: users.id });
     if (updated.length === 0) throw new DomainError('not_found', 'User not found');
     await this.#sessions.revokeAll(id, keepSessionId);
+  }
+
+  /** Logins of enabled admins too well known to keep (`isReservedAdminLogin`). */
+  async reservedAdminLogins(): Promise<string[]> {
+    const admins = await this.#db
+      .select({ login: users.login })
+      .from(users)
+      .where(and(eq(users.role, 'admin'), isNull(users.disabledAt)));
+    return admins.map((admin) => admin.login).filter(isReservedAdminLogin);
+  }
+
+  /**
+   * Gives the first admin a new generated password, for a stage whose only way in is that admin's
+   * expired one. Refused while another active admin exists, who can reset it instead.
+   */
+  async reissueAdmin(login: string, password: string): Promise<void> {
+    const passwordHash = await hashPassword(password);
+    const id = await this.#db.transaction(async (tx) => {
+      const [admin] = await tx
+        .select()
+        .from(users)
+        .where(
+          and(eq(sql`lower(${users.login})`, login.trim().toLowerCase()), eq(users.role, 'admin')),
+        )
+        .for('update');
+      if (!admin) throw new DomainError('not_found', `No admin "${login}"`);
+      const others = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.role, 'admin'), isNull(users.disabledAt), ne(users.id, admin.id)));
+      if (others.length > 0) {
+        throw new DomainError('conflict', 'Another active admin can reset this password');
+      }
+      await tx
+        .update(users)
+        .set({
+          passwordHash,
+          passwordChangeRequired: true,
+          passwordExpiresAt: generatedPasswordExpiry(),
+          disabledAt: null,
+        })
+        .where(eq(users.id, admin.id));
+      return admin.id;
+    });
+    await this.#sessions.revokeAll(id);
   }
 
   async recordLogin(id: number): Promise<void> {

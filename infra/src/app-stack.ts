@@ -18,6 +18,7 @@ import * as triggers from 'aws-cdk-lib/triggers';
 import type { Construct } from 'constructs';
 import { BUILD_VERSION, REPO_ROOT, type StageConfig } from './config.ts';
 import {
+  ADMIN_LOGIN,
   ADOT_LAYER_ARN,
   DB_ENDPOINT_PARAMETER,
   DB_MASTER_PASSWORD_PARAMETER,
@@ -286,9 +287,10 @@ export class AppStack extends Stack {
     );
 
     const migrate = fn('migrate', { timeout: Duration.minutes(10) });
-    migrate.addEnvironment('ADMIN_LOGIN', 'admin');
+    migrate.addEnvironment('ADMIN_LOGIN', ADMIN_LOGIN);
     migrate.addEnvironment('ADMIN_PASSWORD_PARAMETER', adminPassword.parameterName);
     adminPassword.grantRead(migrate);
+    adminPassword.grantWrite(migrate);
     // Creates the stage's role and database on the shared instance before migrating.
     migrate.addEnvironment('DB_MASTER_USER', DB_MASTER_USER);
     migrate.addEnvironment('DB_MASTER_PASSWORD_PARAMETER', DB_MASTER_PASSWORD_PARAMETER);

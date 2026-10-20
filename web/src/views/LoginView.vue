@@ -74,6 +74,8 @@ async function submit() {
   } catch (err) {
     if (err instanceof ApiError && err.status === 429)
       error.value = t('login.throttled', { seconds: err.retryAfterSeconds ?? 60 });
+    else if (err instanceof ApiError && err.code === 'password_expired')
+      error.value = t('login.passwordExpired');
     else if (err instanceof ApiError && err.status === 401)
       error.value = challenge.value ? t('login.invalidCode') : t('login.invalid');
     else if (challenge.value && err instanceof ApiError && err.status === 400)

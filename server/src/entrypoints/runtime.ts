@@ -2,6 +2,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import pg from 'pg';
 import pino from 'pino';
 import { loadConfig } from '../adapters/env-config.ts';
+import type { UserService } from '../core/auth/users.ts';
 import type { AppConfig } from '../core/config.ts';
 import type { Logger } from '../core/ports.ts';
 import { logTraceFields, shutdownTelemetry } from '../telemetry/index.ts';
@@ -100,4 +101,29 @@ export function processSnapshot(pool: pg.Pool): () => Record<string, unknown> {
     delay.reset();
     return snapshot;
   };
+}
+
+/**
+ * Creates the first admin from the config while the database has no users, and warns while an
+ * enabled admin keeps a well-known login (`isReservedAdminLogin`). A `generated` password must be
+ * changed at first sign-in, and expires.
+ */
+export async function bootstrapAdmin(
+  users: UserService,
+  config: AppConfig,
+  logger: Logger,
+  generated = false,
+): Promise<void> {
+  if (config.bootstrapAdmin) {
+    const { login, password } = config.bootstrapAdmin;
+    if (await users.bootstrapAdmin(login, password, generated)) {
+      logger.info({ login }, 'Created initial admin user');
+    }
+  }
+  for (const login of await users.reservedAdminLogins()) {
+    logger.warn(
+      { security: 'reserved_admin_login', login },
+      'Security: an enabled admin has a well-known login; disable it once you have your own admin',
+    );
+  }
 }

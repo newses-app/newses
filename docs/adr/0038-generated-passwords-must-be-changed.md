@@ -1,6 +1,6 @@
 # 0038. Generated passwords must be changed at first sign-in
 
-- Status: Accepted
+- Status: Superseded by 0075
 - Date: 2026-10-07
 
 ## Context

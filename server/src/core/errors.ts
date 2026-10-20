@@ -1,5 +1,6 @@
 export type DomainErrorCode =
   | 'invalid_credentials'
+  | 'password_expired'
   | 'throttled'
   | 'not_found'
   | 'conflict'

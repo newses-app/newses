@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { loginNameSchema } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import { hashPassword } from '../../core/auth/passwords.ts';
+import { generatedPasswordExpiry } from '../../core/auth/users.ts';
 import { base32Encode } from '../../core/auth/totp.ts';
 import { users } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';
@@ -62,6 +63,7 @@ export const usersStep: ImportStep = {
           report.note(row.login, 'users', row.id, 'adopted the existing user with this login');
         } else {
           const password = temporaryPassword();
+          const expires = generatedPasswordExpiry();
           const [created] = await tx
             .insert(users)
             .values({
@@ -69,6 +71,7 @@ export const usersStep: ImportStep = {
               passwordHash: await hashPassword(password),
               role: row.access_level >= ADMIN_ACCESS_LEVEL ? 'admin' : 'user',
               passwordChangeRequired: true,
+              passwordExpiresAt: expires,
             })
             .returning({ id: users.id });
           if (!created) throw new Error('User insert returned no row');
@@ -79,7 +82,7 @@ export const usersStep: ImportStep = {
             row.id,
             options.dryRun
               ? 'would get a temporary password'
-              : `temporary password ${password} (must be changed at first sign-in)`,
+              : `temporary password ${password} (must be changed at first sign-in; expires ${expires.toISOString().slice(0, 16).replace('T', ' ')} UTC)`,
           );
         }
         await map.record(tx, USERS, [{ sourceId: row.id, targetId: userId, userId }]);

@@ -1,5 +1,5 @@
 import { SQSClient } from '@aws-sdk/client-sqs';
-import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
+import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import type pg from 'pg';
 import { loadConfig } from '../../adapters/env-config.ts';
@@ -36,6 +36,18 @@ export async function readParameter(envName: string): Promise<string> {
     new GetParameterCommand({ Name: requireEnv(envName), WithDecryption: true }),
   );
   return Parameter?.Value ?? '';
+}
+
+/** Replaces the SecureString value of the parameter named by `envName`. */
+export async function writeParameter(envName: string, value: string): Promise<void> {
+  await ssm.send(
+    new PutParameterCommand({
+      Name: requireEnv(envName),
+      Type: 'SecureString',
+      Value: value,
+      Overwrite: true,
+    }),
+  );
 }
 
 /** A TLS connection URL for the database at DB_HOST and DB_PORT. */

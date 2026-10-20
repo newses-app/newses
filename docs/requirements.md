@@ -109,7 +109,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Multi-user | P1 | Admin creates, disables, deletes users and resets passwords; users manage only their own data |
-| Admin bootstrap | P1 | First admin created from environment variables or CLI on an empty database; a generated password must be changed at first sign-in |
+| Admin bootstrap | P1 | First admin created from environment variables or CLI on an empty database, never under a well-known login; a generated password must be changed at first sign-in and expires after 7 days |
 | Passwords | P1 | Argon2id hashes; change password in settings |
 | Sessions | P1 | Cookie sessions for web with CSRF protection; list and revoke own sessions; bearer tokens for apps |
 | Login rate limiting | P1 | Per-IP and per-account throttling with exponential delay |

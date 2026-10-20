@@ -16,6 +16,7 @@ export class HttpError extends Error {
 
 const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   invalid_credentials: 401,
+  password_expired: 401,
   throttled: 429,
   not_found: 404,
   conflict: 409,

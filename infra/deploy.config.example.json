@@ -8,6 +8,7 @@
   "hostedZone": { "zoneName": "example.com", "hostedZoneId": "Z0000000000EXAMPLE" },
   "adotLayerArn": "arn:aws:lambda:us-east-2:615299751070:layer:AWSOpenTelemetryDistroJs:16",
   "budgetUsd": 25,
+  "adminLogin": "your-login",
   "stages": [
     {
       "name": "dev",

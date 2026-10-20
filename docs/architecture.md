@@ -335,7 +335,9 @@ Search:
 - Session tokens are 256-bit random values stored as SHA-256 hashes. Cookie sessions last 30 days, bearer and `api` sessions 90 days, all sliding on use. Logging in ends the session the client sent, if any.
 - `api` sessions are opened only by an app-password login through a compatibility API and belong to that app password: revoking it ends them, and each keeps its 10 most recent. `/api/v1` ignores them; the compatibility APIs accept nothing else.
 - The cookie is `__Host-rss_session` (Secure) over HTTPS and `rss_session` over plain HTTP; HTTPS is taken from `X-Forwarded-Proto` only when `TRUST_PROXY` trusts the proxy.
-- A user created with a generated password (the AWS bootstrap admin) has `password_change_required`: until they change it, every authenticated request other than session, login, logout, and password change gets 403 `password_change_required`, and the web app shows only the password change.
+- A user created with a generated password (the AWS bootstrap admin, users the TTRSS importer creates) has `password_change_required`: until they change it, every authenticated request other than session, login, logout, and password change gets 403 `password_change_required`, and the web app shows only the password change.
+- A generated password expires 7 days after it is set (`password_expires_at`). Past that, it no longer signs in: login answers 401 `password_expired`, counted as a failed login and logged as `login_failed` with that reason, and the user's sessions end. Changing or resetting the password clears both. On AWS, the migrate function's `reissue-admin` task gives the first admin a new generated password in SSM, and enables it, but only while no other admin is active.
+- The first admin's login may not contain `admin`, `root`, or `superuser`, nor be `sa` with only digits and separators besides (`isReservedAdminLogin` in `shared`). Bootstrapping into a database without users refuses one, and startup logs a `security` warning while an enabled admin has one.
 - Cookie-session requests other than GET/HEAD/OPTIONS must send the session's CSRF token in `X-CSRF-Token`. Login accepts JSON only, so cross-site form posts cannot log a browser in.
 - Failed logins are counted in `login_attempts` per account (lockout after 5) and per IP (after 20). Lockouts start at 1 s and double per further failure, up to 15 minutes. A wrong current password when changing it counts against the account. A lockout only delays further password, code, and app-password checks for that account or IP; signed-in sessions keep working, so an attacker can at worst hold off new sign-ins 15 minutes at a time.
 - Passwords are 8–1,024 characters and not on the bundled common-password list (the 10,000 most frequent of 8+ characters, `shared/src/common-passwords.ts`).
@@ -543,7 +545,7 @@ Operator setup, once per account:
 - `pnpm --filter @newses/infra cdk deploy <prefix>-dev-pipeline` (and `<prefix>-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it, release stacks included.
 - In the paying account's Billing console (or `aws ce update-cost-allocation-tags-status`), the `project` cost-allocation tag activated once it appears, up to 24 h after the first deployment.
 - The signing parameters, before the first release: `scripts/windows-signing-setup.sh --ssm` and `scripts/android-signing-setup.sh --backup DIR --ssm`.
-- The first admin is `admin`, with a generated password in the SSM SecureString `/<prefix>/<stage>/admin-password` that must be changed at first sign-in. Create a personal admin, then disable or delete `admin`.
+- The first admin is the deploy config's `adminLogin`, with a generated password in the SSM SecureString `/<prefix>/<stage>/admin-password` that must be changed at first sign-in. If it expires first, `reissue-admin` (`AGENTS.md`) replaces it.
 
 ### SBOMs
 

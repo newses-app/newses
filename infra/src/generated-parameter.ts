@@ -56,6 +56,15 @@ export class GeneratedParameter extends Construct {
     });
   }
 
+  /** For a function that replaces the value, as the migrate function's `reissue-admin` does. */
+  grantWrite(grantee: iam.IGrantable): void {
+    iam.Grant.addToPrincipal({
+      grantee,
+      actions: ['ssm:PutParameter'],
+      resourceArns: [this.parameterArn],
+    });
+  }
+
   /** One provider per stack, shared by its parameters. */
   private static provider(stack: Stack): cr.Provider {
     const id = 'GeneratedParameterProvider';

@@ -158,6 +158,7 @@
     "password": "Password",
     "submit": "Sign in",
     "invalid": "Wrong user name or password.",
+    "passwordExpired": "This temporary password has expired. Ask an admin to set a new one.",
     "throttled": "Too many attempts. Try again in {seconds} seconds.",
     "code": "Authentication code",
     "codePrompt": "Enter the 6-digit code from your authenticator app, or one of your recovery codes.",

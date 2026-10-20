@@ -41,6 +41,8 @@ export const users = pgTable(
     lastLoginAt: tstz('last_login_at'),
     // Set for a generated initial password; only changing the password is allowed until cleared.
     passwordChangeRequired: boolean('password_change_required').notNull().default(false),
+    // When a generated initial password stops signing in; cleared with the flag.
+    passwordExpiresAt: tstz('password_expires_at'),
     // Sealed TOTP secret; set while enrolling, required at login once `totp_enabled_at` is set.
     totpSecret: text('totp_secret'),
     totpEnabledAt: tstz('totp_enabled_at'),

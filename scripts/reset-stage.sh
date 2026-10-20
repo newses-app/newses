@@ -10,7 +10,8 @@ usage() {
 Usage: scripts/reset-stage.sh <dev|prod> [--dry-run] [--yes]
 
   Deletes every user, subscription, entry, cached image, favicon, and archived entry in the
-  stage, then recreates the admin with the password in SSM (changed at first sign-in).
+  stage, then recreates the admin (adminLogin) with the password in SSM, which must be changed
+  at first sign-in and expires after 7 days.
   prod is snapshotted first (<prefix>-prod-pre-reset-<time>).
 
   --dry-run  Look everything up and show what would be deleted, then stop
@@ -42,6 +43,7 @@ esac
 # shellcheck source=lib/deploy-config.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/deploy-config.sh"
 domain=$(stage_domain "$stage")
+admin_login=$(deploy_value adminLogin)
 
 docker info >/dev/null 2>&1 || die 'Docker is not running'
 command -v aws >/dev/null || die 'the AWS CLI is not installed'
@@ -139,7 +141,7 @@ for url in "${queues[@]}"; do
 done
 
 echo
-echo "Stage $stage is empty. Sign in at https://$domain as admin with the password from:"
+echo "Stage $stage is empty. Within 7 days, sign in at https://$domain as $admin_login with the password from:"
 echo "  aws ssm get-parameter --name /$prefix/$stage/admin-password --with-decryption --query Parameter.Value --output text"
 echo "Every session and app password is gone: the apps must sign in again."
 [ "$stage" != prod ] || echo "The previous data is in database snapshot $snapshot."

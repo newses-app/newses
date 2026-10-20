@@ -253,6 +253,13 @@
       "when": 1792371915140,
       "tag": "0035_kept_images",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792460243836,
+      "tag": "0036_password_expiry",
+      "breakpoints": true
     }
   ]
 }

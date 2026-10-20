@@ -179,6 +179,7 @@ describe('Database', () => {
         Variables: Match.objectLike({
           DB_MASTER_USER: 'rss_admin',
           DB_MASTER_PASSWORD_PARAMETER: '/newses/db/master-password',
+          ADMIN_LOGIN: 'your-login',
         }),
       },
     });
@@ -188,6 +189,17 @@ describe('Database', () => {
         Variables: Match.not(Match.objectLike({ DB_MASTER_PASSWORD_PARAMETER: Match.anyValue() })),
       },
     });
+    // Only the admin password can be replaced, by migrate's `reissue-admin`.
+    const writes = Object.values(app.findResources('AWS::IAM::Policy'))
+      .flatMap(
+        (policy) =>
+          (policy as { Properties: { PolicyDocument: { Statement: { Action: unknown }[] } } })
+            .Properties.PolicyDocument.Statement,
+      )
+      .filter((statement) => JSON.stringify(statement.Action).includes('ssm:PutParameter'));
+    expect(writes.map((statement) => JSON.stringify(statement))).toEqual([
+      expect.stringContaining('admin-password'),
+    ]);
   });
 });
 

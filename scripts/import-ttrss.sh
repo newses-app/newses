@@ -172,5 +172,5 @@ status=0
 (umask 077 && run_import ${pass[@]+"${pass[@]}"} >"$report" 2>&1) || status=$?
 sed -E 's/(temporary password) [^ ]+/\1 (in the report file)/' "$report"
 echo
-echo "Report saved to $report. It holds the new users' temporary passwords: hand them out, then delete it."
+echo "Report saved to $report. It holds the new users' temporary passwords: hand them out within 7 days, when they expire, then delete it."
 exit "$status"
