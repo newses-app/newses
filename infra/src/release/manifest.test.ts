@@ -5,6 +5,8 @@ import {
   FEEDS,
   installCommands,
   installerNames,
+  openapiFile,
+  openapiName,
   renderChecksums,
   renderIndex,
   rewriteFeed,
@@ -17,7 +19,8 @@ import {
 const version = '1.2.3-rc.1';
 const names = installerNames(version);
 const sboms = sbomNames(version);
-const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, ...FEEDS];
+const openapi = openapiName(version);
+const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, openapi, ...FEEDS];
 
 // electron-builder's latest-linux.yml, as built.
 const linuxFeed = `version: 1.2.3-rc.1
@@ -35,7 +38,7 @@ releaseDate: '2026-10-10T20:01:43.112Z'
 `;
 
 describe('checkBuiltFiles', () => {
-  it("accepts exactly the version's installers, block map, SBOMs, and feeds", () => {
+  it("accepts exactly the version's installers, block map, SBOMs, OpenAPI document, and feeds", () => {
     expect(() => {
       checkBuiltFiles(version, built);
     }).not.toThrow();
@@ -48,6 +51,12 @@ describe('checkBuiltFiles', () => {
     expect(() => {
       checkBuiltFiles(version, [...built, 'newses-1.2.2-android.apk']);
     }).toThrow(/unexpected \[newses-1\.2\.2-android\.apk\]/);
+    expect(() => {
+      checkBuiltFiles(
+        version,
+        built.filter((name) => name !== openapi),
+      );
+    }).toThrow(/missing \[newses-1\.2\.3-rc\.1-openapi\.json\]/);
   });
 });
 
@@ -97,10 +106,11 @@ describe('sbomArtifacts', () => {
 describe('renderChecksums', () => {
   it("lists the build legs' versioned files, in sha256sum's format", () => {
     const lines = renderChecksums(version, files).trimEnd().split('\n');
-    expect(lines).toHaveLength(9);
+    expect(lines).toHaveLength(10);
     expect(lines[0]).toBe(`hash0  ${names.windows}`);
     expect(lines.some((line) => line.endsWith('latest.yml'))).toBe(false);
-    expect(lines.at(-1)).toBe(`hash8  ${sboms[1] ?? ''}`);
+    expect(lines.at(-2)).toBe(`hash8  ${sboms[1] ?? ''}`);
+    expect(lines.at(-1)).toBe(`hash9  ${openapi}`);
   });
 
   it('refuses a missing file', () => {
@@ -143,8 +153,8 @@ describe('installCommands', () => {
     ]);
   });
 
-  it('only downloads and checks an SBOM', () => {
-    expect(installCommands('sbom', file)).toHaveLength(2);
+  it('only downloads and checks an SBOM or the OpenAPI document', () => {
+    expect(installCommands('file', file)).toHaveLength(2);
   });
 });
 
@@ -179,18 +189,20 @@ describe('buildManifest', () => {
 
 describe('renderIndex', () => {
   const manifest = buildManifest(input);
-  const page = renderIndex(manifest, sbomFiles(input));
+  const page = renderIndex(manifest, sbomFiles(input), openapiFile(input));
 
-  it('links each installer and SBOM with its hash and commands', () => {
+  it('links each installer, SBOM, and the OpenAPI document with its hash and commands', () => {
     expect(page).toContain(`<a href="${manifest.windows.zip.url}">`);
     expect(page).toContain(`<a href="${manifest.windows.portable.url}">`);
     expect(page).toContain(`<a href="${manifest.android.url}">`);
     expect(page).toContain(`<a href="${folder}${sboms[1] ?? ''}">`);
+    expect(page).toContain(`<a href="${folder}${openapi}">`);
+    expect(page).toContain('<code>SHA-256 hash9</code>');
     expect(page).toContain(`<a href="${folder}SHA256SUMS">SHA256SUMS</a>`);
     expect(page).toContain('<code>SHA-256 hash7</code>');
     // Commands are escaped: the shell quotes and pipe survive as text.
     expect(page).toContain(`echo &#39;hash4  ${names.deb}&#39; | sha256sum -c`);
-    expect(page.match(/<details>/g)).toHaveLength(8);
+    expect(page.match(/<details>/g)).toHaveLength(9);
   });
 });
 
@@ -207,6 +219,7 @@ describe('uploadPlan', () => {
       `downloads/${version}/${names.windows}.blockmap`,
       `downloads/${version}/newses-${version}-desktop.cdx.json`,
       `downloads/${version}/newses-${version}-mobile.cdx.json`,
+      `downloads/${version}/${openapi}`,
       `downloads/${version}/SHA256SUMS`,
       'downloads/latest.yml',
       'downloads/latest-linux.yml',
@@ -222,6 +235,13 @@ describe('uploadPlan', () => {
     );
     expect(plan.find((u) => u.name === sboms[0])).toEqual(
       expect.objectContaining({ contentType: 'application/vnd.cyclonedx+json', attachment: false }),
+    );
+    expect(plan.find((u) => u.name === openapi)).toEqual(
+      expect.objectContaining({
+        contentType: 'application/vnd.oai.openapi+json',
+        cacheControl: 'public, max-age=31536000, immutable',
+        attachment: false,
+      }),
     );
     expect(plan.find((u) => u.name === 'SHA256SUMS')).toEqual(
       expect.objectContaining({ contentType: 'text/plain; charset=utf-8', attachment: false }),

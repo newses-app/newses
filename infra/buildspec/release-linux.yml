@@ -53,6 +53,7 @@ phases:
         for deliverable in desktop mobile; do
           node infra/src/release/build-sbom.ts --deliverable "$deliverable" --tag "$RELEASE_TAG" --out sbom
         done
+        node infra/src/release/build-openapi.ts --tag "$RELEASE_TAG" --out openapi
 
         # Exactly these, so a failed or misnamed build stops here.
         files=(
@@ -62,6 +63,7 @@ phases:
           "mobile/release/newses-$version-android.apk"
           "sbom/newses-$version-desktop.cdx.json"
           "sbom/newses-$version-mobile.cdx.json"
+          "openapi/newses-$version-openapi.json"
         )
         for file in "${files[@]}"; do
           aws s3 cp --only-show-errors "$file" "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/"

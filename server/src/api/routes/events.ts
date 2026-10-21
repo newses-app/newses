@@ -1,4 +1,5 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifySchema } from 'fastify';
+import { z } from 'zod';
 import type { Realtime, RealtimeEvent } from '../../core/ports.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 
@@ -12,13 +13,26 @@ export interface EventStreamOptions {
   maxDurationMs?: number;
 }
 
+/** Both variants describe one operation, so every deployment serves the same OpenAPI document. */
+const eventsSchema: FastifySchema = {
+  summary: 'Per-user invalidation events',
+  description:
+    'Clients refetch what an event names, and reconnect when a stream ends. A deployment that holds no streams answers 204: poll instead, and do not reconnect.',
+  response: {
+    200: {
+      description: 'Server-sent events: `counters`, with comment heartbeats',
+      content: { 'text/event-stream': { schema: z.string() } },
+    },
+  },
+};
+
 /** Server-sent events: per-user invalidation signals (`counters`). Clients refetch on receipt. */
 export const eventRoutes: FastifyPluginAsync<EventStreamOptions> = (app, options) => {
   const heartbeatMs = options.heartbeatMs ?? 25_000;
   const coalesceMs = options.coalesceMs ?? 1000;
   const maxDurationMs = options.maxDurationMs ?? 30 * 60_000;
 
-  app.get('/events', { preHandler: requireUser }, (request, reply) => {
+  app.get('/events', { schema: eventsSchema, preHandler: requireUser }, (request, reply) => {
     const userId = requireAuth(request).user.id;
     reply.hijack();
     const res = reply.raw;
@@ -61,6 +75,6 @@ export const eventRoutes: FastifyPluginAsync<EventStreamOptions> = (app, options
 
 /** Where streams cannot be held open: 204 tells EventSource not to reconnect, so clients poll. */
 export const noEventRoutes: FastifyPluginAsync = (app) => {
-  app.get('/events', { schema: { hide: true } }, (_request, reply) => reply.code(204).send());
+  app.get('/events', { schema: eventsSchema }, (_request, reply) => reply.code(204).send());
   return Promise.resolve();
 };

@@ -17,6 +17,7 @@ import {
   CHECKSUMS,
   checkBuiltFiles,
   FEEDS,
+  openapiFile,
   renderChecksums,
   renderIndex,
   rewriteFeed,
@@ -93,7 +94,10 @@ const input = {
 };
 const manifest = buildManifest(input);
 await writeFile(join(dir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-await writeFile(join(dir, 'index.html'), renderIndex(manifest, sbomFiles(input)));
+await writeFile(
+  join(dir, 'index.html'),
+  renderIndex(manifest, sbomFiles(input), openapiFile(input)),
+);
 
 const plan = uploadPlan(version.name, DOWNLOADS_PREFIX);
 await writeFile(

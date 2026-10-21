@@ -58,6 +58,9 @@ export const sbomArtifacts = (version: string) =>
     describes: installers.map((installer) => installerNames(version)[installer]),
   }));
 
+/** The native API's OpenAPI document, built by the Linux leg as `/api/v1/openapi.json` serves it. */
+export const openapiName = (version: string) => `newses-${version}-openapi.json`;
+
 /** The checksums of a version's files, for `sha256sum -c`. */
 export const CHECKSUMS = 'SHA256SUMS';
 
@@ -66,6 +69,7 @@ const versionedNames = (version: string) => [
   ...Object.values(installerNames(version)),
   blockmapName(version),
   ...sbomNames(version),
+  openapiName(version),
 ];
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
@@ -85,6 +89,7 @@ const CONTENT_TYPES: Record<string, string> = {
 
 const contentType = (name: string) => {
   if (name.endsWith('.cdx.json')) return 'application/vnd.cyclonedx+json';
+  if (name.endsWith('-openapi.json')) return 'application/vnd.oai.openapi+json';
   if (name === CHECKSUMS) return 'text/plain; charset=utf-8';
   const type = CONTENT_TYPES[name.slice(name.lastIndexOf('.'))];
   if (!type) throw new Error(`No content type for ${name}`);
@@ -169,6 +174,9 @@ export const sbomFiles = (input: ManifestInput) =>
     ]),
   ) as Record<ReleaseSbom, ReleaseFile>;
 
+/** The OpenAPI document, for the downloads page; latest.json leaves it out too. */
+export const openapiFile = (input: ManifestInput) => releaseFile(input, openapiName(input.version));
+
 /** SHA256SUMS: a `sha256sum -c` line for each file from the build legs, and only those. */
 export function renderChecksums(version: string, files: BuiltFile[]) {
   return versionedNames(version)
@@ -198,7 +206,7 @@ const fetchAndCheck = (file: ReleaseFile, shell: 'powershell' | 'sh') => {
 };
 
 /** The commands that download, check, and install one file. */
-export function installCommands(kind: Installer | 'sbom', file: ReleaseFile) {
+export function installCommands(kind: Installer | 'file', file: ReleaseFile) {
   const name = fileName(file.url);
   switch (kind) {
     case 'windows':
@@ -216,7 +224,7 @@ export function installCommands(kind: Installer | 'sbom', file: ReleaseFile) {
       return [...fetchAndCheck(file, 'sh'), `chmod +x ${name}`, `./${name}`];
     case 'android':
       return ['# From a computer, with adb', ...fetchAndCheck(file, 'sh'), `adb install ${name}`];
-    case 'sbom':
+    case 'file':
       return fetchAndCheck(file, 'sh');
   }
 }
@@ -233,8 +241,12 @@ const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => HTML_ESC
 const megabytes = (size: number) => `${(size / 1024 / 1024).toFixed(1)} MB`;
 
 /** The static downloads page for the latest release. */
-export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom, ReleaseFile>) {
-  const installers: [string, string, Installer | 'sbom', ReleaseFile][] = [
+export function renderIndex(
+  manifest: ReleaseManifest,
+  sboms: Record<ReleaseSbom, ReleaseFile>,
+  openapi: ReleaseFile,
+) {
+  const installers: [string, string, Installer | 'file', ReleaseFile][] = [
     [
       'Windows',
       'Installer for Windows 10 and 11 (x64), per user; updates itself',
@@ -267,9 +279,10 @@ export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom
       manifest.android,
     ],
   ];
-  const boms: typeof installers = [
-    ['Desktop SBOM', 'CycloneDX bill of materials for the desktop apps', 'sbom', sboms.desktop],
-    ['Android SBOM', 'CycloneDX bill of materials for the Android app', 'sbom', sboms.mobile],
+  const documents: typeof installers = [
+    ['Desktop SBOM', 'CycloneDX bill of materials for the desktop apps', 'file', sboms.desktop],
+    ['Android SBOM', 'CycloneDX bill of materials for the Android app', 'file', sboms.mobile],
+    ['API description', 'OpenAPI document of the native API, /api/v1', 'file', openapi],
   ];
   const list = (rows: typeof installers) =>
     rows
@@ -281,7 +294,7 @@ export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom
         <a href="${escapeHtml(file.url)}">${escapeHtml(fileName(file.url))}</a> <span>${megabytes(file.size)}</span>
         <code>SHA-256 ${file.sha256}</code>
         <details>
-          <summary>${kind === 'sbom' ? 'Download and verify' : 'Install and verify'}</summary>
+          <summary>${kind === 'file' ? 'Download and verify' : 'Install and verify'}</summary>
           <pre><code>${commands}</code></pre>
         </details>
       </li>`;
@@ -317,12 +330,12 @@ export function renderIndex(manifest: ReleaseManifest, sboms: Record<ReleaseSbom
     <ul>
 ${list(installers)}
     </ul>
-    <h2>Checksums and bills of materials</h2>
+    <h2>Checksums, bills of materials, and API description</h2>
     <p><a href="${checksums}">${CHECKSUMS}</a> lists every file's SHA-256. To check several downloads at once, from the folder that has them:</p>
     <pre><code>curl -fLO ${checksums}
 sha256sum -c --ignore-missing ${CHECKSUMS}</code></pre>
     <ul>
-${list(boms)}
+${list(documents)}
     </ul>
     <p><a href="/">Open the web app</a></p>
   </body>
@@ -337,7 +350,7 @@ export function uploadPlan(version: string, prefix: string): Upload[] {
     key: `${prefix}/${version}/${name}`,
     contentType: contentType(name),
     cacheControl: IMMUTABLE,
-    // Installers download; the block map, SBOMs, and checksums are read by tools.
+    // Installers download; the block map, SBOMs, API description, and checksums are read by tools.
     attachment: /\.(exe|zip|AppImage|deb|apk)$/.test(name),
   }));
   const latest = [...FEEDS, 'latest.json', 'index.html'].map((name) => ({
