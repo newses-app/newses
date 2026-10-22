@@ -54,3 +54,53 @@ export function newEntries(
     target: streamPath(key),
   };
 }
+
+export interface AwayNotifier {
+  /** A counters reading while the reader is away, with the reading before it. */
+  reading(before: Counters, next: Counters): void;
+  /** The reader is back: the next time away starts again. */
+  back(): void;
+}
+
+/**
+ * One running total of new entries while the reader is away, counted from the reading before they
+ * left: the first shows at once, later ones at most every `gapMs` with the latest total, and only
+ * when it has grown.
+ */
+export function awayNotifier(options: {
+  find: (since: Counters, latest: Counters) => NewEntries | null;
+  show: (found: NewEntries) => void;
+  gapMs: number;
+}): AwayNotifier {
+  let since: Counters | null = null;
+  let latest: Counters | null = null;
+  let shownCount = 0;
+  let shownAt: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    timer = undefined;
+    const found = since && latest && options.find(since, latest);
+    if (!found || found.count <= shownCount) return;
+    shownCount = found.count;
+    shownAt = Date.now();
+    options.show(found);
+  };
+  return {
+    reading(before, next) {
+      since ??= before;
+      latest = next;
+      if (timer !== undefined) return;
+      const wait = shownAt === null ? 0 : shownAt + options.gapMs - Date.now();
+      if (wait <= 0) flush();
+      else timer = setTimeout(flush, wait);
+    },
+    back() {
+      clearTimeout(timer);
+      timer = undefined;
+      since = null;
+      latest = null;
+      shownCount = 0;
+      shownAt = null;
+    },
+  };
+}

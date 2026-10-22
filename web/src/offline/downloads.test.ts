@@ -121,9 +121,11 @@ describe('downloadImages', () => {
     const active = new Map<string, number>();
     let most = 0;
     const asked: string[] = [];
-    const fetch: typeof globalThis.fetch = async (input) => {
+    let unbounded = 0;
+    const fetch: typeof globalThis.fetch = async (input, init) => {
       const url = input instanceof Request ? input.url : input.toString();
       asked.push(url);
+      if (!(init?.signal instanceof AbortSignal)) unbounded++;
       const host = url.includes('a.example') ? 'a' : 'b';
       active.set(host, (active.get(host) ?? 0) + 1);
       most = Math.max(most, active.get(host) ?? 0);
@@ -146,6 +148,7 @@ describe('downloadImages', () => {
 
     expect(await downloadImages(options)).toBe(2);
     expect(most).toBe(1);
+    expect(unbounded).toBe(0);
     expect(asked.every((u) => u.startsWith('https://r.example/api/v1/images/'))).toBe(true);
     expect((await db.images.get('https://a.example/1.png'))?.entryIds.sort()).toEqual([1, 2]);
     expect(await storedBytes(db)).toBe(202);
@@ -154,6 +157,47 @@ describe('downloadImages', () => {
     expect(await downloadImages(options)).toBe(0);
     expect(asked).toEqual([]);
     expect(await downloadImages({ ...options, images: false })).toBe(0);
+  });
+
+  it('adds entries to the images it has, and rewrites no image that gains none', async () => {
+    await db.entries.bulkPut([entry(1), entry(2)].map(toStoredEntry));
+    const stored = (url: string, entryIds: number[]) => ({
+      url,
+      blob: new Blob([new Uint8Array(10)]),
+      bytes: 10,
+      entryIds,
+      fetchedAt: NOW,
+    });
+    await db.images.bulkPut([
+      stored('https://a.example/1.png', [1]),
+      stored('https://a.example/2.png', [2]),
+    ]);
+    const img = (name: string) => ({ url: `https://a.example/${name}`, proxy: `/p/${name}` });
+    await db.contents.bulkPut([
+      { ...content(1, [img('1.png')]), bytes: 1 },
+      { ...content(2, [img('1.png'), img('2.png')]), bytes: 1 },
+    ]);
+    let rewritten = 0;
+    db.images.hook('updating', () => {
+      rewritten++;
+    });
+    const options = {
+      api: server(() => ({ entries: [] })).api,
+      db,
+      server: 'https://r.example',
+      images: true,
+      fetch: () => Promise.reject(new Error('Not asked')),
+      now: () => NOW,
+    };
+
+    expect(await downloadImages(options)).toBe(0);
+    expect(rewritten).toBe(1);
+    expect((await db.images.get('https://a.example/1.png'))?.entryIds.sort()).toEqual([1, 2]);
+    expect((await db.images.get('https://a.example/2.png'))?.entryIds).toEqual([2]);
+
+    rewritten = 0;
+    await downloadImages(options);
+    expect(rewritten).toBe(0);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { Category, Counters, Subscription } from '@newses/shared';
-import { describe, expect, it } from 'vitest';
-import { newEntries } from './new-entries.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { awayNotifier, type NewEntries, newEntries } from './new-entries.ts';
 
 const counters = (unread: Record<number, number>): Counters => ({
   subscriptions: Object.entries(unread).map(([id, count]) => ({ id: Number(id), unread: count })),
@@ -53,5 +53,51 @@ describe('newEntries', () => {
       newEntries(counters({ 1: 5 }), counters({ 1: 2 }), subscriptions, categories),
     ).toBeNull();
     expect(newEntries(counters({}), counters({ 1: 40 }), subscriptions, categories)).toBeNull();
+  });
+});
+
+describe('awayNotifier', () => {
+  const GAP = 15 * 60_000;
+  let shown: number[];
+  const notifier = () =>
+    awayNotifier({
+      find: (since, latest) => newEntries(since, latest, subscriptions, categories),
+      show: (found: NewEntries) => shown.push(found.count),
+      gapMs: GAP,
+    });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    shown = [];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows the first rise at once, then the running total at most every gap', () => {
+    const away = notifier();
+    away.reading(counters({ 1: 0 }), counters({ 1: 2 }));
+    expect(shown).toEqual([2]);
+    away.reading(counters({ 1: 2 }), counters({ 1: 3 }));
+    away.reading(counters({ 1: 3 }), counters({ 1: 7 }));
+    vi.advanceTimersByTime(GAP - 1);
+    expect(shown).toEqual([2]);
+    vi.advanceTimersByTime(1);
+    expect(shown).toEqual([2, 7]);
+    // Nothing more since: nothing shows again.
+    away.reading(counters({ 1: 7 }), counters({ 1: 7 }));
+    vi.advanceTimersByTime(GAP);
+    expect(shown).toEqual([2, 7]);
+  });
+
+  it('starts again, at once, when the reader comes back and leaves', () => {
+    const away = notifier();
+    away.reading(counters({ 1: 0 }), counters({ 1: 2 }));
+    away.reading(counters({ 1: 2 }), counters({ 1: 3 }));
+    away.back();
+    vi.advanceTimersByTime(GAP);
+    expect(shown).toEqual([2]);
+    away.reading(counters({ 1: 3 }), counters({ 1: 4 }));
+    expect(shown).toEqual([2, 1]);
   });
 });

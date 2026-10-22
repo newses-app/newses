@@ -12,6 +12,8 @@ const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const IMAGE_RETRY_MS = 24 * 3_600_000;
 /** At most this many image downloads at once, and one per image host, as the server fetches politely. */
 const IMAGE_CONCURRENCY = 2;
+/** An image not received in full by then is a failure, so a stalled download cannot hold up the sync. */
+const IMAGE_TIMEOUT_MS = 60_000;
 const FAILURES_KEY = 'imageFailures';
 
 export interface DownloadOptions {
@@ -206,6 +208,15 @@ export async function downloadImages(options: DownloadOptions): Promise<number> 
   );
 
   const have = new Set((await db.images.toCollection().primaryKeys()).map(String));
+  // The entries each stored image is kept for, from the index alone: images are read and written
+  // only when another entry shows them too.
+  const shownBy = new Map<string, Set<number>>();
+  await db.images.orderBy('entryIds').eachKey((id, cursor) => {
+    const url = cursor.primaryKey;
+    const ids = shownBy.get(url) ?? new Set<number>();
+    shownBy.set(url, ids.add(Number(id)));
+  });
+  const gained = new Map<string, number[]>();
   const tasks = new Map<string, ImageTask>();
   const ids = (await byPriority(db)).map((e) => e.id);
   for (const content of await db.contents.bulkGet(ids)) {
@@ -214,12 +225,8 @@ export async function downloadImages(options: DownloadOptions): Promise<number> 
       if (failures.has(url)) continue;
       if (have.has(url)) {
         // Shown by another entry too: keep it while either is stored.
-        await db.images
-          .where('url')
-          .equals(url)
-          .modify((image) => {
-            if (!image.entryIds.includes(content.id)) image.entryIds.push(content.id);
-          });
+        if (!shownBy.get(url)?.has(content.id))
+          gained.set(url, [...(gained.get(url) ?? []), content.id]);
         continue;
       }
       const task = tasks.get(url);
@@ -227,6 +234,15 @@ export async function downloadImages(options: DownloadOptions): Promise<number> 
       else tasks.set(url, { url, proxy, host: hostOf(url), entryIds: [content.id] });
     }
   }
+  if (gained.size > 0)
+    await db.images
+      .where('url')
+      .anyOf([...gained.keys()])
+      .modify((image) => {
+        const more = (gained.get(image.url) ?? []).filter((id) => !image.entryIds.includes(id));
+        if (more.length === 0) return false;
+        image.entryIds.push(...more);
+      });
 
   let total = await storedBytes(db);
   let stored = 0;
@@ -234,7 +250,10 @@ export async function downloadImages(options: DownloadOptions): Promise<number> 
   const busy = new Set<string>();
   const download = async (task: ImageTask) => {
     try {
-      const response = await fetch(`${options.server}${task.proxy}`, { credentials: 'omit' });
+      const response = await fetch(`${options.server}${task.proxy}`, {
+        credentials: 'omit',
+        signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+      });
       const type = response.headers.get('content-type') ?? '';
       if (!response.ok || !type.startsWith('image/')) throw new Error(String(response.status));
       const blob = await response.blob();

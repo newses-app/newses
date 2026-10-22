@@ -73,8 +73,8 @@ const showFull = computed(
   () =>
     !!fullContent.value && (choice.value === 'full' || (choice.value === null && optedIn.value)),
 );
-// Images stored on the device show without the network, online too; the HTML waits for them, so
-// the browser does not ask for images it has. Without a connection, the others are left out.
+// Images stored on the device show without the network, online too; the HTML waits a moment for
+// them, so the browser does not ask for images it has. Without a connection, the others are left out.
 const { images: storedImages, ready: imagesReady } = useStoredImages(() => props.entry.id);
 const content = computed(() => {
   const html = showFull.value ? fullContent.value : props.entry.content;

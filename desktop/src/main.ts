@@ -85,8 +85,17 @@ let window: BrowserWindow | null = null;
 let updater: Updater | null = null;
 /** Set once quitting starts, so closing to the tray does not stop it. */
 let quitting = false;
-/** Shown notifications, kept until they close: one that is garbage collected loses its click. */
-const notifications = new Set<Notification>();
+/**
+ * The notification shown last, kept until the next replaces it: one that is garbage collected
+ * loses its click, and on Windows it stays in Action Center after its banner closes.
+ */
+let shown: Notification | null = null;
+
+/** Takes the last notification off the screen and out of the notification centre. */
+function closeShown() {
+  shown?.close();
+  shown = null;
+}
 
 const options = (settings: SettingsStore) => ({ ...DEFAULT_OPTIONS, ...settings.get().options });
 
@@ -210,13 +219,14 @@ function registerBridge(settings: SettingsStore) {
       title: text(title, 256) ?? '',
       body: text(body, 1024) ?? '',
     });
-    notifications.add(notification);
     notification.on('click', () => {
       showWindow();
       if (path && settings.get().activeProfile === profile)
         window?.webContents.send('bridge:navigate', path);
     });
-    notification.on('close', () => notifications.delete(notification));
+    // Each is the running total so far: it replaces the last rather than stacking up.
+    closeShown();
+    shown = notification;
     notification.show();
   });
   handle('getDesktopOptions', () => shownOptions(options(settings), PORTABLE));
@@ -324,6 +334,8 @@ function createWindow(settings: SettingsStore, hidden: boolean) {
   win.on('closed', () => {
     window = null;
   });
+  // Back at the window, the new entries are in front of the reader.
+  win.on('focus', closeShown);
 
   // The app never navigates away from itself: links to other sites open in the system browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
