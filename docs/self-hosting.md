@@ -128,7 +128,7 @@ Install the desktop and Android apps from an AWS stage's `https://<domain>/downl
 
 - Enable nightly dumps with `C --profile backup up -d`. Dumps go to the `backups` volume as `newses-YYYYMMDD-HHMMSS.dump` and are pruned after `BACKUP_RETENTION_DAYS`.
 - Take an ad-hoc dump with `C exec db sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"' > newses.dump`.
-- Back up the `blobs` volume too. Favicons and cached images re-fetch, but the archive (`archive/` in the volume) is not in the dumps and cannot be re-fetched.
+- Back up the `blobs` volume too. Favicons and cached images re-fetch, but the archive (`archive/` in the volume) is not in the dumps and cannot be re-fetched. `scripts/export-instance.sh` writes both to one bundle, which `scripts/restore-instance.sh` loads (below).
 
 ## Restore
 
@@ -137,3 +137,16 @@ Install the desktop and Android apps from an AWS stage's `https://<domain>/downl
    - From the backups volume: `C exec backup pg_restore --clean --if-exists -d "$POSTGRES_DB" /backups/<file>.dump`
    - From a local file: `C exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < newses.dump`
 3. `C start server worker`
+
+## Moving to another instance
+
+Moves everything to another Docker host or an AWS stage, or from an AWS stage to Docker (`--aws dev|prod` on either script; bundle contents in `docs/architecture.md`). The target must run the same version of Newses or a newer one.
+
+1. Start the target: `C up -d` on the new host, with its own `APP_SECRET`.
+2. On the source: `scripts/export-instance.sh newses-bundle --freeze`. The source stays stopped; `C start server worker` restarts it. Without `--freeze` it keeps running, and changes after the export are lost.
+3. Copy `newses-bundle/` to the target host privately (it holds password hashes and the source's `APP_SECRET`), e.g. `scp -r`.
+4. On the target: `scripts/restore-instance.sh newses-bundle --dry-run`, then without `--dry-run`. The target's database is saved first as `newses-pre-restore-<time>.dump`.
+5. Point DNS or the proxy at the target, and set `PUBLIC_URL` there if the address changed.
+6. Delete the bundle.
+
+Everyone signs in again, two-factor authentication included; the apps need the new address if it changed. `COMPOSE_PROJECT_NAME` and `COMPOSE_ENV_FILES` select a stack other than `docker/`'s.

@@ -42,6 +42,8 @@ esac
 [ "$stage" = dev ] || ! $yes || die '--yes is for dev only'
 # shellcheck source=lib/deploy-config.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/deploy-config.sh"
+# shellcheck source=lib/aws-stage.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/aws-stage.sh"
 domain=$(stage_domain "$stage")
 admin_login=$(deploy_value adminLogin)
 
@@ -51,29 +53,15 @@ AWS_REGION=$(deploy_region)
 export AWS_REGION
 aws sts get-caller-identity >/dev/null || die 'no AWS credentials (set AWS_PROFILE or sign in)'
 
-prefix=$(deploy_prefix)
-name="$prefix-$stage"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+aws_stage "$stage" "$tmp"
+name=$stage_name
+[ -n "$blob_bucket" ] || die "the $stage data stack has no BlobBucket output; deploy it first"
 
-host=$(aws ssm get-parameter --name "/$prefix/db/endpoint" --query Parameter.Value --output text)
-db_name="${prefix//-/_}_$stage"
-db_password=$(aws ssm get-parameter --name "/$prefix/$stage/db-password" \
-  --with-decryption --query Parameter.Value --output text)
-blob_bucket=$(aws cloudformation describe-stacks --stack-name "$name-data" \
-  --query "Stacks[0].Outputs[?OutputKey=='BlobBucket'].OutputValue" --output text)
-case "$blob_bucket" in '' | None) die "the $stage data stack has no BlobBucket output; deploy it first" ;; esac
-curl -fsSo "$tmp/rds-ca.pem" https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+psql() { stage_pg psql -v ON_ERROR_STOP=1 -X -q "$@"; }
 
-psql() {
-  # The password reaches the container through its environment, never its command line.
-  PGPASSWORD=$db_password docker run --rm -i -e PGPASSWORD \
-    -v "$tmp/rds-ca.pem:/rds-ca.pem:ro" postgres:18-alpine \
-    psql "postgres://$db_name@$host:5432/$db_name?sslmode=verify-full&sslrootcert=/rds-ca.pem" \
-    -v ON_ERROR_STOP=1 -X -q "$@"
-}
-
-echo "Connecting to $db_name on $host..."
+echo "Connecting to $db_name on $db_host..."
 counts=$(psql -At -c "SELECT (SELECT count(*) FROM users) || ' users, ' ||
   (SELECT count(*) FROM subscriptions) || ' subscriptions, ' ||
   (SELECT count(*) FROM entries) || ' entries'") || counts='unreadable (above)'
@@ -83,15 +71,13 @@ aws lambda get-function --function-name "$name-migrate" >/dev/null ||
   die "no $name-migrate function; deploy the app stack first"
 # Resolved before anything is deleted, so a missing queue stops the reset early.
 queues=() messages=0
-for queue in feed-fetch feed-favicon entry-extract; do
-  for suffix in '' -dlq; do
-    url=$(aws sqs get-queue-url --queue-name "$name-$queue$suffix" --query QueueUrl --output text)
-    queues+=("$url")
-    count=$(aws sqs get-queue-attributes --queue-url "$url" \
-      --attribute-names ApproximateNumberOfMessages \
-      --query Attributes.ApproximateNumberOfMessages --output text)
-    messages=$((messages + count))
-  done
+urls=$(stage_queues) || die "a job queue is missing; deploy the $stage app stack first"
+for url in $urls; do
+  queues+=("$url")
+  count=$(aws sqs get-queue-attributes --queue-url "$url" \
+    --attribute-names ApproximateNumberOfMessages \
+    --query Attributes.ApproximateNumberOfMessages --output text)
+  messages=$((messages + count))
 done
 
 echo
@@ -111,13 +97,7 @@ if ! $yes; then
   [ "$answer" = "$domain" ] || { echo 'Nothing reset.'; exit 0; }
 fi
 
-if [ "$stage" = prod ]; then
-  snapshot="$name-pre-reset-$(date +%Y%m%d-%H%M%S)"
-  echo "Snapshotting the database instance as $snapshot..."
-  aws rds create-db-snapshot --db-instance-identifier "$prefix-db" \
-    --db-snapshot-identifier "$snapshot" >/dev/null
-  aws rds wait db-snapshot-available --db-snapshot-identifier "$snapshot"
-fi
+[ "$stage" != prod ] || snapshot=$(stage_snapshot pre-reset)
 
 echo "Dropping the database schema..."
 psql -1 <<'SQL'
@@ -127,9 +107,7 @@ CREATE SCHEMA public;
 SQL
 
 echo "Applying migrations and creating the admin..."
-error=$(aws lambda invoke --function-name "$name-migrate" --cli-read-timeout 900 \
-  --query FunctionError --output text "$tmp/migrate.json")
-[ "$error" = None ] || die "the migrate function failed: $(cat "$tmp/migrate.json")"
+stage_migrate || exit 2
 
 echo "Emptying the blob bucket..."
 aws s3 rm "s3://$blob_bucket" --recursive --only-show-errors
@@ -142,6 +120,6 @@ done
 
 echo
 echo "Stage $stage is empty. Within 7 days, sign in at https://$domain as $admin_login with the password from:"
-echo "  aws ssm get-parameter --name /$prefix/$stage/admin-password --with-decryption --query Parameter.Value --output text"
+echo "  aws ssm get-parameter --name /$stage_prefix/$stage/admin-password --with-decryption --query Parameter.Value --output text"
 echo "Every session and app password is gone: the apps must sign in again."
 [ "$stage" != prod ] || echo "The previous data is in database snapshot $snapshot."

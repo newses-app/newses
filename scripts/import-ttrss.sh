@@ -58,6 +58,8 @@ else
   command -v aws >/dev/null || die 'the AWS CLI is not installed'
   # shellcheck source=lib/deploy-config.sh
   . "$root/scripts/lib/deploy-config.sh"
+  # shellcheck source=lib/aws-stage.sh
+  . "$root/scripts/lib/aws-stage.sh"
   AWS_REGION=$(deploy_region)
   export AWS_REGION
   aws sts get-caller-identity >/dev/null || die 'no AWS credentials (set AWS_PROFILE or sign in)'
@@ -109,43 +111,24 @@ if [ -z "$stage" ]; then
     "${compose[@]}" exec -T server newses cli import-ttrss --source "$source_url" "$@"
   }
 else
-  echo "Building the Newses image from this checkout (a few minutes the first time)..."
-  image=$(docker build -q -f "$root/docker/Dockerfile" "$root")
-  prefix=$(deploy_prefix)
-  host=$(aws ssm get-parameter --name "/$prefix/db/endpoint" --query Parameter.Value --output text)
-  db_name="${prefix//-/_}_$stage"
-  db_password=$(aws ssm get-parameter --name "/$prefix/$stage/db-password" \
-    --with-decryption --query Parameter.Value --output text)
-  app_secret=$(aws ssm get-parameter --name "/$prefix/$stage/app-secret" \
-    --with-decryption --query Parameter.Value --output text)
+  aws_stage "$stage" "$tmp"
+  prefix=$stage_prefix
   # Articles past retention go to the stage's archive in its blob bucket, when the stage has it on.
   archive=$(aws lambda get-function-configuration --function-name "$prefix-$stage-tick" \
     --query 'Environment.Variables.ARCHIVE_ENABLED' --output text)
   [ "$archive" = true ] || archive=false
-  blob_bucket=$(aws cloudformation describe-stacks --stack-name "$prefix-$stage-data" \
-    --query "Stacks[0].Outputs[?OutputKey=='BlobBucket'].OutputValue" --output text)
-  [ "$blob_bucket" != None ] || blob_bucket=''
   if $archive; then
     [ -n "$blob_bucket" ] || die "the $stage data stack has no BlobBucket output; deploy it first"
     echo "Archive: on, in $blob_bucket"
   else
     echo "Archive: off; entries past retention are skipped"
   fi
-  # The import writes the archive with your credentials; temporary ones must outlast it.
-  credentials=$(aws configure export-credentials --format env) ||
-    die 'cannot export your AWS credentials (needs AWS CLI v2)'
-  eval "$credentials"
-  curl -fsSo "$tmp/rds-ca.pem" https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
-  echo "Connecting to $db_name on $host..."
+  # The import writes the archive with your credentials.
+  stage_prepare_image || exit 2
+  echo "Connecting to $db_name on $db_host..."
   run_import() {
-    # Secrets reach the container through its environment, never its command line.
-    PGPASSWORD=$db_password APP_SECRET=$app_secret docker run --rm --network "$name" \
-      -v "$tmp/rds-ca.pem:/rds-ca.pem:ro" -e NODE_EXTRA_CA_CERTS=/rds-ca.pem \
-      -e PGPASSWORD -e APP_SECRET \
-      -e ARCHIVE_ENABLED="$archive" -e BLOB_BUCKET="$blob_bucket" -e AWS_REGION \
-      -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN \
-      -e DATABASE_URL="postgres://$db_name@$host:5432/$db_name?sslmode=verify-full" \
-      "$image" cli import-ttrss --source "$source_url" "$@"
+    stage_run --network "$name" -e ARCHIVE_ENABLED="$archive" -- \
+      cli import-ttrss --source "$source_url" "$@"
   }
 fi
 

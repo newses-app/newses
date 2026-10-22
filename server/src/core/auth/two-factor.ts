@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { and, count, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, count, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { recoveryCodes, users } from '../../db/schema.ts';
-import { open, seal, sign, verify } from '../crypto.ts';
+import { CryptoError, open, seal, sign, verify } from '../crypto.ts';
 import { DomainError } from '../errors.ts';
 import type { SessionKind, UserRow } from './sessions.ts';
 import { hashToken } from './tokens.ts';
@@ -148,6 +148,39 @@ export class TwoFactorService {
         .set({ totpSecret: null, totpEnabledAt: null, totpLastStep: null })
         .where(eq(users.id, userId));
       await tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, userId));
+    });
+  }
+
+  /**
+   * Re-seals every TOTP secret sealed under `previousKey` (another instance's) with this key, all
+   * or none; returns how many. Throws when a secret does not open under `previousKey`.
+   */
+  async reseal(previousKey: Buffer): Promise<number> {
+    if (previousKey.equals(this.#keys.totp)) return 0;
+    return this.#db.transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: users.id, totpSecret: users.totpSecret })
+        .from(users)
+        .where(isNotNull(users.totpSecret))
+        .for('update');
+      for (const { id, totpSecret } of rows) {
+        const context = secretContext(id);
+        let secret: string;
+        try {
+          secret = open(previousKey, totpSecret ?? '', context);
+        } catch (err) {
+          if (!(err instanceof CryptoError)) throw err;
+          throw new DomainError(
+            'invalid_input',
+            `User ${String(id)}'s two-factor secret does not open with the previous secret`,
+          );
+        }
+        await tx
+          .update(users)
+          .set({ totpSecret: seal(this.#keys.totp, secret, context) })
+          .where(eq(users.id, id));
+      }
+      return rows.length;
     });
   }
 

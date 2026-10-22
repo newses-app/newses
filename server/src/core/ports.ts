@@ -68,6 +68,8 @@ export interface BlobStore {
   put(key: string, blob: Blob): Promise<void>;
   get(key: string): Promise<Blob | null>;
   delete(key: string): Promise<void>;
+  /** Every key starting with `prefix`, in no particular order. */
+  list(prefix?: string): AsyncIterable<string>;
 }
 
 export interface ArchivedEnclosure {

@@ -161,6 +161,12 @@ export class MemoryBlobStore implements BlobStore {
     this.blobs.delete(key);
     return Promise.resolve();
   }
+
+  async *list(prefix = ''): AsyncIterable<string> {
+    for (const key of [...this.blobs.keys()]) {
+      if (key.startsWith(prefix)) yield await Promise.resolve(key);
+    }
+  }
 }
 
 export function testFeedDeps(

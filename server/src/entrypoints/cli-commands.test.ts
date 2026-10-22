@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAuthServices, type AuthServices } from '../core/auth/index.ts';
 import { verifyPassword } from '../core/auth/passwords.ts';
+import type { BlobCopyTotals } from '../core/blob-copy.ts';
+import { deriveKey, open } from '../core/crypto.ts';
+import { DomainError } from '../core/errors.ts';
 import { createDb } from '../db/client.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { TEST_APP_SECRET } from '../test/fakes.ts';
@@ -114,5 +117,59 @@ describe('cli', () => {
       return report;
     };
     expect(await importRun(['--source', url])).toBe(1);
+  });
+
+  it("re-seals two-factor secrets from a previous instance's APP_SECRET", async () => {
+    const otherSecret = 'the secret of the instance restored into, 32+ chars';
+    const restored = createAuthServices(createDb(database.pool), otherSecret);
+    const pat = await services.users.create('pat', 'a good password', 'user');
+    const { secret } = await services.twoFactor.begin(pat);
+    const sealed = async () => (await services.users.findByLogin('pat'))?.totpSecret ?? '';
+    const reseal = (previous: string) =>
+      runCli(['reseal-secrets'], restored, {
+        readPassword: () => Promise.resolve(previous),
+        print: () => undefined,
+      });
+
+    expect(await reseal('short')).toBe(2);
+    expect(await reseal(TEST_APP_SECRET)).toBe(0);
+    const context = `user:${String(pat.id)}:totp`;
+    expect(open(deriveKey(otherSecret, 'totp'), await sealed(), context)).toBe(secret);
+    // Already under the new secret: the old one no longer opens it, and nothing changes.
+    const before = await sealed();
+    await expect(reseal(TEST_APP_SECRET)).rejects.toThrow(DomainError);
+    expect(await sealed()).toBe(before);
+    expect(await reseal(otherSecret)).toBe(0);
+    expect(await sealed()).toBe(before);
+  });
+
+  it('copies blobs to and from a directory', async () => {
+    const calls: [string, string, string][] = [];
+    const output: string[] = [];
+    const blobs = (args: string[]) =>
+      runCli(
+        ['blobs', ...args],
+        {
+          ...services,
+          copyBlobs: (direction, dir, prefix, onProgress) => {
+            calls.push([direction, dir, prefix]);
+            const totals: BlobCopyTotals = { count: 1000, bytes: 2_500_000 };
+            onProgress(totals);
+            return Promise.resolve(totals);
+          },
+        },
+        { readPassword: () => Promise.resolve(''), print: (line) => output.push(line) },
+      );
+    expect(await blobs(['pull', '/bundle/blobs'])).toBe(0);
+    expect(await blobs(['push', '/bundle/blobs', '--archive-only'])).toBe(0);
+    expect(calls).toEqual([
+      ['pull', '/bundle/blobs', ''],
+      ['push', '/bundle/blobs', 'archive/'],
+    ]);
+    expect(output).toContain('1000 blobs, 2.5 MB...');
+    expect(output.at(-1)).toBe('Copied 1000 blobs, 2.5 MB');
+    expect(await blobs(['sideways', '/x'])).toBe(2);
+    expect(await blobs(['pull'])).toBe(2);
+    expect(await blobs(['pull', '/x', '--bogus'])).toBe(2);
   });
 });

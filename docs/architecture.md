@@ -347,7 +347,7 @@ Search:
 - Starting enrolment and turning 2FA off re-check the password; turning off and regenerating recovery codes need a code. Enabling 2FA signs out the user's other sessions. Admins (`POST /admin/users/:id/2fa/reset`) and `cli user reset-2fa` turn it off and sign the user out everywhere.
 - App passwords are 160-bit random values shown once (`xxxx-xxxx-…`; case and dashes ignored), stored as SHA-256 hashes, at most 50 per user. Creating one re-checks the account password. `AuthService.authenticateAppPassword` is the only check that accepts them: it skips TOTP, refuses account passwords, shares the login throttle, and records last use at most hourly. `/auth/login` never accepts them. An admin password reset revokes them; a disabled user's are refused.
 - Changing or resetting a password, or disabling a user, revokes their other sessions.
-- `APP_SECRET` (Docker env; SSM `app-secret` on AWS) is the root of per-purpose keys derived with HKDF-SHA256 (`server/src/core/crypto.ts`). Stored secrets are sealed with AES-256-GCM as `v1.<iv>.<ciphertext>.<tag>`, authenticated against their owning row; tokens are signed with HMAC-SHA256. A new secret voids every sealed value and signature; there is no rotation.
+- `APP_SECRET` (Docker env; SSM `app-secret` on AWS) is the root of per-purpose keys derived with HKDF-SHA256 (`server/src/core/crypto.ts`). Stored secrets are sealed with AES-256-GCM as `v1.<iv>.<ciphertext>.<tag>`, authenticated against their owning row; tokens are signed with HMAC-SHA256. A new secret voids every sealed value and signature; there is no rotation. `cli reseal-secrets` re-seals TOTP secrets sealed under another instance's secret, read from stdin, with this one.
 
 ### Authorization
 
@@ -568,7 +568,7 @@ A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to
 Deployment config:
 - The account-specific values live in `infra/deploy.config.json`, never committed; `infra/deploy.config.example.json` shows the shape, validated by `infra/src/deploy-config.ts`: `resourcePrefix` (`<prefix>` in this section: the start of every physical name, tag, and parameter path, with `_` for `-` in database names; the example's is `newses`), account, region, GitHub repository and CodeConnections connection, certificate, hosted zone, ADOT layer, budget, and the stages (`dev` and/or `prod`: branch, release tags, domain, data retention, backups, compatibility trace, archive, trace sampling).
 - The pipelines' synth step writes that file from the String parameter `/<prefix>/deploy-config`; a change to it takes effect on each pipeline's next run. Tests synthesise against the example.
-- Scripts that act on a stage (`reset-stage.sh`, `try-release.sh`, `import-ttrss.sh --aws`, the signing setups with `--ssm`) read the region and domains from the same file.
+- Scripts that act on a stage (`reset-stage.sh`, `freeze-stage.sh`, `try-release.sh`, `import-ttrss.sh --aws`, `export-instance.sh --aws`, `restore-instance.sh --aws`, the signing setups with `--ssm`) read the region and domains from the same file.
 
 Operator setup, once per account:
 - Prerequisites: a CodeConnections connection to the GitHub repository, an ACM certificate in us-east-1 for the stages' domains, and the Route 53 hosted zone.
@@ -579,6 +579,25 @@ Operator setup, once per account:
 - In the paying account's Billing console (or `aws ce update-cost-allocation-tags-status`), the `project` cost-allocation tag activated once it appears, up to 24 h after the first deployment.
 - The signing parameters, before the first release: `scripts/windows-signing-setup.sh --ssm` and `scripts/android-signing-setup.sh --backup DIR --ssm`.
 - The first admin is the deploy config's `adminLogin`, with a generated password in the SSM SecureString `/<prefix>/<stage>/admin-password` that must be changed at first sign-in. If it expires first, `reissue-admin` (`AGENTS.md`) replaces it.
+
+### Moving an instance
+
+`scripts/export-instance.sh` writes a bundle that `scripts/restore-instance.sh` loads into another instance, replacing its data; either end is the Docker stack or an AWS stage.
+
+| Bundle file | Contents |
+|---|---|
+| `manifest` | `key=value` lines: format (`1`), source, export time, whether blobs are archive only, user, subscription, entry, and blob counts; written last, so a bundle without it is incomplete |
+| `db.dump` | `pg_dump -Fc --no-owner --no-acl`, without the `pgboss` schema or the rows of `sessions`, `login_attempts`, `rate_limits`, the hourly stats, `ops_alerts`, and `ops_state` |
+| `migrations` | The source's applied migration hashes |
+| `blobs/` | `LocalBlobStore` layout (data files, content types under `.meta/`); `cli blobs pull\|push DIR` copies it from and to S3 |
+| `app-secret` | The source's `APP_SECRET`, for re-sealing only |
+
+- The bundle directory is mode 0700 and holds password hashes and the source's secret.
+- The database is dumped before blobs are copied: purge archives entries before deleting them, so a running source can at worst leave an entry both live and archived.
+- A restore is refused unless the target has applied every migration in `migrations`; the target's newer ones run after the restore (`migrate`).
+- The restore stops the target, then drops `drizzle`, `pgboss`, and `public` and restores the dump in one transaction, committed only once the whole dump was read; it then migrates, runs `cli reseal-secrets`, empties and refills the blob store, purges AWS job queues, and starts the target. The target keeps its `APP_SECRET`, configuration, and SSM parameters.
+- Ids are unchanged, so share links, access keys, app passwords, and client sync state stay valid; image-proxy and feed-icon signatures are made again with the target's keys.
+- Freezing an AWS stage (`freeze-stage.sh`, `export-instance.sh --freeze`, and every restore) sets the reserved concurrency of `api` and `tick` to 0 and disables the event source mappings of `fetch`, `favicon`, and `extract`, so jobs wait in their queues rather than fail into the dead-letter queues; unfreezing removes the reserved concurrency and enables the mappings. Docker's equivalent stops `server` and `worker`.
 
 ### SBOMs
 

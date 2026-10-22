@@ -37,6 +37,22 @@ export function describeBlobStore(name: string, store: () => BlobStore) {
       expect(await store().get('archive/month=2024-05/a.parquet')).not.toBeNull();
     });
 
+    it('lists keys under a prefix', async () => {
+      const list = async (prefix?: string) => {
+        const keys: string[] = [];
+        for await (const key of store().list(prefix)) keys.push(key);
+        return keys.sort();
+      };
+      for (const key of ['listing/x/1', 'listing/x/month=2024-05/2', 'listing/y', 'listingz']) {
+        await store().put(key, blob(key));
+      }
+      await store().delete('listing/y');
+      expect(await list('listing/')).toEqual(['listing/x/1', 'listing/x/month=2024-05/2']);
+      expect(await list('listing/x/m')).toEqual(['listing/x/month=2024-05/2']);
+      expect(await list()).toEqual(expect.arrayContaining(['listing/x/1', 'listingz']));
+      expect(await list('nothing/')).toEqual([]);
+    });
+
     it.each(['', '../escape', 'a/../b', '.meta/a', 'a//b', '/abs', 'a/', '=a'])(
       'rejects key %j',
       async (key) => {

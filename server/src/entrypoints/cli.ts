@@ -1,5 +1,7 @@
-import { DomainError } from '../core/errors.ts';
+import { LocalBlobStore } from '../adapters/local-blob-store.ts';
 import { createAuthServices } from '../core/auth/index.ts';
+import { copyBlobs } from '../core/blob-copy.ts';
+import { DomainError } from '../core/errors.ts';
 import { createDb } from '../db/client.ts';
 import { importTtrss } from '../importer/importer.ts';
 import { TtrssSource } from '../importer/source.ts';
@@ -36,6 +38,17 @@ try {
       } finally {
         await source.close();
       }
+    },
+    copyBlobs(
+      direction: 'pull' | 'push',
+      dir: string,
+      prefix: string,
+      onProgress: Parameters<typeof copyBlobs>[3],
+    ) {
+      const [store, local] = [createBlobStore(config), new LocalBlobStore(dir)];
+      return direction === 'pull'
+        ? copyBlobs(store, local, prefix, onProgress)
+        : copyBlobs(local, store, prefix, onProgress);
     },
   };
   code = await runCli(process.argv.slice(2), services, {

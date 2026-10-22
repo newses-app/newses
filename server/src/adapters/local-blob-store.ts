@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 import type { Blob, BlobStore } from '../core/ports.ts';
 import { assertBlobKey } from './blob-key.ts';
 
@@ -34,11 +34,29 @@ export class LocalBlobStore implements BlobStore {
     await Promise.all([rm(dataPath, { force: true }), rm(metaPath, { force: true })]);
   }
 
+  async *list(prefix = ''): AsyncIterable<string> {
+    let files;
+    try {
+      files = await readdir(this.#root, { recursive: true, withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw err;
+    }
+    for (const file of files) {
+      if (!file.isFile() || TEMP_FILE.test(file.name)) continue;
+      const key = relative(this.#root, join(file.parentPath, file.name)).split(sep).join('/');
+      if (!key.startsWith('.meta/') && key.startsWith(prefix)) yield key;
+    }
+  }
+
   #paths(key: string) {
     assertBlobKey(key);
     return { dataPath: join(this.#root, key), metaPath: join(this.#root, '.meta', `${key}.json`) };
   }
 }
+
+/** A write in progress, or one interrupted. */
+const TEMP_FILE = /\.\d+\.\d+\.tmp$/;
 
 async function writeAtomically(path: string, data: Uint8Array | string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });

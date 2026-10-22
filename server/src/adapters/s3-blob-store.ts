@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   NoSuchKey,
   PutObjectCommand,
   S3Client,
@@ -50,5 +51,20 @@ export class S3BlobStore implements BlobStore {
   async delete(key: string): Promise<void> {
     assertBlobKey(key);
     await this.#client.send(new DeleteObjectCommand({ Bucket: this.#bucket, Key: key }));
+  }
+
+  async *list(prefix = ''): AsyncIterable<string> {
+    let token: string | undefined;
+    do {
+      const page = await this.#client.send(
+        new ListObjectsV2Command({
+          Bucket: this.#bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of page.Contents ?? []) if (object.Key) yield object.Key;
+      token = page.NextContinuationToken;
+    } while (token);
   }
 }
