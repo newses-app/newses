@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Imports a TTRSS database dump into the local Docker stack or an AWS stage: restores the dump
 # into a throwaway PostgreSQL container, runs a dry run, asks, imports, and saves the report.
-# See docs/migration-ttrss.md.
+# See https://newses.app/guide/migration-ttrss.
 set -euo pipefail
 
 usage() {

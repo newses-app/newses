@@ -614,3 +614,9 @@ CycloneDX 1.6, one per deliverable, composed by `infra/src/release/build-sbom.ts
 - Workspace packages and Gradle projects are first party and left out; the root component is `newses-<deliverable>`, linked to the `repository` URL in the root `package.json`.
 - The release pipeline publishes the desktop and mobile SBOMs; the others are made locally.
 - Dependency-Track is an external server; uploads run locally (`PUT /api/v1/bom`, auto-creating the project). Project `newses-<deliverable>`, version the release's or, untagged, the branch's; tags `newses` and `prod` (release), `dev` (prerelease), or `local` (untagged); tagged uploads become the latest version. The API key needs `BOM_UPLOAD`, `PROJECT_CREATION_UPLOAD`, and `VIEW_PORTFOLIO`.
+
+### Project site
+
+- The landing page, user guides, contributor pages, and download page are a VitePress site in `newses-app/newses.app`, with its own CDK app and pipeline, in this deployment's AWS account but in separate stacks. This repository's builds, image, and stacks never reference it.
+- Domains: `newses.app` (`www.newses.app` redirects to it) and `dev.newses.app` (not indexed), both under the `newses.app` hosted zone and certificate. No analytics or cookies.
+- The site's `dev` and `main` branches build from this repository's matching branch, reading `docs/architecture.md`, `docs/adr/`, and `AGENTS.md` at build time and publishing them under `/contributing/`; `requirements.md` is not published.

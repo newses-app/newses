@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Exports a Newses instance, the Docker stack or an AWS stage, to a bundle directory that
 # scripts/restore-instance.sh loads into another: its database without sessions or operations
-# data, its blobs, and its APP_SECRET. See docs/self-hosting.md.
+# data, its blobs, and its APP_SECRET. See https://newses.app/guide/self-hosting.
 set -euo pipefail
 
 usage() {

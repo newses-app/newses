@@ -12,7 +12,7 @@ export const USAGE = `Usage:
   cli user reset-password <login>      Set a new password from stdin; revokes sessions and app passwords
   cli user reset-2fa <login>           Turn off two-factor authentication and sign the user out everywhere
   cli import-ttrss --source <postgres-url> [--users a,b] [--since YYYY-MM-DD] [--dry-run] [--force]
-                                       Import TTRSS users' data; see docs/migration-ttrss.md
+                                       Import TTRSS users' data; see https://newses.app/guide/migration-ttrss
   cli blobs pull|push <dir> [--archive-only]
                                        Copy the blob store to (pull) or from (push) a local directory
   cli reseal-secrets                   Re-seal two-factor secrets sealed under the previous instance's

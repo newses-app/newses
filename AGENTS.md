@@ -53,8 +53,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 |---|---|
 | `docs/requirements.md` | What the product does: features, phases, non-functional requirements, non-goals |
 | `docs/architecture.md` | How it is built and deployed: stack, layout, components, data model concepts, APIs, deployment |
-| `docs/self-hosting.md` | Operating a Docker deployment: install, configuration, upgrade, proxy, backup, restore |
-| `docs/migration-ttrss.md` | Importing data from an existing TTRSS instance |
+| `newses-app/newses.app` | User guides: install, configuration, upgrade, proxy, backup, restore, TTRSS import, using Newses, clients, apps |
 | `docs/adr/` | Decision history |
 
 Put each new fact in the doc that owns it. Never state the same fact in two places.
@@ -66,6 +65,7 @@ Put each new fact in the doc that owns it. Never state the same fact in two plac
 - Tables and bullets. No preambles, summaries, or filler.
 - Delete stale content; don't annotate it.
 - Code is authoritative once it exists (Drizzle schema, generated OpenAPI). Docs keep only concepts and constraints code doesn't express.
+- A change to configuration, deployment, or import behaviour comes with a matching pull request in `newses-app/newses.app`.
 
 ## ADRs
 

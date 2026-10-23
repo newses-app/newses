@@ -2,7 +2,7 @@
 # Replaces the data of the Docker stack or an AWS stage with a bundle from
 # scripts/export-instance.sh: restores the database, applies the target's newer migrations,
 # re-seals two-factor secrets with the target's APP_SECRET, and replaces the blobs.
-# See docs/self-hosting.md.
+# See https://newses.app/guide/self-hosting.
 set -euo pipefail
 
 usage() {

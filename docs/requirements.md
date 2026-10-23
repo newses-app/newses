@@ -147,7 +147,7 @@
 
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
-| TTRSS import | P3 | Per `migration-ttrss.md`; reconciliation report shows matching per-user entry, label, and note counts |
+| TTRSS import | P3 | Per the [TTRSS migration guide](https://newses.app/guide/migration-ttrss); reconciliation report shows matching per-user entry, label, and note counts |
 | Instance move | P3 | A whole instance moves between the Docker stack and AWS stages, in any direction, through a bundle of its database and blobs; users, entries, states, the archive, two-factor, app passwords, access keys, and share links carry over; everyone signs in again |
 
 ### Operations

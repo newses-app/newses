@@ -1,6 +1,6 @@
 # 0001. Documentation conventions
 
-- Status: Accepted
+- Status: Superseded by 0079
 - Date: 2026-10-03
 
 ## Context
