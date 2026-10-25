@@ -477,6 +477,30 @@ describe('Downloads', () => {
       Name: 'newses-dev-downloads-index',
     });
   });
+
+  it("lets the stage's project site read them, and no other origin", () => {
+    edge.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        Name: 'newses-dev-downloads-headers',
+        CorsConfig: Match.objectLike({
+          AccessControlAllowOrigins: { Items: ['https://dev.example.com'] },
+          AccessControlAllowMethods: { Items: ['GET', 'HEAD'] },
+          AccessControlAllowCredentials: false,
+          OriginOverride: true,
+        }),
+      }),
+    });
+    const { downloadsCorsOrigins: _, ...withoutSite } = dev;
+    const bare = Template.fromStack(
+      new NewsesStage(newApp(), 'Bare', { stage: withoutSite, webDir }).edge,
+    );
+    bare.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        Name: 'newses-dev-downloads-headers',
+        CorsConfig: Match.absent(),
+      }),
+    });
+  });
 });
 
 describe('Release', () => {

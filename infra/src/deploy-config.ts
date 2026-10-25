@@ -19,6 +19,7 @@ const stageSchema = z.object({
   archive: z.boolean(),
   traceSampling: z.number().min(0).max(1),
   instanceName: z.string().trim().min(1).max(100).optional(),
+  downloadsCorsOrigins: z.array(z.string().regex(/^https:\/\/[^/]+$/)).optional(),
 }) satisfies z.ZodType<StageConfig>;
 
 export const deployConfigSchema = z

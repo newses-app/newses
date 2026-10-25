@@ -24,6 +24,8 @@ export interface StageConfig {
   traceSampling: number;
   /** What the apps call this server (`INSTANCE_NAME`); omitted for none. */
   instanceName?: string | undefined;
+  /** Origins whose pages may fetch the downloads (the project site's `latest.json` reads). */
+  downloadsCorsOrigins?: string[] | undefined;
 }
 
 /** Where the app downloads live, in the downloads bucket and under the stage's domain. */

@@ -158,8 +158,18 @@ export class EdgeStack extends Stack {
       },
     });
 
+    const corsOrigins = stage.downloadsCorsOrigins ?? [];
     const downloadsHeaders = new cloudfront.ResponseHeadersPolicy(this, 'DownloadsHeaders', {
       responseHeadersPolicyName: resourceName(stage, 'downloads-headers'),
+      ...(corsOrigins.length > 0 && {
+        corsBehavior: {
+          accessControlAllowOrigins: corsOrigins,
+          accessControlAllowMethods: ['GET', 'HEAD'],
+          accessControlAllowHeaders: ['*'],
+          accessControlAllowCredentials: false,
+          originOverride: true,
+        },
+      }),
       securityHeadersBehavior: {
         contentSecurityPolicy: { contentSecurityPolicy: DOWNLOADS_CSP, override: true },
         contentTypeOptions: { override: true },

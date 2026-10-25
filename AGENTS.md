@@ -42,6 +42,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - Migrations are generated, never edited after they are committed; change the schema and generate a new one.
 - `web` is bundled by Vite; browser code imports runtime values from `@newses/shared/client` (no Zod) and only types from `@newses/shared`. UI strings live in `web/src/locales/en.json`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
+- No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site's documentation are the exception.
 
 ## Commits
 
