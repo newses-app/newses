@@ -4,6 +4,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 
 ## Commands
 
+<!-- #region commands -->
 | Command | Does |
 |---|---|
 | `nvm use` | Switch to Node 24 (`.nvmrc`) |
@@ -34,15 +35,18 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `aws sns subscribe --topic-arn arn:aws:sns:<region>:<account>:<prefix>-<stage>-alerts --protocol email --notification-endpoint ADDRESS` | Emails a stage's operations alerts to ADDRESS, once confirmed from the email AWS sends; the topic `<prefix>-budget` carries the project budget's notifications |
 | `scripts/try-release.sh` | Run the dev release legs on the working tree without a tag; the publish is a dry run unless `--publish` (`--help`) |
 | `scripts/sbom.sh` | CycloneDX SBOMs of the server, Docker image, web, desktop, and mobile apps in `sbom/`, validated; `--upload` sends them to Dependency-Track (`DTRACK_URL`, default `http://localhost:8080`, and `DTRACK_API_KEY`, from the environment or `dtrack.env`), `--from URL` a published release's (`--help`) |
+<!-- #endregion commands -->
 
 ## Code conventions
 
+<!-- #region conventions -->
 - Node runs `.ts` directly: erasable syntax only (no enums, namespaces, parameter properties); relative imports use the `.ts` extension; workspace packages export `./src/index.ts`.
 - Tests live next to code as `*.test.ts` (Vitest). Database tests start a Postgres container via Testcontainers, so Docker must be running.
 - Migrations are generated, never edited after they are committed; change the schema and generate a new one.
 - `web` is bundled by Vite; browser code imports runtime values from `@newses/shared/client` (no Zod) and only types from `@newses/shared`. UI strings live in `web/src/locales/en.json`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
 - No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site's documentation are the exception.
+<!-- #endregion conventions -->
 
 ## Commits
 
@@ -67,6 +71,7 @@ Put each new fact in the doc that owns it. Never state the same fact in two plac
 - Delete stale content; don't annotate it.
 - Code is authoritative once it exists (Drizzle schema, generated OpenAPI). Docs keep only concepts and constraints code doesn't express.
 - A change to configuration, deployment, or import behaviour comes with a matching pull request in `newses-app/newses.app`.
+- The project site includes this file's `#region commands` and `#region conventions` sections in its contributor page; keep the markers around them.
 
 ## ADRs
 
