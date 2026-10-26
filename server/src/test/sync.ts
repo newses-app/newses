@@ -7,9 +7,9 @@ const SYNC_WAIT_MS = 3000;
 
 /**
  * Follows a user's changes from `since` until entry `id` arrives; returns it, the call that
- * brought it, and the token after. Each call returns changes before a watermark on the database's
- * clock; when that clock steps back (virtual machines resyncing their time), a row written just
- * before waits for a later call, as clients expect.
+ * brought it, and the token after. Each call returns changes below a watermark, the oldest
+ * transaction still writing in the database; while one is open, a row written after it waits for
+ * a later call, as clients expect.
  */
 export async function syncedEntry(
   sync: SyncService,

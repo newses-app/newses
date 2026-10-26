@@ -26,8 +26,8 @@ let userId: number;
 
 const URL_A = 'https://a.example/rss';
 
-async function addSource(url: string, subscribe = true) {
-  const [source] = await db.insert(feedSources).values({ url }).returning();
+async function addSource(url: string, subscribe = true, nextFetchAt?: Date) {
+  const [source] = await db.insert(feedSources).values({ url, nextFetchAt }).returning();
   if (!source) throw new Error('no source');
   if (subscribe) await db.insert(subscriptions).values({ userId, feedSourceId: source.id });
   return source;
@@ -80,15 +80,20 @@ describe('hintSeconds', () => {
 });
 
 describe('FeedUpdater.dispatchDue', () => {
+  // Due a day ago, a millisecond apart in the order added: the clock may step back between
+  // statements, which would leave a source added at now() not yet due, or out of order.
+  let dueAt = Date.now() - 24 * 60 * 60 * 1000;
+  const addDue = (url: string, subscribe = true) => addSource(url, subscribe, new Date(dueAt++));
+
   it('claims due, enabled, subscribed sources once', async () => {
-    const due = await addSource(URL_A);
-    await addSource('https://unsubscribed.example/rss', false);
-    const disabled = await addSource('https://disabled.example/rss');
+    const due = await addDue(URL_A);
+    await addDue('https://unsubscribed.example/rss', false);
+    const disabled = await addDue('https://disabled.example/rss');
     await db
       .update(feedSources)
       .set({ disabledAt: new Date() })
       .where(eq(feedSources.id, disabled.id));
-    const later = await addSource('https://later.example/rss');
+    const later = await addDue('https://later.example/rss');
     await db
       .update(feedSources)
       .set({ nextFetchAt: new Date(Date.now() + 60_000) })
@@ -102,7 +107,7 @@ describe('FeedUpdater.dispatchDue', () => {
   });
 
   it('skips sources whose subscriptions are all paused', async () => {
-    const paused = await addSource(URL_A);
+    const paused = await addDue(URL_A);
     await db.update(subscriptions).set({ paused: true });
     expect(await feeds.updater.dispatchDue()).toBe(0);
     const [other] = await db
@@ -115,8 +120,8 @@ describe('FeedUpdater.dispatchDue', () => {
 
   it('batches sources by host, at most 20 per job', async () => {
     const many = [];
-    for (let i = 0; i < 22; i++) many.push(await addSource(`https://big.example/${String(i)}`));
-    const other = await addSource('https://other.example:8443/rss');
+    for (let i = 0; i < 22; i++) many.push(await addDue(`https://big.example/${String(i)}`));
+    const other = await addDue('https://other.example:8443/rss');
 
     expect(await feeds.updater.dispatchDue()).toBe(21);
     expect(queue.jobs).toEqual([
@@ -130,9 +135,9 @@ describe('FeedUpdater.dispatchDue', () => {
   });
 
   it("leaves sources due when their host's job is already queued", async () => {
-    const first = await addSource(URL_A);
+    const first = await addDue(URL_A);
     await feeds.updater.dispatchDue();
-    const second = await addSource('https://a.example/other');
+    const second = await addDue('https://a.example/other');
     expect(await feeds.updater.dispatchDue()).toBe(1);
     expect(queue.jobs).toHaveLength(1);
     expect(secondsUntil((await source(second.id)).nextFetchAt)).toBeLessThanOrEqual(0);
@@ -436,19 +441,36 @@ describe('FeedUpdater.reschedule', () => {
 });
 
 describe('FeedUpdater.updateMany', () => {
-  /** Answers after a delay, recording the most requests to one host in flight at once. */
-  class SlowFetcher extends FakeFetcher {
+  /**
+   * Answers once `gate` settles, or as soon as two requests overlap, recording the most requests
+   * to one host in flight at once.
+   */
+  class HeldFetcher extends FakeFetcher {
     inFlight = 0;
     peak = 0;
+    gate: Promise<unknown> = Promise.resolve();
+    readonly #overlap = Promise.withResolvers<undefined>();
     override async fetch(...args: Parameters<FakeFetcher['fetch']>) {
       this.inFlight += 1;
       this.peak = Math.max(this.peak, this.inFlight);
+      if (this.inFlight > 1) this.#overlap.resolve(undefined);
       try {
-        await new Promise((resolve) => setTimeout(resolve, 30));
+        await Promise.race([this.gate, this.#overlap.promise]);
         return await super.fetch(...args);
       } finally {
         this.inFlight -= 1;
       }
+    }
+  }
+
+  /** Settles `requeued` when a job finds its host held and queues itself again. */
+  class WaitingQueue extends RecordingQueue {
+    readonly #requeued = Promise.withResolvers<undefined>();
+    readonly requeued = this.#requeued.promise;
+    override async enqueue(...args: Parameters<RecordingQueue['enqueue']>) {
+      const queued = await super.enqueue(...args);
+      if (args[2]?.delaySeconds !== undefined) this.#requeued.resolve(undefined);
+      return queued;
     }
   }
 
@@ -458,7 +480,10 @@ describe('FeedUpdater.updateMany', () => {
   }
 
   it("never lets two processes work through a host's feeds at once", async () => {
-    const slow = new SlowFetcher();
+    const slow = new HeldFetcher();
+    const waiting = new WaitingQueue();
+    // The job holding the host fetches nothing until the other has found it held.
+    slow.gate = waiting.requeued;
     const sources = [];
     for (const n of [1, 2, 3, 4]) {
       const url = `https://many.example/${String(n)}`;
@@ -467,8 +492,8 @@ describe('FeedUpdater.updateMany', () => {
     }
     const ids = sources.map((s) => s.id);
     // Two processes, each with its own in-process limiter.
-    const first = createFeedServices(testFeedDeps(db, slow, { queue }));
-    const second = createFeedServices(testFeedDeps(db, slow, { queue }));
+    const first = createFeedServices(testFeedDeps(db, slow, { queue: waiting }));
+    const second = createFeedServices(testFeedDeps(db, slow, { queue: waiting }));
     await Promise.all([
       first.updater.updateMany(ids.slice(0, 2)),
       second.updater.updateMany(ids.slice(2)),
@@ -476,13 +501,13 @@ describe('FeedUpdater.updateMany', () => {
     expect(slow.peak).toBe(1);
     // The job that found the host held waits, its sources still claimed.
     expect(slow.requested).toHaveLength(2);
-    expect(queue.jobs).toContainEqual(
+    expect(waiting.jobs).toContainEqual(
       expect.objectContaining({ name: 'feed.fetch', key: 'many.example', delaySeconds: 60 }),
     );
-    const waiting = (queue.jobs.find((j) => j.name === 'feed.fetch')?.data ?? {}) as {
+    const requeued = (waiting.jobs.find((j) => j.name === 'feed.fetch')?.data ?? {}) as {
       feedSourceIds: number[];
     };
-    for (const id of waiting.feedSourceIds)
+    for (const id of requeued.feedSourceIds)
       expect(secondsUntil((await source(id)).nextFetchAt)).toBeGreaterThan(14 * 60);
     // The finished job let go of the host.
     expect((await lease())?.leaseId).toBeNull();

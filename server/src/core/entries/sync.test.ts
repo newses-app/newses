@@ -194,8 +194,6 @@ describe('SyncService', () => {
     await other.connect();
     try {
       await other.query('BEGIN');
-      // This transaction's rows get its start time, before the sync below runs.
-      await other.query(`SELECT now()`);
       const base = await sync.changes(userId, undefined, 100);
       const [entry] = await db
         .insert(entries)
@@ -215,17 +213,131 @@ describe('SyncService', () => {
     }
   });
 
-  it('requires a full resync once deletions may have been forgotten', async () => {
+  it("isn't held back by another database's transactions", async () => {
+    const elsewhere = await createTestDatabase({ migrate: false });
+    const other = new pg.Client({ connectionString: elsewhere.url });
+    await other.connect();
+    try {
+      await other.query('BEGIN');
+      await other.query('CREATE TABLE held (i int)');
+      const base = await sync.changes(userId, undefined, 100);
+      const id = await addEntry('meanwhile');
+      expect((await sync.changes(userId, base.next, 100)).entries.map((e) => e.id)).toEqual([id]);
+    } finally {
+      await other.end();
+      await elsewhere.drop();
+    }
+  });
+
+  it('syncs rows written after a token even when the clock stepped back', async () => {
     const { next } = await sync.changes(userId, undefined, 100);
-    const token = JSON.parse(Buffer.from(next, 'base64url').toString()) as { t: string };
-    const old = Buffer.from(JSON.stringify({ t: '2000-01-01 00:00:00+00', i: 0 })).toString(
-      'base64url',
-    );
-    expect(token.t).toBeTruthy();
-    await expect(sync.changes(userId, old, 100)).rejects.toMatchObject({ code: 'resync_required' });
-    await expect(sync.changes(userId, 'garbage', 100)).rejects.toMatchObject({
-      code: 'invalid_input',
-    });
+    const [entry] = await db
+      .insert(entries)
+      .values({ feedSourceId: sourceId, guid: 'stepped', contentHash: 'stepped' })
+      .returning();
+    // Written after the token, with a time before it, as when the clock steps back in between.
+    const [row] = await db
+      .insert(userEntries)
+      .values({
+        userId,
+        entryId: entry?.id ?? 0,
+        subscriptionId,
+        sortAt: new Date(),
+        updatedAt: new Date(Date.now() - 60_000),
+      })
+      .returning();
+    expect((await sync.changes(userId, next, 100)).entries.map((e) => e.id)).toEqual([row?.id]);
+  });
+
+  it('takes rows with transaction ids from another cluster into a full sync', async () => {
+    const [current] = (
+      await db.execute<{ xid: string }>(sql`SELECT pg_current_xact_id()::text AS xid`)
+    ).rows;
+    const here = await addEntry('here');
+    const [entry] = await db
+      .insert(entries)
+      .values({ feedSourceId: sourceId, guid: 'restored', contentHash: 'restored' })
+      .returning();
+    // A restore from a busier cluster keeps that cluster's ids, far ahead of this one's.
+    const [restored] = await db
+      .insert(userEntries)
+      .values({
+        userId,
+        entryId: entry?.id ?? 0,
+        subscriptionId,
+        sortAt: new Date(),
+        syncXid: Number(current?.xid) + 1_000_000,
+      })
+      .returning();
+    const seen: number[] = [];
+    let next: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const result = await sync.changes(userId, next, 1);
+      seen.push(...result.entries.map((e) => e.id));
+      next = result.next;
+      if (!result.more) break;
+    }
+    expect(seen).toEqual([here, restored?.id]);
+    // The full sync hands over to changes from where it started.
+    const later = await addEntry('later');
+    expect((await sync.changes(userId, next, 100)).entries.map((e) => e.id)).toEqual([later]);
+  });
+
+  it('carries tokens from before sync_xid on to the rows written since, without a resync', async () => {
+    // Such tokens hold the watermark as Postgres printed it.
+    const [printed] = (
+      await db.execute<{ t: string }>(sql`SELECT (now() - interval '1 hour')::text AS t`)
+    ).rows;
+    const since = new Date(printed?.t ?? '');
+    const legacy = Buffer.from(JSON.stringify({ t: printed?.t, i: 0 })).toString('base64url');
+    // Rows from before the migration have sync_xid 0; the client has those older than its token.
+    const before = async (guid: string, updatedAt: Date) => {
+      const [entry] = await db
+        .insert(entries)
+        .values({ feedSourceId: sourceId, guid, contentHash: guid })
+        .returning();
+      const [row] = await db
+        .insert(userEntries)
+        .values({
+          userId,
+          entryId: entry?.id ?? 0,
+          subscriptionId,
+          sortAt: new Date(),
+          syncXid: 0,
+          updatedAt,
+        })
+        .returning();
+      return row?.id ?? 0;
+    };
+    await before('seen', new Date(since.getTime() - 60_000));
+    const unseen = await before('unseen', new Date(since.getTime() + 60_000));
+    const sinceMigration = await addEntry('new');
+
+    const first = await sync.changes(userId, legacy, 100);
+    expect(first.entries.map((e) => e.id)).toEqual([unseen]);
+    expect(first.more).toBe(true);
+    const second = await sync.changes(userId, first.next, 100);
+    expect(second.entries.map((e) => e.id)).toEqual([sinceMigration]);
+    expect(second.more).toBe(false);
+  });
+
+  it('requires a full resync for expired, unknown, and other copies’ tokens', async () => {
+    const { next } = await sync.changes(userId, undefined, 100);
+    const token = JSON.parse(Buffer.from(next, 'base64url').toString()) as {
+      e: string;
+      t: number;
+    };
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    expect(token.t).toBeGreaterThan(0);
+    for (const since of [
+      encode({ ...token, t: token.t - 31 * 24 * 60 * 60 }),
+      encode({ t: '2000-01-01 00:00:00+00', i: 0 }),
+      encode({ ...token, e: 'another' }),
+      'garbage',
+    ])
+      await expect(sync.changes(userId, since, 100)).rejects.toMatchObject({
+        code: 'resync_required',
+      });
   });
 
   it('prunes old tombstones and skips them for deleted users', async () => {

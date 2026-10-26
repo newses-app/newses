@@ -27,6 +27,19 @@ const timestamps = () => ({
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
 
+const xid8 = customType<{ data: number; driverData: string }>({
+  dataType: () => 'xid8',
+  fromDriver: (value) => Number(value),
+  toDriver: (value) => String(value),
+});
+
+// The id of the transaction that last wrote a synced row, kept by the set_sync_xid trigger; native
+// sync orders changes by it rather than by the clock. Rows from before it existed have 0.
+const syncXid = () =>
+  xid8('sync_xid')
+    .notNull()
+    .default(sql`pg_current_xact_id()`);
+
 export const userRole = pgEnum('user_role', ['admin', 'user']);
 export const sessionKind = pgEnum('session_kind', ['cookie', 'bearer', 'api']);
 
@@ -166,6 +179,7 @@ export const categories = pgTable(
     sortOrder: integer('sort_order').notNull().default(0),
     collapsed: boolean('collapsed').notNull().default(false),
     ...timestamps(),
+    syncXid: syncXid(),
   },
   (t) => [
     index('categories_user_parent_idx').on(t.userId, t.parentId),
@@ -203,6 +217,7 @@ export const feedSources = pgTable(
     faviconKey: text('favicon_key'),
     faviconCheckedAt: tstz('favicon_checked_at'),
     ...timestamps(),
+    syncXid: syncXid(),
   },
   (t) => [
     index('feed_sources_due_idx')
@@ -250,6 +265,7 @@ export const subscriptions = pgTable(
     hideFromAll: boolean('hide_from_all').notNull().default(false),
     sortOrder: integer('sort_order').notNull().default(0),
     ...timestamps(),
+    syncXid: syncXid(),
   },
   (t) => [
     unique('subscriptions_user_feed_source_key').on(t.userId, t.feedSourceId),
@@ -370,6 +386,7 @@ export const userEntries = pgTable(
     // Public share link id; null when the entry is not shared.
     shareId: uuid('share_id').unique(),
     ...timestamps(),
+    syncXid: syncXid(),
   },
   (t) => [
     unique('user_entries_user_entry_key').on(t.userId, t.entryId),
@@ -389,6 +406,7 @@ export const userEntries = pgTable(
       .on(t.userId, t.readAt.desc())
       .where(sql`${t.readAt} IS NOT NULL`),
     index('user_entries_user_updated_idx').on(t.userId, t.updatedAt),
+    index('user_entries_user_sync_idx').on(t.userId, t.syncXid, t.id),
     // Entries someone keeps (labels aside), whose images are kept.
     index('user_entries_kept_entry_idx')
       .on(t.entryId)
@@ -414,10 +432,11 @@ export const labels = pgTable(
     fgColor: text('fg_color').notNull(),
     bgColor: text('bg_color').notNull(),
     ...timestamps(),
+    syncXid: syncXid(),
   },
   (t) => [
     uniqueIndex('labels_user_caption_key').on(t.userId, sql`lower(${t.caption})`),
-    index('labels_user_updated_idx').on(t.userId, t.updatedAt),
+    index('labels_user_sync_idx').on(t.userId, t.syncXid),
   ],
 );
 
@@ -567,8 +586,9 @@ export const tombstones = pgTable(
     entity: text('entity').notNull(),
     entityId: bigint('entity_id', { mode: 'number' }).notNull(),
     deletedAt: tstz('deleted_at').notNull().defaultNow(),
+    syncXid: syncXid(),
   },
-  (t) => [index('tombstones_user_deleted_idx').on(t.userId, t.deletedAt)],
+  (t) => [index('tombstones_user_sync_idx').on(t.userId, t.syncXid)],
 );
 
 // Rows imported from TTRSS, so re-running an import updates them instead of adding copies.

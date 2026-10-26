@@ -1,6 +1,6 @@
 # 0027. Native API: sync, search, and events
 
-- Status: Accepted
+- Status: Superseded by 0080
 - Date: 2026-10-04
 
 ## Context
