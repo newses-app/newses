@@ -6,7 +6,7 @@ Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md). Report v
 
 ## Issues
 
-- Issues for the app and the project site ([`newses-app/newses.app`](https://github.com/newses-app/newses.app)) are tracked here.
+- Issues for Newses (the server, the web, desktop, and Android apps) and its architecture and decision records are tracked here. Problems with the project site's pages and guides go to [`newses-app/newses.app`](https://github.com/newses-app/newses.app/issues).
 - Search first, then open a bug report or feature request with its form.
 - Open an issue before starting a feature or a large change, so the scope is agreed before the code.
 

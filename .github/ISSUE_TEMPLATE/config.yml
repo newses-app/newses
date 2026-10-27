@@ -6,3 +6,6 @@ contact_links:
   - name: Guides and FAQ
     url: https://newses.app/guide/faq
     about: Installing, configuring, and using Newses.
+  - name: Problem with newses.app
+    url: https://github.com/newses-app/newses.app/issues/new/choose
+    about: A wrong, unclear, or broken page or guide on the project site.
