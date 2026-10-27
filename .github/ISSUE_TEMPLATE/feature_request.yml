@@ -1,0 +1,23 @@
+name: Feature request
+description: Something Newses should do that it doesn't
+labels: [feature]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you're trying to do, and what gets in the way today
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What Newses would do, from the reader's point of view
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds, or how other readers (Tiny Tiny RSS, for example) handle it

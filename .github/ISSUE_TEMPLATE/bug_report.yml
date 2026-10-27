@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in Newses or its apps doesn't work as the guides say
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Report vulnerabilities privately, as the [security policy](https://github.com/newses-app/newses/security/policy) describes, not here.
+  - type: input
+    id: version
+    attributes:
+      label: Newses version
+      description: The release or image tag, for example `v1.2.0`
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Docker
+        - AWS
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      multiple: true
+      options:
+        - Web app
+        - Desktop app (Windows)
+        - Desktop app (Linux)
+        - Android app
+        - Third-party client
+    validations:
+      required: true
+  - type: input
+    id: client-details
+    attributes:
+      label: Browser, operating system, or third-party client
+      description: For example Firefox 140 on Windows 11, or Newsboat 2.40
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server or browser console output around the problem, with secrets and personal data removed
+      render: text

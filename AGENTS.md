@@ -45,7 +45,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - Migrations are generated, never edited after they are committed; change the schema and generate a new one.
 - `web` is bundled by Vite; browser code imports runtime values from `@newses/shared/client` (no Zod) and only types from `@newses/shared`. UI strings live in `web/src/locales/en.json`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
-- No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site's documentation are the exception.
+- No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site (its documentation and images), and the community files' links to the project's repositories, are the exception.
 <!-- #endregion conventions -->
 
 ## Commits
@@ -60,6 +60,9 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `docs/architecture.md` | How it is built and deployed: stack, layout, components, data model concepts, APIs, deployment |
 | `newses-app/newses.app` | User guides: install, configuration, upgrade, proxy, backup, restore, TTRSS import, using Newses, clients, apps |
 | `docs/adr/` | Decision history |
+| `README.md` | The repository's front page: what Newses is, a screenshot, links to the site |
+| `CONTRIBUTING.md` | The contribution workflow: issues, pull requests, license of contributions |
+| `CODE_OF_CONDUCT.md`, `.github/` | Code of conduct, security policy, issue forms, pull request template |
 
 Put each new fact in the doc that owns it. Never state the same fact in two places.
 
