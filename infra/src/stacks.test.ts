@@ -664,6 +664,10 @@ describe('PipelineStack', () => {
       ],
       Targets: [{ TargetType: 'SNS', TargetAddress: { Ref: Match.stringLikeRegexp('^Results') } }],
     });
+    // Created once the topic lets CodeStar Notifications publish, or the service refuses it.
+    template.hasResource('AWS::CodeStarNotifications::NotificationRule', {
+      DependsOn: Match.arrayWith([Match.stringLikeRegexp('^ResultsPolicy')]),
+    });
     const stackNames = root.node
       .findAll()
       .filter((c): c is Stack => Stack.isStack(c))

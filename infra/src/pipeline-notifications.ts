@@ -15,11 +15,14 @@ export function notifyResults(
   topic: sns.ITopic,
   ruleName: string,
 ): void {
-  pipeline.notifyOn('Results', topic, {
+  const rule = pipeline.notifyOn('Results', topic, {
     notificationRuleName: ruleName,
     events: [
       codepipeline.PipelineNotificationEvents.PIPELINE_EXECUTION_SUCCEEDED,
       codepipeline.PipelineNotificationEvents.PIPELINE_EXECUTION_FAILED,
     ],
   });
+  // CodeStar Notifications refuses a rule whose topic does not yet let it publish, and the rule
+  // only references the topic, not the policy that the binding adds. An imported topic adds none.
+  rule.node.addDependency(topic);
 }
