@@ -5,6 +5,7 @@ import * as actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 import { DOWNLOADS_PREFIX, type StageConfig } from './config.ts';
 import {
@@ -14,6 +15,7 @@ import {
   resourceName,
   SIGNING_PARAMETERS,
 } from './deploy-config.ts';
+import { notifyResults, pipelinesTopicName } from './pipeline-notifications.ts';
 
 /** Build-environment variables read from SSM SecureString parameters; CodeBuild grants the reads. */
 const signingParameters = (group: string, names: Record<string, string>) =>
@@ -34,7 +36,8 @@ export interface ReleaseStackProps extends StackProps {
 /**
  * The stage's release pipeline: a version tag builds the desktop and Android apps on Linux and
  * Windows in parallel, signs them, and publishes them to the stage's downloads bucket. Branch
- * runs (the run on creation, a manual release) skip the build and publish stages.
+ * runs (the run on creation, a manual release) skip the build and publish stages. Each run's
+ * result goes to the stage's pipelines topic.
  */
 export class ReleaseStack extends Stack {
   constructor(scope: Construct, id: string, props: ReleaseStackProps) {
@@ -241,6 +244,14 @@ export class ReleaseStack extends Stack {
         },
       ],
     });
+
+    // The pipeline stack owns the topic and lets CodeStar Notifications publish to it.
+    const results = sns.Topic.fromTopicArn(
+      this,
+      'Results',
+      this.formatArn({ service: 'sns', resource: pipelinesTopicName(stage) }),
+    );
+    notifyResults(pipeline, results, resourceName(stage, 'release-results'));
 
     // scripts/try-release.sh starts the projects directly and reads these.
     const outputs: Record<string, string> = {

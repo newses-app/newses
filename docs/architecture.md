@@ -501,7 +501,7 @@ The settings page shows apps' connection details from `/api/v1/auth/app-password
 | `db` | `postgres:18-alpine` | Named volume |
 | `migrate` | app image, `migrate` | Runs to completion before `server`/`worker` start |
 | `server` | app image, `server` | Serves API and SPA; behind the user's reverse proxy for TLS; `/healthz` checks database and queue |
-| `worker` | app image, `worker` | Jobs and scheduler |
+| `worker` | app image, `worker` | Jobs and scheduler; healthy while the feed dispatch, every minute, has written its heartbeat file within 3 minutes |
 | `backup` (`backup` profile) | `postgres:18-alpine` | Nightly `pg_dump` to a volume |
 | `lgtm` (`observability` profile) | `grafana/otel-lgtm` | OTLP collector, Tempo, Loki, Prometheus, and Grafana on `127.0.0.1:3000`, with the dashboards in `docker/observability/dashboards` |
 
@@ -542,6 +542,7 @@ flowchart LR
 - Logs go to CloudWatch, kept a month. No CloudWatch metrics, alarms, or dashboards; the Operations page reports, and `ops.check` runs after each dispatch.
 - Tracing: functions run the ADOT layer (`adotLayerArn` in the deployment config) when the stage's `traceSampling` is above 0. The SDK samples that share of traces by trace id (`traceidratio`) and sends spans to X-Ray through Lambda's local endpoint; Lambda active tracing (not needed for these spans), Application Signals, and X-Ray Transaction Search are off. Only the `aws-lambda` and `aws-sdk` instrumentations run; undici is never instrumented, so feed requests carry no trace headers. Only our spans and AWS SDK calls are recorded: functions are bundled, so `pg` is not instrumented. Service names are `<prefix>-<function>`.
 - Alerts: `tick` publishes alert changes to the SNS topic `<prefix>-<stage>-alerts`; email subscriptions are added outside the stack (see `AGENTS.md`), so addresses stay out of the repository.
+- Pipeline results: the stage's pipeline stack owns the SNS topic `<prefix>-<stage>-pipelines`; CodeStar Notifications rules send each succeeded or failed run of the stage's deploy and release pipelines to it. Email subscriptions are added the same way as for alerts.
 - Budget: the `<prefix>-budget` stack holds one monthly AWS Budget (`budgetUsd` in the deployment config) over running the project: everything tagged `project=<prefix>`, both stages, except the CodeBuild and CodePipeline services. Whichever pipeline runs first creates it; later runs change nothing, and removing a stage leaves it in place. It notifies its own topic, `<prefix>-budget`, at 80% and 100% of actual spend and 100% of forecast. It counts only once the `project` cost-allocation tag is active, which only the paying account (an organization's management account) can do. Untaggable charges (X-Ray, tax) fall outside it.
 - Web traffic is same-origin through CloudFront. The API behaviour forwards `Origin` and `OPTIONS`, so the apps' CORS preflights reach the API; the pipeline smoke test sends one.
 

@@ -1,3 +1,6 @@
+import { writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { PgBoss } from 'pg-boss';
 import { IntervalScheduler } from '../adapters/interval-scheduler.ts';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
@@ -20,6 +23,11 @@ import { scheduleOpsFlush, trackRun } from './tracking.ts';
 const ARCHIVE_COMPACT_BUDGET_MS = 10 * 60 * 1000;
 /** How long one run may spend keeping kept entries' images. */
 const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
+/**
+ * Written after each successful feed dispatch, so it goes stale when the scheduler or the database
+ * stalls; `newses worker-health` (`docker/entrypoint.sh`) checks its age for Compose.
+ */
+const HEARTBEAT_FILE = join(tmpdir(), 'newses-worker-heartbeat');
 
 const { config, logger, pool, onShutdown } = createRuntime('worker');
 const db = createDb(pool);
@@ -85,6 +93,9 @@ const task = (name: string, intervalSeconds: number, run: () => Promise<void>) =
 task('feeds.dispatch', 60, async () => {
   const dispatched = await feeds.updater.dispatchDue();
   if (dispatched > 0) logger.debug({ dispatched }, 'Dispatched feed fetches');
+  await writeFile(HEARTBEAT_FILE, new Date().toISOString()).catch((err: unknown) => {
+    logger.warn({ err }, 'Could not write the worker heartbeat');
+  });
 });
 task('images.keep', 5 * 60, async () => {
   const kept = await feeds.images.keep(IMAGES_KEEP_BUDGET_MS);

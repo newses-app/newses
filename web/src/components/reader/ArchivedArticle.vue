@@ -11,6 +11,7 @@ import {
 } from '@mdi/js';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { withLazyImages } from '../../lib/article-html.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
 import { appServer } from '../../platform/index.ts';
@@ -27,7 +28,7 @@ const date = computed(() =>
 const title = computed(() => props.entry.title ?? t('entries.untitled'));
 const link = computed(() => safeUrl(props.entry.link));
 const content = computed(
-  () => props.entry.content && resolveContentUrls(props.entry.content, appServer()),
+  () => props.entry.content && withLazyImages(resolveContentUrls(props.entry.content, appServer())),
 );
 const enclosures = computed(() =>
   (props.entry.enclosures ?? []).filter((enclosure) => safeUrl(enclosure.url)),

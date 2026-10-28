@@ -567,6 +567,21 @@ describe('Release', () => {
       expect(document).not.toContain('newses-prod');
     }
   });
+
+  it("reports each run's result to the stage's pipelines topic", () => {
+    release.hasResourceProperties('AWS::CodeStarNotifications::NotificationRule', {
+      Name: 'newses-dev-release-results',
+      EventTypeIds: [
+        'codepipeline-pipeline-pipeline-execution-succeeded',
+        'codepipeline-pipeline-pipeline-execution-failed',
+      ],
+      Targets: [{ TargetType: 'SNS', TargetAddress: Match.anyValue() }],
+    });
+    const [rule] = Object.values(
+      release.findResources('AWS::CodeStarNotifications::NotificationRule'),
+    );
+    expect(JSON.stringify(rule)).toContain(':newses-dev-pipelines');
+  });
 });
 
 describe('PipelineStack', () => {
@@ -630,6 +645,25 @@ describe('PipelineStack', () => {
       { Description: Match.stringLikeRegexp('FileAsset') },
       1,
     );
+    // Each run's result goes to the stage's pipelines topic, which CodeStar Notifications may use.
+    template.hasResourceProperties('AWS::SNS::Topic', {
+      TopicName: `newses-${config.name}-pipelines`,
+    });
+    template.hasResourceProperties('AWS::SNS::TopicPolicy', {
+      PolicyDocument: {
+        Statement: [
+          Match.objectLike({ Principal: { Service: 'codestar-notifications.amazonaws.com' } }),
+        ],
+      },
+    });
+    template.hasResourceProperties('AWS::CodeStarNotifications::NotificationRule', {
+      Name: `newses-${config.name}-deploy-results`,
+      EventTypeIds: [
+        'codepipeline-pipeline-pipeline-execution-succeeded',
+        'codepipeline-pipeline-pipeline-execution-failed',
+      ],
+      Targets: [{ TargetType: 'SNS', TargetAddress: { Ref: Match.stringLikeRegexp('^Results') } }],
+    });
     const stackNames = root.node
       .findAll()
       .filter((c): c is Stack => Stack.isStack(c))

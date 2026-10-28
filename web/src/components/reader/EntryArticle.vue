@@ -26,6 +26,7 @@ import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useStoredImages } from '../../composables/useStoredImages.ts';
+import { withLazyImages } from '../../lib/article-html.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
 import { withStoredImages } from '../../lib/offline-content.ts';
@@ -80,7 +81,10 @@ const content = computed(() => {
   const html = showFull.value ? fullContent.value : props.entry.content;
   const storedOnly = connectivity.value !== 'online';
   return (
-    html && resolveContentUrls(withStoredImages(html, storedImages.value, storedOnly), appServer())
+    html &&
+    withLazyImages(
+      resolveContentUrls(withStoredImages(html, storedImages.value, storedOnly), appServer()),
+    )
   );
 });
 /** Offline, an article whose text was not downloaded shows its excerpt and says so. */

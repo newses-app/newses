@@ -3,6 +3,7 @@ import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import { PipelineType } from 'aws-cdk-lib/aws-codepipeline';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as pipelines from 'aws-cdk-lib/pipelines';
 import type { Construct } from 'constructs';
 import { BudgetStage } from './budget.ts';
@@ -16,6 +17,7 @@ import {
   resourceName,
 } from './deploy-config.ts';
 import { DatabaseStage } from './database.ts';
+import { notifyResults, pipelinesTopicName } from './pipeline-notifications.ts';
 import { NewsesStage } from './stage.ts';
 
 const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0;
@@ -23,7 +25,7 @@ const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_
 /**
  * Self-mutating pipeline: each push to the stage's branch runs `pnpm check`, builds the SPA,
  * bundles the Lambdas, deploys the shared database and the stage, smoke-tests it, and deploys the
- * shared project budget.
+ * shared project budget. Each run's result goes to the stage's pipelines topic.
  */
 export class PipelineStack extends Stack {
   constructor(
@@ -125,5 +127,10 @@ export class PipelineStack extends Stack {
     // Shared by both pipelines; deploying it after the stage keeps a clash between them (the
     // stack busy with the other pipeline's update) from holding up the stage. A retry clears it.
     pipeline.addStage(new BudgetStage(this, `${PROJECT}-budget`, { limitUsd: BUDGET_USD }));
+
+    // The release pipeline, in the stage, reports here too.
+    const results = new sns.Topic(this, 'Results', { topicName: pipelinesTopicName(stage) });
+    pipeline.buildPipeline();
+    notifyResults(pipeline.pipeline, results, resourceName(stage, 'deploy-results'));
   }
 }
