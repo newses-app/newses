@@ -236,9 +236,11 @@ export function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
 
-const ARROW_WIDGETS = '[role=menu], [role=listbox], [role=tablist], [role=radiogroup], .v-list';
+// Media players seek and change volume with the arrow keys.
+const ARROW_WIDGETS =
+  '[role=menu], [role=listbox], [role=tablist], [role=radiogroup], .v-list, audio, video';
 
-/** Whether a key event comes from a widget that moves focus with the arrow keys itself. */
+/** Whether a key event comes from a widget that uses the arrow keys itself. */
 export function usesArrowKeys(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest(ARROW_WIDGETS) !== null;
 }

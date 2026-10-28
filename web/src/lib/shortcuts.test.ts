@@ -111,4 +111,9 @@ describe('usesArrowKeys', () => {
     expect(usesArrowKeys(document.body)).toBe(false);
     expect(usesArrowKeys(null)).toBe(false);
   });
+
+  it('leaves the arrow keys to media players', () => {
+    expect(usesArrowKeys(document.createElement('audio'))).toBe(true);
+    expect(usesArrowKeys(document.createElement('video'))).toBe(true);
+  });
 });

@@ -161,7 +161,32 @@ describe('image proxy', () => {
       'https://a.example/3.webp',
       'https://a.example/4.jpg',
     ]);
-    expect(proxy.sources(html, 2)).toHaveLength(2);
+    expect(proxy.sources(html, [], 2)).toHaveLength(2);
+  });
+
+  it('lists image enclosures after the content, once, and within the limit', () => {
+    const enclosure = (url: string, mimeType: string | null) => ({
+      url,
+      mimeType,
+      length: null,
+      width: null,
+      height: null,
+      durationSeconds: null,
+    });
+    const html = '<img src="https://a.example/1.png">';
+    const enclosures = [
+      enclosure('https://a.example/show.mp3', 'audio/mpeg'),
+      enclosure('https://a.example/1.png', 'image/png'),
+      enclosure('https://a.example/2.jpg', null),
+    ];
+    const proxy = services.feeds.images;
+    expect(proxy.sources(html, enclosures)).toEqual([
+      { url: 'https://a.example/1.png', proxy: proxy.path('https://a.example/1.png') },
+      { url: 'https://a.example/2.jpg', proxy: proxy.path('https://a.example/2.jpg') },
+    ]);
+    expect(proxy.sources(html, enclosures, 1).map((i) => i.url)).toEqual([
+      'https://a.example/1.png',
+    ]);
   });
 
   it('does not fetch from a paused host', async () => {

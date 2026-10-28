@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRelative, hostOf, safeUrl } from './format.ts';
+import { formatDuration, formatRelative, hostOf, safeUrl } from './format.ts';
 
 describe('format', () => {
   const now = Date.parse('2026-10-04T12:00:00Z');
@@ -21,5 +21,11 @@ describe('format', () => {
     expect(safeUrl('data:text/html,<script>')).toBeNull();
     expect(safeUrl('/relative')).toBeNull();
     expect(safeUrl(null)).toBeNull();
+  });
+
+  it('formats running times', () => {
+    expect(formatDuration(0)).toBe('0:00');
+    expect(formatDuration(65)).toBe('1:05');
+    expect(formatDuration(3600 + 2 * 60 + 3.4)).toBe('1:02:03');
   });
 });

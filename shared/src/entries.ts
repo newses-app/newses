@@ -56,6 +56,8 @@ export const enclosureSchema = z.object({
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
   durationSeconds: z.number().int().nullable(),
+  /** An image enclosure's image proxy path, for users who proxy images. */
+  proxy: z.string().optional(),
 });
 
 export const entrySchema = z.object({

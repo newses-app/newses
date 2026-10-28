@@ -102,7 +102,7 @@ export const entryRoutes: FastifyPluginAsyncZod<
             fullContent,
             enclosures: e.enclosures ?? [],
             // Signed whatever the user's proxy preference: stored images never reach image hosts.
-            images: images.sources(`${content ?? ''}${fullContent ?? ''}`),
+            images: images.sources(`${content ?? ''}${fullContent ?? ''}`, e.enclosures),
           };
         }),
       };

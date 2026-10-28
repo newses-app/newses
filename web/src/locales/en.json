@@ -196,6 +196,7 @@
     "notFound": "This article is no longer available.",
     "noContent": "This article has no content; open the original to read it.",
     "attachments": "Attachments",
+    "attachedImage": "Attached image {n}",
     "star": "Star",
     "unstar": "Unstar",
     "publish": "Publish",

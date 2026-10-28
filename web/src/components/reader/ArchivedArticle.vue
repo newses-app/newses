@@ -5,7 +5,6 @@ import {
   mdiLabelOutline,
   mdiNotePlusOutline,
   mdiOpenInNew,
-  mdiPaperclip,
   mdiShareVariantOutline,
   mdiStarOutline,
 } from '@mdi/js';
@@ -15,6 +14,7 @@ import { withLazyImages } from '../../lib/article-html.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
 import { appServer } from '../../platform/index.ts';
+import EntryEnclosures from './EntryEnclosures.vue';
 import FeedIcon from './FeedIcon.vue';
 
 const props = defineProps<{ entry: ArchivedEntry; restoring: boolean }>();
@@ -29,9 +29,6 @@ const title = computed(() => props.entry.title ?? t('entries.untitled'));
 const link = computed(() => safeUrl(props.entry.link));
 const content = computed(
   () => props.entry.content && withLazyImages(resolveContentUrls(props.entry.content, appServer())),
-);
-const enclosures = computed(() =>
-  (props.entry.enclosures ?? []).filter((enclosure) => safeUrl(enclosure.url)),
 );
 </script>
 
@@ -110,20 +107,7 @@ const enclosures = computed(() =>
     <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-else-if="content" class="article-content" v-html="content" />
     <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
-    <v-list v-if="enclosures.length" density="compact" class="mt-4">
-      <v-list-subheader>{{ t('entries.attachments') }}</v-list-subheader>
-      <!-- Vuetify gives link items role=link, so each sits in its own listitem. -->
-      <div v-for="enclosure in enclosures" :key="enclosure.url" role="listitem">
-        <v-list-item
-          :href="enclosure.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          :prepend-icon="mdiPaperclip"
-          :title="enclosure.url.split('/').pop() || enclosure.url"
-          :subtitle="enclosure.mimeType ?? ''"
-        />
-      </div>
-    </v-list>
+    <EntryEnclosures :enclosures="entry.enclosures ?? []" :content="entry.content" />
   </article>
 </template>
 

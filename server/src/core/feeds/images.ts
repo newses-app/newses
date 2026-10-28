@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { type Enclosure, enclosureKind } from '@newses/shared';
 import { eq, sql } from 'drizzle-orm';
 import sanitizeHtml from 'sanitize-html';
 import type { Db } from '../../db/client.ts';
@@ -110,15 +111,18 @@ export class ImageProxy {
   }
 
   /**
-   * The http(s) images in sanitised entry HTML, each with its proxy path, in document order and
-   * at most `limit`; for clients that store articles' images.
+   * The http(s) images in sanitised entry HTML, each with its proxy path, in document order, then
+   * the entry's image enclosures, at most `limit`; for clients that store articles' images.
    */
-  sources(html: string, limit = MAX_SOURCES): ImageSource[] {
+  sources(html: string, enclosures: readonly Enclosure[] = [], limit = MAX_SOURCES): ImageSource[] {
     const urls = new Set<string>();
-    mapImages(html, (url) => {
+    const add = (url: string) => {
       if (urls.size < limit && httpUrl(url)) urls.add(url);
       return url;
-    });
+    };
+    mapImages(html, add);
+    for (const enclosure of enclosures)
+      if (enclosureKind(enclosure) === 'image') add(enclosure.url);
     return [...urls].map((url) => ({ url, proxy: this.path(url) }));
   }
 

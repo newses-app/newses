@@ -9,7 +9,6 @@ import {
   mdiNotePlusOutline,
   mdiNoteTextOutline,
   mdiOpenInNew,
-  mdiPaperclip,
   mdiScoreboardOutline,
   mdiShareVariant,
   mdiShareVariantOutline,
@@ -36,6 +35,7 @@ import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
 import { appServer } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
+import EntryEnclosures from './EntryEnclosures.vue';
 import FeedIcon from './FeedIcon.vue';
 import ScoreBadge from './ScoreBadge.vue';
 
@@ -55,9 +55,6 @@ const date = computed(() =>
 );
 const title = computed(() => props.entry.title ?? t('entries.untitled'));
 const link = computed(() => safeUrl(props.entry.link));
-const enclosures = computed(() =>
-  (props.entry.enclosures ?? []).filter((enclosure) => safeUrl(enclosure.url)),
-);
 
 // Full text: shown first for subscriptions opted in to it, else on request.
 const subscriptions = useSubscriptions();
@@ -77,8 +74,9 @@ const showFull = computed(
 // Images stored on the device show without the network, online too; the HTML waits a moment for
 // them, so the browser does not ask for images it has. Without a connection, the others are left out.
 const { images: storedImages, ready: imagesReady } = useStoredImages(() => props.entry.id);
+const shownHtml = computed(() => (showFull.value ? fullContent.value : props.entry.content));
 const content = computed(() => {
-  const html = showFull.value ? fullContent.value : props.entry.content;
+  const html = shownHtml.value;
   const storedOnly = connectivity.value !== 'online';
   return (
     html &&
@@ -267,20 +265,11 @@ async function toggleFullText() {
     <p v-if="notStored" class="text-body-small text-medium-emphasis">
       {{ t('offline.notStored') }}
     </p>
-    <v-list v-if="enclosures.length" density="compact" class="mt-4">
-      <v-list-subheader>{{ t('entries.attachments') }}</v-list-subheader>
-      <!-- Vuetify gives link items role=link, so each sits in its own listitem. -->
-      <div v-for="enclosure in enclosures" :key="enclosure.url" role="listitem">
-        <v-list-item
-          :href="enclosure.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          :prepend-icon="mdiPaperclip"
-          :title="enclosure.url.split('/').pop() || enclosure.url"
-          :subtitle="enclosure.mimeType ?? ''"
-        />
-      </div>
-    </v-list>
+    <EntryEnclosures
+      :enclosures="entry.enclosures ?? []"
+      :content="shownHtml"
+      :stored="storedImages"
+    />
   </article>
 </template>
 
