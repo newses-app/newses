@@ -63,12 +63,12 @@ export class NewsesStage extends Stage {
       originHeader: this.params.originHeader,
       ...(props.webDir !== undefined && { webDir: props.webDir }),
     });
-    // Publishes into the Edge stack's downloads bucket, which it names rather than references.
+    // Publishes into the Edge stack's downloads bucket, which it names rather than references. It
+    // deploys alongside the other stacks: the bucket is only needed once a tag runs the pipeline.
     this.release = new ReleaseStack(this, 'Release', {
       env,
       stackName: resourceName(stage, 'release'),
       stage,
     });
-    this.release.addStackDependency(this.edge);
   }
 }

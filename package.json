@@ -12,7 +12,9 @@
     "node": ">=24"
   },
   "scripts": {
-    "check": "pnpm lint && pnpm typecheck && pnpm format:check && pnpm test",
+    "check": "pnpm run \"/^check:/\"",
+    "check:lint-format": "pnpm lint && pnpm format:check",
+    "check:typecheck-test": "pnpm typecheck && pnpm test",
     "lint": "eslint .",
     "typecheck": "tsc && pnpm -r typecheck",
     "format": "prettier --write .",

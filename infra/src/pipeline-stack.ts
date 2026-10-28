@@ -24,8 +24,8 @@ const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_
 
 /**
  * Self-mutating pipeline: each push to the stage's branch runs `pnpm check`, builds the SPA,
- * bundles the Lambdas, deploys the shared database and the stage, smoke-tests it, and deploys the
- * shared project budget. Each run's result goes to the stage's pipelines topic.
+ * bundles the Lambdas, deploys the shared database, then the stage and the shared project budget
+ * side by side, and smoke-tests the stage. Each run's result goes to the stage's pipelines topic.
  */
 export class PipelineStack extends Stack {
   constructor(
@@ -54,6 +54,9 @@ export class PipelineStack extends Stack {
       pipelineName: resourceName(stage),
       // One project publishes every file asset, instead of one project per asset.
       publishAssetsInParallel: false,
+      // One deploy action per stack: preparing a change set first costs about 40 s a stack, even
+      // when nothing changed, and nothing reviews the change sets.
+      useChangeSets: false,
       pipelineType: PipelineType.V2,
       crossAccountKeys: false,
       synth: new pipelines.CodeBuildStep('Synth', {
@@ -106,7 +109,11 @@ export class PipelineStack extends Stack {
     // Shared by both pipelines, and needed by the stage; a clash between the pipelines (the stack
     // busy with the other pipeline's update) fails this run, and a retry clears it.
     pipeline.addStage(new DatabaseStage(this, `${PROJECT}-db`));
-    pipeline.addStage(
+    // Shared by both pipelines, and deployed alongside the stage, which does not need it. It only
+    // changes with its config, so a clash with the other pipeline's run is unlikely; a retry clears it.
+    const wave = pipeline.addWave(resourceName(stage));
+    wave.addStage(new BudgetStage(this, `${PROJECT}-budget`, { limitUsd: BUDGET_USD }));
+    wave.addStage(
       new NewsesStage(this, resourceName(stage), {
         stage,
         webDir: props.webDir,
@@ -124,9 +131,6 @@ export class PipelineStack extends Stack {
         ],
       },
     );
-    // Shared by both pipelines; deploying it after the stage keeps a clash between them (the
-    // stack busy with the other pipeline's update) from holding up the stage. A retry clears it.
-    pipeline.addStage(new BudgetStage(this, `${PROJECT}-budget`, { limitUsd: BUDGET_USD }));
 
     // The release pipeline, in the stage, reports here too.
     const results = new sns.Topic(this, 'Results', { topicName: pipelinesTopicName(stage) });

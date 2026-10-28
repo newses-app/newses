@@ -2,6 +2,7 @@ import { Aspects, Stack, type StackProps, Stage, type StageProps, Tags } from 'a
 import * as budgets from 'aws-cdk-lib/aws-budgets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cxapi from 'aws-cdk-lib/cx-api';
 import type { Construct } from 'constructs';
 import { ACCOUNT, PROJECT, REGION } from './deploy-config.ts';
 import { ManagedLogGroups } from './managed-log-groups.ts';
@@ -75,6 +76,8 @@ export class BudgetStage extends Stage {
 
   constructor(scope: Construct, id: string, props: StageProps & { limitUsd: number }) {
     super(scope, id, props);
+    // Construct paths name the pipeline, so with them each pipeline's run would update the stack.
+    this.node.setContext(cxapi.PATH_METADATA_ENABLE_CONTEXT, false);
     Tags.of(this).add('project', PROJECT);
     Aspects.of(this).add(new ManagedLogGroups());
     this.budget = new BudgetStack(this, 'Budget', {

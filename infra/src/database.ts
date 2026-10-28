@@ -10,6 +10,7 @@ import {
   Tags,
 } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as cxapi from 'aws-cdk-lib/cx-api';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
@@ -28,7 +29,7 @@ const NAME = `${PROJECT}-db`;
 
 /**
  * The master password, in a stack of its own: CloudFormation resolves `ssm-secure` references
- * when it creates a change set, so the parameter must exist before `DatabaseStack` is prepared.
+ * when a deployment starts, so the parameter must exist before `DatabaseStack` deploys.
  */
 export class DatabaseParamsStack extends Stack {
   readonly masterPassword: GeneratedParameter;
@@ -139,6 +140,8 @@ export class DatabaseStage extends Stage {
 
   constructor(scope: Construct, id: string, props?: StageProps) {
     super(scope, id, props);
+    // Construct paths name the pipeline, so with them each pipeline's run would update the stacks.
+    this.node.setContext(cxapi.PATH_METADATA_ENABLE_CONTEXT, false);
     const env = { account: ACCOUNT, region: REGION };
     Tags.of(this).add('project', PROJECT);
     Aspects.of(this).add(new ManagedLogGroups());

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as cxapi from 'aws-cdk-lib/cx-api';
 import { describe, expect, it } from 'vitest';
 import { BUILD_SERVICES } from './budget.ts';
 import {
@@ -19,7 +20,8 @@ import { PipelineStack } from './pipeline-stack.ts';
 import { NewsesStage } from './stage.ts';
 
 // Skips Lambda bundling, which needs esbuild and network access.
-const newApp = () => new App({ context: { 'aws:cdk:bundling-stacks': [] } });
+const newApp = (context: Record<string, unknown> = {}) =>
+  new App({ context: { 'aws:cdk:bundling-stacks': [], ...context } });
 const webDir = mkdtempSync(join(tmpdir(), 'web-'));
 writeFileSync(join(webDir, 'index.html'), '<!doctype html>');
 
@@ -102,11 +104,12 @@ describe('NewsesStage', () => {
 
 /**
  * A stack shared by both pipelines, as each pipeline synthesises it. With bundling skipped, asset
- * hashes come from the construct path; real synthesis hashes the bundle, the same in both.
+ * hashes come from the construct path; real synthesis hashes the bundle, the same in both. Path
+ * metadata is on, as the CDK CLI synthesises.
  */
 const sharedStacks = (stackName: string) =>
   STAGES.map((config) => {
-    const root = newApp();
+    const root = newApp({ [cxapi.PATH_METADATA_ENABLE_CONTEXT]: true });
     new PipelineStack(root, `newses-${config.name}-pipeline`, {
       env: { account: ACCOUNT, region: REGION },
       stage: config,
@@ -604,14 +607,37 @@ describe('PipelineStack', () => {
       ]),
     });
     const [codePipeline] = Object.values(template.findResources('AWS::CodePipeline::Pipeline')) as {
-      Properties: { Stages: { Name: string }[] };
+      Properties: { Stages: { Name: string; Actions: { Name: string; RunOrder: number }[] }[] };
     }[];
-    const stageNames = codePipeline?.Properties.Stages.map((s) => s.Name) ?? [];
+    const stages = codePipeline?.Properties.Stages ?? [];
+    const stageNames = stages.map((s) => s.Name);
     // The stage's functions read the shared database's address when they deploy.
     expect(stageNames.indexOf('newses-db')).toBeGreaterThan(-1);
     expect(stageNames.indexOf('newses-db')).toBeLessThan(
       stageNames.indexOf(`newses-${config.name}`),
     );
+    // One action per stack, without change sets; the budget and release stacks deploy first,
+    // alongside the stage's params and data, and the smoke test runs after the edge.
+    expect(
+      stages
+        .flatMap((s) => s.Actions)
+        .map((a) => a.Name)
+        .filter((name) => name.endsWith('.Prepare')),
+    ).toEqual([]);
+    const runOrders = Object.fromEntries(
+      stages
+        .find((s) => s.Name === `newses-${config.name}`)
+        ?.Actions.map((a) => [a.Name, a.RunOrder]) ?? [],
+    );
+    expect(runOrders).toEqual({
+      'newses-budget.newses-budget.Deploy': 1,
+      [`newses-${config.name}.params.Deploy`]: 1,
+      [`newses-${config.name}.data.Deploy`]: 1,
+      [`newses-${config.name}.release.Deploy`]: 1,
+      [`newses-${config.name}.app.Deploy`]: 2,
+      [`newses-${config.name}.edge.Deploy`]: 3,
+      [`newses-${config.name}.SmokeTest`]: 4,
+    });
     // Inline buildspecs are JSON; the asset publishing project names a buildspec file instead.
     const buildSpecs = Object.values(template.findResources('AWS::CodeBuild::Project'))
       .map(

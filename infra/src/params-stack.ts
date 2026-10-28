@@ -6,7 +6,7 @@ import { GeneratedParameter } from './generated-parameter.ts';
 
 /**
  * Generated credentials, in a stack of their own: CloudFormation resolves `ssm-secure`
- * references when it creates a change set, so the parameters must exist before `Data` is prepared.
+ * references when a deployment starts, so the parameters must exist before `Data` deploys.
  */
 export class ParamsStack extends Stack {
   readonly dbPassword: GeneratedParameter;
