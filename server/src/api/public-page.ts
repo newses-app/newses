@@ -1,5 +1,8 @@
 import type { Entry } from '@newses/shared';
 import { VIDEO_FRAME_SOURCES } from '@newses/shared/web-csp';
+import en from '../locales/en.json' with { type: 'json' };
+
+const LOCALE = 'en';
 
 /**
  * Policy for public pages: no scripts at all, the entry's images, media, and embedded videos,
@@ -47,7 +50,7 @@ const STYLE = `
 
 function page(title: string, body: string): string {
   return `<!doctype html>
-<html lang="en">
+<html lang="${LOCALE}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -67,7 +70,7 @@ ${body}
 
 /** A shared entry as a standalone page. `content` is sanitised HTML, safe to embed. */
 export function sharedEntryPage(entry: Entry): string {
-  const title = entry.title ?? '(untitled)';
+  const title = entry.title ?? en.untitled;
   const date = entry.publishedAt ?? entry.sortAt;
   const heading = isHttp(entry.link)
     ? `<a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">${escapeHtml(title)}</a>`
@@ -76,7 +79,7 @@ export function sharedEntryPage(entry: Entry): string {
     entry.feedTitle && escapeHtml(entry.feedTitle),
     entry.author && escapeHtml(entry.author),
     `<time datetime="${escapeHtml(date)}">${escapeHtml(
-      new Date(date).toLocaleDateString('en', { dateStyle: 'long', timeZone: 'UTC' }),
+      new Date(date).toLocaleDateString(LOCALE, { dateStyle: 'long', timeZone: 'UTC' }),
     )}</time>`,
   ].filter(Boolean);
   const attachments = (entry.enclosures ?? []).filter((e) => isHttp(e.url));
@@ -90,7 +93,7 @@ export function sharedEntryPage(entry: Entry): string {
 ${entry.content ?? `<p>${escapeHtml(entry.excerpt ?? '')}</p>`}
 ${
   attachments.length
-    ? `<h2>Attachments</h2>\n<ul>${attachments
+    ? `<h2>${escapeHtml(en.attachments)}</h2>\n<ul>${attachments
         .map(
           (e) =>
             `<li><a href="${escapeHtml(e.url)}" rel="noopener noreferrer">${escapeHtml(
@@ -101,13 +104,13 @@ ${
     : ''
 }
 </article>
-${isHttp(entry.link) ? `<p><a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">Read the original</a></p>` : ''}
-<footer>Shared from Newses.</footer>`,
+${isHttp(entry.link) ? `<p><a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">${escapeHtml(en.readOriginal)}</a></p>` : ''}
+<footer>${escapeHtml(en.sharedFrom)}</footer>`,
   );
 }
 
 export const notFoundPage = () =>
   page(
-    'Not available',
-    '<h1>Not available</h1>\n<p>This link does not exist or is no longer shared.</p>',
+    en.notAvailable,
+    `<h1>${escapeHtml(en.notAvailable)}</h1>\n<p>${escapeHtml(en.notAvailableText)}</p>`,
   );

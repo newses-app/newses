@@ -3,7 +3,8 @@ import { MAX_PAGE_TEXT_LENGTH, MAX_PAGE_TITLE_LENGTH } from '@newses/shared/clie
 import { useQueryClient } from '@tanstack/vue-query';
 import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { COUNTERS_KEY } from '../../composables/useCounters.ts';
 import { ENTRIES_KEY } from '../../composables/useEntries.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
@@ -12,6 +13,7 @@ import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
 const { t } = useI18n();
+const errorText = useErrorText();
 const queryClient = useQueryClient();
 const { online, whenOnline } = useOnlineOnly();
 
@@ -56,7 +58,7 @@ async function publish() {
     ui.notify(t('publish.done', { title: entry.title ?? entry.link ?? '' }));
     if (closeWindow) window.close();
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : t('errors.generic');
+    error.value = errorText(err);
   } finally {
     busy.value = false;
   }

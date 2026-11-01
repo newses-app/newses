@@ -11,6 +11,7 @@ import { assertMaxLength, DomainError, ThrottledError } from '../errors.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import { decodeBody } from './decode.ts';
 import { discoverFeeds, type FeedCandidate, looksLikeHtml } from './discover.ts';
+import { describeFetchFailure } from './fetch-failure.ts';
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
 import type { Ingester } from './ingest.ts';
 import { FeedParseError, type ParsedFeed, parseFeed } from './parse.ts';
@@ -214,7 +215,10 @@ export class SubscriptionService {
       }
       if (candidates.length > 1) return { kind: 'choose', candidates };
     }
-    throw new DomainError('feed_not_found', `No feed found at ${url}`);
+    throw new DomainError('feed_not_found', `No feed found at ${url}`, {
+      reason: 'no_feed_found',
+      params: { url },
+    });
   }
 
   async #sourceByUrl(url: string): Promise<FeedSourceRow | undefined> {
@@ -258,7 +262,9 @@ export class SubscriptionService {
       return { subscription, source };
     } catch (err) {
       if (isUniqueViolation(err))
-        throw new DomainError('conflict', 'Already subscribed to this feed');
+        throw new DomainError('conflict', 'Already subscribed to this feed', {
+          reason: 'already_subscribed',
+        });
       throw err;
     }
   }
@@ -272,31 +278,21 @@ export class SubscriptionService {
   }
 }
 
-/**
- * Says why a URL could not be subscribed without echoing network errors, which would let users
- * probe hosts and ports through the server.
- */
+/** Why a URL could not be subscribed. */
 function fetchFailure(url: string, err: unknown): DomainError {
   if (!(err instanceof FetchError))
-    return new DomainError('fetch_failed', `Could not fetch ${url}`);
+    return new DomainError('fetch_failed', `Could not fetch ${url}`, {
+      reason: 'fetch_network',
+      params: { url },
+    });
+  const { message, detail } = describeFetchFailure(url, err);
   switch (err.code) {
     case 'invalid_url':
-      return new DomainError('invalid_input', `Not a valid URL: ${url}`);
     case 'blocked_address':
-      return new DomainError('invalid_input', `${url} is on a private network`);
-    case 'http_status':
-      return new DomainError('fetch_failed', `${url} returned HTTP ${String(err.status)}`);
-    case 'too_large':
-      return new DomainError('fetch_failed', `${url} is too large`);
-    case 'too_many_redirects':
-      return new DomainError('fetch_failed', `${url} redirects too many times`);
-    case 'timeout':
-    case 'network':
-      return new DomainError('fetch_failed', `Could not connect to ${url}`);
+      return new DomainError('invalid_input', message, detail);
     case 'host_blocked':
-      return new ThrottledError(
-        err.retryAfterSeconds ?? 60,
-        'The site asked to wait before more requests',
-      );
+      return new ThrottledError(err.retryAfterSeconds ?? 60, message, detail);
+    default:
+      return new DomainError('fetch_failed', message, detail);
   }
 }

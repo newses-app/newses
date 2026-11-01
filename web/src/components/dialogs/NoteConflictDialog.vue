@@ -3,13 +3,15 @@ import type { Entry } from '@newses/shared';
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useEntryActions } from '../../composables/useEntries.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { noteConflicts } from '../../offline/status.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const actions = useEntryActions();
@@ -42,7 +44,7 @@ async function keepMine() {
       queryClient.getQueryData<Entry>(['entry', current.id]) ?? (await api.entries.get(current.id));
     await actions.setNote({ ...entry, note: current.theirs }, current.mine);
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   }
 }
 

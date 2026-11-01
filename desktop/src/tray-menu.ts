@@ -1,6 +1,7 @@
 import type { ProfileList } from '@newses/shared';
 import { profileLabel } from '@newses/shared/profiles';
 import type { MenuItemConstructorOptions } from 'electron';
+import { t } from './i18n.ts';
 
 export interface TrayActions {
   open: () => void;
@@ -16,14 +17,16 @@ export function trayMenu(
   actions: TrayActions,
 ): MenuItemConstructorOptions[] {
   const menu: MenuItemConstructorOptions[] = [
-    { label: 'Open', click: actions.open },
-    { label: 'Check now', click: actions.checkNow },
+    { label: t('open'), click: actions.open },
+    { label: t('checkNow'), click: actions.checkNow },
   ];
   if (profiles.length > 1)
     menu.push({
-      label: 'Profiles',
+      label: t('profiles'),
       submenu: profiles.map((profile) => ({
-        label: profile.signedIn ? profileLabel(profile) : `${profileLabel(profile)} (signed out)`,
+        label: profile.signedIn
+          ? profileLabel(profile)
+          : t('signedOut', { name: profileLabel(profile) }),
         type: 'radio',
         checked: profile.id === active,
         click: () => {
@@ -31,6 +34,6 @@ export function trayMenu(
         },
       })),
     });
-  menu.push({ type: 'separator' }, { label: 'Quit', click: actions.quit });
+  menu.push({ type: 'separator' }, { label: t('quit'), click: actions.quit });
   return menu;
 }

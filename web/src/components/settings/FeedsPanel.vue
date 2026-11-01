@@ -13,7 +13,8 @@ import {
 } from '@mdi/js';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import FeedErrorNote from '../feeds/FeedErrorNote.vue';
 import { useCategories, useFeedsRefresh, useSubscriptions } from '../../composables/useFeeds.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
@@ -27,6 +28,7 @@ import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 
 const exporting = ref(false);
@@ -37,7 +39,7 @@ async function exportOpml() {
     const data = await api.opml.export();
     await bridge.saveFile({ name: 'subscriptions.opml', type: 'text/x-opml', data });
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     exporting.value = false;
   }
@@ -68,7 +70,7 @@ async function run(work: () => Promise<unknown>, done?: string) {
     await work();
     if (done) ui.notify(done);
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     await refreshFeeds();
   }
@@ -178,7 +180,7 @@ async function importOpml(event: Event) {
       }),
     );
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     importing.value = false;
     if (fileInput.value) fileInput.value.value = '';

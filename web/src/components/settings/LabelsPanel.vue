@@ -3,7 +3,7 @@ import type { Label } from '@newses/shared';
 import { mdiDelete, mdiLabelOutline, mdiPencil, mdiPlus } from '@mdi/js';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useLabelActions, useLabels } from '../../composables/useLabels.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { contrastRatio, MIN_CONTRAST } from '../../lib/appearance.ts';
@@ -13,6 +13,7 @@ import LabelChip from '../labels/LabelChip.vue';
 import { isTemporary } from '../../lib/offline-resources.ts';
 
 const { t } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const labels = useLabels();
 const actions = useLabelActions();
@@ -55,7 +56,7 @@ async function run(work: () => Promise<unknown>) {
     await work();
     return true;
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
     return false;
   } finally {
     busy.value = false;
@@ -148,7 +149,7 @@ async function deleteLabel(label: Label) {
                 "
                 @click="Object.assign(editing, colors)"
               >
-                Aa
+                {{ t('labels.sample') }}
               </button>
             </div>
             <v-row dense>
@@ -160,7 +161,7 @@ async function deleteLabel(label: Label) {
               </v-col>
             </v-row>
             <div class="d-flex align-center ga-2">
-              <span class="text-body-medium">{{ t('labels.preview') }}:</span>
+              <span class="text-body-medium">{{ t('labels.previewWith') }}</span>
               <LabelChip :label="preview" />
             </div>
             <v-alert

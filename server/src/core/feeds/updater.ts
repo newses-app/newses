@@ -142,6 +142,7 @@ export class FeedUpdater {
       throw new ThrottledError(
         Math.ceil((source.blockedUntil.getTime() - now) / 1000),
         'The feed host asked not to be fetched again yet',
+        { reason: 'feed_host_paused' },
       );
     }
     const recent =

@@ -231,7 +231,7 @@ Archive:
 Fetching untrusted URLs (`HttpFetcher`):
 - http(s) only, at most 5 redirects, a 20 s timeout, and a 10 MB body limit (lower per request where less is needed); downloads stop once the limit is exceeded. Responses are decompressed.
 - Private, loopback, link-local, multicast, documentation, and IPv4-embedding IPv6 (NAT64, 6to4, Teredo) addresses are refused unless allowed by `FETCH_ALLOW_PRIVATE_NETWORKS`. The check runs on the resolved address at connect time, which also covers redirects and DNS rebinding.
-- Subscribe errors name the failure class (private network, HTTP status, too large, unreachable), never the network error text.
+- Errors from subscribing and from fetching a page name the failure class (private network, HTTP status, too large, unreachable), never the network error text.
 
 Subscription lifecycle:
 - Subscribing normalises the URL. An existing feed source is reused without fetching. Otherwise the URL is fetched and must parse as a feed, or be an HTML page whose `<link rel="alternate">` names exactly one feed; several feeds are returned for the user to choose.
@@ -401,6 +401,7 @@ Admins:
 - Names, titles, notes, and addresses have one set of length limits (`shared/src/limits.ts`). The schemas check them, and the services check them again, so the compatibility APIs and OPML import hold to them too. Titles a feed gives itself are cut to the limit instead.
 - `/api/v1` responses over 1 KB are compressed for clients that accept it (Brotli at quality 4, else gzip), except event streams and images. On AWS, CloudFront's API behaviour does not cache, so it forwards `Accept-Encoding` to the API and passes compressed responses through, and the Lambda adapter returns them base64-encoded, which keeps large sync and content pages under Lambda's 6 MB response limit.
 - CORS on `/api/v1/*` allows the app origins `app://newses` (Electron) and `https://localhost` (Capacitor Android): requests with `Authorization` and `Content-Type`, `Retry-After` exposed, preflights cached for a day. Credentials are never allowed, so apps use bearer tokens and cookie sessions stay same-origin. Other origins get no CORS headers. CORS is applied before authentication, so apps can read errors too.
+- Errors are `{ error, message }`: a code and English text. Failures the web app shows, whose code does not say enough, add `reason` (`ERROR_REASONS` in `shared`) and its `params`. The web app shows the reason's text, else the code's, else `message`.
 - Entries are identified by `user_entries.id`. A headline list selects one stream: a subscription, a category (with subcategories; `0` is uncategorised), a label, a tag, or a special feed (`all`, `fresh`, `starred`, `published`, `recentlyRead`).
 - Fresh: unread entries with `sort_at` within the user's `freshMaxAgeHours`. Recently read: entries read within the last 7 days, in reading order.
 - All and Fresh, and a search or catch-up without a stream, leave out entries of subscriptions hidden from All (`hideFromAll`), as do their unread counts; the compatibility APIs' All, Fresh, and reading list follow them.

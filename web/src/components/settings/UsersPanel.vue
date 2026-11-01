@@ -5,12 +5,14 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const { session } = useSession();
@@ -22,7 +24,8 @@ async function run(work: () => Promise<unknown>, done?: string) {
     if (done) ui.notify(done);
     return true;
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    const invalid = error instanceof ApiError && error.code === 'validation';
+    ui.notify(invalid ? t('users.invalid') : errorText(error), true);
     return false;
   } finally {
     await queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });

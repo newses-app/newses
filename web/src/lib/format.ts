@@ -17,6 +17,11 @@ export function formatRelative(iso: string, locale: string, now = Date.now()): s
   return format.format(0, 'minute');
 }
 
+/** Items as the locale lists them: "a, b, c" in English. */
+export function formatList(items: string[], locale: string): string {
+  return new Intl.ListFormat(locale, { style: 'short', type: 'unit' }).format(items);
+}
+
 export function formatDateTime(iso: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(iso),

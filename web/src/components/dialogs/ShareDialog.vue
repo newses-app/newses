@@ -2,7 +2,7 @@
 import { mdiOpenInNew } from '@mdi/js';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useEntryActions } from '../../composables/useEntries.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { shareUrl } from '../../lib/sharing.ts';
@@ -11,6 +11,7 @@ import CopyField from '../sharing/CopyField.vue';
 
 const ui = useUiStore();
 const { t } = useI18n();
+const errorText = useErrorText();
 const actions = useEntryActions();
 
 const open = computed({
@@ -28,7 +29,7 @@ async function run(work: () => Promise<void>) {
   try {
     await work();
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     busy.value = false;
   }

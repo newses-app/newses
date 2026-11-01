@@ -48,7 +48,10 @@ describe('ThemeService', () => {
 
   it('rejects a second theme with the same name, ignoring case, per user', async () => {
     await service.create(alice, theme('Dusk'));
-    await expect(service.create(alice, theme('DUSK'))).rejects.toMatchObject({ code: 'conflict' });
+    await expect(service.create(alice, theme('DUSK'))).rejects.toMatchObject({
+      code: 'conflict',
+      detail: { reason: 'theme_name_taken', params: { name: 'DUSK' } },
+    });
     await expect(service.create(bob, theme('Dusk'))).resolves.toBeDefined();
     const other = await service.create(alice, theme('Dawn'));
     await expect(service.update(alice, other.theme.id, { name: 'dusk' })).rejects.toMatchObject({

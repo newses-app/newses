@@ -55,6 +55,7 @@ function readOutlines(outlines: Outline[]) {
       throw new DomainError(
         'invalid_input',
         `Folders are nested more than ${String(MAX_OPML_DEPTH)} deep`,
+        { reason: 'opml_too_deep', params: { max: MAX_OPML_DEPTH } },
       );
     for (const [index, outline] of items.entries()) {
       if (parent === null && TTRSS_SECTIONS.has(outline.text ?? '')) continue;
@@ -62,6 +63,7 @@ function readOutlines(outlines: Outline[]) {
         throw new DomainError(
           'invalid_input',
           `At most ${String(MAX_OPML_OUTLINES)} feeds and folders can be imported at once`,
+          { reason: 'opml_too_many', params: { max: MAX_OPML_OUTLINES } },
         );
       const title = (outline.title ?? outline.text ?? '').trim();
       if (outline.xmlUrl) {
@@ -127,7 +129,9 @@ export class OpmlService {
     try {
       outlines = parseOpml(xml).body?.outlines ?? [];
     } catch {
-      throw new DomainError('invalid_input', 'Not a valid OPML document');
+      throw new DomainError('invalid_input', 'Not a valid OPML document', {
+        reason: 'opml_invalid',
+      });
     }
     const { folders, feeds, invalid } = readOutlines(outlines);
     const result: OpmlImportResult = {

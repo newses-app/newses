@@ -586,7 +586,9 @@ export class EntryService {
     if (updated.length > 0) return;
     const [exists] = await this.#db.select({ id: userEntries.id }).from(userEntries).where(mine);
     if (!exists) throw new DomainError('not_found', 'Entry not found');
-    throw new DomainError('conflict', 'The note was changed on another device');
+    throw new DomainError('conflict', 'The note was changed on another device', {
+      reason: 'note_changed',
+    });
   }
 
   /** Shares one of the user's entries at a public link; returns its id, existing or new. */

@@ -125,7 +125,10 @@ async function clear() {
   const pending = outboxPending.value;
   const text =
     pending > 0
-      ? `${t('offline.clearText')} ${t('offline.clearPending', { n: pending }, pending)}`
+      ? t('common.sentences', {
+          first: t('offline.clearText'),
+          second: t('offline.clearPending', { n: pending }, pending),
+        })
       : t('offline.clearText');
   if (!(await ui.confirm(t('offline.clearTitle'), text, t('offline.clear')))) return;
   await clearStore();

@@ -76,10 +76,58 @@
     "on": "On",
     "off": "Off",
     "first": "First",
-    "after": "After {name}"
+    "after": "After {name}",
+    "groupSeparator": "; ",
+    "sentences": "{first} {second}"
   },
   "errors": {
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "code": {
+      "csrf": "Your session needs refreshing. Reload the page and try again.",
+      "forbidden": "You don't have permission to do that.",
+      "http_error": "The server couldn't complete that. Please try again.",
+      "internal": "Something went wrong on the server. Please try again.",
+      "last_admin": "At least one active admin must remain.",
+      "not_found": "That no longer exists.",
+      "password_change_required": "Change your password to continue.",
+      "password_expired": "Your password has expired. Ask an admin for a new one.",
+      "throttled": "Too many requests. Try again shortly.",
+      "unauthenticated": "You've been signed out. Sign in again.",
+      "validation": "Some of that isn't valid. Check it and try again."
+    },
+    "reason": {
+      "already_subscribed": "You're already subscribed to this feed.",
+      "app_password_limit": "You can have at most {max} app passwords.",
+      "article_no_address": "This article has no web address.",
+      "body_too_large": "That's too large to send.",
+      "category_into_itself": "A category can't be moved into itself.",
+      "category_name_taken": "A category named \"{name}\" already exists there.",
+      "feed_host_paused": "The feed's host asked not to be fetched again yet.",
+      "fetch_blocked_address": "{url} is on a private network.",
+      "fetch_host_blocked": "The site asked to wait before more requests.",
+      "fetch_http_status": "{url} returned HTTP {status}.",
+      "fetch_invalid_url": "{url} isn't a valid address.",
+      "fetch_network": "Couldn't connect to {url}.",
+      "fetch_timeout": "{url} didn't answer in time.",
+      "fetch_too_large": "{url} is too large.",
+      "fetch_too_many_redirects": "{url} redirects too many times.",
+      "invalid_host": "{host} isn't a host name.",
+      "invalid_pattern": "Invalid pattern \"{pattern}\": {detail}",
+      "label_name_taken": "A label named \"{name}\" already exists.",
+      "login_taken": "The login \"{login}\" is taken.",
+      "no_article_found": "No article found on the page.",
+      "no_feed_found": "No feed found at {url}.",
+      "not_a_web_page": "This article isn't a web page.",
+      "note_changed": "The note was changed on another device.",
+      "opml_invalid": "That isn't a valid OPML file.",
+      "opml_too_deep": "Folders are nested more than {max} deep.",
+      "opml_too_many": "At most {max} feeds and folders can be imported at once.",
+      "tag_empty": "The tag is empty.",
+      "theme_limit": "You can have at most {max} themes.",
+      "theme_name_taken": "A theme named \"{name}\" already exists.",
+      "too_long": "That's longer than {max} characters.",
+      "unsupported_scheme": "Only http and https addresses are supported."
+    }
   },
   "nav": {
     "more": "More actions",
@@ -189,6 +237,7 @@
   "entries": {
     "listLabel": "Articles",
     "untitled": "(untitled)",
+    "unreadCount": "({n})",
     "fullText": "Full text",
     "fullTextShown": "Showing the article from its web page; press Full text again for the feed's version.",
     "empty": "No articles.",
@@ -240,6 +289,8 @@
     "fgColor": "Text colour",
     "bgColor": "Background colour",
     "preview": "Preview",
+    "previewWith": "Preview:",
+    "sample": "Aa",
     "lowContrast": "Contrast is {ratio}:1; at least 4.5:1 keeps the label readable."
   },
   "filters": {
@@ -495,7 +546,7 @@
     "truncated": "Showing the first 256 KB.",
     "parsed": "As stored",
     "feed": "{format} feed “{title}”: no entries | {format} feed “{title}”: one entry | {format} feed “{title}”: {n} entries",
-    "parseError": "Not a feed: {error}",
+    "parseError": "Newses can't read this as a feed.",
     "discovered": "The page advertises:",
     "filter": "Filter: {name}",
     "retryAfter": "Try again in {seconds} s."
@@ -732,6 +783,7 @@
     "copiedValue": "Copied."
   },
   "users": {
+    "invalid": "Logins use letters, digits, and . _ {'@'} - only, up to 64 characters. Passwords need at least 8 characters and can't be a common one.",
     "create": "New user",
     "admin": "Administrator",
     "enabled": "Enabled",
@@ -758,6 +810,7 @@
     "settingsHint": "Each action can have up to four keys or two-key sequences. Your changes replace that action's defaults.",
     "disabledHint": "Single-key shortcuts are turned off in Preferences, so these bindings do nothing until you turn them on.",
     "conflicts": "Some keys are bound more than once, so only one of their actions runs: {list}",
+    "conflict": "{keys}: {actions}",
     "action": "Action",
     "keys": "Keys",
     "unbound": "Not set",
@@ -851,6 +904,7 @@
     "hostsHint": "Requests to each site, busiest first. More than {budget} requests to one site in an hour raises an alert.",
     "hostTrend": "Requests per hour (top) and failed or rate-limited requests (bottom).",
     "host": "Site",
+    "hostExample": "example.com",
     "requests": "Requests",
     "peakHour": "Busiest hour",
     "notModified": "Unchanged",
@@ -874,6 +928,7 @@
     "requests7d": "Requests (7 days)",
     "requests30d": "Requests (30 days)",
     "clients": "Apps (30 days)",
+    "clientRequests": "{client} {n}",
     "client": {
       "web": "Web",
       "desktop": "Desktop",

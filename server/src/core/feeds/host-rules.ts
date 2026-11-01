@@ -9,12 +9,16 @@ export type HostRuleRow = typeof fetchHostRules.$inferSelect;
 /** A host and optional port, as `new URL(url).host` gives it (`Example.com:443` → `example.com`). */
 export function normaliseHost(input: string): string {
   const trimmed = input.trim().toLowerCase();
-  if (!/^[a-z0-9.[\]:-]+$/.test(trimmed))
-    throw new DomainError('invalid_input', `Not a host: ${input}`);
+  const notAHost = () =>
+    new DomainError('invalid_input', `Not a host: ${input}`, {
+      reason: 'invalid_host',
+      params: { host: input },
+    });
+  if (!/^[a-z0-9.[\]:-]+$/.test(trimmed)) throw notAHost();
   try {
     return new URL(`https://${trimmed}`).host;
   } catch {
-    throw new DomainError('invalid_input', `Not a host: ${input}`);
+    throw notAHost();
   }
 }
 

@@ -14,6 +14,7 @@ export * from './client.ts';
 export * from './filters.ts';
 export * from './filter-options.ts';
 export * from './api-version.ts';
+export * from './error-reasons.ts';
 export * from './server.ts';
 export * from './ops.ts';
 export type * from './platform-bridge.ts';

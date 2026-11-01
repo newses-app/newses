@@ -40,7 +40,10 @@ export class AppPasswordService {
       .from(appPasswords)
       .where(eq(appPasswords.userId, userId));
     if ((existing?.n ?? 0) >= MAX_PER_USER) {
-      throw new DomainError('invalid_input', `At most ${String(MAX_PER_USER)} app passwords`);
+      throw new DomainError('invalid_input', `At most ${String(MAX_PER_USER)} app passwords`, {
+        reason: 'app_password_limit',
+        params: { max: MAX_PER_USER },
+      });
     }
     const password = newAppPassword();
     const [appPassword] = await this.#db

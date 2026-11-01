@@ -100,6 +100,7 @@ describe('SubscriptionService.subscribe', () => {
     expect(fetcher.requested).toEqual(['https://shared.example/rss']);
     await expect(service.subscribe(userId, 'https://shared.example/rss')).rejects.toMatchObject({
       code: 'conflict',
+      detail: { reason: 'already_subscribed' },
     });
   });
 
@@ -115,15 +116,22 @@ describe('SubscriptionService.subscribe', () => {
       );
     await expect(service.subscribe(userId, 'https://plain.example/')).rejects.toMatchObject({
       code: 'feed_not_found',
+      detail: { reason: 'no_feed_found', params: { url: 'https://plain.example/' } },
     });
     await expect(service.subscribe(userId, 'https://missing.example/')).rejects.toMatchObject({
       code: 'fetch_failed',
+      detail: {
+        reason: 'fetch_http_status',
+        params: { url: 'https://missing.example/', status: '404' },
+      },
     });
     await expect(service.subscribe(userId, 'https://private.example/')).rejects.toMatchObject({
       code: 'invalid_input',
+      detail: { reason: 'fetch_blocked_address', params: { url: 'https://private.example/' } },
     });
     await expect(service.subscribe(userId, 'gopher://x')).rejects.toMatchObject({
       code: 'invalid_input',
+      detail: { reason: 'unsupported_scheme' },
     });
   });
 

@@ -5,7 +5,8 @@ import { MAX_PROFILE_LABEL_LENGTH, profileLabel } from '@newses/shared/client';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative, formatStorage } from '../../lib/format.ts';
 import { syncRequests } from '../../offline/status.ts';
@@ -25,6 +26,7 @@ import PasswordForm from './PasswordForm.vue';
 import TwoFactorSection from './TwoFactorSection.vue';
 
 const { t, locale } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const { session, logout } = useSession();
@@ -83,7 +85,10 @@ async function clearData(profile: Profile) {
   const pending = await pendingChanges(profile);
   const text =
     pending > 0
-      ? `${t('profiles.clearText')} ${t('offline.clearPending', { n: pending }, pending)}`
+      ? t('common.sentences', {
+          first: t('profiles.clearText'),
+          second: t('offline.clearPending', { n: pending }, pending),
+        })
       : t('profiles.clearText');
   const title = t('profiles.clearTitle', { profile: profileLabel(profile) });
   if (!(await ui.confirm(title, text, t('profiles.clear')))) return;
@@ -123,7 +128,7 @@ async function revoke(id: number) {
   try {
     await api.auth.revokeSession(id);
   } catch (err) {
-    ui.notify(err instanceof ApiError ? err.message : t('errors.generic'), true);
+    ui.notify(errorText(err), true);
   }
   await queryClient.invalidateQueries({ queryKey: ['sessions'] });
 }

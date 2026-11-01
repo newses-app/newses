@@ -2,7 +2,7 @@
 import { MAX_SCORE } from '@newses/shared/client';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useEntryActions } from '../../composables/useEntries.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { parseScore } from '../../lib/score.ts';
@@ -10,6 +10,7 @@ import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
 const { t, n } = useI18n();
+const errorText = useErrorText();
 const actions = useEntryActions();
 
 const open = computed({
@@ -40,7 +41,7 @@ async function save(score: number | null) {
     open.value = false;
     ui.notify(t('entries.scoreSaved'));
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     busy.value = false;
   }

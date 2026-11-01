@@ -25,6 +25,7 @@ import CombinedList from '../components/reader/CombinedList.vue';
 import HeadlineList from '../components/reader/HeadlineList.vue';
 import { useCounters } from '../composables/useCounters.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
+import { useErrorText } from '../composables/useErrorText.ts';
 import { useIconSrc } from '../composables/useIconSrc.ts';
 import { useOnlineOnly } from '../composables/useOnlineOnly.ts';
 import { ENTRIES_KEY, useEntry, useEntryActions, useEntryList } from '../composables/useEntries.ts';
@@ -50,6 +51,7 @@ import { bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
 
 const { t } = useI18n();
+const errorText = useErrorText();
 const route = useRoute();
 const router = useRouter();
 const display = useDisplay();
@@ -153,7 +155,7 @@ useDocumentTitle(() =>
 );
 
 function notifyError(error: unknown) {
-  if (error instanceof ApiError) ui.notify(error.message, true);
+  if (error instanceof ApiError) ui.notify(errorText(error), true);
   else ui.notify(t(connectivity.value === 'online' ? 'errors.generic' : 'offline.notSaved'), true);
 }
 
@@ -439,9 +441,9 @@ const showArticle = computed(
     </template>
     <v-app-bar-title v-if="!compact || !searchOpen" tag="h1">
       {{ title }}
-      <span v-if="unread > 0" class="text-body-medium text-medium-emphasis ms-1"
-        >({{ unread }})</span
-      >
+      <span v-if="unread > 0" class="text-body-medium text-medium-emphasis ms-1">
+        {{ t('entries.unreadCount', { n: unread }) }}
+      </span>
     </v-app-bar-title>
     <v-text-field
       v-if="!compact || searchOpen"

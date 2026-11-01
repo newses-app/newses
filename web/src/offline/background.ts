@@ -1,5 +1,5 @@
 import type { CreateThemeRequest } from '@newses/shared';
-import { ApiError, createApiClient } from '@newses/shared/client';
+import { type ApiFailure, ApiError, createApiClient } from '@newses/shared/client';
 import { DEFAULT_KEEP } from '../lib/offline-keep.ts';
 import { clearReadable, exclusively, type OfflineDb, openOfflineDb } from './db.ts';
 import { downloadContents, indexStoredContents, trimToLimit } from './downloads.ts';
@@ -19,7 +19,7 @@ import { readWorkerConfig, writeWorkerConfig } from './worker-config.ts';
  * objects created offline changed ids.
  */
 export interface WorkerReport {
-  refused: { kind: string; code: string; message: string; url?: string }[];
+  refused: ({ kind: string; url?: string } & ApiFailure)[];
   overridden: number;
   noteConflicts: NoteConflict[];
   themeDrafts: CreateThemeRequest[];
@@ -40,10 +40,9 @@ const emptyReport = (): WorkerReport => ({
 /** What sending changes did, as the reader hears of it. */
 export function reportOf(result: FlushResult): WorkerReport {
   return {
-    refused: result.refused.map(({ op, code, message }) => ({
+    refused: result.refused.map(({ op, ...failure }) => ({
       kind: op.kind,
-      code,
-      message,
+      ...failure,
       ...(op.kind === 'subscription.create' && { url: op.body.url }),
     })),
     overridden: result.overridden,

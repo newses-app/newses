@@ -36,7 +36,10 @@ export class ThemeService {
       .from(themes)
       .where(eq(themes.ownerId, userId));
     if ((existing?.n ?? 0) >= MAX_THEMES_PER_USER) {
-      throw new DomainError('invalid_input', `At most ${String(MAX_THEMES_PER_USER)} themes`);
+      throw new DomainError('invalid_input', `At most ${String(MAX_THEMES_PER_USER)} themes`, {
+        reason: 'theme_limit',
+        params: { max: MAX_THEMES_PER_USER },
+      });
     }
     const row = await this.#unique(theme.name, async () => {
       const [inserted] = await this.#db
@@ -101,7 +104,10 @@ export class ThemeService {
       return await run();
     } catch (err) {
       if (isUniqueViolation(err))
-        throw new DomainError('conflict', `A theme named "${name}" already exists`);
+        throw new DomainError('conflict', `A theme named "${name}" already exists`, {
+          reason: 'theme_name_taken',
+          params: { name },
+        });
       throw err;
     }
   }

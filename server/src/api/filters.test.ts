@@ -95,6 +95,10 @@ describe('filters API', () => {
     });
     expect(bad.status).toBe(400);
     expect(bad.body.message).toMatch(/Invalid pattern/);
+    expect(bad.body).toMatchObject({
+      reason: 'invalid_pattern',
+      params: { pattern: '(?<=a)b', detail: expect.any(String) as string },
+    });
     const foreign = await call('POST', '/filters', {
       title: 'Foreign label',
       rules: [titleRule('x')],

@@ -19,17 +19,25 @@ export function normalizePageUrl(input: string): string {
   return httpHref(input.trim(), input);
 }
 
+const invalidUrl = (input: string) =>
+  new DomainError('invalid_input', `Not a valid URL: ${input}`, {
+    reason: 'fetch_invalid_url',
+    params: { url: input },
+  });
+
 function httpHref(raw: string, input: string): string {
   let url: URL;
   try {
     url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
   } catch {
-    throw new DomainError('invalid_input', `Not a valid URL: ${input}`);
+    throw invalidUrl(input);
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new DomainError('invalid_input', 'Only http and https URLs are supported');
+    throw new DomainError('invalid_input', 'Only http and https URLs are supported', {
+      reason: 'unsupported_scheme',
+    });
   }
-  if (!url.hostname) throw new DomainError('invalid_input', `Not a valid URL: ${input}`);
+  if (!url.hostname) throw invalidUrl(input);
   url.hash = '';
   return url.href;
 }

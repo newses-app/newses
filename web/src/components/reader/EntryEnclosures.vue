@@ -4,7 +4,7 @@ import { mdiPaperclip } from '@mdi/js';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { type EnclosureView, enclosureViews } from '../../lib/enclosures.ts';
-import { formatDuration, formatStorage } from '../../lib/format.ts';
+import { formatDuration, formatList, formatStorage } from '../../lib/format.ts';
 import { connectivity } from '../../offline/connectivity.ts';
 import { appServer } from '../../platform/index.ts';
 
@@ -38,7 +38,7 @@ function details({ enclosure }: EnclosureView): string {
     enclosure.durationSeconds ? formatDuration(enclosure.durationSeconds) : null,
     enclosure.length ? formatStorage(enclosure.length, locale.value) : null,
   ].filter((part): part is string => !!part);
-  return new Intl.ListFormat(locale.value, { style: 'short', type: 'unit' }).format(parts);
+  return formatList(parts, locale.value);
 }
 
 const aspectRatio = ({ enclosure }: EnclosureView) =>

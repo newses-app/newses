@@ -5,7 +5,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
-import { ApiError } from '../api.ts';
+import { useErrorText } from '../composables/useErrorText.ts';
 import ArchivedArticle from '../components/reader/ArchivedArticle.vue';
 import ArchiveList from '../components/reader/ArchiveList.vue';
 import { useArchivedEntry, useArchiveList, useRestore } from '../composables/useArchive.ts';
@@ -18,6 +18,7 @@ import { parseStream, subscriptionKey } from '../lib/streams.ts';
 import { useUiStore } from '../stores/ui.ts';
 
 const { t } = useI18n();
+const errorText = useErrorText();
 const route = useRoute();
 const router = useRouter();
 const display = useDisplay();
@@ -120,7 +121,7 @@ async function restore(state: EntryState, then?: 'note' | 'labels') {
     if (then === 'note') ui.noteEntry = restored;
     if (then === 'labels') ui.labelsEntry = restored;
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     restoring.value = false;
   }

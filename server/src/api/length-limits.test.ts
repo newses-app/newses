@@ -59,7 +59,7 @@ afterAll(async () => {
   await database.drop();
 });
 
-const invalid = { code: 'invalid_input' };
+const invalid = { code: 'invalid_input', detail: { reason: 'too_long' } };
 
 describe('length limits', () => {
   it('are enforced by the services', async () => {

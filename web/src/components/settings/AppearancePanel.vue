@@ -18,6 +18,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useTheme } from 'vuetify';
 import { ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { adjustmentsPreview } from '../../composables/useAppearance.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
@@ -38,6 +39,7 @@ import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, n } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const vuetifyTheme = useTheme();
 const { prefs, update } = usePrefs();
@@ -188,7 +190,7 @@ async function run(work: () => Promise<unknown>): Promise<boolean> {
     await work();
     return true;
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
     return false;
   } finally {
     busy.value = false;

@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import FeedErrorNote from '../feeds/FeedErrorNote.vue';
 import { useDurations } from '../../composables/useDurations.ts';
 import { ENTRIES_KEY } from '../../composables/useEntries.ts';
@@ -23,6 +24,7 @@ const ui = useUiStore();
 const route = useRoute();
 const router = useRouter();
 const { t, locale } = useI18n();
+const errorText = useErrorText();
 const subscriptions = useSubscriptions();
 const categories = useCategories();
 const refreshFeeds = useFeedsRefresh();
@@ -103,7 +105,10 @@ const schedule = computed(() => {
     duration: message.minutes === null ? '' : duration(message.minutes),
   });
   return s.nextFetchAt
-    ? `${text} ${t('feeds.nextCheck', { when: formatDateTime(s.nextFetchAt, locale.value) })}`
+    ? t('common.sentences', {
+        first: text,
+        second: t('feeds.nextCheck', { when: formatDateTime(s.nextFetchAt, locale.value) }),
+      })
     : text;
 });
 
@@ -117,7 +122,7 @@ async function run(work: () => Promise<unknown>, done?: string) {
     await refreshFeeds();
     if (done) ui.notify(done);
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     busy.value = false;
   }

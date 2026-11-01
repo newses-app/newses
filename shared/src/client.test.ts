@@ -100,6 +100,45 @@ describe('createApiClient', () => {
     expect(error).toMatchObject({ status: 429, code: 'throttled', retryAfterSeconds: 30 });
   });
 
+  it('keeps the reason and params of an error', async () => {
+    const { fetch } = fakeFetch([
+      new Response(
+        JSON.stringify({
+          error: 'conflict',
+          message: 'Taken',
+          reason: 'label_name_taken',
+          params: { name: 'News' },
+        }),
+        { status: 409 },
+      ),
+    ]);
+    const error = await createApiClient({ fetch })
+      .subscriptions.refresh(1)
+      .catch((err: unknown) => err);
+    expect(error).toMatchObject({
+      code: 'conflict',
+      reason: 'label_name_taken',
+      params: { name: 'News' },
+    });
+  });
+
+  it.each([
+    ['an older server', { error: 'conflict', message: 'Taken' }, null, {}],
+    ['a reason that is no string', { error: 'conflict', message: 'Taken', reason: 1 }, null, {}],
+    [
+      'params that are no strings or numbers',
+      { error: 'conflict', message: 'Taken', reason: 'x', params: { a: { b: 1 } } },
+      'x',
+      {},
+    ],
+  ])('copes with %s', async (_case, body, reason, params) => {
+    const { fetch } = fakeFetch([new Response(JSON.stringify(body), { status: 409 })]);
+    const error = await createApiClient({ fetch })
+      .subscriptions.refresh(1)
+      .catch((err: unknown) => err);
+    expect(error).toMatchObject({ code: 'conflict', message: 'Taken', reason, params });
+  });
+
   it('posts OPML as XML and returns exports as text', async () => {
     const { calls, fetch } = fakeFetch([json({ subscribed: 1 }), new Response('<opml/>')]);
     const api = createApiClient({ fetch });

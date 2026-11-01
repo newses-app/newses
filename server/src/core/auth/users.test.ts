@@ -37,6 +37,7 @@ describe('UserService', () => {
     await services.users.create('Alice', 'password1');
     await expect(services.users.create('alice', 'password1')).rejects.toMatchObject({
       code: 'conflict',
+      detail: { reason: 'login_taken', params: { login: 'alice' } },
     });
     expect((await services.users.findByLogin(' ALICE '))?.login).toBe('Alice');
   });

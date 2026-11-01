@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api, ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative } from '../../lib/format.ts';
@@ -15,6 +16,7 @@ type Dialog =
   | { kind: 'created'; name: string; password: string };
 
 const { t, locale } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const { session } = useSession();
@@ -66,9 +68,7 @@ async function create() {
         ? t('account.wrongPassword')
         : status === 429
           ? t('account.throttled')
-          : err instanceof ApiError
-            ? err.message
-            : t('errors.generic');
+          : errorText(err);
   } finally {
     busy.value = false;
     await queryClient.invalidateQueries({ queryKey: ['appPasswords'] });
@@ -96,7 +96,7 @@ async function revoke(appPassword: AppPassword) {
   try {
     await api.auth.appPasswords.revoke(appPassword.id);
   } catch (err) {
-    ui.notify(err instanceof ApiError ? err.message : t('errors.generic'), true);
+    ui.notify(errorText(err), true);
   }
   await queryClient.invalidateQueries({ queryKey: ['appPasswords'] });
 }

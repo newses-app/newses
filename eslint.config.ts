@@ -113,6 +113,29 @@ export default defineConfig(
     languageOptions: { globals: globals.browser },
     rules: {
       'vue/multi-word-component-names': ['error', { ignores: ['App'] }],
+      // UI text comes from web/src/locales; the attributes are this rule's, and Vuetify's for text.
+      'vue/no-bare-strings-in-template': [
+        'error',
+        {
+          attributes: {
+            '/.+/': [
+              'aria-label',
+              'aria-placeholder',
+              'aria-roledescription',
+              'aria-valuetext',
+              'hint',
+              'label',
+              'messages',
+              'no-data-text',
+              'placeholder',
+              'subtitle',
+              'text',
+              'title',
+            ],
+            img: ['alt'],
+          },
+        },
+      ],
     },
   },
   prettier,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatRelative, hostOf, safeUrl } from './format.ts';
+import { formatDuration, formatList, formatRelative, hostOf, safeUrl } from './format.ts';
 
 describe('format', () => {
   const now = Date.parse('2026-10-04T12:00:00Z');
@@ -7,6 +7,11 @@ describe('format', () => {
     expect(formatRelative('2026-10-04T09:00:00Z', 'en', now)).toBe('3 hours ago');
     expect(formatRelative('2026-10-03T12:00:00Z', 'en', now)).toBe('yesterday');
     expect(formatRelative('2026-10-04T11:59:40Z', 'en', now)).toBe('this minute');
+  });
+
+  it('lists items as the locale does', () => {
+    expect(formatList(['a', 'b', 'c'], 'en')).toBe('a, b, c');
+    expect(formatList(['a'], 'en')).toBe('a');
   });
 
   it('extracts hosts', () => {

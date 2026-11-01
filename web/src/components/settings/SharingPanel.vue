@@ -4,7 +4,8 @@ import { mdiBookmarkOutline, mdiLinkOff, mdiOpenInNew, mdiPlus, mdiRefresh } fro
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { SHARES_KEY, useEntryActions } from '../../composables/useEntries.ts';
 import { bookmarklets } from '../../lib/intents.ts';
 import { publishedFeedUrl, shareUrl } from '../../lib/sharing.ts';
@@ -15,6 +16,7 @@ import CopyField from '../sharing/CopyField.vue';
 const PUBLISHED_FEED_KEY = ['published-feed'] as const;
 
 const { t } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const actions = useEntryActions();
@@ -36,7 +38,7 @@ async function run(work: () => Promise<unknown>, done?: string) {
     await work();
     if (done) ui.notify(done);
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     busy.value = false;
   }

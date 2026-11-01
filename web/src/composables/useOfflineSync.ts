@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api.ts';
 import { replaceEntries } from '../lib/entry-cache.ts';
+import { failureText } from '../lib/error-text.ts';
 import { upsertById } from '../lib/offline-keep.ts';
 import { lastAccount, markFilled, wasEvicted } from '../offline/account.ts';
 import { reportOf, takeWorkerReport, type WorkerReport } from '../offline/background.ts';
@@ -127,7 +128,8 @@ function patchCaches(queryClient: QueryClient, changes: SyncResponse): void {
 export function useOfflineSync(): void {
   const queryClient = useQueryClient();
   const ui = useUiStore();
-  const { t } = useI18n();
+  const i18n = useI18n();
+  const { t } = i18n;
   let running: Promise<void> | null = null;
   /** Counts requests, so one made while a sync runs gets another after it. */
   let requested = 0;
@@ -138,11 +140,11 @@ export function useOfflineSync(): void {
 
   /** Tells the reader what sending changes did, here or in the service worker. */
   async function announce(db: OfflineDb, report: WorkerReport): Promise<void> {
-    for (const { kind, code, message, url } of report.refused)
+    for (const { kind, url, ...failure } of report.refused)
       ui.notify(
-        kind === 'subscription.create' && code === 'choose'
+        kind === 'subscription.create' && failure.code === 'choose'
           ? t('offline.subscribeChoose', { url: url ?? '' })
-          : t('offline.refused', { error: message }),
+          : t('offline.refused', { error: failureText(i18n, failure) }),
         true,
       );
     if (report.themeDrafts.length > 0) {
@@ -264,7 +266,7 @@ export function useOfflineSync(): void {
       });
       await publishBackground(db).catch(() => undefined);
     } catch (error) {
-      syncStatus.lastError = describeError(error);
+      syncStatus.lastError = describeError(i18n, error);
       throw error;
     } finally {
       syncStatus.running = false;

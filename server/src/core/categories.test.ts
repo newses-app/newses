@@ -54,7 +54,10 @@ describe('CategoryService', () => {
     const a = await service.create(userId, 'A');
     await service.create(userId, 'Same');
     await service.create(userId, 'Same', a.id);
-    await expect(service.create(userId, 'Same')).rejects.toMatchObject({ code: 'conflict' });
+    await expect(service.create(userId, 'Same')).rejects.toMatchObject({
+      code: 'conflict',
+      detail: { reason: 'category_name_taken', params: { name: 'Same' } },
+    });
   });
 
   it('prevents cycles', async () => {

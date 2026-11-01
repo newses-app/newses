@@ -4,12 +4,14 @@ import { mdiAlertCircle, mdiAlert, mdiCheckCircle, mdiDelete } from '@mdi/js';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useDurations } from '../../composables/useDurations.ts';
-import { formatDateTime, formatRelative } from '../../lib/format.ts';
+import { formatDateTime, formatList, formatRelative } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const { duration, intervalItems } = useDurations();
@@ -55,7 +57,7 @@ async function changeRule(work: () => Promise<unknown>) {
     await work();
     await queryClient.invalidateQueries({ queryKey: ['admin'] });
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     ruleBusy.value = false;
   }
@@ -122,7 +124,12 @@ const bytes = (value: number) =>
     maximumFractionDigits: 1,
   }).format(value >= 1e6 ? value / 1e6 : value / 1e3);
 const ms = (value: number) =>
-  value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${String(Math.round(value))} ms`;
+  new Intl.NumberFormat(locale.value, {
+    style: 'unit',
+    unit: value >= 1000 ? 'second' : 'millisecond',
+    minimumFractionDigits: value >= 1000 ? 1 : 0,
+    maximumFractionDigits: value >= 1000 ? 1 : 0,
+  }).format(value >= 1000 ? value / 1000 : value);
 
 const hostTrend = computed(() => hosts.data.value?.hourly.map((h) => h.requests) ?? []);
 const hostFailures = computed(
@@ -397,7 +404,7 @@ const AUDIT_EVENTS = [
         <v-text-field
           v-model="ruleHost"
           :label="t('ops.host')"
-          placeholder="example.com"
+          :placeholder="t('ops.hostExample')"
           density="compact"
           hide-details
           class="flex-grow-1"
@@ -480,10 +487,17 @@ const AUDIT_EVENTS = [
             <td class="text-end d-none d-sm-table-cell">{{ number(user.requests30d) }}</td>
             <td class="d-none d-md-table-cell text-body-small">
               {{
-                clientNames
-                  .filter((name) => user.clients[name])
-                  .map((name) => `${t(`ops.client.${name}`)} ${number(user.clients[name] ?? 0)}`)
-                  .join(', ')
+                formatList(
+                  clientNames
+                    .filter((name) => user.clients[name])
+                    .map((name) =>
+                      t('ops.clientRequests', {
+                        client: t(`ops.client.${name}`),
+                        n: number(user.clients[name] ?? 0),
+                      }),
+                    ),
+                  locale,
+                )
               }}
             </td>
             <td class="text-end">{{ number(user.read7d) }}</td>

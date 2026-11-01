@@ -17,9 +17,10 @@ import {
   type ShortcutAction,
   withOverride,
 } from '../../lib/shortcuts.ts';
+import { formatList } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const ui = useUiStore();
 const { prefs, update } = usePrefs();
 
@@ -27,6 +28,8 @@ const overrides = computed(() => prefs.value.shortcutBindings);
 const bindings = computed(() => effectiveBindings(overrides.value));
 const conflicts = computed(() => findConflicts(bindings.value));
 const actionName = (action: ShortcutAction) => t(`shortcuts.actions.${action}`);
+const actionNames = (actions: ShortcutAction[]) =>
+  formatList(actions.map(actionName), locale.value);
 const keysText = (sequence: string) => displayKeys(sequence).join(' ');
 
 const save = (next: BindingOverrides) => update({ shortcutBindings: next });
@@ -113,8 +116,13 @@ function saveRecording() {
       {{
         t('shortcuts.conflicts', {
           list: conflicts
-            .map((c) => `${keysText(c.sequence)}: ${c.actions.map(actionName).join(', ')}`)
-            .join('; '),
+            .map((c) =>
+              t('shortcuts.conflict', {
+                keys: keysText(c.sequence),
+                actions: actionNames(c.actions),
+              }),
+            )
+            .join(t('common.groupSeparator')),
         })
       }}
     </v-alert>
@@ -195,13 +203,13 @@ function saveRecording() {
             @keydown="capture"
           />
           <v-alert v-if="blocked.length" type="error" variant="tonal" density="compact">
-            {{ t('shortcuts.blocked', { actions: blocked.map(actionName).join(', ') }) }}
+            {{ t('shortcuts.blocked', { actions: actionNames(blocked) }) }}
           </v-alert>
           <v-alert v-else-if="duplicate" type="info" variant="tonal" density="compact">
             {{ t('shortcuts.duplicate') }}
           </v-alert>
           <v-alert v-else-if="moved.length" type="warning" variant="tonal" density="compact">
-            {{ t('shortcuts.moved', { actions: moved.map(actionName).join(', ') }) }}
+            {{ t('shortcuts.moved', { actions: actionNames(moved) }) }}
           </v-alert>
         </v-card-text>
         <v-card-actions>

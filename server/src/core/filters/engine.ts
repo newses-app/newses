@@ -42,7 +42,10 @@ export function compilePattern(pattern: string): RE2JS {
     return RE2JS.compile(pattern, RE2JS.CASE_INSENSITIVE);
   } catch (err) {
     if (!(err instanceof RE2JSException)) throw err;
-    throw new DomainError('invalid_input', `Invalid pattern "${pattern}": ${err.message}`);
+    throw new DomainError('invalid_input', `Invalid pattern "${pattern}": ${err.message}`, {
+      reason: 'invalid_pattern',
+      params: { pattern, detail: err.message },
+    });
   }
 }
 

@@ -1,6 +1,7 @@
 import type { Counters } from '@newses/shared';
 import { onScopeDispose, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { formatList } from '../lib/format.ts';
 import { awayNotifier, newEntries } from '../lib/new-entries.ts';
 import { bridge, desktop } from '../platform/index.ts';
 import { pollInBackground, useCounters } from './useCounters.ts';
@@ -17,7 +18,7 @@ export const NOTIFY_GAP_MS = 15 * 60_000;
  */
 export function useEntryNotifications(): void {
   if (bridge.platform !== 'desktop') return;
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const counters = useCounters();
   const subscriptions = useSubscriptions();
   const categories = useCategories();
@@ -36,7 +37,7 @@ export function useEntryNotifications(): void {
       newEntries(since, latest, subscriptions.data.value ?? [], categories.data.value ?? []),
     show: (found) => {
       const more = found.places.length - PLACES;
-      const places = found.places.slice(0, PLACES).join(', ');
+      const places = formatList(found.places.slice(0, PLACES), locale.value);
       void bridge.notify({
         title: t('notifications.title', { n: found.count }, found.count),
         body: more > 0 ? t('notifications.more', { places, n: more }) : places,

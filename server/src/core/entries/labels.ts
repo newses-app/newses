@@ -140,7 +140,10 @@ export class LabelService {
       return await run();
     } catch (err) {
       if (isUniqueViolation(err))
-        throw new DomainError('conflict', `A label named "${caption}" already exists`);
+        throw new DomainError('conflict', `A label named "${caption}" already exists`, {
+          reason: 'label_name_taken',
+          params: { name: caption },
+        });
       throw err;
     }
   }

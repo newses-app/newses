@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useEntryActions } from '../../composables/useEntries.ts';
 import { useLabelActions, useLabels } from '../../composables/useLabels.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
@@ -11,6 +11,7 @@ import LabelChip from '../labels/LabelChip.vue';
 
 const ui = useUiStore();
 const { t } = useI18n();
+const errorText = useErrorText();
 const labels = useLabels();
 const labelActions = useLabelActions();
 const entryActions = useEntryActions();
@@ -37,7 +38,7 @@ watch(
 );
 
 function notifyError(error: unknown) {
-  ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+  ui.notify(errorText(error), true);
 }
 
 /** Creates a label and selects it; it is saved with the others. */

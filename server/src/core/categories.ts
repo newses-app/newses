@@ -107,7 +107,9 @@ export class CategoryService {
       node = parentOf.get(node)
     ) {
       if (node === id)
-        throw new DomainError('invalid_input', 'A category cannot be moved into itself');
+        throw new DomainError('invalid_input', 'A category cannot be moved into itself', {
+          reason: 'category_into_itself',
+        });
     }
   }
 
@@ -116,7 +118,10 @@ export class CategoryService {
       return await run();
     } catch (err) {
       if (isUniqueViolation(err)) {
-        throw new DomainError('conflict', `A category named "${title}" already exists there`);
+        throw new DomainError('conflict', `A category named "${title}" already exists there`, {
+          reason: 'category_name_taken',
+          params: { name: title },
+        });
       }
       throw err;
     }

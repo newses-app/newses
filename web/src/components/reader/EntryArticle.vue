@@ -19,7 +19,8 @@ import {
 } from '@mdi/js';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useSubscriptions } from '../../composables/useFeeds.ts';
 import { useLabels } from '../../composables/useLabels.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
@@ -42,6 +43,7 @@ import ScoreBadge from './ScoreBadge.vue';
 const props = defineProps<{ entry: Entry }>();
 const emit = defineEmits<{ change: [state: EntryState]; select: [] }>();
 const { t, n, locale } = useI18n();
+const errorText = useErrorText();
 const { prefs } = usePrefs();
 const high = computed(() => isHighScore(props.entry.score, prefs.value.scoreHighlightAbove));
 const ui = useUiStore();
@@ -114,7 +116,7 @@ async function toggleFullText() {
     try {
       fetched.value = (await api.entries.fullText(props.entry.id)).content;
     } catch (error) {
-      ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+      ui.notify(errorText(error), true);
       return;
     } finally {
       extracting.value = false;

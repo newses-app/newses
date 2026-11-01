@@ -1,6 +1,8 @@
 import type { CreateThemeRequest } from '@newses/shared';
 import { ApiError } from '@newses/shared/client';
 import { reactive, ref } from 'vue';
+import { requestOutcome } from '../lib/connectivity.ts';
+import { failureText, type Translator } from '../lib/error-text.ts';
 import type { OfflineDb } from './db.ts';
 import { indexBytes, storedBytes } from './downloads.ts';
 import { type NoteConflict, onPendingCount } from './outbox.ts';
@@ -51,8 +53,10 @@ export const keepThemeDrafts = (db: OfflineDb, drafts: CreateThemeRequest[]) =>
 /** Notes changed both on this device and elsewhere, waiting for the reader to settle. */
 export const noteConflicts = ref<NoteConflict[]>([]);
 
-export function describeError(error: unknown): string {
-  if (error instanceof ApiError) return `${String(error.status)} ${error.message}`;
+/** Why a sync failed; anything but a refusal or no server is a fault to diagnose, kept as it is. */
+export function describeError(i18n: Translator, error: unknown): string {
+  if (error instanceof ApiError) return `${String(error.status)} ${failureText(i18n, error)}`;
+  if (requestOutcome({ error }) === 'unreachable') return i18n.t('offline.unreachable', {});
   if (error instanceof Error) return `${error.name}: ${error.message}`;
   return String(error);
 }

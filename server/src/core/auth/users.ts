@@ -69,7 +69,11 @@ export class UserService {
       if (!user) throw new Error('User insert returned no row');
       return user;
     } catch (err) {
-      if (isUniqueViolation(err)) throw new DomainError('conflict', `Login "${login}" is taken`);
+      if (isUniqueViolation(err))
+        throw new DomainError('conflict', `Login "${login}" is taken`, {
+          reason: 'login_taken',
+          params: { login },
+        });
       throw err;
     }
   }

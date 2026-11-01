@@ -5,8 +5,8 @@ import type {
   UpdateSubscriptionRequest,
 } from '@newses/shared';
 import { useQueryClient } from '@tanstack/vue-query';
-import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../api.ts';
+import { api } from '../api.ts';
+import { useErrorText } from './useErrorText.ts';
 import { byDisplayOrder, reorder } from '../lib/reorder.ts';
 import { useUiStore } from '../stores/ui.ts';
 import { CATEGORIES_KEY, SUBSCRIPTIONS_KEY, useFeedsRefresh } from './useFeeds.ts';
@@ -19,7 +19,7 @@ export function useTreeEditing() {
   const queryClient = useQueryClient();
   const refresh = useFeedsRefresh();
   const ui = useUiStore();
-  const { t } = useI18n();
+  const errorText = useErrorText();
   const { edit } = useResourceEdits();
   const updateFeed = (id: number, changes: UpdateSubscriptionRequest) =>
     edit({ kind: 'subscription.update', id, changes }, () => api.subscriptions.update(id, changes));
@@ -33,7 +33,7 @@ export function useTreeEditing() {
     try {
       await work();
     } catch (error) {
-      ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+      ui.notify(errorText(error), true);
     } finally {
       await refresh();
     }

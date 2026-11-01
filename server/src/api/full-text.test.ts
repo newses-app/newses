@@ -116,12 +116,14 @@ describe('full text', () => {
       headers,
     });
     expect(notHtml.statusCode).toBe(422);
+    expect(notHtml.json()).toMatchObject({ reason: 'not_a_web_page' });
     const missing = await app.inject({
       method: 'POST',
       url: `/api/v1/entries/${String((await entryNamed('Three')).id)}/full-text`,
       headers,
     });
     expect(missing.statusCode).toBe(502);
+    expect(missing.json()).toMatchObject({ error: 'fetch_failed', reason: 'fetch_http_status' });
     const others = await app.inject({
       method: 'POST',
       url: '/api/v1/entries/999999/full-text',

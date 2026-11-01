@@ -239,7 +239,7 @@ export class FilterService {
     for (const rule of filter.rules) compilePattern(rule.pattern);
     for (const action of filter.actions)
       if (action.type === 'tag' && !normaliseTag(action.tag))
-        throw new DomainError('invalid_input', 'Tag is empty');
+        throw new DomainError('invalid_input', 'Tag is empty', { reason: 'tag_empty' });
     const labelIds = filter.actions.flatMap((a) => (a.type === 'label' ? [a.labelId] : []));
     if (labelIds.length > 0) {
       const owned = await this.#db

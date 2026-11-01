@@ -3,16 +3,19 @@ import type { FeedDebug, Filter } from '@newses/shared';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSubscriptions } from '../../composables/useFeeds.ts';
+import { failureText } from '../../lib/error-text.ts';
 import { formatDateTime } from '../../lib/format.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 /** The feed debugger: what the feed answers now, and what would be stored, without storing it. */
 const ui = useUiStore();
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
+const errorText = useErrorText();
 const { online } = useOnlineOnly();
 const subscriptions = useSubscriptions();
 
@@ -53,7 +56,7 @@ async function run() {
     result.value = await api.subscriptions.debug(id);
   } catch (error) {
     result.value = null;
-    failure.value = error instanceof ApiError ? error.message : t('errors.generic');
+    failure.value = errorText(error);
   } finally {
     busy.value = false;
   }
@@ -67,6 +70,17 @@ watch(
     if (id !== null) void run();
   },
 );
+
+/** Why the fetch got no answer; its code is a `FetchErrorCode`, as in the `fetch_` reasons. */
+const fetchError = computed(() => {
+  const debug = result.value;
+  if (!debug?.error) return null;
+  const { code, message, status } = debug.error;
+  return failureText(
+    { t, te },
+    { code, message, reason: `fetch_${code}`, params: { url: debug.url, status: status ?? '' } },
+  );
+});
 
 const bytes = (value: number) =>
   new Intl.NumberFormat(locale.value, {
@@ -92,7 +106,7 @@ const bytes = (value: number) =>
             density="compact"
             class="mb-4"
           >
-            {{ result.error.message }}
+            {{ fetchError }}
             <template v-if="result.error.retryAfterSeconds">
               {{ t('feedDebug.retryAfter', { seconds: result.error.retryAfterSeconds }) }}
             </template>
@@ -151,7 +165,8 @@ const bytes = (value: number) =>
               }}
             </p>
             <v-alert v-else type="warning" variant="tonal" density="compact">
-              {{ t('feedDebug.parseError', { error: result.parseError }) }}
+              {{ t('feedDebug.parseError') }}
+              <div class="debug-text">{{ result.parseError }}</div>
             </v-alert>
             <template v-if="result.discovered.length > 0">
               <p class="text-body-small mt-2">{{ t('feedDebug.discovered') }}</p>

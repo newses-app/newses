@@ -519,6 +519,7 @@ describe('LabelService', () => {
     await services.labels.create(bob, { caption: 'Work', ...red });
     await expect(services.labels.create(alice, { caption: 'WORK', ...red })).rejects.toMatchObject({
       code: 'conflict',
+      detail: { reason: 'label_name_taken', params: { name: 'WORK' } },
     });
     expect((await services.labels.list(alice)).map((l) => l.caption)).toEqual(['cooking', 'Work']);
 

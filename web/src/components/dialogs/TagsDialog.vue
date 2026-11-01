@@ -2,7 +2,7 @@
 import { MAX_TAGS_PER_ENTRY, normaliseTags } from '@newses/shared/client';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { ApiError } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useEntryActions } from '../../composables/useEntries.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTags } from '../../composables/useTags.ts';
@@ -11,6 +11,7 @@ import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
 const { t } = useI18n();
+const errorText = useErrorText();
 const actions = useEntryActions();
 
 const open = computed({
@@ -49,7 +50,7 @@ async function save() {
     await actions.setTags(entry, selected.value);
     open.value = false;
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     busy.value = false;
   }

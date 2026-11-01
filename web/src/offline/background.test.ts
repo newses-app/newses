@@ -55,12 +55,23 @@ describe('runInBackground', () => {
     const { fetch, asked } = server({
       ...common,
       'POST /labels': () =>
-        Response.json({ error: 'invalid_input', message: 'No' }, { status: 400 }),
+        Response.json(
+          { error: 'invalid_input', message: 'No', reason: 'too_long', params: { max: 8 } },
+          { status: 400 },
+        ),
     });
     await runInBackground('outbox', fetch);
     expect(asked).toEqual(['GET /server', 'GET /auth/session', 'POST /labels']);
     expect(await takeWorkerReport(db)).toMatchObject({
-      refused: [{ kind: 'label.create', message: 'No' }],
+      refused: [
+        {
+          kind: 'label.create',
+          code: 'invalid_input',
+          message: 'No',
+          reason: 'too_long',
+          params: { max: 8 },
+        },
+      ],
       renumbered: true,
     });
     expect(await takeWorkerReport(db)).toBeNull();

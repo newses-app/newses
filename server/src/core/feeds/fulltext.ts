@@ -9,6 +9,7 @@ import type { JobQueue, Logger } from '../ports.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import { decodeBody } from './decode.ts';
 import { looksLikeHtml } from './discover.ts';
+import { describeFetchFailure } from './fetch-failure.ts';
 import { type Fetcher, FetchError } from './http.ts';
 import { sanitizeContent, sanitizeTitle } from './sanitize.ts';
 
@@ -76,14 +77,14 @@ export async function fetchPage(
     .fetch(url, { purpose, accept: 'text/html', maxBytes: MAX_PAGE_BYTES })
     .catch((err: unknown) => {
       if (!(err instanceof FetchError)) throw err;
-      throw new DomainError(
-        'fetch_failed',
-        err.code === 'host_blocked' ? 'The site asked to wait before more requests' : err.message,
-      );
+      const { message, detail } = describeFetchFailure(url, err);
+      throw new DomainError('fetch_failed', message, detail);
     });
   const html = decodeBody(page.body, page.contentType);
   if (!looksLikeHtml(html, page.contentType))
-    throw new DomainError('feed_not_found', 'The article is not a web page');
+    throw new DomainError('feed_not_found', 'The article is not a web page', {
+      reason: 'not_a_web_page',
+    });
   return { url: page.url, html };
 }
 
@@ -158,10 +159,15 @@ export class FullTextService {
       .where(eq(entries.id, entryId));
     try {
       if (!entry?.link || !/^https?:\/\//i.test(entry.link))
-        throw new DomainError('invalid_input', 'The article has no web address');
+        throw new DomainError('invalid_input', 'The article has no web address', {
+          reason: 'article_no_address',
+        });
       const page = await fetchPage({ fetcher: this.#fetcher }, entry.link, 'fulltext');
       const content = extractArticle(page.html, page.url);
-      if (!content) throw new DomainError('feed_not_found', 'No article found on the page');
+      if (!content)
+        throw new DomainError('feed_not_found', 'No article found on the page', {
+          reason: 'no_article_found',
+        });
       await this.#db
         .update(entries)
         .set({ fullContent: content, fullContentAt: sql`now()`, fullContentError: null })

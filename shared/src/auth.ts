@@ -156,7 +156,12 @@ export const updateUserRequestSchema = z.object({
 
 export const resetPasswordRequestSchema = z.object({ password: passwordSchema });
 
-export const errorResponseSchema = z.object({ error: z.string(), message: z.string() });
+export const errorResponseSchema = z.object({
+  error: z.string(),
+  message: z.string(),
+  reason: z.string().optional(),
+  params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+});
 
 export type User = z.infer<typeof userSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;

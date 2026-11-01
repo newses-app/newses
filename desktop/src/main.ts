@@ -24,6 +24,7 @@ import {
   shell,
 } from 'electron';
 import { setLaunchAtLogin, setTray } from './background.ts';
+import { t } from './i18n.ts';
 import {
   DEFAULT_OPTIONS,
   HIDDEN_ARG,
@@ -275,7 +276,7 @@ function buildMenu() {
     Menu.buildFromTemplate([
       { role: 'fileMenu' },
       { role: 'editMenu' },
-      { label: 'View', submenu: view },
+      { label: t('viewMenu'), submenu: view },
     ]),
   );
 }

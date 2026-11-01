@@ -3,7 +3,8 @@ import type { FeedCandidate } from '@newses/shared';
 import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { useResourceEdits } from '../../composables/useResourceEdits.ts';
 import { temporaryId } from '../../lib/offline-resources.ts';
 import { useCategories, useFeedsRefresh } from '../../composables/useFeeds.ts';
@@ -14,6 +15,7 @@ import { useUiStore } from '../../stores/ui.ts';
 const ui = useUiStore();
 const router = useRouter();
 const { t } = useI18n();
+const errorText = useErrorText();
 const categories = useCategories();
 const refreshFeeds = useFeedsRefresh();
 
@@ -68,7 +70,7 @@ async function submit() {
     ui.notify(t('subscribe.done', { feed: result.subscription.title }));
     await router.push(`/${subscriptionKey(result.subscription.id)}`);
   } catch (err) {
-    error.value = err instanceof ApiError ? err.message : t('errors.generic');
+    error.value = errorText(err);
   } finally {
     busy.value = false;
   }

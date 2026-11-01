@@ -5,7 +5,7 @@ import type {
   EntryState,
   MarkReadRequest,
 } from '@newses/shared';
-import { ApiError, normaliseTags } from '@newses/shared/client';
+import { type ApiFailure, ApiError, normaliseTags } from '@newses/shared/client';
 import { statePatch } from '../lib/entry-cache.ts';
 import {
   applyResourceOps,
@@ -397,6 +397,14 @@ async function send(
   }
 }
 
+/** What is kept of a refusal, to say why when a page next shows it. */
+const failureOf = ({ code, message, reason, params }: ApiError): ApiFailure => ({
+  code,
+  message,
+  reason,
+  params,
+});
+
 /**
  * Whether a request failed for want of the server, rather than being refused by it. A feed the
  * server could not fetch is the server's answer, though it comes as 502 too.
@@ -419,7 +427,7 @@ export interface FlushResult {
   /** Notes changed both here and elsewhere, for the reader to settle. */
   noteConflicts: NoteConflict[];
   /** Changes the server refused, with its reason; they are not sent again. */
-  refused: { op: OutboxOp; code: string; message: string }[];
+  refused: ({ op: OutboxOp } & ApiFailure)[];
   /** Objects created offline that the server now has, under its ids. */
   created: Created[];
   /** Objects created offline that the server refused; changes to them were dropped too. */
@@ -496,7 +504,7 @@ export async function flushOutbox(
         }
       } else if (error.status !== 404) {
         const { seq: _seq, queuedAt: _at, ...change } = op;
-        result.refused.push({ op: change, code: error.code, message: error.message });
+        result.refused.push({ op: change, ...failureOf(error) });
       }
     }
     await db.outbox.bulkDelete(batch.map((b) => b.seq));
@@ -585,6 +593,6 @@ async function refusedResource(
     }
     if (change.kind === 'theme.create') result.themeDrafts.push(change.body);
   } else if (error.status === 404) return 'settled';
-  result.refused.push({ op: refused, code: error.code, message: error.message });
+  result.refused.push({ op: refused, ...failureOf(error) });
   return 'settled';
 }

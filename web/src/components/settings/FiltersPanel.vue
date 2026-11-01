@@ -25,7 +25,8 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { api, ApiError } from '../../api.ts';
+import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
 import { COUNTERS_KEY } from '../../composables/useCounters.ts';
 import { ENTRIES_KEY } from '../../composables/useEntries.ts';
 import { useCategories, useSubscriptions } from '../../composables/useFeeds.ts';
@@ -61,6 +62,7 @@ interface Draft {
 }
 
 const { t } = useI18n();
+const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
 const filters = useQuery({ queryKey: FILTERS_KEY, queryFn: () => api.filters.list() });
@@ -184,7 +186,7 @@ async function run<T>(work: () => Promise<T>): Promise<T | undefined> {
   try {
     return await work();
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
     return undefined;
   } finally {
     busy.value = false;
@@ -242,7 +244,7 @@ async function apply(filter: Filter) {
     } while (cursor);
     ui.notify(t('filters.applied', { checked, matched }));
   } catch (error) {
-    ui.notify(error instanceof ApiError ? error.message : t('errors.generic'), true);
+    ui.notify(errorText(error), true);
   } finally {
     applying.value = null;
     await Promise.all([

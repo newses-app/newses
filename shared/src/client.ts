@@ -18,6 +18,7 @@ import type {
   User,
 } from './auth.ts';
 import type { ArchivedEntry, ArchiveEntriesQuery, ArchiveEntriesResponse } from './archive.ts';
+import type { ErrorParams } from './error-reasons.ts';
 import type { Filter, FilterApplyResponse, FilterRequest, FilterTestResponse } from './filters.ts';
 import type {
   BulkEntryStateRequest,
@@ -84,20 +85,50 @@ export interface ApiClientOptions {
   fetch?: typeof fetch;
 }
 
+/** What a client keeps of a refused request to say why; older servers send no `reason`. */
+export interface ApiFailure {
+  code: string;
+  message: string;
+  reason?: string | null | undefined;
+  params?: ErrorParams | undefined;
+}
+
 /** A non-2xx response; `code` is the API's error code (e.g. `unauthenticated`, `not_found`). */
-export class ApiError extends Error {
+export class ApiError extends Error implements ApiFailure {
   override name = 'ApiError';
   readonly status: number;
   readonly code: string;
   /** Seconds from Retry-After on 429 responses. */
   readonly retryAfterSeconds: number | null;
+  /** Finer than `code`, one of `ERROR_REASONS` unless the server is newer than this client. */
+  readonly reason: string | null;
+  readonly params: ErrorParams;
 
-  constructor(status: number, code: string, message: string, retryAfterSeconds: number | null) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    retryAfterSeconds: number | null,
+    detail: { reason?: string | null; params?: ErrorParams } = {},
+  ) {
     super(message);
     this.status = status;
     this.code = code;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.reason = detail.reason ?? null;
+    this.params = detail.params ?? {};
   }
+}
+
+/** The reason and params of an error body; what is malformed counts as not sent. */
+function errorDetail(body: { reason?: unknown; params?: unknown }) {
+  const { reason, params } = body;
+  if (typeof reason !== 'string') return {};
+  const valid =
+    typeof params === 'object' &&
+    params !== null &&
+    Object.values(params).every((v) => typeof v === 'string' || typeof v === 'number');
+  return valid ? { reason, params: params as ErrorParams } : { reason };
 }
 
 type Query = Record<string, string | number | boolean | undefined>;
@@ -153,6 +184,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
       const error = (await response.json().catch(() => ({}))) as {
         error?: string;
         message?: string;
+        reason?: unknown;
+        params?: unknown;
       };
       const retryAfter = Number(response.headers.get('retry-after'));
       throw new ApiError(
@@ -160,6 +193,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
         error.error ?? 'http_error',
         error.message ?? `HTTP ${String(response.status)}`,
         Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+        errorDetail(error),
       );
     }
     if (opts.text) return (await response.text()) as T;
