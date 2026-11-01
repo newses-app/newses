@@ -1,6 +1,6 @@
 # 0081. API error reasons and per-package locale files
 
-- Status: Accepted
+- Status: Superseded by 0082
 - Date: 2026-10-31
 
 ## Context
