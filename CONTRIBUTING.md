@@ -18,6 +18,7 @@ Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md). Report v
 - Docs change in the same pull request, in the doc that owns the fact (`AGENTS.md`'s docs map).
 - A change to the stack, architecture, data model concepts, API surface, hosting, security model, or a feature's scope comes with an ADR in `docs/adr/`.
 - A change to configuration, deployment, or import behaviour comes with a matching pull request in [`newses-app/newses.app`](https://github.com/newses-app/newses.app).
+- Adding or improving a language follows [`docs/translations.md`](docs/translations.md).
 - Link the issue it closes (`Closes #123`).
 
 ## License

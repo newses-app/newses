@@ -176,7 +176,7 @@
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
 | Dependencies | High and critical advisories in production dependencies fail the pipeline (`pnpm audit`) and are fixed before the next deployment, at most 7 days after disclosure; moderate ones within 30 days; other dependency updates at least every 90 days |
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls; single-key shortcuts can be turned off; every drag action has a non-drag alternative |
-| Internationalisation | All UI strings externalised; English shipped |
+| Internationalisation | All UI strings externalised; each user chooses a language or follows their device, on every app; strings without a translation show in English; layouts work right to left; English and Spanish shipped |
 | Reliability | Worker restarts resume pending jobs; no entry loss on crash mid-ingest |
 | Portability | One core runs under Docker Compose and AWS Lambda; only adapters and entrypoints differ |
 

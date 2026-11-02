@@ -300,7 +300,7 @@ async function toggle(filter: Filter, enabled: boolean) {
             density="compact"
             hide-details
             color="primary"
-            class="mr-2"
+            class="me-2"
             @update:model-value="(v) => toggle(filter, !!v)"
           />
         </template>

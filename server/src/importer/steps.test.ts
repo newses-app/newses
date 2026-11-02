@@ -40,6 +40,8 @@ const SOURCE_ROWS = `
     (2, 'COMBINED_DISPLAY_MODE', NULL, 'true'),
     (2, '_DEFAULT_VIEW_MODE', NULL, 'marked'),
     (2, 'USER_TIMEZONE', NULL, 'Europe/London'),
+    (2, 'USER_LANGUAGE', NULL, 'en_GB'),
+    (1, 'USER_LANGUAGE', NULL, 'tlh_KL'),
     (2, 'HIDE_READ_FEEDS', NULL, 'true');`;
 
 async function run(changes: Partial<ImportOptions> = {}) {
@@ -177,15 +179,39 @@ describe('TTRSS import steps', () => {
       freshMaxAgeHours: 48,
       layout: 'combined',
       hideReadFeeds: true,
+      language: 'en',
     });
-    expect(report.tally('pat', 'preferences')).toEqual({ source: 4, imported: 3 });
+    expect(report.tally('pat', 'preferences')).toEqual({ source: 5, imported: 4 });
     expect(report.skipped('pat')).toContainEqual(
       expect.objectContaining({ reason: '_DEFAULT_VIEW_MODE = "marked" has no equivalent value' }),
+    );
+    expect(report.skipped('admin')).toContainEqual(
+      expect.objectContaining({ reason: 'USER_LANGUAGE = "tlh_KL" has no equivalent value' }),
     );
     expect(report.notes('pat')).toContainEqual(
       expect.objectContaining({ item: 'preferences', text: 'not imported: USER_TIMEZONE' }),
     );
   });
+
+  it.each(['', 'auto'])(
+    'leaves a language never chosen ("%s") unset, unreported',
+    async (value) => {
+      await sourceDb.pool.query(
+        "UPDATE ttrss_user_prefs2 SET value = $1 WHERE pref_name = 'USER_LANGUAGE' AND owner_uid = 1",
+        [value],
+      );
+      try {
+        const report = await run();
+        expect(report.skipped('admin')).not.toContainEqual(
+          expect.objectContaining({ reason: expect.stringContaining('USER_LANGUAGE') as string }),
+        );
+      } finally {
+        await sourceDb.pool.query(
+          "UPDATE ttrss_user_prefs2 SET value = 'tlh_KL' WHERE pref_name = 'USER_LANGUAGE' AND owner_uid = 1",
+        );
+      }
+    },
+  );
 
   it('re-runs onto the rows it imported, applying source changes', async () => {
     await run();

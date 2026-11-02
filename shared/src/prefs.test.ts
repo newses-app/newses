@@ -20,6 +20,13 @@ describe('preferences', () => {
     expect(prefsSchema.parse(DEFAULT_PREFS)).toEqual(DEFAULT_PREFS);
   });
 
+  it('takes any language tag, or null to follow the device', () => {
+    for (const language of ['en', 'es-MX', 'zh-Hant-TW', 'tlh', null])
+      expect(updatePrefsRequestSchema.parse({ language })).toEqual({ language });
+    for (const language of ['', 'e', 'es_ES', 'es-', 'a b', `es-${'x'.repeat(40)}`, 5])
+      expect(updatePrefsRequestSchema.safeParse({ language }).success).toBe(false);
+  });
+
   it('bounds reading preferences', () => {
     const valid = { articleFont: 'serif', articleFontSize: 20, articleWidth: 'wide' };
     expect(updatePrefsRequestSchema.parse(valid)).toEqual(valid);

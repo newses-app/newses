@@ -4,6 +4,7 @@ import { FONT_KEYS, MAX_SCORE } from '@newses/shared/client';
 import { computed, onBeforeUnmount, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useDurations } from '../../composables/useDurations.ts';
+import { useLanguagePicker } from '../../composables/useLanguage.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { parseScore } from '../../lib/score.ts';
 import { useUiStore } from '../../stores/ui.ts';
@@ -11,6 +12,7 @@ import { useUiStore } from '../../stores/ui.ts';
 const { t, n } = useI18n();
 const ui = useUiStore();
 const { prefs, update } = usePrefs();
+const language = useLanguagePicker();
 const { intervalItems, purgeItems } = useDurations();
 
 const choices = <K extends keyof Prefs>(key: K, values: readonly Prefs[K][], prefix: string) =>
@@ -70,6 +72,16 @@ const switches = [
   <section>
     <h2 class="text-title-large mb-4">{{ t('settings.reading') }}</h2>
     <v-row>
+      <v-col cols="12" sm="6">
+        <v-select
+          :model-value="language.value.value"
+          :items="language.items.value"
+          :label="t('settings.language')"
+          :hint="language.onServer.value ? undefined : t('settings.languageOnDevice')"
+          :persistent-hint="!language.onServer.value"
+          @update:model-value="language.change"
+        />
+      </v-col>
       <v-col cols="12" sm="6">
         <v-select
           :model-value="prefs.viewMode"

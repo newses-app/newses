@@ -1,4 +1,5 @@
 import { type PrefKey, prefsSchema } from '@newses/shared';
+import { matchLocale } from '@newses/shared/locales';
 import { sql } from 'drizzle-orm';
 import { userPrefs } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';
@@ -7,8 +8,17 @@ import { importedUsers } from './common.ts';
 const bool = (value: string) => value === 'true' || value === '1';
 const int = (value: string) => (/^-?\d+$/.test(value.trim()) ? Number(value) : Number.NaN);
 
-/** TTRSS preferences with an equivalent here, and how their text values convert. */
-const PREFS: Record<string, { key: PrefKey; value: (text: string) => unknown }> = {
+/** TTRSS writes locales such as `es_ES`; a language not on offer has no equivalent. */
+const language = (text: string) => matchLocale([text.trim().replace('_', '-')]);
+
+/**
+ * TTRSS preferences with an equivalent here, and how their text values convert; `unset` lists the
+ * values that mean the user never chose one.
+ */
+const PREFS: Record<
+  string,
+  { key: PrefKey; value: (text: string) => unknown; unset?: readonly string[] }
+> = {
   FRESH_ARTICLE_MAX_AGE: { key: 'freshMaxAgeHours', value: int },
   PURGE_OLD_DAYS: { key: 'purgeDays', value: int },
   DEFAULT_UPDATE_INTERVAL: { key: 'updateIntervalMinutes', value: int },
@@ -28,6 +38,7 @@ const PREFS: Record<string, { key: PrefKey; value: (text: string) => unknown }> 
     value: (text) =>
       ({ default: 'newest', feed_dates: 'newest', date_reverse: 'oldest', title: 'title' })[text],
   },
+  USER_LANGUAGE: { key: 'language', value: language, unset: ['', 'auto'] },
 };
 
 interface SourcePrefRow {
@@ -52,7 +63,7 @@ export const prefsStep: ImportStep = {
       const values: { userId: number; key: PrefKey; value: unknown }[] = [];
       for (const row of known) {
         const pref = PREFS[row.pref_name];
-        if (!pref) continue;
+        if (!pref || pref.unset?.includes(row.value.trim())) continue;
         const value = pref.value(row.value);
         if (!prefsSchema.shape[pref.key].safeParse(value).success) {
           report.skip(

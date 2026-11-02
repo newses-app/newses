@@ -21,6 +21,7 @@ import OfflineStatus from '../components/OfflineStatus.vue';
 import ProfileMenu from '../components/profiles/ProfileMenu.vue';
 import FeedTree from '../components/reader/FeedTree.vue';
 import { useAppearance } from '../composables/useAppearance.ts';
+import { useLanguage } from '../composables/useLanguage.ts';
 import { useLiveCounters } from '../composables/useCounters.ts';
 import { useEntryNotifications } from '../composables/useEntryNotifications.ts';
 import { useOfflineSync } from '../composables/useOfflineSync.ts';
@@ -37,6 +38,7 @@ const router = useRouter();
 const { prefs, update } = usePrefs();
 
 useAppearance();
+useLanguage();
 
 useLiveCounters();
 useEntryNotifications();

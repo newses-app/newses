@@ -19,7 +19,8 @@
     "typecheck": "tsc && pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "locales:status": "node shared/src/locale-status.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

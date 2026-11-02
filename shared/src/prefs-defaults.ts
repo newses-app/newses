@@ -22,4 +22,5 @@ export const DEFAULT_PREFS: Prefs = {
   freshMaxAgeHours: 24,
   updateIntervalMinutes: null,
   purgeDays: null,
+  language: null,
 };

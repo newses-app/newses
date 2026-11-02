@@ -7,6 +7,7 @@ import { i18n } from './plugins/i18n.ts';
 import { queryClient } from './plugins/query.ts';
 import { createAppVuetify } from './plugins/vuetify.ts';
 import { startAppearance } from './composables/useAppearance.ts';
+import { startLanguage } from './composables/useLanguage.ts';
 import { installAuthGuard } from './composables/useSession.ts';
 import { api } from './api.ts';
 import { startConnectivity } from './offline/connectivity.ts';
@@ -35,6 +36,8 @@ loadOfflineSettings();
 if (NATIVE) void requestPersistence();
 // The last theme shown here, so a reload doesn't flash Original and signed-out screens are themed.
 const appearance = startAppearance();
+// The last language shown here, so signed-out screens have it and a reload doesn't flash English.
+await startLanguage();
 // Whether the device has a network, before the first request.
 await startConnectivity(bridge, () => api.serverInfo());
 if (NATIVE) routeExternalLinks(document, (url) => void bridge.openExternal(url));

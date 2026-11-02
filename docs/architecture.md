@@ -14,7 +14,7 @@
 | Auth | `@node-rs/argon2`, `otpauth` |
 | Logging | Pino (JSON), with the active trace's ids |
 | Observability | OpenTelemetry API and Node SDK (OTLP); `@fastify/otel`, pg-boss's built-in tracing, pg and Node runtime instrumentation; nodemailer for alert email. AWS: ADOT Lambda layer to X-Ray, SNS, AWS Budgets |
-| Web | Vue 3, Vite, Vuetify 3, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
+| Web | Vue 3, Vite, Vuetify 4, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
 | Desktop | Electron, esbuild, electron-builder |
 | Mobile | Capacitor (Android) |
 | Tests | Vitest, Testcontainers (Postgres), Playwright, axe-core (WCAG 2.2 AA scans in the Playwright suite) |
@@ -114,6 +114,8 @@ Rules:
 - Custom themes export as JSON `{ format: 'newses-theme', version: 1, name, base, tokens }`; importing posts the file's theme to `/themes`, so the server validates it, and numbers a name already taken.
 - The last resolved tokens are kept in `localStorage` and applied before mounting, so a reload starts with the reader's theme and signed-out screens use it.
 - Reading preferences (font, text size, line width) set CSS custom properties on the document root that article styles read; the `default` font is the theme's article font, and the text size is kept under the theme's scale.
+- `LOCALES` in `shared` lists the shipped languages. The `language` preference (API 1.7) holds a language tag, any tag so that a server never refuses an app's newer language, and null follows the device. Before mounting, the app shows the last choice kept per profile in `localStorage`, else the first of `navigator.languages` on offer (`es-MX` as `es`), else `en`, and sets `lang` and `dir` on the document root; signed-out screens stay on that. Signed in, the preference replaces it, and is fetched again each time the app regains focus. Against a server older than API 1.7, where `/prefs` has no `language`, the choice stays on the device and is never sent.
+- `en` and its Vuetify strings are always loaded and fill any gaps. Other languages are lazy chunks, which the service worker precaches and the native build bundles; one that fails to load leaves the current language. Vuetify's text and direction follow through `createVueI18nAdapter`.
 - Fonts are system font stacks, except the theme fonts Patrick Hand and IBM Plex Mono (latin subsets), which are bundled and served from the app's own origin. A browser downloads one only when text uses it; the service worker caches fonts when first used rather than precaching them, and with offline reading on, the first sync of a page loads all of them so themes render offline.
 - Shortcuts follow TTRSS's defaults, including two-key chords (`g a`) with a 1.5 s window. They are ignored in text fields and while a dialog is open.
 - The `shortcutBindings` preference holds only changed actions; each replaces that action's defaults, and `[]` unbinds it. A key cannot be bound alone while it starts a chord.

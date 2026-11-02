@@ -7,6 +7,8 @@ import { partialThemeTokensSchema } from './themes.ts';
 export const viewModeSchema = z.enum(['all', 'unread', 'adaptive']);
 export const headlineOrderSchema = z.enum(['newest', 'oldest', 'title']);
 
+const LANGUAGE_TAG = /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/;
+
 const prefsShape = {
   /** `adaptive` shows unread entries when there are any, else all. */
   viewMode: viewModeSchema,
@@ -50,6 +52,8 @@ const prefsShape = {
   updateIntervalMinutes: z.number().int().min(15).max(10_080).nullable(),
   /** Default for this user's subscriptions; 0 keeps entries forever, null uses the server default. */
   purgeDays: z.number().int().min(0).max(3650).nullable(),
+  /** A language tag, null to follow the device. Any tag, as apps may ship languages this server doesn't. */
+  language: z.string().max(35).regex(LANGUAGE_TAG).nullable(),
 };
 
 export const prefsSchema = z.object(prefsShape);

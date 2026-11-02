@@ -10,6 +10,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `nvm use` | Switch to Node 24 (`.nvmrc`) |
 | `pnpm install` | Install and link workspace packages |
 | `pnpm check` | Lint, typecheck, format check, tests (run before every commit; the AWS pipeline runs the same) |
+| `pnpm locales:status` | The messages each language has yet to translate, by package |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
 | `pnpm --filter @newses/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @newses/server db:migrate` | Apply migrations |
@@ -45,6 +46,8 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - Migrations are generated, never edited after they are committed; change the schema and generate a new one.
 - `web` is bundled by Vite; browser code imports runtime values from `@newses/shared/client` (no Zod) and only types from `@newses/shared`.
 - UI strings live in each package's `src/locales/en.json` (`web`, `desktop`, `server`). In `web`, vue-i18n parses them: write a literal `@`, `|`, or `{` as `{'@'}`.
+- A changed meaning takes a new key in `en.json`: nothing else flags a translation gone stale.
+- Web layout is logical: `ms-`, `me-`, `ps-`, and `pe-` classes, and `inline-start` and `inline-end` in CSS. Physical sides fail the lint and `web/src/logical-css.test.ts`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
 - No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site (its documentation and images), and the community files' links to the project's repositories, are the exception.
 <!-- #endregion conventions -->
@@ -60,6 +63,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `docs/requirements.md` | What the product does: features, phases, non-functional requirements, non-goals |
 | `docs/architecture.md` | How it is built and deployed: stack, layout, components, data model concepts, APIs, deployment |
 | `newses-app/newses.app` | User guides: install, configuration, upgrade, proxy, backup, restore, TTRSS import, using Newses, clients, apps |
+| `docs/translations.md` | Adding a language, the translation pass, message rules, pseudo-locales, the glossary |
 | `docs/adr/` | Decision history |
 | `README.md` | The repository's front page: what Newses is, a screenshot, links to the site |
 | `CONTRIBUTING.md` | The contribution workflow: issues, pull requests, license of contributions |

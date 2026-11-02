@@ -17,6 +17,9 @@ export function usePrefs() {
     queryKey: PREFS_KEY,
     ...storedQuery('prefs', () => api.prefs.get()),
     staleTime: Infinity,
+    // No event carries preferences, and installed apps can stay open for days: coming back to the
+    // app picks up what another device changed.
+    refetchOnWindowFocus: 'always',
   });
   const { edit } = useResourceEdits();
 

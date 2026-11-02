@@ -37,4 +37,14 @@ describe('PrefsService', () => {
     ]);
     expect(await prefs.get(userId)).toEqual({ ...DEFAULT_PREFS, theme: 'dark' });
   });
+
+  it("keeps a language this server doesn't ship, and null follows the device again", async () => {
+    const [user] = await db.insert(users).values({ login: 'bea', passwordHash: 'x' }).returning();
+    const userId = user?.id ?? 0;
+    const prefs = new PrefsService(db);
+    expect(await prefs.update(userId, { language: 'tlh-KL' })).toMatchObject({
+      language: 'tlh-KL',
+    });
+    expect(await prefs.update(userId, { language: null })).toEqual(DEFAULT_PREFS);
+  });
 });

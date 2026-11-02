@@ -676,6 +676,9 @@
       "operations": "Operations"
     },
     "reading": "Reading",
+    "language": "Language",
+    "languageSystem": "System default",
+    "languageOnDevice": "This server can't keep your language, so it applies on this device only.",
     "updates": "Updates",
     "updatesHint": "Defaults for your feeds; each feed can override them.",
     "freshAge": "Fresh articles are newer than",
