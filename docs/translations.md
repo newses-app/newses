@@ -39,6 +39,13 @@ Development builds offer two generated languages in Settings. Neither is in prod
 | `en-XA` | Text that isn't from a locale file, as everything else is accented and bracketed; tight layouts, as it runs longer |
 | `ar-XB` | Right-to-left layout |
 
+## Spanish
+
+- Neutral across regions: `tú`, and words every region reads (`equipo`, `escribe`, `presiona`).
+- Readers are addressed without gender: `tienes una suscripción`, not `estás suscrito`.
+- `archivo` is both the archive and a file; context separates them.
+- `time.*` uses figures (`1 hora`), as it follows `cada`.
+
 ## Glossary
 
 | English | Means | Spanish |
@@ -54,3 +61,8 @@ Development builds offer two generated languages in Settings. Neither is in prod
 | fresh | Unread and recent | reciente |
 | archive | Past articles of a feed, read-only | archivo |
 | typeface | The font setting; `fuente` is taken by feed | tipo de letra |
+| settings | The app's settings | ajustes |
+| sign in, sign out | Starting and ending a session | iniciar sesión, cerrar sesión |
+| check | Fetching a feed for new articles | comprobar |
+| shortcut | A keyboard binding | atajo |
+| sync | Exchanging changes with the server | sincronizar |

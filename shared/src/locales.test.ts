@@ -35,6 +35,9 @@ describe('negotiateLocale', () => {
 
   it('offers the shipped languages unless told otherwise', () => {
     expect(negotiateLocale(['en-US'])).toBe('en');
+    expect(negotiateLocale(['es-MX'])).toBe('es');
+    expect(negotiateLocale(['es-419'])).toBe('es');
+    expect(negotiateLocale(['fr-FR'])).toBe('en');
   });
 });
 
