@@ -127,6 +127,7 @@ async function submit() {
               ref="codeField"
               v-model="code"
               :label="t('login.code')"
+              dir="ltr"
               autocomplete="one-time-code"
               spellcheck="false"
               required

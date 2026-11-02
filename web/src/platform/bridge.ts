@@ -68,6 +68,7 @@ export const webBridge: PlatformBridge = {
   setDesktopOptions: () => Promise.resolve(),
   onShare: () => undefined,
   setTheme: () => Promise.resolve(),
+  setLanguage: () => Promise.resolve(),
   onBackButton: () => undefined,
   // The browser loads the current web app; only the apps update.
   onUpdateStatus: (listener) => {

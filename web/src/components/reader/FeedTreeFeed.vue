@@ -10,13 +10,15 @@ import {
 import { computed, inject, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useIconSrc } from '../../composables/useIconSrc.ts';
+import { feedErrorText } from '../../lib/error-text.ts';
 import { isTemporary } from '../../lib/offline-resources.ts';
 import type { FeedNode } from '../../lib/tree.ts';
 import { TREE_CONTEXT } from './tree-context.ts';
 import UnreadCount from './UnreadCount.vue';
 
 const props = defineProps<{ node: FeedNode; depth: number }>();
-const { t } = useI18n();
+const { t, te } = useI18n();
+const errorText = computed(() => feedErrorText({ t, te }, props.node.subscription));
 const context = inject(TREE_CONTEXT);
 if (!context) throw new Error('FeedTreeFeed must be inside FeedTree');
 const { dragged, editing, current } = context;
@@ -76,7 +78,7 @@ function onDrop() {
         <v-icon v-else :icon="mdiRss" size="16" class="me-3" />
       </template>
       <v-list-item-title :class="{ 'font-weight-bold': node.unread > 0 }">
-        {{ node.subscription.title }}
+        <bdi>{{ node.subscription.title }}</bdi>
       </v-list-item-title>
       <template #append>
         <template v-if="pending">
@@ -88,7 +90,7 @@ function onDrop() {
             :icon="mdiCancel"
             size="small"
             color="error"
-            :title="t('feeds.disabled', { error: node.subscription.lastError ?? '' })"
+            :title="t('feeds.disabled', { error: errorText })"
             class="ms-1"
           />
           <span class="d-sr-only">{{ t('settings.disabledStatus') }}</span>
@@ -98,7 +100,7 @@ function onDrop() {
             :icon="mdiAlertCircleOutline"
             size="small"
             color="warning"
-            :title="node.subscription.lastError ?? ''"
+            :title="errorText"
             class="ms-1"
           />
           <span class="d-sr-only">{{

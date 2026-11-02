@@ -1,3 +1,4 @@
+import type { Subscription } from '@newses/shared';
 import type { ApiFailure } from '@newses/shared/client';
 
 export interface Translator {
@@ -18,4 +19,19 @@ export function failureText({ t, te }: Translator, failure: ApiFailure): string 
   const key = `errors.code.${failure.code}`;
   if (te(key)) return t(key, {});
   return failure.message || t('errors.generic', {});
+}
+
+/** A feed's last error in the reader's language; `''` when it has none. */
+export function feedErrorText(
+  i18n: Translator,
+  { lastError, lastErrorReason, lastErrorParams }: Subscription,
+): string {
+  return lastError === null
+    ? ''
+    : failureText(i18n, {
+        code: '',
+        message: lastError,
+        reason: lastErrorReason,
+        params: lastErrorParams,
+      });
 }

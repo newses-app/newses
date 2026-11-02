@@ -206,6 +206,7 @@ async function revoke(id: number) {
               <v-text-field
                 v-model="label"
                 :label="t('profiles.label')"
+                dir="auto"
                 :placeholder="renaming ? profileLabel({ ...renaming, label: null }) : undefined"
                 :maxlength="MAX_PROFILE_LABEL_LENGTH"
                 autofocus

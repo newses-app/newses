@@ -68,6 +68,7 @@ async function submit() {
               ref="addressField"
               v-model="address"
               :label="t('connect.address')"
+              dir="ltr"
               :placeholder="t('connect.placeholder')"
               :hint="current ? t('connect.changeHint') : undefined"
               persistent-hint

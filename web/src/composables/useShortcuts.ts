@@ -9,9 +9,11 @@ import {
 } from 'vue';
 import {
   effectiveBindings,
+  hasCommandModifier,
   isTyping,
   type ShortcutAction,
   ShortcutMatcher,
+  shortcutKey,
   usesArrowKeys,
 } from '../lib/shortcuts.ts';
 import { usePrefs } from './usePrefs.ts';
@@ -34,11 +36,11 @@ export function useShortcutListener(global: Handler): void {
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (!prefs.value.keyboardShortcuts) return;
-    if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+    if (hasCommandModifier(event) || event.defaultPrevented) return;
     if (isTyping(event.target) && event.key !== 'Escape') return;
     if (event.key.startsWith('Arrow') && usesArrowKeys(event.target)) return;
     if (document.querySelector('.v-overlay--active:is(.v-dialog, .v-menu)')) return;
-    const action = matcher.value.press(event.key);
+    const action = matcher.value.press(shortcutKey(event, matcher.value));
     if (!action) return;
     if (page.value?.(action) || global(action)) event.preventDefault();
   };

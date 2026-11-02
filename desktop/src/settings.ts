@@ -25,6 +25,8 @@ export interface Settings {
   background?: string | undefined;
   /** The app theme's last text colour, the window controls' symbols in a new window. */
   text?: string | undefined;
+  /** The app's last language, for the menus built before its window runs. */
+  language?: string | undefined;
   /** Changed from the defaults in settings (options.ts). */
   options?: Partial<DesktopOptions> | undefined;
 }

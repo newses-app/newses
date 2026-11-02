@@ -48,6 +48,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - UI strings live in each package's `src/locales/en.json` (`web`, `desktop`, `server`). In `web`, vue-i18n parses them: write a literal `@`, `|`, or `{` as `{'@'}`.
 - A changed meaning takes a new key in `en.json`: nothing else flags a translation gone stale.
 - Web layout is logical: `ms-`, `me-`, `ps-`, and `pe-` classes, and `inline-start` and `inline-end` in CSS. Physical sides fail the lint and `web/src/logical-css.test.ts`.
+- Text a reader or feed wrote sits in `<bdi>` or has `dir="auto"`, in inputs too; URLs, codes, and patterns have `dir="ltr"`. `t()` isolates parameters itself, so a message that gets stored goes through `withoutIsolates`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
 - No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site (its documentation and images), and the community files' links to the project's repositories, are the exception.
 <!-- #endregion conventions -->

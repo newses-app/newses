@@ -40,10 +40,12 @@ const restoreFocus = useReturnFocus(() => ui.helpOpen);
                 <template v-for="action in group.actions" :key="action">
                   <tr v-for="sequence in bindings[action]" :key="sequence">
                     <td class="py-1 pe-4 text-no-wrap">
-                      <template v-for="(key, index) in displayKeys(sequence)" :key="index">
-                        <kbd>{{ key }}</kbd
-                        ><span v-if="index < displayKeys(sequence).length - 1"> </span>
-                      </template>
+                      <span dir="ltr">
+                        <template v-for="(key, index) in displayKeys(sequence)" :key="index">
+                          <kbd>{{ key }}</kbd
+                          ><span v-if="index < displayKeys(sequence).length - 1"> </span>
+                        </template>
+                      </span>
                     </td>
                     <td class="py-1">{{ t(`shortcuts.actions.${action}`) }}</td>
                   </tr>

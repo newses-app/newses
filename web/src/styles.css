@@ -1,6 +1,22 @@
 /* The theme's UI text scale; unlayered, so it overrides Vuetify's root font size. */
 html {
   font-size: calc(var(--ui-font-scale, 1) * 100%);
+  /* An inset shadow's offset, along the start edge of a row. */
+  --edge-mark: 3px;
+}
+html[dir='rtl'] {
+  --edge-mark: -3px;
+}
+html[dir='rtl'] .mirrored-icon {
+  transform: scaleX(-1);
+}
+/* Code and media controls read left to right in any language. */
+pre,
+code,
+audio,
+video {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 /* Article bodies: sanitised feed HTML rendered with v-html. Reading preferences set the variables. */
@@ -28,9 +44,9 @@ html {
   border-radius: 4px;
 }
 .article-content blockquote {
-  border-left: 3px solid rgba(var(--v-theme-on-surface), 0.25);
+  border-inline-start: 3px solid rgba(var(--v-theme-on-surface), 0.25);
   margin: 0 0 1rem;
-  padding-left: 1rem;
+  padding-inline-start: 1rem;
 }
 .article-content p,
 .article-content ul,
@@ -39,7 +55,7 @@ html {
 }
 .article-content ul,
 .article-content ol {
-  padding-left: 1.5rem;
+  padding-inline-start: 1.5rem;
 }
 .article-content a {
   color: rgb(var(--v-theme-primary));
@@ -74,7 +90,7 @@ html {
 .skip-link {
   position: fixed;
   top: 0.5rem;
-  left: 0.5rem;
+  inset-inline-start: 0.5rem;
   z-index: 3000;
   padding: 0.5rem 1rem;
   border-radius: 4px;
@@ -146,8 +162,10 @@ html[data-window-controls] .window-drag-strip {
   width: env(titlebar-area-width, 100%);
   height: env(titlebar-area-height, 0px);
 }
+/* The window controls stay where the system puts them, whatever the language's direction. */
 html[data-window-controls] .v-app-bar .v-toolbar__content {
-  padding-inline-end: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+  padding-left: env(titlebar-area-x, 0px);
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 html[data-window-controls]:not(
     :has(.v-overlay--active, .v-navigation-drawer--temporary.v-navigation-drawer--active)

@@ -155,7 +155,9 @@ function saveRecording() {
                 "
                 @click:close="remove(action, s)"
               >
-                <kbd v-for="(key, index) in displayKeys(s)" :key="index">{{ key }}</kbd>
+                <span dir="ltr">
+                  <kbd v-for="(key, index) in displayKeys(s)" :key="index">{{ key }}</kbd>
+                </span>
               </v-chip>
             </td>
             <td class="text-end text-no-wrap">
@@ -195,6 +197,7 @@ function saveRecording() {
           <p class="text-body-medium mb-4">{{ t('shortcuts.recordHint') }}</p>
           <v-text-field
             :model-value="keysText(sequence)"
+            dir="ltr"
             :label="t('shortcuts.keys')"
             :placeholder="t('shortcuts.pressKeys')"
             persistent-placeholder

@@ -58,6 +58,7 @@ async function save(note: string | null) {
           <v-textarea
             v-model="text"
             :label="t('entries.note')"
+            dir="auto"
             :maxlength="MAX_NOTE_LENGTH"
             auto-grow
             rows="4"

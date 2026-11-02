@@ -21,7 +21,7 @@ import { flushOutbox, loadPending } from '../offline/outbox.ts';
 import { setPeriodicSync } from '../offline/registration.ts';
 import {
   backgroundState,
-  describeError,
+  syncFailure,
   flushRequests,
   keepThemeDrafts,
   loadStatus,
@@ -266,7 +266,7 @@ export function useOfflineSync(): void {
       });
       await publishBackground(db).catch(() => undefined);
     } catch (error) {
-      syncStatus.lastError = describeError(i18n, error);
+      syncStatus.lastError = syncFailure(error);
       throw error;
     } finally {
       syncStatus.running = false;

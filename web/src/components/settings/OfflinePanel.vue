@@ -16,6 +16,7 @@ import {
   outboxPending,
   storeSummary,
   syncRequests,
+  describeFailure,
   syncStatus,
 } from '../../offline/status.ts';
 import {
@@ -28,7 +29,14 @@ import { reloadStore } from '../../offline/sync.ts';
 import { bridge, connection, NATIVE } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
+/** A fault's own words, in English, on hover for a bug report. */
+const faultDetail = computed(() =>
+  syncStatus.lastError?.kind === 'fault' ? syncStatus.lastError.detail : undefined,
+);
+const lastError = computed(
+  () => syncStatus.lastError && describeFailure({ t, te }, syncStatus.lastError),
+);
 const ui = useUiStore();
 const enabled = ref(offlineEnabled());
 const kept = ref(false);
@@ -246,8 +254,8 @@ async function clear() {
             </template>
             <template v-else>{{ t('offline.neverSynced') }}</template>
           </v-list-item-title>
-          <v-list-item-subtitle v-if="syncStatus.lastError" class="text-wrap">
-            {{ t('offline.lastError', { error: syncStatus.lastError }) }}
+          <v-list-item-subtitle v-if="lastError" class="text-wrap" :title="faultDetail">
+            {{ t('offline.lastError', { error: lastError }) }}
           </v-list-item-subtitle>
         </v-list-item>
         <v-list-item v-if="!NATIVE">

@@ -106,6 +106,7 @@ export interface HeadlineRow extends Record<string, unknown> {
   title: string | null;
   link: string | null;
   author: string | null;
+  lang: string | null;
   published_at: string | null;
   sort_at: string;
   unread: boolean;
@@ -141,7 +142,7 @@ const FEED_TITLE = sql`coalesce(s.title,
 /** Headline columns of `user_entries ue` joined as in `HEADLINE_FROM`. */
 export const headlineColumns = (withContent: boolean) => sql`
   ue.id, ue.entry_id, ue.subscription_id, ${FEED_TITLE} AS feed_title,
-  e.title, e.link, e.author, ${iso(sql`e.published_at`)} AS published_at,
+  e.title, e.link, e.author, e.lang, ${iso(sql`e.published_at`)} AS published_at,
   ${iso(sql`ue.sort_at`)} AS sort_at, ue.unread, ue.starred, ue.published, ue.score, ue.note,
   ue.share_id, ${iso(sql`ue.read_at`)} AS read_at, ${CONTENT_VERSION} AS content_version,
   array(SELECT el.label_id FROM entry_labels el WHERE el.user_entry_id = ue.id ORDER BY 1) AS labels,
@@ -161,6 +162,7 @@ export function toEntry(row: HeadlineRow): Entry {
     title: row.title,
     link: row.link,
     author: row.author,
+    lang: row.lang,
     publishedAt: row.published_at,
     sortAt: row.sort_at,
     unread: row.unread,

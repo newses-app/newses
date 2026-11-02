@@ -38,6 +38,7 @@ export const ERROR_REASONS = {
   no_article_found: [],
   tag_empty: [],
   invalid_pattern: ['pattern', 'detail'],
+  feed_unreadable: [],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

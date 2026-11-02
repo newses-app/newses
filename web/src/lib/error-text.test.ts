@@ -1,8 +1,9 @@
+import type { Subscription } from '@newses/shared';
 import { ERROR_REASONS } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
 import { i18n } from '../plugins/i18n.ts';
 import en from '../locales/en.json';
-import { failureText } from './error-text.ts';
+import { failureText, feedErrorText } from './error-text.ts';
 
 const { t } = i18n.global;
 const text = (failure: Parameters<typeof failureText>[1]) => failureText(i18n.global, failure);
@@ -14,6 +15,28 @@ const leaves = (node: object, path = ''): [string, string][] =>
 
 const placeholders = (message: string) =>
   [...message.matchAll(/\{(\w+)\}/g)].map((match) => match[1] ?? '').sort();
+
+describe('feedErrorText', () => {
+  const error = (changes: Partial<Subscription>) =>
+    feedErrorText(i18n.global, { lastError: null, ...changes } as Subscription);
+
+  it("says a feed's error from its reason, in the reader's language", () => {
+    const lastError = 'https://feed.example/ returned HTTP 500';
+    const params = { url: 'https://feed.example/', status: '500' };
+    expect(
+      error({ lastError, lastErrorReason: 'fetch_http_status', lastErrorParams: params }),
+    ).toBe('https://feed.example/ returned HTTP 500.');
+  });
+
+  it('falls back to the text for servers and errors with no reason', () => {
+    expect(error({ lastError: 'Stored in English' })).toBe('Stored in English');
+    expect(error({ lastError: 'Newer', lastErrorReason: 'from_the_future' })).toBe('Newer');
+  });
+
+  it('is empty for a feed without an error', () => {
+    expect(error({})).toBe('');
+  });
+});
 
 describe('failureText', () => {
   it('prefers the reason, with its params', () => {

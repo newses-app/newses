@@ -107,6 +107,7 @@ describe('OpmlService', () => {
     await services.opml.import(alice, TTRSS_EXPORT);
     const exported = await services.opml.export(alice);
     expect(exported).toContain('<opml');
+    expect(exported).toContain('<title>Newses subscriptions</title>');
     await services.opml.import(bob, exported);
     expect(await tree(bob)).toEqual(await tree(alice));
   });

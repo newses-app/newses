@@ -1,4 +1,5 @@
 import type { Category, Counters, Subscription } from '@newses/shared';
+import { compareTitles } from './collation.ts';
 import { categoryKey, type StreamKey, subscriptionKey } from './streams.ts';
 
 export interface CategoryNode {
@@ -24,7 +25,7 @@ export interface FeedTree {
 const byOrder =
   <T>(title: (item: T) => string, order: (item: T) => number) =>
   (a: T, b: T) =>
-    order(a) - order(b) || title(a).localeCompare(title(b), undefined, { sensitivity: 'base' });
+    order(a) - order(b) || compareTitles(title(a), title(b));
 
 /**
  * Nests categories and subscriptions with their unread counts. With `hideRead`, feeds and

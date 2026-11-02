@@ -31,6 +31,8 @@ import {
   mergeTokens,
   themeTokens,
 } from '../../lib/appearance.ts';
+import { ONE_DECIMAL } from '../../lib/format.ts';
+import { withoutIsolates } from '../../lib/message-params.ts';
 import { readThemeFile, themeFile, themeFileName, uniqueName } from '../../lib/theme-files.ts';
 import { isTemporary } from '../../lib/offline-resources.ts';
 import { saveThemeDrafts, themeDrafts } from '../../offline/status.ts';
@@ -140,7 +142,7 @@ const issues = computed(
 function lowContrast(color: keyof ThemePalette): string | undefined {
   const issue = issues.value.get(color);
   return (
-    issue && t('appearance.lowContrast', { ratio: issue.ratio.toFixed(1), min: String(issue.min) })
+    issue && t('appearance.lowContrast', { ratio: n(issue.ratio, ONE_DECIMAL), min: issue.min })
   );
 }
 
@@ -252,7 +254,8 @@ function rename(theme: Theme) {
 }
 
 async function duplicate(theme: Theme) {
-  const name = uniqueName(t('appearance.copyName', { name: theme.name }), ownNames());
+  const copyName = withoutIsolates(t('appearance.copyName', { name: theme.name }));
+  const name = uniqueName(copyName, ownNames());
   if (await run(() => actions.create({ name, base: theme.base, tokens: theme.tokens })))
     ui.notify(t('appearance.saved', { name }));
 }
@@ -534,7 +537,7 @@ async function pick(value: unknown) {
     <p class="text-body-medium text-medium-emphasis mb-4">{{ t('appearance.adjustHint') }}</p>
 
     <h3 class="text-title-medium mb-1">
-      {{ t('appearance.colors', { mode: t(`theme.${mode}`) }) }}
+      {{ t(mode === 'light' ? 'appearance.colorsLight' : 'appearance.colorsDark') }}
     </h3>
     <p class="text-body-medium text-medium-emphasis mb-2">{{ t('appearance.colorsHint') }}</p>
     <v-row dense>
@@ -655,6 +658,7 @@ async function pick(value: unknown) {
             <v-text-field
               v-model="naming.name"
               :label="t('appearance.name')"
+              dir="auto"
               :maxlength="MAX_THEME_NAME_LENGTH"
               counter
               autofocus

@@ -293,7 +293,13 @@ describe('FeedUpdater.update', () => {
     fetcher.set(URL_A, new FetchError('http_status', 'HTTP 500', { status: 500 }));
     await feeds.updater.update(created.id);
     let row = await source(created.id);
-    expect(row).toMatchObject({ errorCount: 1, lastError: 'HTTP 500', disabledAt: null });
+    expect(row).toMatchObject({
+      errorCount: 1,
+      lastError: expect.stringMatching(/ returned HTTP 500$/) as string,
+      lastErrorReason: 'fetch_http_status',
+      lastErrorParams: expect.objectContaining({ status: '500' }) as object,
+      disabledAt: null,
+    });
     expect(secondsUntil(row.nextFetchAt)).toBeGreaterThan(1700);
 
     fetcher.set(URL_A, { body: 'not a feed', contentType: 'text/plain' });
@@ -301,6 +307,7 @@ describe('FeedUpdater.update', () => {
     row = await source(created.id);
     expect(row.errorCount).toBe(2);
     expect(row.lastError).toMatch(/^Not a valid feed/);
+    expect(row).toMatchObject({ lastErrorReason: 'feed_unreadable', lastErrorParams: null });
     expect(secondsUntil(row.nextFetchAt)).toBeGreaterThan(3500);
 
     await feeds.updater.update(created.id);

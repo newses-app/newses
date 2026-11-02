@@ -1,7 +1,10 @@
 import { LOCALES } from '@newses/shared/locales';
 import { afterEach, describe, expect, it } from 'vitest';
+import { defineComponent, h } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { i18n, setLocale, vuetifyLocale } from './i18n.ts';
 import en from '../locales/en.json';
+import { mountWithPlugins } from '../test/mount.ts';
 
 const { t } = i18n.global;
 
@@ -55,6 +58,42 @@ describe.each(LOCALES.map(({ code }) => code))('%s plural messages', (code) => {
       expect(text).not.toContain('undefined');
       expect(text).not.toBe(key);
     }
+  });
+});
+
+describe('message parameters', () => {
+  const NewsTitle = defineComponent({
+    setup() {
+      const { t } = useI18n();
+      return () => h('p', t('appearance.saved', { name: 'חדשות' }));
+    },
+  });
+
+  it('are isolated in components too, through the one composer they use', () => {
+    expect(mountWithPlugins(NewsTitle).text()).toContain('\u2068חדשות\u2069');
+  });
+
+  it('format numbers, keeping the plural choice with or without an explicit count', () => {
+    expect(t('tags.count', { n: 1234 }, 1234)).toBe('1,234 articles');
+    expect(t('tags.count', { n: 1234 })).toBe('1,234 articles');
+    expect(t('tags.count', { n: 1 })).toBe('1 article');
+    expect(t('ops.serverErrors', { count: 1 })).toBe('1 server error');
+    expect(t('ops.serverErrors', { count: 2000 })).toBe('2,000 server errors');
+  });
+
+  it('leave English left-to-right text as it was', () => {
+    expect(t('appearance.saved', { name: 'Fish' })).toBe(
+      en.appearance.saved.replace('{name}', 'Fish'),
+    );
+  });
+
+  it('isolate all text in a right-to-left UI', async () => {
+    await setLocale('ar-XB');
+    expect(t('appearance.saved', { name: 'Fish' })).toContain('\u2068Fish\u2069');
+  });
+
+  it('fill positional text too', () => {
+    expect(vuetifyLocale.adapter.t('$vuetify.input.clear', 'חדשות')).toContain('\u2068חדשות\u2069');
   });
 });
 

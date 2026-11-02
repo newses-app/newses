@@ -67,7 +67,7 @@ function onDrop() {
         <v-icon :icon="collapsed ? mdiFolder : mdiFolderOpen" size="small" class="me-2" />
       </template>
       <v-list-item-title>
-        {{ node.category.title }}
+        <bdi>{{ node.category.title }}</bdi>
         <span v-if="isTemporary(node.category.id)" class="text-body-small text-medium-emphasis">
           · {{ t('offline.notSent') }}
         </span>

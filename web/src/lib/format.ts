@@ -22,6 +22,9 @@ export function formatList(items: string[], locale: string): string {
   return new Intl.ListFormat(locale, { style: 'short', type: 'unit' }).format(items);
 }
 
+/** For `n()`: a ratio shown to one decimal place. */
+export const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+
 export function formatDateTime(iso: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(iso),

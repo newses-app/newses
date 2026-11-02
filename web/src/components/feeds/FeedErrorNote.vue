@@ -15,7 +15,9 @@ const { t, locale } = useI18n();
         formatRelative(at, locale)
       }}</time>
     </template>
-    <template #error>{{ error }}</template>
+    <template #error
+      ><bdi>{{ error }}</bdi></template
+    >
   </i18n-t>
   <span v-else>{{ disabled ? t('feeds.disabled', { error }) : error }}</span>
 </template>

@@ -136,6 +136,57 @@ describe('parseFeed', () => {
     expect(load('rss091.xml').ttlSeconds).toBeNull();
   });
 
+  it.each([
+    [
+      'RSS',
+      `<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><title>t</title>
+         <language>en_US</language>
+         <item><guid>a</guid></item>
+         <item><guid>b</guid><dc:language>fr</dc:language></item></channel></rss>`,
+      ['en-US', 'fr'],
+    ],
+    [
+      'RSS 1.0',
+      `<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+           xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <channel rdf:about="https://s.example/"><title>t</title><link>https://s.example/</link>
+           <dc:language>de</dc:language></channel>
+         <item rdf:about="https://s.example/a"><title>a</title><link>https://s.example/a</link></item>
+         <item rdf:about="https://s.example/b"><title>b</title><link>https://s.example/b</link>
+           <dc:language>nl</dc:language></item>
+       </rdf:RDF>`,
+      ['de', 'nl'],
+    ],
+    [
+      'Atom',
+      `<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="he"><title>t</title><id>f</id>
+         <updated>2026-01-01T00:00:00Z</updated>
+         <entry><id>a</id><title>a</title><updated>2026-01-01T00:00:00Z</updated></entry>
+         <entry xml:lang="ar"><id>b</id><title>b</title><updated>2026-01-01T00:00:00Z</updated></entry>
+         <entry xml:lang="ar"><id>c</id><title>c</title><updated>2026-01-01T00:00:00Z</updated>
+           <content xml:lang="fa">x</content></entry></feed>`,
+      ['he', 'ar', 'fa'],
+    ],
+    [
+      'JSON Feed',
+      JSON.stringify({
+        version: 'https://jsonfeed.org/version/1.1',
+        title: 't',
+        language: 'es-MX',
+        items: [{ id: 'a' }, { id: 'b', language: 'pt-BR' }],
+      }),
+      ['es-MX', 'pt-BR'],
+    ],
+  ])('reads the language of entries in %s, else of the feed', (_format, body, langs) => {
+    expect(parseFeed(body, FEED_URL).entries.map((e) => e.lang)).toEqual(langs);
+  });
+
+  it.each(['English', '', 'x', 'en us', 'en-'])('ignores %j as a language', (language) => {
+    const body = `<rss version="2.0"><channel><title>t</title><language>${language}</language>
+      <item><guid>a</guid></item></channel></rss>`;
+    expect(parseFeed(body, FEED_URL).entries[0]?.lang).toBeNull();
+  });
+
   it('drops links and enclosures that are not http(s)', () => {
     const feed = parseFeed(
       `<rss version="2.0"><channel><title>T</title><link>javascript:alert(1)</link>

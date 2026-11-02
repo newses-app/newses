@@ -163,6 +163,7 @@ watch(key, () => scroller.value?.scrollTo({ top: 0 }));
       :prepend-inner-icon="mdiMagnify"
       :placeholder="t('search.placeholder')"
       :aria-label="t('archive.search')"
+      dir="auto"
       density="compact"
       hide-details
       clearable
@@ -176,6 +177,7 @@ watch(key, () => scroller.value?.scrollTo({ top: 0 }));
       v-else
       :icon="mdiMagnify"
       :aria-label="t('archive.search')"
+      dir="auto"
       :title="t('archive.search')"
       @click="openSearch"
     />

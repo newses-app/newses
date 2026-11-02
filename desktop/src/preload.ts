@@ -90,6 +90,7 @@ const bridge: PlatformBridge = {
   // Sharing to the app is Android's.
   onShare: () => undefined,
   setTheme: (theme: AppTheme) => invoke<undefined>('setTheme', theme),
+  setLanguage: (code: string) => invoke<undefined>('setLanguage', code),
   // Desktop has no system back button.
   onBackButton: () => undefined,
   onUpdateStatus: (listener) => {

@@ -2,8 +2,9 @@ import type { Prefs } from '@newses/shared';
 import { negotiateLocale } from '@newses/shared/locales';
 import { computed, shallowRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { bridge } from '../platform/index.ts';
 import { profileKey } from '../platform/profile-keys.ts';
-import { AVAILABLE_LOCALES, setLocale } from '../plugins/i18n.ts';
+import { AVAILABLE_LOCALES, i18n, setLocale } from '../plugins/i18n.ts';
 import { usePrefs } from './usePrefs.ts';
 
 const CACHE_KEY = 'newses.language';
@@ -32,10 +33,11 @@ function cacheChoice(language: string | null): void {
 }
 
 /** A choice no longer on offer falls through to the device's languages. */
-const showChoice = () => {
+async function showChoice(): Promise<void> {
   const device = navigator.languages;
-  return setLocale(negotiateLocale(chosen.value ? [chosen.value, ...device] : device, OFFERED));
-};
+  await setLocale(negotiateLocale(chosen.value ? [chosen.value, ...device] : device, OFFERED));
+  void bridge.setLanguage(i18n.global.locale.value);
+}
 
 function choose(language: string | null): Promise<void> {
   chosen.value = language;

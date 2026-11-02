@@ -379,6 +379,7 @@ describe('TTRSS entries import', () => {
         updatedAt: null,
         enclosures: [],
         categories: [],
+        lang: null,
       },
     ]);
     expect(result).toEqual({ inserted: 0, updated: 1 });
@@ -421,6 +422,7 @@ describe('TTRSS entries import', () => {
         updatedAt: null,
         enclosures: [],
         categories: [],
+        lang: null,
       },
     ]);
     expect((await run()).reconciled).toBe(true);

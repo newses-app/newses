@@ -113,7 +113,7 @@ onBeforeUnmount(() => {
   max-width: var(--article-width, 50rem);
 }
 .combined-card.high-score {
-  box-shadow: inset 3px 0 rgb(var(--v-theme-primary));
+  box-shadow: inset var(--edge-mark) 0 rgb(var(--v-theme-primary));
 }
 /* Read entries dim their heading only, which keeps every text above AA contrast. */
 .combined-card.read :deep(.entry-heading) {

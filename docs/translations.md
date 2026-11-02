@@ -5,8 +5,10 @@
 | Part | File |
 |---|---|
 | Messages | `src/locales/<code>.json` in `web`, `server`, and `desktop`, with the keys of `en.json` |
+| Server and desktop imports | `MESSAGES` in `server/src/i18n.ts` and `desktop/src/i18n.ts` |
 | Vuetify's text | `web/src/locales/vuetify/<code>.ts`: `export { es as default } from 'vuetify/locale';` |
 | Registry | `LOCALES` in `shared/src/locales.ts`: code, the language's own name, direction, plural forms |
+| Android per-app languages | `mobile/android/app/src/main/res/xml/locales_config.xml` |
 
 - A language joins the registry once reviewed; the files and the registry land together.
 - Plural forms are the CLDR categories its messages have, in the order they are written, ending in `other`. Categories left out use `other`: Spanish lists `one, other`, so CLDR's `many` for a million uses `other`.
@@ -23,8 +25,10 @@
 - A changed meaning takes a new key: nothing else flags a translation gone stale.
 - Placeholders keep their names, and each message has the placeholders of its English.
 - Plural forms are separated by ` | `.
+- Zero is a separate key, and each message counts one thing: join separate counts in code.
+- `{duration}` is a noun phrase from `time.*`, so a sentence around it needs no agreement with it.
 - In `web`, write a literal `@`, `|`, or `{` as `{'@'}`.
-- Not translated: the name Newses, search operators, API `message`, the CLI, the compatibility APIs, operator alerts, the project site, and the downloads page.
+- Not translated: the name Newses, search operators, the parser's explanation in `{detail}`, API `message`, the CLI, the compatibility APIs, operator alerts, the project site, and the downloads page.
 
 ## Pseudo-locales
 

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { MAX_FEED_TITLE_LENGTH } from '@newses/shared';
+import { type ErrorDetail, MAX_FEED_TITLE_LENGTH } from '@newses/shared';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { feedSources, fetchHosts, subscriptions } from '../../db/schema.ts';
@@ -9,6 +9,7 @@ import type { Jobs } from '../jobs.ts';
 import type { JobQueue, Logger } from '../ports.ts';
 import { userPrefInt } from '../prefs.ts';
 import { decodeBody } from './decode.ts';
+import { describeFetchFailure } from './fetch-failure.ts';
 import type { FullTextService } from './fulltext.ts';
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
 import type { Ingester } from './ingest.ts';
@@ -57,6 +58,16 @@ export function backoffSeconds(
 export function hintSeconds(hints: (number | null)[]): number | null {
   const given = hints.filter((h): h is number => h !== null && h > 0);
   return given.length === 0 ? null : Math.min(MAX_HINT_SECONDS, Math.max(...given));
+}
+
+/** Why a feed failed, as its last error. */
+function describeFailure(
+  url: string,
+  err: FetchError | FeedParseError,
+): { message: string; detail: ErrorDetail } {
+  return err instanceof FetchError
+    ? describeFetchFailure(url, err)
+    : { message: `Not a valid feed: ${err.message}`, detail: { reason: 'feed_unreadable' } };
 }
 
 export class FeedUpdater {
@@ -311,6 +322,8 @@ export class FeedUpdater {
         nextFetchAt: sql`now() + make_interval(secs => ${next})`,
         errorCount: 0,
         lastError: null,
+        lastErrorReason: null,
+        lastErrorParams: null,
         lastErrorAt: null,
         blockedUntil: null,
       })
@@ -482,8 +495,7 @@ export class FeedUpdater {
     let retryAfter = err instanceof FetchError ? err.retryAfterSeconds : null;
     const throttled = err instanceof FetchError && isHostThrottle(err);
     if (throttled) retryAfter ??= DEFAULT_HOST_COOLDOWN_SECONDS;
-    const message =
-      err instanceof FeedParseError ? `Not a valid feed: ${err.message}` : err.message;
+    const { message, detail } = describeFailure(source.url, err);
     const inputs = await this.#inputsOf(source.id);
     const slowdown = throttled
       ? afterThrottle(source.slowdownSeconds, this.#interval({ ...inputs, slowdown: null }).seconds)
@@ -495,6 +507,8 @@ export class FeedUpdater {
       .set({
         errorCount: failures,
         lastError: message.slice(0, 1000),
+        lastErrorReason: detail.reason,
+        lastErrorParams: detail.params ?? null,
         lastErrorAt: sql`now()`,
         lastFetchedAt: sql`now()`,
         fetchIntervalSeconds: schedule.seconds,

@@ -404,6 +404,7 @@ const AUDIT_EVENTS = [
         <v-text-field
           v-model="ruleHost"
           :label="t('ops.host')"
+          dir="ltr"
           :placeholder="t('ops.hostExample')"
           density="compact"
           hide-details

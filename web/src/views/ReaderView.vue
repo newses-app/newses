@@ -313,7 +313,7 @@ async function catchUp(olderThanDays?: number) {
       ...stream.value,
       ...(olderThanDays !== undefined && { olderThanDays }),
     });
-    ui.notify(t('catchUp.done', { n: updated }, updated));
+    ui.notify(updated ? t('catchUp.done', { n: updated }, updated) : t('catchUp.none'));
   } catch (error) {
     notifyError(error);
   }
@@ -440,7 +440,7 @@ const showArticle = computed(
       <v-app-bar-nav-icon v-else :aria-label="t('nav.menu')" @click="ui.drawer = !ui.drawer" />
     </template>
     <v-app-bar-title v-if="!compact || !searchOpen" tag="h1">
-      {{ title }}
+      <bdi>{{ title }}</bdi>
       <span v-if="unread > 0" class="text-body-medium text-medium-emphasis ms-1">
         {{ t('entries.unreadCount', { n: unread }) }}
       </span>
@@ -452,6 +452,7 @@ const showArticle = computed(
       :prepend-inner-icon="mdiMagnify"
       :placeholder="t(online ? 'search.placeholder' : 'search.placeholderOffline')"
       :aria-label="t('search.label')"
+      dir="auto"
       density="compact"
       hide-details
       clearable
@@ -465,6 +466,7 @@ const showArticle = computed(
       v-else
       :icon="mdiMagnify"
       :aria-label="t('search.label')"
+      dir="auto"
       :title="t('search.label')"
       @click="openSearch"
     />

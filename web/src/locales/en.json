@@ -1,6 +1,7 @@
 {
   "app": {
     "name": "Newses",
+    "pageTitle": "{view} – {app}",
     "waking": "Waking up the server. This can take up to 30 seconds after a period of inactivity.",
     "unreachable": "Couldn't reach the server.",
     "retry": "Try again"
@@ -14,6 +15,8 @@
     "lastSynced": "Last synced {when}",
     "neverSynced": "Not synced yet",
     "lastError": "The last sync failed: {error}",
+    "refusedStatus": "{status} {error}",
+    "syncFault": "Something went wrong on this device.",
     "unsupported": "This server needs an update before articles can be kept offline.",
     "syncNow": "Sync now",
     "persisted": "The browser keeps these articles.",
@@ -103,6 +106,7 @@
       "category_into_itself": "A category can't be moved into itself.",
       "category_name_taken": "A category named \"{name}\" already exists there.",
       "feed_host_paused": "The feed's host asked not to be fetched again yet.",
+      "feed_unreadable": "This isn't a valid feed.",
       "fetch_blocked_address": "{url} is on a private network.",
       "fetch_host_blocked": "The site asked to wait before more requests.",
       "fetch_http_status": "{url} returned HTTP {status}.",
@@ -306,7 +310,8 @@
     "enabledNamed": "Filter {title} enabled",
     "moveUp": "Move {title} up",
     "moveDown": "Move {title} down",
-    "summary": "{rules} rule, {actions} action | {rules} rules, {actions} actions",
+    "ruleCount": "{n} rule | {n} rules",
+    "actionCount": "{n} action | {n} actions",
     "apply": "Apply to existing articles",
     "applyNamed": "Apply {title} to existing articles",
     "applyConfirm": "Run “{title}” on all your articles now? Starred, published, noted, labelled, and shared articles are never deleted.",
@@ -489,7 +494,8 @@
     "confirm": "Mark articles in “{feed}” as read?",
     "action": "Mark read",
     "thisStream": "this view",
-    "done": "No articles marked read. | One article marked read. | {n} articles marked read."
+    "done": "One article marked read. | {n} articles marked read.",
+    "none": "No articles marked read."
   },
   "feeds": {
     "fullText": "Full text",
@@ -515,8 +521,11 @@
     "category": "Category",
     "interval": "Check for updates",
     "purge": "Delete articles",
-    "every": "Every {duration}",
-    "olderThan": "Older than {duration}",
+    "everyMinutes": "Every minute | Every {n} minutes",
+    "everyHours": "Every hour | Every {n} hours",
+    "everyDays": "Every day | Every {n} days",
+    "everyWeeks": "Every week | Every {n} weeks",
+    "olderThan": "Older than one day | Older than {n} days",
     "useDefault": "Default",
     "keepForever": "Never",
     "refresh": "Update now",
@@ -545,7 +554,8 @@
     "body": "Body",
     "truncated": "Showing the first 256 KB.",
     "parsed": "As stored",
-    "feed": "{format} feed “{title}”: no entries | {format} feed “{title}”: one entry | {format} feed “{title}”: {n} entries",
+    "feed": "{format} feed “{title}”: one entry | {format} feed “{title}”: {n} entries",
+    "feedEmpty": "{format} feed “{title}”: no entries",
     "parseError": "Newses can't read this as a feed.",
     "discovered": "The page advertises:",
     "filter": "Filter: {name}",
@@ -576,7 +586,8 @@
     "adjust": "Adjust this theme",
     "adjustHint": "Changes apply to the theme you use and are saved as you make them.",
     "reset": "Reset adjustments",
-    "colors": "Colours ({mode})",
+    "colorsLight": "Colours (light)",
+    "colorsDark": "Colours (dark)",
     "colorsHint": "Switch the mode to edit the other mode's colours.",
     "colorNames": {
       "background": "Background",

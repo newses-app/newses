@@ -27,6 +27,7 @@ const date = computed(() =>
 );
 const title = computed(() => props.entry.title ?? t('entries.untitled'));
 const link = computed(() => safeUrl(props.entry.link));
+const lang = computed(() => props.entry.lang ?? undefined);
 const content = computed(
   () => props.entry.content && withLazyImages(resolveContentUrls(props.entry.content, appServer())),
 );
@@ -35,7 +36,7 @@ const content = computed(
 <template>
   <article class="entry-article">
     <header class="mb-4">
-      <h2 class="entry-heading text-headline-small mt-0 mb-1" tabindex="-1">
+      <h2 class="entry-heading text-headline-small mt-0 mb-1" tabindex="-1" dir="auto" :lang>
         <a v-if="link" :href="link" target="_blank" rel="noopener noreferrer" class="entry-title">{{
           title
         }}</a>
@@ -43,9 +44,13 @@ const content = computed(
       </h2>
       <div class="text-body-medium text-medium-emphasis">
         <span v-if="entry.feedTitle">
-          <FeedIcon :subscription-id="entry.subscriptionId" class="me-1" />{{ entry.feedTitle }}
+          <FeedIcon :subscription-id="entry.subscriptionId" class="me-1" /><bdi>{{
+            entry.feedTitle
+          }}</bdi>
         </span>
-        <span v-if="entry.author"> · {{ entry.author }}</span>
+        <span v-if="entry.author">
+          · <bdi>{{ entry.author }}</bdi></span
+        >
         <span>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span
         >
@@ -105,8 +110,11 @@ const content = computed(
     <v-skeleton-loader v-if="entry.content === undefined" type="paragraph@3" />
     <!-- Content is sanitised by the server against an allow-list before storage. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
-    <div v-else-if="content" class="article-content" v-html="content" />
-    <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
+    <div v-else-if="content" class="article-content" dir="auto" :lang v-html="content" />
+    <p v-else-if="entry.excerpt" class="text-medium-emphasis" dir="auto" :lang>
+      {{ entry.excerpt }}
+    </p>
+    <p v-else class="text-medium-emphasis">{{ t('entries.noContent') }}</p>
     <EntryEnclosures :enclosures="entry.enclosures ?? []" :content="entry.content" />
   </article>
 </template>

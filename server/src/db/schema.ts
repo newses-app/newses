@@ -1,3 +1,4 @@
+import type { ErrorParams } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -203,6 +204,9 @@ export const feedSources = pgTable(
     lastFetchedAt: tstz('last_fetched_at'),
     errorCount: integer('error_count').notNull().default(0),
     lastError: text('last_error'),
+    /** What `last_error` says as an error reason, for apps to say it in the reader's language. */
+    lastErrorReason: text('last_error_reason'),
+    lastErrorParams: jsonb('last_error_params').$type<ErrorParams>(),
     lastErrorAt: tstz('last_error_at'),
     disabledAt: tstz('disabled_at'),
     // Publisher's update hint from the feed document (RSS ttl, sy:updatePeriod).

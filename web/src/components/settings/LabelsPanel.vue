@@ -3,6 +3,7 @@ import type { Label } from '@newses/shared';
 import { mdiDelete, mdiLabelOutline, mdiPencil, mdiPlus } from '@mdi/js';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ONE_DECIMAL } from '../../lib/format.ts';
 import { useErrorText } from '../../composables/useErrorText.ts';
 import { useLabelActions, useLabels } from '../../composables/useLabels.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
@@ -12,7 +13,7 @@ import { useUiStore } from '../../stores/ui.ts';
 import LabelChip from '../labels/LabelChip.vue';
 import { isTemporary } from '../../lib/offline-resources.ts';
 
-const { t } = useI18n();
+const { t, n } = useI18n();
 const errorText = useErrorText();
 const ui = useUiStore();
 const labels = useLabels();
@@ -132,6 +133,7 @@ async function deleteLabel(label: Label) {
             <v-text-field
               v-model="editing.caption"
               :label="t('labels.caption')"
+              dir="auto"
               maxlength="100"
               autofocus
             />
@@ -171,7 +173,7 @@ async function deleteLabel(label: Label) {
               density="compact"
               class="mt-4"
             >
-              {{ t('labels.lowContrast', { ratio: contrast.toFixed(1) }) }}
+              {{ t('labels.lowContrast', { ratio: n(contrast, ONE_DECIMAL) }) }}
             </v-alert>
           </v-card-text>
           <v-card-actions>

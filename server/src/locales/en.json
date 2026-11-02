@@ -4,5 +4,8 @@
   "readOriginal": "Read the original",
   "sharedFrom": "Shared from Newses.",
   "notAvailable": "Not available",
-  "notAvailableText": "This link does not exist or is no longer shared."
+  "notAvailableText": "This link does not exist or is no longer shared.",
+  "publishedTitle": "Published articles",
+  "publishedDescription": "Articles published from Newses",
+  "opmlTitle": "Newses subscriptions"
 }

@@ -2,6 +2,7 @@ import { DEFAULT_LOCALE, type Locale, LOCALES } from '@newses/shared/locales';
 import { createI18n, useI18n } from 'vue-i18n';
 import { en as vuetifyEn } from 'vuetify/locale';
 import { createVueI18nAdapter } from 'vuetify/locale/adapters/vue-i18n';
+import { shownParam } from '../lib/message-params.ts';
 import { pluralRule } from '../lib/plurals.ts';
 import { PSEUDO_LOCALES, pseudoMessages } from '../lib/pseudo-locale.ts';
 import en from '../locales/en.json';
@@ -39,12 +40,36 @@ export const i18n = createI18n<[MessageSchema], string, false>({
   ),
 });
 
+const RIGHT_TO_LEFT: Record<string, boolean> = Object.fromEntries(
+  AVAILABLE_LOCALES.map(({ code, direction }) => [code, direction === 'rtl']),
+);
+
+const translate = i18n.global.t;
+
+/**
+ * Every message's parameters pass through `shownParam` here: `useI18n()` hands components this
+ * one composer. vue-i18n takes a numeric `count` or `n` as the plural choice unless it is given
+ * one, so that survives the number becoming text.
+ */
+i18n.global.t = (key: string, ...args: unknown[]) => {
+  const [params, ...rest] = args;
+  if (typeof params !== 'object' || params === null) return translate(key, ...(args as []));
+  const locale = i18n.global.locale.value;
+  const shown = (value: unknown) => shownParam(value, locale, RIGHT_TO_LEFT[locale] ?? false);
+  if (Array.isArray(params)) return translate(key, params.map(shown), ...(rest as []));
+  const named = params as Record<string, unknown>;
+  const count = named.count ?? named.n;
+  return translate(
+    key,
+    Object.fromEntries(Object.entries(named).map(([name, value]) => [name, shown(value)])),
+    ...((rest.length === 0 && typeof count === 'number' ? [count] : rest) as []),
+  );
+};
+
 /** Vuetify's locale options: its own text and direction follow the app's language. */
 export const vuetifyLocale = {
   adapter: createVueI18nAdapter({ i18n, useI18n }),
-  rtl: Object.fromEntries(
-    AVAILABLE_LOCALES.map(({ code, direction }) => [code, direction === 'rtl']),
-  ),
+  rtl: RIGHT_TO_LEFT,
 };
 
 async function loadMessages(code: string): Promise<MessageSchema> {

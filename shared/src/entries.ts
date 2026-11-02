@@ -68,6 +68,8 @@ export const entrySchema = z.object({
   title: z.string().nullable(),
   link: z.string().nullable(),
   author: z.string().nullable(),
+  /** Language tag of the article, when its feed gives one; absent before API 1.7. */
+  lang: z.string().nullable().optional(),
   publishedAt: z.iso.datetime().nullable(),
   /** Headline sort time: publication time, else fetch time. */
   sortAt: z.iso.datetime(),

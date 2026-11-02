@@ -1,8 +1,7 @@
 import type { Entry } from '@newses/shared';
+import { LOCALES } from '@newses/shared/locales';
 import { VIDEO_FRAME_SOURCES } from '@newses/shared/web-csp';
-import en from '../locales/en.json' with { type: 'json' };
-
-const LOCALE = 'en';
+import { messagesFor } from '../i18n.ts';
 
 /**
  * Policy for public pages: no scripts at all, the entry's images, media, and embedded videos,
@@ -44,13 +43,16 @@ const STYLE = `
   .meta, footer { color: var(--muted); font-size: .9rem; }
   img, video, iframe { max-width: 100%; height: auto; }
   pre { overflow-x: auto; }
+  pre, code { direction: ltr; unicode-bidi: isolate; }
+  audio, video { direction: ltr; }
   blockquote { margin-inline: 0; padding-inline-start: 1rem; border-inline-start: 3px solid var(--muted); }
   footer { margin-top: 3rem; }
 `;
 
-function page(title: string, body: string): string {
+function page(locale: string, title: string, body: string): string {
+  const direction = LOCALES.find((known) => known.code === locale)?.direction ?? 'ltr';
   return `<!doctype html>
-<html lang="${LOCALE}">
+<html lang="${locale}" dir="${direction}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -69,31 +71,36 @@ ${body}
 }
 
 /** A shared entry as a standalone page. `content` is sanitised HTML, safe to embed. */
-export function sharedEntryPage(entry: Entry): string {
-  const title = entry.title ?? en.untitled;
+export function sharedEntryPage(entry: Entry, locale: string): string {
+  const text = messagesFor(locale);
+  const title = entry.title ?? text.untitled;
   const date = entry.publishedAt ?? entry.sortAt;
   const heading = isHttp(entry.link)
     ? `<a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">${escapeHtml(title)}</a>`
     : escapeHtml(title);
   const meta = [
-    entry.feedTitle && escapeHtml(entry.feedTitle),
-    entry.author && escapeHtml(entry.author),
+    entry.feedTitle && `<bdi>${escapeHtml(entry.feedTitle)}</bdi>`,
+    entry.author && `<bdi>${escapeHtml(entry.author)}</bdi>`,
     `<time datetime="${escapeHtml(date)}">${escapeHtml(
-      new Date(date).toLocaleDateString(LOCALE, { dateStyle: 'long', timeZone: 'UTC' }),
+      new Date(date).toLocaleDateString(locale, { dateStyle: 'long', timeZone: 'UTC' }),
     )}</time>`,
   ].filter(Boolean);
   const attachments = (entry.enclosures ?? []).filter((e) => isHttp(e.url));
+  const lang = entry.lang ? ` lang="${escapeHtml(entry.lang)}"` : '';
   return page(
+    locale,
     title,
     `<article>
 <header>
-<h1>${heading}</h1>
+<h1 dir="auto"${lang}>${heading}</h1>
 <p class="meta">${meta.join(' · ')}</p>
 </header>
+<div dir="auto"${lang}>
 ${entry.content ?? `<p>${escapeHtml(entry.excerpt ?? '')}</p>`}
+</div>
 ${
   attachments.length
-    ? `<h2>${escapeHtml(en.attachments)}</h2>\n<ul>${attachments
+    ? `<h2>${escapeHtml(text.attachments)}</h2>\n<ul>${attachments
         .map(
           (e) =>
             `<li><a href="${escapeHtml(e.url)}" rel="noopener noreferrer">${escapeHtml(
@@ -104,13 +111,16 @@ ${
     : ''
 }
 </article>
-${isHttp(entry.link) ? `<p><a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">${escapeHtml(en.readOriginal)}</a></p>` : ''}
-<footer>${escapeHtml(en.sharedFrom)}</footer>`,
+${isHttp(entry.link) ? `<p><a href="${escapeHtml(entry.link)}" rel="noopener noreferrer">${escapeHtml(text.readOriginal)}</a></p>` : ''}
+<footer>${escapeHtml(text.sharedFrom)}</footer>`,
   );
 }
 
-export const notFoundPage = () =>
-  page(
-    en.notAvailable,
-    `<h1>${escapeHtml(en.notAvailable)}</h1>\n<p>${escapeHtml(en.notAvailableText)}</p>`,
+export function notFoundPage(locale: string): string {
+  const text = messagesFor(locale);
+  return page(
+    locale,
+    text.notAvailable,
+    `<h1>${escapeHtml(text.notAvailable)}</h1>\n<p>${escapeHtml(text.notAvailableText)}</p>`,
   );
+}

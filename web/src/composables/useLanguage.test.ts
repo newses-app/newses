@@ -2,6 +2,7 @@ import type { Prefs } from '@newses/shared';
 import { DEFAULT_PREFS } from '@newses/shared/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computed, defineComponent, h, nextTick, shallowRef } from 'vue';
+import { bridge } from '../platform/index.ts';
 import { i18n, setLocale } from '../plugins/i18n.ts';
 import { mountWithPlugins } from '../test/mount.ts';
 import { startLanguage, useLanguage, useLanguagePicker } from './useLanguage.ts';
@@ -70,6 +71,13 @@ describe('startLanguage', () => {
     await startLanguage();
     expect(shown()).toBe('ar-XB');
     expect(document.documentElement.dir).toBe('rtl');
+  });
+
+  it('tells the shell the language shown, for its menus', async () => {
+    const setLanguage = vi.spyOn(bridge, 'setLanguage');
+    deviceLanguages(['ar-XB']);
+    await startLanguage();
+    expect(setLanguage).toHaveBeenLastCalledWith('ar-XB');
   });
 
   it('falls through a choice no longer on offer', async () => {

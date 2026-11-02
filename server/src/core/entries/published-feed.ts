@@ -4,14 +4,19 @@ import { generateRssFeed } from 'feedsmith';
 export const PUBLISHED_FEED_LENGTH = 50;
 
 /**
- * RSS 2.0 of a user's published entries. `content` is the sanitised HTML, already pointed at
- * the image proxy when the owner uses it; `selfUrl` is the feed's own public URL.
+ * RSS 2.0 of a user's published entries, titled in the owner's language; its `<language>` stays
+ * unset, as that is no language of the articles. `content` is the sanitised HTML, already pointed
+ * at the image proxy when the owner uses it; `self` is the feed's own public URL.
  */
-export function publishedFeedXml(entries: Entry[], urls: { site: string; self: string }): string {
+export function publishedFeedXml(
+  entries: Entry[],
+  text: { publishedTitle: string; publishedDescription: string },
+  urls: { site: string; self: string },
+): string {
   return generateRssFeed({
-    title: 'Published articles',
+    title: text.publishedTitle,
     link: urls.site,
-    description: 'Articles published from Newses',
+    description: text.publishedDescription,
     lastBuildDate: new Date(),
     atom: { links: [{ href: urls.self, rel: 'self', type: 'application/rss+xml' }] },
     items: entries.map((entry) => ({

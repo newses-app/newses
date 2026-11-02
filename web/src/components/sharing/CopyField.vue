@@ -21,6 +21,7 @@ async function copy() {
   <v-text-field
     :model-value="value"
     :label="label"
+    dir="ltr"
     readonly
     hide-details
     @focus="($event.target as HTMLInputElement).select()"

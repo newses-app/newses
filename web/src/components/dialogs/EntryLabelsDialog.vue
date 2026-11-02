@@ -103,6 +103,7 @@ async function save() {
           <v-text-field
             v-model="caption"
             :label="t('labels.newLabel')"
+            dir="auto"
             maxlength="100"
             density="compact"
           />

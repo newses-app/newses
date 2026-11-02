@@ -85,6 +85,7 @@ async function submit() {
           <v-text-field
             v-model="url"
             :label="t('subscribe.url')"
+            dir="ltr"
             :hint="t('subscribe.urlHint')"
             persistent-hint
             autofocus

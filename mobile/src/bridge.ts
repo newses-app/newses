@@ -222,6 +222,8 @@ const bridge: PlatformBridge = {
   },
   // The app draws edge to edge, so the bars show the page's theme background; over a dark one
   // their icons must be light.
+  // Android has no menus of its own: everything shown comes from the web app.
+  setLanguage: () => Promise.resolve(),
   setTheme: ({ dark }) =>
     SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }),
   onBackButton: (handler) => {

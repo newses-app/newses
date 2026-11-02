@@ -58,6 +58,9 @@ export const subscriptionSchema = z.object({
   iconUrl: z.string().nullable(),
   lastFetchedAt: z.iso.datetime().nullable(),
   lastError: z.string().nullable(),
+  /** One of `ERROR_REASONS`, to say `lastError` in the reader's language; absent before API 1.7. */
+  lastErrorReason: z.string().nullable().optional(),
+  lastErrorParams: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   lastErrorAt: z.iso.datetime().nullable(),
   /** Consecutive failed fetches. */
   errorCount: z.number().int(),

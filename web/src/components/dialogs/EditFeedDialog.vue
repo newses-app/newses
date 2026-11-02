@@ -13,6 +13,7 @@ import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useResourceEdits } from '../../composables/useResourceEdits.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
+import { feedErrorText } from '../../lib/error-text.ts';
 import { formatDateTime } from '../../lib/format.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { scheduleMessage } from '../../lib/schedule.ts';
@@ -23,7 +24,7 @@ import { useUiStore } from '../../stores/ui.ts';
 const ui = useUiStore();
 const route = useRoute();
 const router = useRouter();
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 const errorText = useErrorText();
 const subscriptions = useSubscriptions();
 const categories = useCategories();
@@ -187,6 +188,7 @@ async function unsubscribe() {
           <v-text-field
             v-model="title"
             :label="t('feeds.title')"
+            dir="auto"
             :placeholder="subscription.title"
           />
           <v-select
@@ -238,7 +240,7 @@ async function unsubscribe() {
             class="mt-2"
           >
             <FeedErrorNote
-              :error="subscription.lastError"
+              :error="feedErrorText({ t, te }, subscription)"
               :at="subscription.lastErrorAt"
               :disabled="subscription.disabled"
             />

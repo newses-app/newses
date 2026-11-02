@@ -1,3 +1,5 @@
+import { compareTitles } from './collation.ts';
+
 export interface Ordered {
   id: number;
   sortOrder: number;
@@ -19,7 +21,7 @@ export function reorder(siblings: Ordered[], movedId: number, beforeId: number |
 
 /** Sorts feeds or categories as the tree shows them. */
 export const byDisplayOrder = <T extends { sortOrder: number; title: string }>(a: T, b: T) =>
-  a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+  a.sortOrder - b.sortOrder || compareTitles(a.title, b.title);
 
 /**
  * A position among `siblings` (display order, without the moved item) is the id it follows, or

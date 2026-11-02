@@ -101,6 +101,8 @@ export function toSubscription(view: SubscriptionView, userIntervalSeconds: numb
     iconUrl: source.faviconKey ? `/${source.faviconKey}` : null,
     lastFetchedAt: source.lastFetchedAt?.toISOString() ?? null,
     lastError: source.lastError,
+    lastErrorReason: source.lastErrorReason,
+    lastErrorParams: source.lastErrorParams ?? {},
     lastErrorAt: source.lastErrorAt?.toISOString() ?? null,
     errorCount: source.errorCount,
     disabled: source.disabledAt !== null,

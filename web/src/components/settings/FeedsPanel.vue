@@ -21,13 +21,15 @@ import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useResourceEdits } from '../../composables/useResourceEdits.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
+import { feedErrorText } from '../../lib/error-text.ts';
+import { compareTitles } from '../../lib/collation.ts';
 import { formatRelative } from '../../lib/format.ts';
 import { temporaryId } from '../../lib/offline-resources.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 const errorText = useErrorText();
 const ui = useUiStore();
 
@@ -57,7 +59,7 @@ const categoryName = (id: number | null) =>
 const rows = computed(() =>
   [...(subscriptions.data.value ?? [])]
     .filter((s) => !errorsOnly.value || s.errorCount > 0 || s.disabled)
-    .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })),
+    .sort((a, b) => compareTitles(a.title, b.title)),
 );
 const errorCount = computed(
   () => subscriptions.data.value?.filter((s) => s.errorCount > 0 || s.disabled).length ?? 0,
@@ -241,13 +243,15 @@ async function importOpml(event: Event) {
       <v-list-item
         v-for="category in categories.data.value"
         :key="category.id"
-        :title="category.title"
         :subtitle="
           category.parentId === null
             ? ''
             : t('settings.inCategory', { category: categoryName(category.parentId) })
         "
       >
+        <template #title
+          ><bdi>{{ category.title }}</bdi></template
+        >
         <template #append>
           <v-btn
             :icon="mdiPencil"
@@ -290,7 +294,7 @@ async function importOpml(event: Event) {
       <tbody>
         <tr v-for="s in rows" :key="s.id">
           <td>
-            <div class="font-weight-medium">{{ s.title }}</div>
+            <bdi class="d-block font-weight-medium">{{ s.title }}</bdi>
             <div class="text-body-small text-medium-emphasis text-truncate feed-url">
               {{ s.url }}
             </div>
@@ -313,9 +317,9 @@ async function importOpml(event: Event) {
             <div
               v-if="s.lastError"
               class="text-medium-emphasis text-truncate feed-url"
-              :title="s.lastError"
+              :title="feedErrorText({ t, te }, s)"
             >
-              <FeedErrorNote :error="s.lastError" :at="s.lastErrorAt" />
+              <FeedErrorNote :error="feedErrorText({ t, te }, s)" :at="s.lastErrorAt" />
             </div>
           </td>
           <td class="text-no-wrap text-end">
@@ -354,7 +358,12 @@ async function importOpml(event: Event) {
       >
         <v-form @submit.prevent="saveCategory">
           <v-card-text>
-            <v-text-field v-model="editing.title" :label="t('settings.categoryName')" autofocus />
+            <v-text-field
+              v-model="editing.title"
+              dir="auto"
+              :label="t('settings.categoryName')"
+              autofocus
+            />
             <v-select
               :model-value="editing.parentId"
               :items="parentItems"

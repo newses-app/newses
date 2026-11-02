@@ -75,6 +75,7 @@ const submit = whenOnline(publish);
           <v-text-field
             v-model="url"
             :label="t('publish.url')"
+            dir="ltr"
             autofocus
             type="url"
             inputmode="url"
@@ -83,6 +84,7 @@ const submit = whenOnline(publish);
             v-model="title"
             class="mt-2"
             :label="t('publish.pageTitle')"
+            dir="auto"
             :hint="t('publish.pageTitleHint')"
             persistent-hint
             :maxlength="MAX_PAGE_TITLE_LENGTH"
@@ -91,6 +93,7 @@ const submit = whenOnline(publish);
             v-model="text"
             class="mt-4"
             :label="t('publish.text')"
+            dir="auto"
             :hint="t('publish.textHint')"
             persistent-hint
             auto-grow

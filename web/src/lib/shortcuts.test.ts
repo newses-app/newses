@@ -8,8 +8,10 @@ import {
   DEFAULT_BINDINGS,
   effectiveBindings,
   findConflicts,
+  hasCommandModifier,
   isTyping,
   ShortcutMatcher,
+  shortcutKey,
   usesArrowKeys,
   withOverride,
 } from './shortcuts.ts';
@@ -77,13 +79,60 @@ describe('bindings', () => {
 
   it('records bindable keys only', () => {
     const key = (k: string, mods: Partial<KeyboardEvent> = {}) =>
-      bindableKey({ key: k, ctrlKey: false, altKey: false, metaKey: false, ...mods });
+      bindableKey({
+        key: k,
+        ctrlKey: false,
+        altKey: false,
+        metaKey: false,
+        getModifierState: () => false,
+        ...mods,
+      });
     expect(key('j')).toBe('j');
     expect(key('ArrowDown')).toBe('ArrowDown');
     expect(key('j', { ctrlKey: true })).toBeNull();
     expect(key('Shift')).toBeNull();
     expect(key(' ')).toBeNull();
     expect(key('Tab')).toBeNull();
+  });
+});
+
+describe('shortcutKey', () => {
+  const key = (key: string, code: string, shiftKey = false) => ({ key, code, shiftKey });
+
+  it('uses the Latin letter of a non-Latin layout, chords included', () => {
+    const matcher = new ShortcutMatcher();
+    expect(matcher.press(shortcutKey(key('מ', 'KeyN'), matcher), 0)).toBe('nextArticle');
+    expect(matcher.press(shortcutKey(key('Т', 'KeyN', true), matcher), 0)).toBe('pageDown');
+    expect(matcher.press(shortcutKey(key('п', 'KeyG'), matcher), 0)).toBeNull();
+    expect(matcher.press(shortcutKey(key('ф', 'KeyA'), matcher), 10)).toBe('gotoAll');
+  });
+
+  it('leaves ASCII keys, keys outside the letters, and bound keys alone', () => {
+    const matcher = new ShortcutMatcher(effectiveBindings({ gotoAll: ['й'] }));
+    expect(shortcutKey(key('/', 'Digit7', true), matcher)).toBe('/');
+    expect(shortcutKey(key('n', 'KeyB'), matcher)).toBe('n');
+    expect(shortcutKey(key('ñ', 'Semicolon'), matcher)).toBe('ñ');
+    expect(shortcutKey(key('й', 'KeyQ'), matcher)).toBe('й');
+    expect(shortcutKey(key('ArrowDown', 'ArrowDown'), matcher)).toBe('ArrowDown');
+  });
+});
+
+describe('hasCommandModifier', () => {
+  const held = (mods: Partial<KeyboardEvent>, altGraph = false) =>
+    hasCommandModifier({
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      getModifierState: () => altGraph,
+      ...mods,
+    });
+
+  it('counts Ctrl, Alt, and Meta, but not AltGr reported as Ctrl and Alt', () => {
+    expect(held({})).toBe(false);
+    expect(held({ ctrlKey: true })).toBe(true);
+    expect(held({ altKey: true })).toBe(true);
+    expect(held({ metaKey: true })).toBe(true);
+    expect(held({ ctrlKey: true, altKey: true }, true)).toBe(false);
   });
 });
 

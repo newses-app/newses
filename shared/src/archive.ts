@@ -23,6 +23,8 @@ export const archivedEntrySchema = z.object({
   title: z.string().nullable(),
   link: z.string().nullable(),
   author: z.string().nullable(),
+  /** Language tag of the article, when its feed gave one; absent before API 1.7. */
+  lang: z.string().nullable().optional(),
   publishedAt: z.iso.datetime().nullable(),
   sortAt: z.iso.datetime(),
   /** Plain-text start of the content. */

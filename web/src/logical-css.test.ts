@@ -13,15 +13,11 @@ const sources = readdirSync(ROOT, { recursive: true, encoding: 'utf8' })
 const PHYSICAL =
   /\b(?:margin|padding|border)-(?:left|right)\b|^\s*(?:left|right):|\b(?:text-align|float):\s*(?:left|right)\b|inset -?[1-9]/;
 
-/** Physical on purpose, or still to become logical. */
+/** Physical on purpose: the window controls don't follow the document's direction. */
 const ALLOWED = [
-  'components/reader/CombinedList.vue: box-shadow: inset 3px 0 rgb(var(--v-theme-primary));',
-  'components/reader/HeadlineList.vue: box-shadow: inset 3px 0 rgb(var(--v-theme-primary));',
-  'styles.css: border-left: 3px solid rgba(var(--v-theme-on-surface), 0.25);',
-  'styles.css: left: 0.5rem;',
   'styles.css: left: env(titlebar-area-x, 0px);',
-  'styles.css: padding-left: 1.5rem;',
-  'styles.css: padding-left: 1rem;',
+  'styles.css: padding-left: env(titlebar-area-x, 0px);',
+  'styles.css: padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));',
 ];
 
 /** The CSS of a source file: all of a `.css`, the `<style>` blocks of a `.vue`. */

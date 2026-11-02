@@ -4,6 +4,7 @@ import type { Keys } from '../crypto.ts';
 import { UserRateLimiter } from '../rate-limit.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
+import { PrefsService } from '../prefs.ts';
 import type { ArchiveWriter, BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
 import { FeedDebugger } from './debugger.ts';
 import { FaviconService, IconTokens } from './favicons.ts';
@@ -63,7 +64,7 @@ export function createFeedServices(deps: FeedDeps) {
     categories,
     subscriptions,
     feedDebugger: new FeedDebugger({ db, fetcher, limits, subscriptions }),
-    opml: new OpmlService(db, categories, subscriptions, limits),
+    opml: new OpmlService(db, categories, subscriptions, new PrefsService(db), limits),
     ingester,
     updater,
     hostRules: new HostRuleService(db, updater),

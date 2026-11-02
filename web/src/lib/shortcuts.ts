@@ -178,6 +178,14 @@ export class ShortcutMatcher {
       }
   }
 
+  /** Whether `key` is part of any binding. */
+  binds(key: string): boolean {
+    if (this.#prefixes.has(key)) return true;
+    for (const sequence of this.#bindings.keys())
+      if (sequence.split(' ').includes(key)) return true;
+    return false;
+  }
+
   press(key: string, now = Date.now()): ShortcutAction | null {
     const prefix = this.#prefix && now - this.#prefixAt <= CHORD_TIMEOUT_MS ? this.#prefix : null;
     this.#prefix = null;
@@ -193,6 +201,25 @@ export class ShortcutMatcher {
     return this.#bindings.get(key) ?? null;
   }
 }
+
+/**
+ * The key an event presses for the matcher: `event.key`, or on a non-Latin layout, where that is
+ * another script's letter, the Latin letter at the same place unless the key itself is bound.
+ */
+export function shortcutKey(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'shiftKey'>,
+  matcher: ShortcutMatcher,
+): string {
+  const letter = /^Key([A-Z])$/.exec(event.code)?.[1];
+  // eslint-disable-next-line no-control-regex
+  if (!letter || /^[\x00-\x7f]+$/.test(event.key) || matcher.binds(event.key)) return event.key;
+  return event.shiftKey ? letter : letter.toLowerCase();
+}
+
+/** Whether Ctrl, Alt, or Meta is held; AltGr, which Windows reports as Ctrl and Alt, only types. */
+export const hasCommandModifier = (
+  event: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey' | 'getModifierState'>,
+) => (event.ctrlKey || event.altKey || event.metaKey) && !event.getModifierState('AltGraph');
 
 /** Keys shown by symbol or short name rather than their `KeyboardEvent.key` value. */
 const KEY_NAMES: Record<string, string> = {
@@ -225,8 +252,10 @@ const UNBINDABLE = new Set([
  * The key a recorded key press binds, or null for presses shortcuts never see (with Ctrl, Alt,
  * or Meta), modifier-only keys, Space (the sequence separator), and Tab (which moves focus).
  */
-export function bindableKey(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey'>) {
-  if (event.ctrlKey || event.altKey || event.metaKey || UNBINDABLE.has(event.key)) return null;
+export function bindableKey(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'metaKey' | 'getModifierState'>,
+) {
+  if (hasCommandModifier(event) || UNBINDABLE.has(event.key)) return null;
   return event.key.length <= 20 ? event.key : null;
 }
 

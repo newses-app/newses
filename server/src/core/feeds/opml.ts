@@ -10,7 +10,9 @@ import {
   MAX_OPML_DEPTH,
   MAX_OPML_OUTLINES,
 } from '@newses/shared';
+import { messagesFor, ownerLocale } from '../../i18n.ts';
 import { assertMaxLength, DomainError } from '../errors.ts';
+import type { PrefsService } from '../prefs.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import type { SubscriptionService } from './subscriptions.ts';
 import { httpUrl, normalizeFeedUrl } from './url.ts';
@@ -102,6 +104,7 @@ export class OpmlService {
   readonly #db: Db;
   readonly #categories: CategoryService;
   readonly #subscriptions: SubscriptionService;
+  readonly #prefs: PrefsService;
   readonly #limits: UserRateLimiter | undefined;
 
   /** With limits, each user's imports are rate limited. */
@@ -109,11 +112,13 @@ export class OpmlService {
     db: Db,
     categoryService: CategoryService,
     subscriptionService: SubscriptionService,
+    prefs: PrefsService,
     limits?: UserRateLimiter,
   ) {
     this.#db = db;
     this.#categories = categoryService;
     this.#subscriptions = subscriptionService;
+    this.#prefs = prefs;
     this.#limits = limits;
   }
 
@@ -217,9 +222,10 @@ export class OpmlService {
   }
 
   async export(userId: number): Promise<string> {
-    const [allCategories, allSubscriptions] = await Promise.all([
+    const [allCategories, allSubscriptions, prefs] = await Promise.all([
       this.#categories.list(userId),
       this.#subscriptions.list(userId),
+      this.#prefs.get(userId),
     ]);
     const feedOutlines = (categoryId: number | null): Outline[] =>
       allSubscriptions
@@ -244,7 +250,10 @@ export class OpmlService {
         }));
 
     return generateOpml({
-      head: { title: 'Newses subscriptions', dateCreated: new Date() },
+      head: {
+        title: messagesFor(ownerLocale(prefs.language)).opmlTitle,
+        dateCreated: new Date(),
+      },
       body: { outlines: [...categoryOutlines(null), ...feedOutlines(null)] },
     });
   }

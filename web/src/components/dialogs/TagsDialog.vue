@@ -73,6 +73,7 @@ async function save() {
             no-filter
             hide-selected
             :label="t('tags.title')"
+            dir="auto"
             :hint="t('tags.hint', { n: MAX_TAGS_PER_ENTRY })"
             persistent-hint
             :delimiters="[',']"

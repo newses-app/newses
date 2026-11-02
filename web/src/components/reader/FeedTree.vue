@@ -121,11 +121,10 @@ function dropOnRoot() {
       <template v-if="labelItems.length">
         <v-divider class="my-2" role="presentation" />
         <div v-for="item in labelItems" :key="item.key" role="listitem">
-          <v-list-item
-            :to="`/${item.key}`"
-            :active="current === item.key"
-            :title="item.label.caption"
-          >
+          <v-list-item :to="`/${item.key}`" :active="current === item.key">
+            <template #title
+              ><bdi>{{ item.label.caption }}</bdi></template
+            >
             <template #prepend>
               <span
                 class="label-swatch"

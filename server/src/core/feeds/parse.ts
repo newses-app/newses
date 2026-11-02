@@ -22,6 +22,8 @@ export interface ParsedEntry {
   updatedAt: Date | null;
   enclosures: ParsedEnclosure[];
   categories: string[];
+  /** Language tag of the entry, else of its feed. */
+  lang: string | null;
 }
 
 export interface ParsedFeed {
@@ -54,6 +56,17 @@ interface Media {
 
 const text = (value: Text): string | null =>
   (typeof value === 'string' ? value : value?.value)?.trim() || null;
+
+const LANGUAGE_TAG = /^[a-z]{2,3}(-[a-z0-9]{1,8})*$/i;
+
+/** The first value that is a language tag. Feeds also write `en_US`, and `English`, which isn't. */
+function languageTag(...values: (string | undefined)[]): string | null {
+  for (const value of values) {
+    const tag = value?.trim().replaceAll('_', '-');
+    if (tag && tag.length <= 35 && LANGUAGE_TAG.test(tag)) return tag;
+  }
+  return null;
+}
 
 function mediaEnclosures(media: Media | undefined, base: string | null): ParsedEnclosure[] {
   const contents = [
@@ -133,6 +146,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
       const feed = parsed.feed;
       const siteUrl = httpUrl(feed.link, feedUrl);
       const feedAuthor = feed.dc?.creators?.[0] ?? feed.itunes?.author ?? null;
+      const feedLanguage = feed.language ?? feed.dc?.languages?.[0];
       return {
         format: 'rss',
         title: text(feed.title),
@@ -164,6 +178,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
             updatedAt: null,
             enclosures,
             categories: (item.categories ?? []).map((c) => c.name?.trim() ?? '').filter(Boolean),
+            lang: languageTag(item.dc?.languages?.[0], feedLanguage),
           };
         }),
       };
@@ -201,6 +216,13 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
             categories: (entry.categories ?? [])
               .map((c) => (c.label ?? c.term ?? '').trim())
               .filter(Boolean),
+            lang: languageTag(
+              entry.content?.xml?.lang,
+              entry.xml?.lang,
+              entry.dc?.languages?.[0],
+              feed.xml?.lang,
+              feed.dc?.languages?.[0],
+            ),
           };
         }),
       };
@@ -223,6 +245,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
           updatedAt: null,
           enclosures: mediaEnclosures(item.media, siteUrl ?? feedUrl),
           categories: item.dc?.subjects ?? [],
+          lang: languageTag(item.dc?.languages?.[0], feed.dc?.languages?.[0]),
         })),
       };
     }
@@ -246,6 +269,7 @@ export function parseFeed(body: string, feedUrl: string): ParsedFeed {
             enclosure(httpUrl(a.url, siteUrl ?? feedUrl), a.mime_type, a.size_in_bytes),
           ),
           categories: item.tags ?? [],
+          lang: languageTag(item.language, feed.language),
         })),
       };
     }

@@ -96,6 +96,8 @@ describe('share links', () => {
     expect(page.headers['content-security-policy']).not.toContain('script-src');
     expect(page.headers['referrer-policy']).toBe('no-referrer');
     expect(page.headers['x-robots-tag']).toBe('noindex');
+    expect(page.headers.vary).toMatch(/accept-language/i);
+    expect(page.body).toContain('<html lang="en" dir="ltr">');
     expect(page.body).toContain('<title>Fish &amp; &lt;Chips&gt;</title>');
     expect(page.body).toContain('<p>Crispy</p>');
     expect(page.body).toContain('href="https://food.example/fish"');
@@ -115,7 +117,9 @@ describe('share links', () => {
     const gone = await app.inject({ url: `/public/share/${shareId}` });
     expect(gone.statusCode).toBe(404);
     expect(gone.headers['content-security-policy']).toContain("default-src 'none'");
-    expect((await app.inject({ url: '/public/share/not-a-uuid' })).statusCode).toBe(404);
+    const nowhere = await app.inject({ url: '/public/share/not-a-uuid' });
+    expect(nowhere.statusCode).toBe(404);
+    expect(nowhere.headers.vary).toMatch(/accept-language/i);
   });
 
   it('shares only the owner’s entries and hides those of disabled users', async () => {
@@ -177,6 +181,7 @@ describe('published feed', () => {
     });
     const feed = await app.inject({ url: `/public/feeds/${key}` });
     expect(feed.body).toContain('<title>Published articles</title>');
+    expect(feed.body).not.toContain('<language>');
     expect(feed.body).toContain(`href="https://reader.example/public/feeds/${key}"`);
     expect(feed.body.match(/<item>/g)).toHaveLength(1);
     expect(feed.body).toContain('<![CDATA[Fish & <Chips>]]>');

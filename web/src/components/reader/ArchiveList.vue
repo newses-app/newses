@@ -94,11 +94,15 @@ const link = (entry: ArchivedEntry) => ({
             />
             <v-icon v-else :icon="mdiRss" size="16" class="me-3 align-self-start mt-1" />
           </template>
-          <v-list-item-title>{{ entry.title ?? t('entries.untitled') }}</v-list-item-title>
+          <v-list-item-title>
+            <bdi :lang="entry.lang ?? undefined">{{ entry.title ?? t('entries.untitled') }}</bdi>
+          </v-list-item-title>
           <v-list-item-subtitle>
-            <span>{{ entry.feedTitle }}</span> ·
+            <bdi>{{ entry.feedTitle }}</bdi> ·
             <time :datetime="entry.sortAt">{{ formatRelative(entry.sortAt, locale) }}</time>
-            <template v-if="showPreview && entry.excerpt"> — {{ entry.excerpt }}</template>
+            <template v-if="showPreview && entry.excerpt">
+              — <bdi :lang="entry.lang ?? undefined">{{ entry.excerpt }}</bdi>
+            </template>
           </v-list-item-subtitle>
         </v-list-item>
       </div>

@@ -157,7 +157,7 @@ const bytes = (value: number) =>
             <h3 class="text-title-small mt-4">{{ t('feedDebug.parsed') }}</h3>
             <p v-if="result.feed" class="text-body-medium">
               {{
-                t('feedDebug.feed', {
+                t(result.entries.length ? 'feedDebug.feed' : 'feedDebug.feedEmpty', {
                   format: result.feed.format.toUpperCase(),
                   title: result.feed.title ?? t('entries.untitled'),
                   n: result.entries.length,
@@ -217,6 +217,8 @@ const bytes = (value: number) =>
 
 <style scoped>
 .debug-text {
+  direction: ltr;
+  text-align: start;
   font-family: ui-monospace, monospace;
   overflow-wrap: anywhere;
 }

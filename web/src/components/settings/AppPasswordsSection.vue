@@ -121,13 +121,15 @@ async function revoke(appPassword: AppPassword) {
       <v-list-item
         v-for="appPassword in appPasswords.data.value"
         :key="appPassword.id"
-        :title="appPassword.name"
         :subtitle="
           appPassword.lastUsedAt
             ? t('appPasswords.lastUsed', { when: formatRelative(appPassword.lastUsedAt, locale) })
             : t('appPasswords.neverUsed')
         "
       >
+        <template #title
+          ><bdi>{{ appPassword.name }}</bdi></template
+        >
         <template #append>
           <v-btn
             :icon="mdiDelete"
@@ -181,6 +183,7 @@ async function revoke(appPassword: AppPassword) {
             <v-text-field
               v-model="dialog.name"
               :label="t('appPasswords.name')"
+              dir="auto"
               :hint="t('appPasswords.nameHint')"
               autocomplete="off"
               autofocus

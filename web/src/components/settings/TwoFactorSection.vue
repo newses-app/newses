@@ -170,6 +170,7 @@ function downloadCodes(codes: string[]) {
               <v-text-field
                 v-model="dialog.code"
                 :label="t('login.code')"
+                dir="ltr"
                 autocomplete="one-time-code"
                 inputmode="numeric"
                 autofocus
@@ -202,6 +203,7 @@ function downloadCodes(codes: string[]) {
               <v-text-field
                 v-model="dialog.code"
                 :label="t('login.code')"
+                dir="ltr"
                 autocomplete="one-time-code"
                 :hint="t('twoFactor.codeHint')"
                 persistent-hint
@@ -212,6 +214,7 @@ function downloadCodes(codes: string[]) {
               <v-text-field
                 v-model="dialog.code"
                 :label="t('login.code')"
+                dir="ltr"
                 autocomplete="one-time-code"
                 autofocus
               />

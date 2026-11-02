@@ -165,6 +165,8 @@ export interface PlatformBridge {
    * Android colours its system bar icons by `dark`.
    */
   setTheme(theme: AppTheme): Promise<void>;
+  /** The language the app shows; the desktop's tray and menus follow it. */
+  setLanguage(code: string): Promise<void>;
   /**
    * Called on the system back button (Android); the handler returns false when it had nothing to
    * close or go back to, and the app then exits.

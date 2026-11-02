@@ -53,7 +53,9 @@ function publish() {
   <v-dialog v-model="open" max-width="520" @after-leave="restoreFocus">
     <v-card :title="t('sharedLink.title')">
       <v-card-text>
-        <p v-if="ui.sharedLink?.title" class="text-body-large">{{ ui.sharedLink.title }}</p>
+        <p v-if="ui.sharedLink?.title" class="text-body-large" dir="auto">
+          {{ ui.sharedLink.title }}
+        </p>
         <p class="text-body-medium text-medium-emphasis text-break">{{ ui.sharedLink?.url }}</p>
         <div v-if="target && others.length > 0" class="d-flex align-center flex-wrap ga-2 mt-4">
           <ProfileAvatar :profile="target" :size="24" />

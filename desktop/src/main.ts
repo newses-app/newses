@@ -12,7 +12,6 @@ import {
   type IpcMainInvokeEvent,
   ipcMain,
   Menu,
-  type MenuItemConstructorOptions,
   nativeTheme,
   net,
   Notification,
@@ -23,8 +22,9 @@ import {
   session,
   shell,
 } from 'electron';
+import { appMenu } from './app-menu.ts';
 import { setLaunchAtLogin, setTray } from './background.ts';
-import { t } from './i18n.ts';
+import { setLanguage } from './i18n.ts';
 import {
   DEFAULT_OPTIONS,
   HIDDEN_ARG,
@@ -239,6 +239,14 @@ function registerBridge(settings: SettingsStore) {
     if (changes.launchAtLogin !== undefined) await setLaunchAtLogin(changes.launchAtLogin);
   });
   // `system` lets Electron follow the OS again; pinning light or dark would stop that for good.
+  handle('setLanguage', async (code) => {
+    if (typeof code !== 'string') return;
+    const language = setLanguage([code]);
+    if (language === settings.get().language) return;
+    buildMenu();
+    void showProfiles();
+    await settings.update({ language });
+  });
   handle('setTheme', async (theme) => {
     nativeTheme.themeSource = themeSource(theme);
     const saved = settings.get();
@@ -262,22 +270,10 @@ function registerBridge(settings: SettingsStore) {
 }
 
 function buildMenu() {
-  const view: MenuItemConstructorOptions[] = [
-    { role: 'reload' },
-    { type: 'separator' },
-    { role: 'resetZoom' },
-    { role: 'zoomIn' },
-    { role: 'zoomOut' },
-    { type: 'separator' },
-    { role: 'togglefullscreen' },
-  ];
-  if (!app.isPackaged) view.push({ type: 'separator' }, { role: 'toggleDevTools' });
   Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      { role: 'fileMenu' },
-      { role: 'editMenu' },
-      { label: t('viewMenu'), submenu: view },
-    ]),
+    Menu.buildFromTemplate(
+      appMenu({ developer: !app.isPackaged, windows: process.platform === 'win32' }),
+    ),
   );
 }
 
@@ -380,6 +376,8 @@ if (!app.requestSingleInstanceLock()) {
     );
     protocol.handle(APP_SCHEME, serveApp);
     const showProfiles = registerBridge(settings);
+    const { language } = settings.get();
+    setLanguage([...(language ? [language] : []), ...app.getPreferredSystemLanguages()]);
     buildMenu();
     // Started at login: straight to the tray, when there is one.
     const hidden = process.argv.includes(HIDDEN_ARG) && options(settings).closeToTray;

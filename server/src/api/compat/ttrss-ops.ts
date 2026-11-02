@@ -181,7 +181,7 @@ export function ttrssOps({ entries: entryServices, feeds, prefs }: TtrssDeps): T
       author: entry.author ?? '',
       score: entry.score,
       note: entry.note,
-      lang: '',
+      lang: entry.lang ?? '',
       comments_count: 0,
       comments_link: '',
       always_display_attachments: false,

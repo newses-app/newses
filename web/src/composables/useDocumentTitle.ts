@@ -6,6 +6,6 @@ export function useDocumentTitle(title: () => string | undefined): void {
   const { t } = useI18n();
   watchEffect(() => {
     const view = title();
-    document.title = view ? `${view} – ${t('app.name')}` : t('app.name');
+    document.title = view ? t('app.pageTitle', { view, app: t('app.name') }) : t('app.name');
   });
 }

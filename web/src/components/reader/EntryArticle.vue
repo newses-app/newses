@@ -57,6 +57,7 @@ const date = computed(() =>
 );
 const title = computed(() => props.entry.title ?? t('entries.untitled'));
 const link = computed(() => safeUrl(props.entry.link));
+const lang = computed(() => props.entry.lang ?? undefined);
 
 // Full text: shown first for subscriptions opted in to it, else on request.
 const subscriptions = useSubscriptions();
@@ -129,7 +130,7 @@ async function toggleFullText() {
 <template>
   <article class="entry-article">
     <header class="mb-4">
-      <h2 class="entry-heading text-headline-small mt-0 mb-1" tabindex="-1">
+      <h2 class="entry-heading text-headline-small mt-0 mb-1" tabindex="-1" dir="auto" :lang>
         <a
           v-if="link"
           :href="link"
@@ -143,9 +144,13 @@ async function toggleFullText() {
       </h2>
       <div class="text-body-medium text-medium-emphasis">
         <span v-if="entry.feedTitle">
-          <FeedIcon :subscription-id="entry.subscriptionId" class="me-1" />{{ entry.feedTitle }}
+          <FeedIcon :subscription-id="entry.subscriptionId" class="me-1" /><bdi>{{
+            entry.feedTitle
+          }}</bdi>
         </span>
-        <span v-if="entry.author"> · {{ entry.author }}</span>
+        <span v-if="entry.author">
+          · <bdi>{{ entry.author }}</bdi></span
+        >
         <span>
           · <time :datetime="entry.publishedAt ?? entry.sortAt">{{ date }}</time></span
         >
@@ -254,7 +259,7 @@ async function toggleFullText() {
       density="compact"
       class="entry-note mb-4"
     >
-      {{ entry.note }}
+      <div dir="auto">{{ entry.note }}</div>
     </v-alert>
     <p v-if="showFull" class="text-body-small text-medium-emphasis mb-2" data-full-text>
       {{ t('entries.fullTextShown') }}
@@ -262,8 +267,11 @@ async function toggleFullText() {
     <v-skeleton-loader v-if="entry.content === undefined || !imagesReady" type="paragraph@3" />
     <!-- Content is sanitised by the server against an allow-list before storage. -->
     <!-- eslint-disable-next-line vue/no-v-html -->
-    <div v-else-if="content" class="article-content" v-html="content" />
-    <p v-else class="text-medium-emphasis">{{ entry.excerpt ?? t('entries.noContent') }}</p>
+    <div v-else-if="content" class="article-content" dir="auto" :lang v-html="content" />
+    <p v-else-if="entry.excerpt" class="text-medium-emphasis" dir="auto" :lang>
+      {{ entry.excerpt }}
+    </p>
+    <p v-else class="text-medium-emphasis">{{ t('entries.noContent') }}</p>
     <p v-if="notStored" class="text-body-small text-medium-emphasis">
       {{ t('offline.notStored') }}
     </p>

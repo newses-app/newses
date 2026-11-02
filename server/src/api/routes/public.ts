@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Entry } from '@newses/shared';
+import type { Entry, Prefs } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import type { EntryService } from '../../core/entries/entries.ts';
 import { PUBLISHED_FEED_LENGTH, publishedFeedXml } from '../../core/entries/published-feed.ts';
 import type { ImageProxy } from '../../core/feeds/images.ts';
 import type { PrefsService } from '../../core/prefs.ts';
+import { messagesFor, ownerLocale, pageLocale } from '../../i18n.ts';
 import { notFoundPage, PUBLIC_PAGE_CSP, sharedEntryPage } from '../public-page.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,8 +30,8 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
   const origin = (request: FastifyRequest) => publicUrl ?? `${request.protocol}://${request.host}`;
 
   /** Owners with the image proxy on keep image hosts away from their readers too. */
-  async function withImages(userId: number, list: Entry[], base: string): Promise<Entry[]> {
-    if (!list.some((e) => e.content) || !(await prefs.get(userId)).proxyImages) return list;
+  function withImages(owner: Prefs, list: Entry[], base: string): Entry[] {
+    if (!owner.proxyImages) return list;
     return list.map((e) => (e.content ? { ...e, content: images.rewrite(e.content, base) } : e));
   }
 
@@ -43,6 +44,7 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
       .header('x-frame-options', 'DENY')
       .header('x-robots-tag', 'noindex')
       .header('cache-control', 'no-cache')
+      .header('vary', 'Accept-Language')
       .send(body);
 
   app.get(
@@ -55,10 +57,13 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
       const shared = UUID.test(request.params.id)
         ? await entries.getShared(request.params.id)
         : null;
-      if (!shared) return html(reply, 404, notFoundPage());
+      const accepted = request.headers['accept-language'];
+      if (!shared) return html(reply, 404, notFoundPage(pageLocale(accepted)));
+      const owner = await prefs.get(shared.userId);
       // Same-origin proxy paths need no origin.
-      const [entry] = await withImages(shared.userId, [shared.entry], '');
-      return html(reply, 200, sharedEntryPage(entry ?? shared.entry));
+      const [entry] = withImages(owner, [shared.entry], '');
+      const locale = pageLocale(accepted, owner.language);
+      return html(reply, 200, sharedEntryPage(entry ?? shared.entry, locale));
     },
   );
 
@@ -74,12 +79,13 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
       if (userId === null)
         return reply.code(404).type('text/plain; charset=utf-8').send('Not found');
       const base = origin(request);
-      const list = await withImages(
-        userId,
+      const owner = await prefs.get(userId);
+      const list = withImages(
+        owner,
         await entries.listPublished(userId, PUBLISHED_FEED_LENGTH),
         base,
       );
-      const xml = publishedFeedXml(list, {
+      const xml = publishedFeedXml(list, messagesFor(ownerLocale(owner.language)), {
         site: `${base}/`,
         self: `${base}/public/feeds/${encodeURIComponent(request.params.key)}`,
       });

@@ -38,7 +38,9 @@ const tabs = computed(() => [
 const tab = computed(
   () => (typeof route.params.tab === 'string' && route.params.tab) || 'preferences',
 );
-useDocumentTitle(() => `${t(`settings.tabs.${tab.value}`)} – ${t('nav.settings')}`);
+useDocumentTitle(() =>
+  t('app.pageTitle', { view: t(`settings.tabs.${tab.value}`), app: t('nav.settings') }),
+);
 </script>
 
 <template>

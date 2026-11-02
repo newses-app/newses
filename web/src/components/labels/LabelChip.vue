@@ -9,10 +9,16 @@ defineProps<{ label: Label; to?: string | undefined }>();
     v-if="to"
     :to="to"
     class="label-chip"
+    dir="auto"
     :style="{ color: label.fgColor, backgroundColor: label.bgColor }"
     >{{ label.caption }}</router-link
   >
-  <span v-else class="label-chip" :style="{ color: label.fgColor, backgroundColor: label.bgColor }">
+  <span
+    v-else
+    class="label-chip"
+    dir="auto"
+    :style="{ color: label.fgColor, backgroundColor: label.bgColor }"
+  >
     {{ label.caption }}
   </span>
 </template>

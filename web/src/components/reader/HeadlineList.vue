@@ -108,7 +108,8 @@ const link = (entry: Entry) => ({
             </span>
           </template>
           <v-list-item-title class="headline-title">
-            {{ entry.title ?? t('entries.untitled') }}
+            <bdi :lang="entry.lang ?? undefined">{{ entry.title ?? t('entries.untitled') }}</bdi
+            >{{ ' ' }}
             <LabelChip v-for="label in entryLabels(entry)" :key="label.id" :label="label" />
           </v-list-item-title>
           <v-list-item-subtitle>
@@ -119,15 +120,18 @@ const link = (entry: Entry) => ({
             <template v-if="entry.score !== 0">
               <ScoreBadge :score="entry.score" :high="high(entry)" /> ·
             </template>
-            <span>{{ entry.feedTitle }}</span> ·
+            <bdi>{{ entry.feedTitle }}</bdi> ·
             <time :datetime="entry.sortAt">{{ formatRelative(entry.sortAt, locale) }}</time>
             <span v-if="entry.note" class="note">
               —
               <v-icon :icon="mdiNoteTextOutline" size="14" aria-hidden="true" />
-              <span class="d-sr-only">{{ t('entries.noteLabel') }}</span>
-              {{ entry.note }}
+              <span class="d-sr-only">{{ t('entries.noteLabel') }}</span
+              >{{ ' ' }}
+              <bdi>{{ entry.note }}</bdi>
             </span>
-            <template v-if="showPreview && entry.excerpt"> — {{ entry.excerpt }}</template>
+            <template v-if="showPreview && entry.excerpt">
+              — <bdi :lang="entry.lang ?? undefined">{{ entry.excerpt }}</bdi>
+            </template>
           </v-list-item-subtitle>
         </v-list-item>
         <div class="lead">
@@ -172,7 +176,7 @@ const link = (entry: Entry) => ({
   padding-inline-start: 6px;
 }
 .high-score {
-  box-shadow: inset 3px 0 rgb(var(--v-theme-primary));
+  box-shadow: inset var(--edge-mark) 0 rgb(var(--v-theme-primary));
 }
 /* The feed icon, the star, and the published mark share one column, so the headline keeps the
    rest of the row; star and mark fit under the icon within the row's minimum height. */

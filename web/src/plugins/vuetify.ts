@@ -1,14 +1,15 @@
-import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
+import { aliases } from 'vuetify/iconsets/mdi-svg';
 import { createVuetify } from 'vuetify';
 import 'vuetify/styles';
 import type { Appearance } from '../lib/appearance.ts';
+import { mirroringIcons } from '../lib/mirrored-icons.ts';
 import { vuetifyLocale } from './i18n.ts';
 
 /** Vuetify with the appearance theme's colours; signing in applies the reader's own. */
 export function createAppVuetify(appearance: Appearance) {
   return createVuetify({
     locale: vuetifyLocale,
-    icons: { defaultSet: 'mdi', aliases, sets: { mdi } },
+    icons: { defaultSet: 'mdi', aliases, sets: { mdi: mirroringIcons } },
     theme: {
       defaultTheme: 'system',
       themes: {

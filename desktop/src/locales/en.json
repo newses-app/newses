@@ -4,5 +4,20 @@
   "profiles": "Profiles",
   "signedOut": "{name} (signed out)",
   "quit": "Quit",
-  "viewMenu": "View"
+  "exit": "Exit",
+  "fileMenu": "File",
+  "editMenu": "Edit",
+  "viewMenu": "View",
+  "undo": "Undo",
+  "redo": "Redo",
+  "cut": "Cut",
+  "copy": "Copy",
+  "paste": "Paste",
+  "delete": "Delete",
+  "selectAll": "Select All",
+  "reload": "Reload",
+  "resetZoom": "Actual Size",
+  "zoomIn": "Zoom In",
+  "zoomOut": "Zoom Out",
+  "toggleFullscreen": "Toggle Full Screen"
 }

@@ -25,6 +25,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { formatList } from '../../lib/format.ts';
 import { api } from '../../api.ts';
 import { useErrorText } from '../../composables/useErrorText.ts';
 import { COUNTERS_KEY } from '../../composables/useCounters.ts';
@@ -61,7 +62,16 @@ interface Draft {
   actions: ActionDraft[];
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+const summary = ({ rules, actions }: Filter) =>
+  formatList(
+    [
+      t('filters.ruleCount', { n: rules.length }, rules.length),
+      t('filters.actionCount', { n: actions.length }, actions.length),
+    ],
+    locale.value,
+  );
 const errorText = useErrorText();
 const ui = useUiStore();
 const queryClient = useQueryClient();
@@ -287,12 +297,12 @@ async function toggle(filter: Filter, enabled: boolean) {
       <v-list-item
         v-for="(filter, index) in filters.data.value"
         :key="filter.id"
-        :title="filter.title"
-        :subtitle="
-          t('filters.summary', { rules: filter.rules.length, actions: filter.actions.length })
-        "
+        :subtitle="summary(filter)"
         :data-filter="filter.title"
       >
+        <template #title
+          ><bdi>{{ filter.title }}</bdi></template
+        >
         <template #prepend>
           <v-switch
             :model-value="filter.enabled"
@@ -360,6 +370,7 @@ async function toggle(filter: Filter, enabled: boolean) {
             <v-text-field
               v-model="editing.title"
               :label="t('filters.name')"
+              dir="auto"
               maxlength="200"
               autofocus
             />
@@ -404,6 +415,7 @@ async function toggle(filter: Filter, enabled: boolean) {
                   <v-text-field
                     v-model="rule.pattern"
                     :label="t('filters.pattern')"
+                    dir="ltr"
                     :maxlength="MAX_FILTER_PATTERN"
                     class="pattern"
                     hide-details
@@ -473,6 +485,7 @@ async function toggle(filter: Filter, enabled: boolean) {
                     v-else-if="action.type === 'tag'"
                     v-model="action.tag"
                     :label="t('filters.tag')"
+                    dir="auto"
                     maxlength="64"
                     hide-details
                   />

@@ -85,6 +85,7 @@ interface HotRow extends Record<string, unknown> {
   title: string | null;
   link: string | null;
   author: string | null;
+  lang: string | null;
   published_at: string | null;
   sort_ms: string;
   head: string | null;
@@ -142,7 +143,7 @@ export class ArchiveService {
     const feed = await this.#feed(userId, feedUrl);
     const [hot] = await this.#hotRows(
       sql`SELECT e.id, ${feed.subscriptionId}::int AS subscription_id, ${feed.url} AS feed_url,
-          ${feed.title} AS feed_title, e.guid, e.title, e.link, e.author,
+          ${feed.title} AS feed_title, e.guid, e.title, e.link, e.author, e.lang,
           ${iso(sql`e.published_at`)} AS published_at, ${SORT_MS} AS sort_ms,
           left(e.content, 4000) AS head, e.content
         FROM entries e WHERE e.feed_source_id = ${feed.feedSourceId} AND e.guid = ${guid}`,
@@ -240,7 +241,7 @@ export class ArchiveService {
     const rows = await this.#hotRows(sql`
       SELECT * FROM (
         SELECT e.id, s.id AS subscription_id, fs.url AS feed_url,
-          coalesce(s.title, fs.title, fs.url) AS feed_title, e.guid, e.title, e.link, e.author,
+          coalesce(s.title, fs.title, fs.url) AS feed_title, e.guid, e.title, e.link, e.author, e.lang,
           ${iso(sql`e.published_at`)} AS published_at, ${SORT_MS} AS sort_ms,
           left(e.content, 4000) AS head
         FROM entries e
@@ -361,6 +362,7 @@ function hotItem(row: HotRow): Item {
       title: row.title,
       link: row.link,
       author: row.author,
+      lang: row.lang,
       publishedAt: row.published_at,
       sortAt: sortAt.toISOString(),
       excerpt: excerpt(row.head),
@@ -381,6 +383,7 @@ function coldItem(row: ArchiveRow, feed: Feed): Item {
       title: row.title,
       link: row.link,
       author: row.author,
+      lang: row.lang,
       publishedAt: row.publishedAt?.toISOString() ?? null,
       sortAt: row.sortAt.toISOString(),
       excerpt: excerpt(row.text),

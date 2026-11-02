@@ -36,6 +36,7 @@ export interface PreparedEntry {
   publishedAt: Date | null;
   sourceUpdatedAt: Date | null;
   categories: string[];
+  lang: string | null;
   enclosures: ParsedEntry['enclosures'];
 }
 
@@ -59,6 +60,7 @@ export function prepare(entry: ParsedEntry, siteUrl: string | null): PreparedEnt
     publishedAt: entry.publishedAt,
     sourceUpdatedAt: entry.updatedAt,
     categories: normaliseTags(entry.categories),
+    lang: entry.lang,
     enclosures: entry.enclosures,
   };
 }
@@ -147,6 +149,7 @@ export class Ingester {
             contentHash: sql`excluded.content_hash`,
             sourceUpdatedAt: sql`excluded.source_updated_at`,
             categories: sql`excluded.categories`,
+            lang: sql`coalesce(excluded.lang, ${entries.lang})`,
           },
           setWhere: sql`${entries.contentHash} <> excluded.content_hash`,
         })

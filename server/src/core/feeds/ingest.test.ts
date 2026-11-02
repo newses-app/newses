@@ -33,6 +33,7 @@ const entry = (overrides: Partial<ParsedEntry>): ParsedEntry => ({
   updatedAt: null,
   enclosures: [],
   categories: [],
+  lang: null,
   ...overrides,
 });
 
@@ -128,6 +129,14 @@ describe('Ingester', () => {
     const delivered = await db.select().from(userEntries);
     expect(delivered).toHaveLength(2);
     expect(delivered.some((e) => e.unread)).toBe(false);
+  });
+
+  it('keeps a known language when a changed entry comes without one', async () => {
+    await ingester.ingest(sourceId, null, [entry({ guid: 'a', content: '1', lang: 'he' })]);
+    await ingester.ingest(sourceId, null, [entry({ guid: 'a', content: '2' })]);
+    expect((await db.select().from(entries))[0]?.lang).toBe('he');
+    await ingester.ingest(sourceId, null, [entry({ guid: 'a', content: '3', lang: 'en-GB' })]);
+    expect((await db.select().from(entries))[0]?.lang).toBe('en-GB');
   });
 
   it('takes over an imported entry with the same link instead of duplicating it', async () => {
