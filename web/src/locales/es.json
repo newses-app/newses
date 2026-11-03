@@ -126,7 +126,7 @@
       "opml_invalid": "Ese no es un archivo OPML válido.",
       "opml_too_deep": "Las carpetas tienen más de {max} niveles de anidamiento.",
       "opml_too_many": "Se puede importar un máximo de {max} fuentes y carpetas a la vez.",
-      "tag_empty": "La palabra clave está vacía.",
+      "tag_empty": "El marbete está vacío.",
       "theme_limit": "Puedes tener un máximo de {max} temas.",
       "theme_name_taken": "Ya existe un tema llamado \"{name}\".",
       "too_long": "Supera los {max} caracteres.",
@@ -337,7 +337,7 @@
     "actionN": "Acción {n}",
     "action": "Acción",
     "label": "Etiqueta",
-    "tag": "Palabra clave",
+    "tag": "Marbete",
     "scoreChange": "Cambio de puntuación",
     "removeAction": "Quitar la acción {n}",
     "addAction": "Añadir acción",
@@ -350,7 +350,7 @@
       "titleOrContent": "Título o contenido",
       "author": "Autor",
       "link": "Enlace",
-      "tag": "Palabra clave"
+      "tag": "Marbete"
     },
     "actions": {
       "delete": "Eliminar",
@@ -358,7 +358,7 @@
       "star": "Destacar",
       "publish": "Publicar",
       "label": "Añadir etiqueta",
-      "tag": "Añadir palabra clave",
+      "tag": "Añadir marbete",
       "score": "Cambiar puntuación",
       "stop": "Dejar de procesar filtros"
     }
@@ -366,10 +366,10 @@
   "tags": {
     "title": "Marbetes",
     "edit": "Editar marbetes",
-    "hint": "Separa las marbetes con comas; hasta {n}.",
+    "hint": "Separa los marbetes con comas; hasta {n}.",
     "browse": "Marbetes",
-    "search": "Buscar una marbete",
-    "none": "Aún no hay marbetes. Las categorías de las fuentes se convierten en marbete, y puedes añadir las tuyas a cualquier artículo.",
+    "search": "Buscar un marbete",
+    "none": "Aún no hay marbetes. Las categorías de las fuentes se convierten en marbetes, y puedes añadir los tuyos a cualquier artículo.",
     "count": "{n} artículo | {n} artículos",
     "stream": "Marbete: {tag}"
   },

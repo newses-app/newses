@@ -65,7 +65,7 @@ Development builds offer two generated languages in Settings. Neither is in prod
 | subscription | A reader's link to a feed | suscripción | iscrizione |
 | category | A folder of feeds | categoría | categoria |
 | label | A coloured marker a reader applies to articles | etiqueta | etichetta |
-| tag | A free-text word on an article | palabra clave | tag |
+| tag | A free-text word on an article | marbete | tag |
 | starred | Kept by the reader | destacado | preferito |
 | published | In the reader's public feed | publicado | pubblicato |
 | fresh | Unread and recent | reciente | recente |
