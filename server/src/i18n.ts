@@ -1,11 +1,12 @@
 import { negotiateLocale } from '@newses/shared/locales';
 import en from './locales/en.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
+import it from './locales/it.json' with { type: 'json' };
 
 type Messages = typeof en;
 
 /** One static import per language, as esbuild bundles them for Lambda. */
-export const MESSAGES: Record<string, Partial<Messages>> = { en, es };
+export const MESSAGES: Record<string, Partial<Messages>> = { en, es, it };
 
 /** The text of a language; a message not yet translated is in English. */
 export const messagesFor = (locale: string): Messages => ({ ...en, ...MESSAGES[locale] });

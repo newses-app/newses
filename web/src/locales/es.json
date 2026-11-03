@@ -364,14 +364,14 @@
     }
   },
   "tags": {
-    "title": "Palabras clave",
-    "edit": "Editar palabras clave",
-    "hint": "Separa las palabras clave con comas; hasta {n}.",
-    "browse": "Palabras clave",
-    "search": "Buscar una palabra clave",
-    "none": "Aún no hay palabras clave. Las categorías de las fuentes se convierten en palabras clave, y puedes añadir las tuyas a cualquier artículo.",
+    "title": "Marbetes",
+    "edit": "Editar marbetes",
+    "hint": "Separa las marbetes con comas; hasta {n}.",
+    "browse": "Marbetes",
+    "search": "Buscar una marbete",
+    "none": "Aún no hay marbetes. Las categorías de las fuentes se convierten en marbete, y puedes añadir las tuyas a cualquier artículo.",
     "count": "{n} artículo | {n} artículos",
-    "stream": "Palabra clave: {tag}"
+    "stream": "Marbete: {tag}"
   },
   "sharing": {
     "share": "Compartir",
@@ -724,7 +724,7 @@
     "keyboardShortcuts": "Atajos de teclado de una sola tecla",
     "scoreHighlightAbove": "Resaltar artículos con puntuación superior a",
     "scoreHideBelow": "Ocultar artículos con puntuación inferior a",
-    "scoreHideHint": "Los artículos ocultos siguen en Destacados, Publicados, etiquetas y palabras clave."
+    "scoreHideHint": "Los artículos ocultos siguen en Destacados, Publicados, etiquetas y marbetes."
   },
   "account": {
     "roles": {
@@ -860,7 +860,7 @@
       "openOriginal": "Abrir original",
       "editNote": "Añadir o editar nota",
       "editLabels": "Elegir etiquetas",
-      "editTags": "Editar palabras clave",
+      "editTags": "Editar marbetes",
       "closeArticle": "Cerrar artículo",
       "search": "Buscar",
       "help": "Mostrar esta ayuda",
@@ -881,7 +881,7 @@
       "gotoPublished": "Publicados",
       "gotoRecentlyRead": "Leídos recientemente",
       "gotoSettings": "Ajustes",
-      "gotoTags": "Explorar palabras clave"
+      "gotoTags": "Explorar marbetes"
     }
   },
   "ops": {

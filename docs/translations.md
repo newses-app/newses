@@ -46,23 +46,33 @@ Development builds offer two generated languages in Settings. Neither is in prod
 - `archivo` is both the archive and a file; context separates them.
 - `time.*` uses figures (`1 hora`), as it follows `cada`.
 
+## Italian
+
+- `tu`, and the imperative for buttons and instructions (`Salva`, `Inserisci`).
+- Readers are addressed without gender: `hai un'iscrizione`, not `sei iscritto`; no schwa or slashes.
+- `feed`, `tag`, and `app` stay as loanwords and don't change in the plural.
+- `preferiti` is starred, so the browser's bookmarks bar is `barra dei segnalibri`.
+- `avviso` is an operations alert, so the warning severity is `Attenzione`.
+- Counts with no plural form avoid agreement: `{n} da leggere`, `Nuovi: {n}`.
+- `time.*` uses figures (`1 ora`), as it follows `ogni`.
+
 ## Glossary
 
-| English | Means | Spanish |
-|---|---|---|
-| article | One entry of a feed | artículo |
-| feed | A source a reader subscribes to | fuente |
-| subscription | A reader's link to a feed | suscripción |
-| category | A folder of feeds | categoría |
-| label | A coloured marker a reader applies to articles | etiqueta |
-| tag | A free-text word on an article | palabra clave |
-| starred | Kept by the reader | destacado |
-| published | In the reader's public feed | publicado |
-| fresh | Unread and recent | reciente |
-| archive | Past articles of a feed, read-only | archivo |
-| typeface | The font setting; `fuente` is taken by feed | tipo de letra |
-| settings | The app's settings | ajustes |
-| sign in, sign out | Starting and ending a session | iniciar sesión, cerrar sesión |
-| check | Fetching a feed for new articles | comprobar |
-| shortcut | A keyboard binding | atajo |
-| sync | Exchanging changes with the server | sincronizar |
+| English | Means | Spanish | Italian |
+|---|---|---|---|
+| article | One entry of a feed | artículo | articolo |
+| feed | A source a reader subscribes to | fuente | feed |
+| subscription | A reader's link to a feed | suscripción | iscrizione |
+| category | A folder of feeds | categoría | categoria |
+| label | A coloured marker a reader applies to articles | etiqueta | etichetta |
+| tag | A free-text word on an article | palabra clave | tag |
+| starred | Kept by the reader | destacado | preferito |
+| published | In the reader's public feed | publicado | pubblicato |
+| fresh | Unread and recent | reciente | recente |
+| archive | Past articles of a feed, read-only | archivo | archivio |
+| typeface | The font setting; `fuente` is taken by feed | tipo de letra | carattere |
+| settings | The app's settings | ajustes | impostazioni |
+| sign in, sign out | Starting and ending a session | iniciar sesión, cerrar sesión | accedi, esci |
+| check | Fetching a feed for new articles | comprobar | controllare |
+| shortcut | A keyboard binding | atajo | scorciatoia |
+| sync | Exchanging changes with the server | sincronizar | sincronizzare |

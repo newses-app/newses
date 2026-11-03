@@ -1,0 +1,23 @@
+{
+  "open": "Apri",
+  "checkNow": "Controlla ora",
+  "profiles": "Profili",
+  "signedOut": "{name} (disconnesso)",
+  "quit": "Esci",
+  "exit": "Esci",
+  "fileMenu": "File",
+  "editMenu": "Modifica",
+  "viewMenu": "Visualizza",
+  "undo": "Annulla",
+  "redo": "Ripeti",
+  "cut": "Taglia",
+  "copy": "Copia",
+  "paste": "Incolla",
+  "delete": "Elimina",
+  "selectAll": "Seleziona tutto",
+  "reload": "Ricarica",
+  "resetZoom": "Dimensioni effettive",
+  "zoomIn": "Ingrandisci",
+  "zoomOut": "Riduci",
+  "toggleFullscreen": "Schermo intero"
+}

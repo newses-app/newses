@@ -1,11 +1,12 @@
 import { DEFAULT_LOCALE, LOCALES, negotiateLocale } from '@newses/shared/locales';
 import en from './locales/en.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
+import it from './locales/it.json' with { type: 'json' };
 
 type Messages = typeof en;
 
 /** One static import per language, as the main process is bundled. */
-export const MESSAGES: Record<string, Partial<Messages>> = { en, es };
+export const MESSAGES: Record<string, Partial<Messages>> = { en, es, it };
 
 let shown = DEFAULT_LOCALE;
 

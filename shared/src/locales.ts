@@ -17,6 +17,7 @@ export const DEFAULT_LOCALE = 'en';
 export const LOCALES: readonly Locale[] = [
   { code: DEFAULT_LOCALE, name: 'English', direction: 'ltr', plurals: ['one', 'other'] },
   { code: 'es', name: 'Español', direction: 'ltr', plurals: ['one', 'other'] },
+  { code: 'it', name: 'Italiano', direction: 'ltr', plurals: ['one', 'other'] },
 ];
 
 const LOCALE_CODES = LOCALES.map((locale) => locale.code);
