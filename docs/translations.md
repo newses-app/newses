@@ -56,23 +56,34 @@ Development builds offer two generated languages in Settings. Neither is in prod
 - Counts with no plural form avoid agreement: `{n} da leggere`, `Nuovi: {n}`.
 - `time.*` uses figures (`1 ora`), as it follows `ogni`.
 
+## German
+
+- `du`, lowercase, and the infinitive for buttons and menu items (`Speichern`, `Abbrechen`).
+- Readers and other people are named without gender: `Konto`, `Admin`, `die Administration`, `alle, die …`; no gender star or colon.
+- `Feed`, `App`, `Label`, and `Theme` stay as loanwords; a tag is `Schlagwort`, as `Tag` reads as day.
+- `Favoriten` is starred, so the browser's bookmarks bar is `Lesezeichenleiste`.
+- `Alarm` is an operations alert, so the warning severity is `Warnung`.
+- Quotation marks are `„…“`.
+- `time.*` uses figures (`1 Stunde`), so a sentence around `{duration}` uses `Abrufintervall: {duration}`, as `alle` would need a plural.
+- `{when}` is relative (`vor 5 Minuten`, `gestern`), so it follows a participle or a colon, never `seit`.
+
 ## Glossary
 
-| English | Means | Spanish | Italian |
-|---|---|---|---|
-| article | One entry of a feed | artículo | articolo |
-| feed | A source a reader subscribes to | fuente | feed |
-| subscription | A reader's link to a feed | suscripción | iscrizione |
-| category | A folder of feeds | categoría | categoria |
-| label | A coloured marker a reader applies to articles | etiqueta | etichetta |
-| tag | A free-text word on an article | marbete | tag |
-| starred | Kept by the reader | destacado | preferito |
-| published | In the reader's public feed | publicado | pubblicato |
-| fresh | Unread and recent | reciente | recente |
-| archive | Past articles of a feed, read-only | archivo | archivio |
-| typeface | The font setting; `fuente` is taken by feed | tipo de letra | carattere |
-| settings | The app's settings | ajustes | impostazioni |
-| sign in, sign out | Starting and ending a session | iniciar sesión, cerrar sesión | accedi, esci |
-| check | Fetching a feed for new articles | comprobar | controllare |
-| shortcut | A keyboard binding | atajo | scorciatoia |
-| sync | Exchanging changes with the server | sincronizar | sincronizzare |
+| English | Means | Spanish | Italian | German |
+|---|---|---|---|---|
+| article | One entry of a feed | artículo | articolo | Artikel |
+| feed | A source a reader subscribes to | fuente | feed | Feed |
+| subscription | A reader's link to a feed | suscripción | iscrizione | Abonnement |
+| category | A folder of feeds | categoría | categoria | Kategorie |
+| label | A coloured marker a reader applies to articles | etiqueta | etichetta | Label |
+| tag | A free-text word on an article | marbete | tag | Schlagwort |
+| starred | Kept by the reader | destacado | preferito | Favorit |
+| published | In the reader's public feed | publicado | pubblicato | veröffentlicht |
+| fresh | Unread and recent | reciente | recente | aktuell |
+| archive | Past articles of a feed, read-only | archivo | archivio | Archiv |
+| typeface | The font setting; `fuente` is taken by feed | tipo de letra | carattere | Schriftart |
+| settings | The app's settings | ajustes | impostazioni | Einstellungen |
+| sign in, sign out | Starting and ending a session | iniciar sesión, cerrar sesión | accedi, esci | anmelden, abmelden |
+| check | Fetching a feed for new articles | comprobar | controllare | abrufen |
+| shortcut | A keyboard binding | atajo | scorciatoia | Tastenkürzel |
+| sync | Exchanging changes with the server | sincronizar | sincronizzare | synchronisieren |
