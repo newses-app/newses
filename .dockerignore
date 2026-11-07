@@ -8,7 +8,8 @@ server/src/**/fixtures
 server/drizzle.config.ts
 server/vitest.config.ts
 coverage
-docker/.env
+**/.env
+**/*.env
 **/dist
 web/e2e
 web/vitest.config.ts

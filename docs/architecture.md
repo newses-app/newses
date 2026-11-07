@@ -513,6 +513,8 @@ The settings page shows apps' connection details from `/api/v1/auth/app-password
 | `backup` (`backup` profile) | `postgres:18-alpine` | Nightly `pg_dump` to a volume |
 | `lgtm` (`observability` profile) | `grafana/otel-lgtm` | OTLP collector, Tempo, Loki, Prometheus, and Grafana on `127.0.0.1:3000`, with the dashboards in `docker/observability/dashboards` |
 
+- App image (`docker/Dockerfile`): Node on Alpine, pinned by index digest, for `linux/amd64` and `linux/arm64`. OCI labels come from the build arguments `NEWSES_VERSION`, `NEWSES_REVISION` (commit), and `NEWSES_SOURCE` (repository URL); the web build runs on the builder's platform.
+
 ### AWS
 
 ```mermaid
