@@ -24,6 +24,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm --filter @newses/mobile build:apk` / `install:apk` | Unsigned debug APK in `mobile/release` (needs JDK 21 and the Android SDK); `install:apk` also installs it with `adb` |
 | `pnpm --filter @newses/mobile build:apk:release` | Release APK in `mobile/release`, signed with the values in `mobile/android-signing.env` (unsigned without them) |
 | `scripts/android-signing-setup.sh --backup DIR` | Generates the Android release keystore in an offline backup folder (or reuses it there); writes `mobile/android-signing.env`, and SSM parameters with `--ssm` (`--help`) |
+| `scripts/image-registry-setup.sh` | Creates the ECR Public repository the release pipelines publish the server image to, or updates its gallery listing; prints its URI for the stages' `imageRepository` in the deploy config (`--help`) |
 | `E2E_BASE_URL=… pnpm --filter @newses/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
 | `pnpm --filter @newses/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first); deployments run through the pipelines |
 | `aws ssm put-parameter --name /<prefix>/deploy-config --type String --overwrite --value file://infra/deploy.config.json` | Store the AWS deployment config (gitignored; copy `infra/deploy.config.example.json`) where the pipelines' synth reads it; needed by `cdk` and the AWS scripts locally too |

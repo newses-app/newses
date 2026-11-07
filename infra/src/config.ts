@@ -26,6 +26,11 @@ export interface StageConfig {
   instanceName?: string | undefined;
   /** Origins whose pages may fetch the downloads (the project site's `latest.json` reads). */
   downloadsCorsOrigins?: string[] | undefined;
+  /**
+   * ECR Public repository the release pipeline publishes the server image to,
+   * `public.ecr.aws/<alias>/<name>`; stages may share one. Omitted for no image.
+   */
+  imageRepository?: string | undefined;
 }
 
 /** Where the app downloads live, in the downloads bucket and under the stage's domain. */

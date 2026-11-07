@@ -577,9 +577,9 @@ A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to
 - `scripts/try-release.sh` runs the dev legs on the working tree under a made-up prerelease tag, with a dry-run publish unless `--publish`.
 
 Deployment config:
-- The account-specific values live in `infra/deploy.config.json`, never committed; `infra/deploy.config.example.json` shows the shape, validated by `infra/src/deploy-config.ts`: `resourcePrefix` (`<prefix>` in this section: the start of every physical name, tag, and parameter path, with `_` for `-` in database names; the example's is `newses`), account, region, GitHub repository and CodeConnections connection, certificate, hosted zone, ADOT layer, budget, and the stages (`dev` and/or `prod`: branch, release tags, domain, data retention, backups, compatibility trace, archive, trace sampling, downloads CORS origins).
+- The account-specific values live in `infra/deploy.config.json`, never committed; `infra/deploy.config.example.json` shows the shape, validated by `infra/src/deploy-config.ts`: `resourcePrefix` (`<prefix>` in this section: the start of every physical name, tag, and parameter path, with `_` for `-` in database names; the example's is `newses`), account, region, GitHub repository and CodeConnections connection, certificate, hosted zone, ADOT layer, budget, and the stages (`dev` and/or `prod`: branch, release tags, domain, data retention, backups, compatibility trace, archive, trace sampling, downloads CORS origins, server image repository).
 - The pipelines' synth step writes that file from the String parameter `/<prefix>/deploy-config`; a change to it takes effect on each pipeline's next run. Tests synthesise against the example.
-- Scripts that act on a stage (`reset-stage.sh`, `freeze-stage.sh`, `try-release.sh`, `import-ttrss.sh --aws`, `export-instance.sh --aws`, `restore-instance.sh --aws`, the signing setups with `--ssm`) read the region and domains from the same file.
+- Scripts that act on a stage (`reset-stage.sh`, `freeze-stage.sh`, `try-release.sh`, `import-ttrss.sh --aws`, `export-instance.sh --aws`, `restore-instance.sh --aws`, the signing setups with `--ssm`, `image-registry-setup.sh`) read the region, domains, and account from the same file.
 
 Operator setup, once per account:
 - Prerequisites: a CodeConnections connection to the GitHub repository, an ACM certificate in us-east-1 for the stages' domains, and the Route 53 hosted zone.
@@ -589,6 +589,7 @@ Operator setup, once per account:
 - `pnpm --filter @newses/infra cdk deploy <prefix>-dev-pipeline` (and `<prefix>-prod-pipeline`); a new pipeline runs once on creation, and later changes deploy through it, release stacks included.
 - In the paying account's Billing console (or `aws ce update-cost-allocation-tags-status`), the `project` cost-allocation tag activated once it appears, up to 24 h after the first deployment.
 - The signing parameters, before the first release: `scripts/windows-signing-setup.sh --ssm` and `scripts/android-signing-setup.sh --backup DIR --ssm`.
+- The server image repository, before the first release that publishes the image: `scripts/image-registry-setup.sh` creates the ECR Public repository (in us-east-1) with its gallery listing and prints its URI for the stages' `imageRepository`. A custom registry alias, claimed in the ECR Public console, gives the repository a second URI; the default alias's keeps working.
 - The first admin is the deploy config's `adminLogin`, with a generated password in the SSM SecureString `/<prefix>/<stage>/admin-password` that must be changed at first sign-in. If it expires first, `reissue-admin` (`AGENTS.md`) replaces it.
 
 ### Moving an instance

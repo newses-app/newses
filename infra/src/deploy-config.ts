@@ -20,6 +20,14 @@ const stageSchema = z.object({
   traceSampling: z.number().min(0).max(1),
   instanceName: z.string().trim().min(1).max(100).optional(),
   downloadsCorsOrigins: z.array(z.string().regex(/^https:\/\/[^/]+$/)).optional(),
+  // No tag or digest: the release pipeline adds those.
+  imageRepository: z
+    .string()
+    .regex(
+      /^public\.ecr\.aws\/[a-z][a-z0-9]+(?:[._-][a-z0-9]+)*\/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/,
+      'an ECR Public repository URI, public.ecr.aws/<alias>/<name>',
+    )
+    .optional(),
 }) satisfies z.ZodType<StageConfig>;
 
 export const deployConfigSchema = z
