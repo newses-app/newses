@@ -1,14 +1,16 @@
 // Prepares a release for upload (infra/buildspec/release-publish.yml): checks the files the build
 // legs handed over (with --image, the server image's too), names the installers in their SBOMs,
-// writes SHA256SUMS, the feeds,
-// latest.json and index.html beside them, and writes
-// plan.tsv (file, key, content type, cache control, disposition) and urls.txt for the upload
-// and the checks that follow.
-//   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads [--image]
+// adds the server's files from docker/ with --image (publish-image.ts join's reference, which
+// the compose file pins), writes SHA256SUMS, the feeds, latest.json and index.html beside them,
+// and writes plan.tsv (file, key, content type, cache control, disposition) and urls.txt for the
+// upload and the checks that follow.
+//   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads \
+//     [--image public.ecr.aws/<alias>/newses@sha256:…]
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { versionFromTag } from '@newses/shared/release';
 import { DOWNLOADS_PREFIX } from '../config.ts';
@@ -21,13 +23,18 @@ import {
   imageDigestNames,
   openapiFile,
   renderChecksums,
+  renderCompose,
   renderIndex,
   rewriteFeed,
   sbomArtifacts,
   sbomFiles,
   sbomNames,
+  SERVER_FILES,
+  type ServerImage,
+  serverNames,
   uploadPlan,
 } from './manifest.ts';
+import { parseDigest } from './image.ts';
 import { addDistributions, type Bom } from './sbom.ts';
 
 const { values } = parseArgs({
@@ -36,17 +43,22 @@ const { values } = parseArgs({
     tag: { type: 'string' },
     url: { type: 'string' },
     prerelease: { type: 'boolean', default: false },
-    image: { type: 'boolean', default: false },
+    image: { type: 'string' },
   },
 });
 if (!values.dir || !values.tag || !values.url) {
   throw new Error(
-    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--image]',
+    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--image REPOSITORY@DIGEST]',
   );
 }
-const { dir, url, image } = values;
+const { dir, url } = values;
 const baseUrl = url.replace(/\/$/, '');
 const version = versionFromTag(values.tag);
+const at = values.image?.lastIndexOf('@') ?? -1;
+const serverImage: ServerImage | undefined = values.image
+  ? { repository: values.image.slice(0, at), digest: parseDigest(values.image.slice(at + 1)) }
+  : undefined;
+const image = Boolean(serverImage);
 if (values.prerelease !== version.name.includes('-')) {
   throw new Error(`${values.tag} is the wrong kind of tag for this stage`);
 }
@@ -84,7 +96,25 @@ for (const { name, describes } of sbomArtifacts(version.name, image)) {
   });
   await writeFile(path, `${JSON.stringify(addDistributions(bom, files), null, 2)}\n`);
 }
-const files = [...installers, ...(await Promise.all(sboms.map(built)))];
+
+// The server's files, the compose file pinned to the image.
+const server: BuiltFile[] = [];
+if (serverImage) {
+  const names = serverNames(version.name);
+  const pinned = `${serverImage.repository}:${version.name}@${serverImage.digest}`;
+  for (const [file, source] of Object.entries(SERVER_FILES) as [keyof typeof names, string][]) {
+    const text = await readFile(
+      fileURLToPath(new URL(`../../../docker/${source}`, import.meta.url)),
+      'utf8',
+    );
+    await writeFile(
+      join(dir, names[file]),
+      file === 'compose' ? renderCompose(text, pinned) : text,
+    );
+    server.push(await built(names[file]));
+  }
+}
+const files = [...installers, ...(await Promise.all(sboms.map(built))), ...server];
 await writeFile(join(dir, CHECKSUMS), renderChecksums(version.name, files, image));
 
 for (const feed of FEEDS) {
@@ -98,7 +128,7 @@ const input = {
   published: new Date(),
   baseUrl,
   files,
-  image,
+  image: serverImage,
 };
 const manifest = buildManifest(input);
 await writeFile(join(dir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   buildManifest,
@@ -9,11 +10,14 @@ import {
   openapiFile,
   openapiName,
   renderChecksums,
+  renderCompose,
   renderIndex,
   rewriteFeed,
   sbomArtifacts,
   sbomFiles,
   sbomNames,
+  serverCommands,
+  serverNames,
   uploadPlan,
 } from './manifest.ts';
 
@@ -24,6 +28,9 @@ const openapi = openapiName(version);
 const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, openapi, ...FEEDS];
 const imageSbom = `newses-${version}-image.cdx.json`;
 const builtWithImage = [...built, imageSbom, 'image-amd64.digest', 'image-arm64.digest'];
+const server = serverNames(version);
+const repository = 'public.ecr.aws/example/newses';
+const digest = `sha256:${'d'.repeat(64)}`;
 
 // electron-builder's latest-linux.yml, as built.
 const linuxFeed = `version: 1.2.3-rc.1
@@ -104,6 +111,15 @@ const input = {
   files,
 };
 const folder = `https://reader-dev.example.com/downloads/${version}/`;
+const withServer = {
+  ...input,
+  files: [
+    ...files,
+    { name: imageSbom, size: 1, sha256: 'imagehash' },
+    ...Object.entries(server).map(([key, name], i) => ({ name, size: 100 + i, sha256: key })),
+  ],
+  image: { repository, digest },
+};
 
 describe('sbomArtifacts', () => {
   it('has the desktop SBOM describe both platforms and the Android one the APK', () => {
@@ -141,16 +157,26 @@ describe('renderChecksums', () => {
     expect(() => renderChecksums(version, files.slice(1))).toThrow(/Missing/);
   });
 
-  it("lists the server image's SBOM, but not the digests", () => {
-    const withImage = builtWithImage.map((name, i) => ({
+  it("lists the server image's SBOM and the server's files, but not the digests", () => {
+    const withImage = [...builtWithImage, ...Object.values(server)].map((name, i) => ({
       name,
       size: i,
       sha256: `hash${String(i)}`,
     }));
     const lines = renderChecksums(version, withImage, true).trimEnd().split('\n');
-    expect(lines).toHaveLength(11);
-    expect(lines.at(-2)).toBe(`hash12  ${imageSbom}`);
+    expect(lines).toHaveLength(14);
+    expect(lines).toContain(`hash12  ${imageSbom}`);
+    expect(lines.slice(-3)).toEqual([
+      `hash15  ${server.compose}`,
+      `hash16  ${server.env}`,
+      `hash17  ${server.nginxProxy}`,
+    ]);
     expect(lines.some((line) => line.endsWith('.digest'))).toBe(false);
+  });
+
+  it('refuses a missing server file when the stage publishes the image', () => {
+    const withImage = builtWithImage.map((name, i) => ({ name, size: i, sha256: 'h' }));
+    expect(() => renderChecksums(version, withImage, true)).toThrow(/Missing .*compose\.yaml/);
   });
 });
 
@@ -194,6 +220,60 @@ describe('installCommands', () => {
   });
 });
 
+describe('renderCompose', () => {
+  const pinned = `${repository}:${version}@${digest}`;
+  const source = readFileSync(new URL('../../../docker/compose.yaml', import.meta.url), 'utf8');
+
+  it("pins docker/compose.yaml's image and drops its build, keeping its comments", () => {
+    const compose = renderCompose(source, pinned);
+    expect(compose).toContain(`image: \${NEWSES_IMAGE:-${pinned}}\n`);
+    expect(compose).not.toMatch(/build:|dockerfile:|context:/);
+    expect(compose).toContain('# Nightly pg_dump.');
+    expect(compose).not.toContain('newses:latest');
+    expect(source.split('\n').length - compose.split('\n').length).toBe(3);
+  });
+
+  it('refuses a compose file that names the image other than once, or mounts host files', () => {
+    expect(() => renderCompose('services: {}\n', pinned)).toThrow(/other than once/);
+    const mounted = `${source}\n  extra:\n    volumes:\n      - ./data:/data\n`;
+    expect(() => renderCompose(mounted, pinned)).toThrow(/host files/);
+    const built = source.replace(
+      '  restart: unless-stopped\n',
+      '  restart: unless-stopped\n  x:\n    build: .\n',
+    );
+    expect(() => renderCompose(built, pinned)).toThrow(/builds/);
+  });
+});
+
+describe('serverCommands', () => {
+  const file = (name: string, sha256: string) => ({ url: `${folder}${name}`, size: 1, sha256 });
+  const commands = serverCommands({
+    image: { repository, tag: version, digest },
+    compose: file(server.compose, 'c1'),
+    env: file(server.env, 'e1'),
+    nginxProxy: file(server.nginxProxy, 'n1'),
+  });
+
+  it('saves each file under the name Compose looks for, and checks it', () => {
+    expect(commands.compose).toEqual([
+      'mkdir newses && cd newses',
+      `curl -fL -o compose.yaml ${folder}${server.compose}`,
+      "echo 'c1  compose.yaml' | sha256sum -c",
+      `curl -fL -o .env ${folder}${server.env}`,
+      "echo 'e1  .env' | sha256sum -c",
+      '# In .env, change POSTGRES_PASSWORD and set APP_SECRET to: openssl rand -base64 48',
+      'docker compose up -d',
+    ]);
+    expect(commands.env).toEqual([
+      `curl -fL -o .env.example ${folder}${server.env}`,
+      "echo 'e1  .env.example' | sha256sum -c",
+    ]);
+    expect(commands.nginxProxy.at(-1)).toBe(
+      'docker compose -f compose.yaml -f compose.nginx-proxy.yaml up -d',
+    );
+  });
+});
+
 describe('buildManifest', () => {
   it('lists each installer with its URL, size, and hash', () => {
     const manifest = buildManifest(input);
@@ -221,6 +301,17 @@ describe('buildManifest', () => {
       android: expect.objectContaining({ versionCode: 10203, size: 5 }) as unknown,
     });
   });
+
+  it('adds the server image and its files when the stage publishes the image', () => {
+    expect(buildManifest(input).server).toBeUndefined();
+    const manifest = buildManifest({ ...withServer, image: { repository, digest } });
+    expect(manifest.server).toEqual({
+      image: { repository, tag: version, digest },
+      compose: { url: `${folder}${server.compose}`, size: 100, sha256: 'compose' },
+      env: { url: `${folder}${server.env}`, size: 101, sha256: 'env' },
+      nginxProxy: { url: `${folder}${server.nginxProxy}`, size: 102, sha256: 'nginxProxy' },
+    });
+  });
 });
 
 describe('renderIndex', () => {
@@ -242,16 +333,25 @@ describe('renderIndex', () => {
     expect(page).not.toContain('Server image SBOM');
   });
 
-  it("links the server image's SBOM when the stage publishes the image", () => {
-    const withImage = {
-      ...input,
-      image: true,
-      files: [...files, { name: imageSbom, size: 1, sha256: 'imagehash' }],
-    };
-    const imagePage = renderIndex(manifest, sbomFiles(withImage), openapiFile(withImage));
+  it('has no Server section when the stage does not publish the image', () => {
+    expect(page).not.toContain('<h2>Server</h2>');
+  });
+
+  it("adds the Server section and the image's SBOM when the stage publishes the image", () => {
+    const serverManifest = buildManifest(withServer);
+    const imagePage = renderIndex(serverManifest, sbomFiles(withServer), openapiFile(withServer));
     expect(imagePage).toContain('<h2>Server image SBOM</h2>');
     expect(imagePage).toContain(`<a href="${folder}${imageSbom}">`);
-    expect(imagePage.match(/<details>/g)).toHaveLength(10);
+    expect(imagePage).toContain('<h2>Server</h2>');
+    expect(imagePage).toContain(`<a href="${folder}${server.compose}">`);
+    expect(imagePage).toContain(`<a href="${folder}${server.nginxProxy}">`);
+    expect(imagePage).toContain(
+      `docker pull ${repository}:${version}\ndocker pull ${repository}@${digest}`,
+    );
+    expect(imagePage).toContain('echo &#39;compose  compose.yaml&#39; | sha256sum -c');
+    // The server's three files and the image, then the image SBOM.
+    expect(imagePage.match(/<details>/g)).toHaveLength(14);
+    expect(imagePage.indexOf('<h2>Server</h2>')).toBeLessThan(imagePage.indexOf('Checksums'));
   });
 });
 
@@ -300,9 +400,23 @@ describe('uploadPlan', () => {
     );
   });
 
-  it("uploads the server image's SBOM, but not the digests", () => {
-    const keys = uploadPlan(version, 'downloads', true).map((u) => u.key);
+  it("uploads the server image's SBOM and the server's files, but not the digests", () => {
+    const plan = uploadPlan(version, 'downloads', true);
+    const keys = plan.map((u) => u.key);
     expect(keys).toContain(`downloads/${version}/${imageSbom}`);
+    expect(keys.indexOf(`downloads/${version}/${server.compose}`)).toBeLessThan(
+      keys.indexOf('downloads/latest.json'),
+    );
     expect(keys.some((key) => key.endsWith('.digest'))).toBe(false);
+    expect(plan.find((u) => u.name === server.compose)).toEqual(
+      expect.objectContaining({
+        contentType: 'text/yaml',
+        cacheControl: 'public, max-age=31536000, immutable',
+        attachment: false,
+      }),
+    );
+    expect(plan.find((u) => u.name === server.env)).toEqual(
+      expect.objectContaining({ contentType: 'text/plain; charset=utf-8', attachment: false }),
+    );
   });
 });

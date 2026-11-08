@@ -1,8 +1,9 @@
 # The release pipeline's publish leg (infra/src/release-stack.ts), after the build legs:
-# uploads the release to the stage's downloads bucket, checks every published URL, tags the
-# server image when the stage publishes it (IMAGE_REPOSITORY), then marks the prerelease it
-# replaced to expire. DRY_RUN=true (scripts/try-release.sh) uploads and tags nothing, and deletes
-# the image legs' images.
+# uploads the release to the stage's downloads bucket, checks every published URL, then marks the
+# prerelease it replaced to expire. When the stage publishes the server image (IMAGE_REPOSITORY),
+# its version's tag goes before the uploads, as the compose file pins it, and its other tags after
+# the check. DRY_RUN=true (scripts/try-release.sh) uploads and tags nothing, and deletes the image
+# legs' images.
 # RELEASE_TAG comes from the pipeline or scripts/try-release.sh; the rest from the project.
 
 version: 0.2
@@ -28,30 +29,38 @@ phases:
         : "${DOWNLOADS_BUCKET:?not set; expected from the project}"
         dry_run=${DRY_RUN:-false}
         version=${RELEASE_TAG#v}
-        flag=() image=()
+        flag=() image=''
         [ "$PRERELEASE" = true ] && flag=(--prerelease)
-        if [ -n "${IMAGE_REPOSITORY:-}" ]; then
-          flag+=(--image)
-          image=(node infra/src/release/publish-image.ts --dir artifacts --tag "$RELEASE_TAG"
-            --repository "$IMAGE_REPOSITORY")
-        fi
+        image() {
+          node infra/src/release/publish-image.ts "$1" --dir artifacts --tag "$RELEASE_TAG" \
+            --repository "$IMAGE_REPOSITORY" "${@:2}"
+        }
 
         mkdir -p artifacts
         aws s3 sync --only-show-errors "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/" artifacts/
+        # The image the compose file pins, before anything is pushed.
+        [ -z "${IMAGE_REPOSITORY:-}" ] || image=$(image join --dry-run)
+        [ -z "$image" ] || flag+=(--image "$image")
         node infra/src/release/publish.ts --dir artifacts --tag "$RELEASE_TAG" \
           --url "$DOWNLOADS_URL" "${flag[@]}"
 
         if [ "$dry_run" = true ]; then
           echo "Dry run: would upload to s3://$DOWNLOADS_BUCKET:"
           cut -f2- artifacts/plan.tsv
-          [ ${#image[@]} = 0 ] || "${image[@]}" --dry-run
+          [ -z "$image" ] || image tag --dry-run
           exit 0
         fi
 
         previous=$(aws s3 cp "s3://$DOWNLOADS_BUCKET/downloads/latest.json" - 2>/dev/null |
           node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{try{console.log(JSON.parse(s).version)}catch{}})' || true)
 
-        # Versioned files first, so the feeds and page never point at a missing file.
+        # The version's image, then its files, so the feeds, page, and floating tags never point at
+        # something missing.
+        if [ -n "$image" ]; then
+          joined=$(image join)
+          [ "$joined" = "$image" ] ||
+            { echo "Joined $joined, not $image, which the compose file pins" >&2; exit 1; }
+        fi
         while IFS=$'\t' read -r file key type cache disposition; do
           aws s3 cp --only-show-errors "$file" "s3://$DOWNLOADS_BUCKET/$key" \
             --content-type "$type" --cache-control "$cache" --content-disposition "$disposition"
@@ -65,7 +74,7 @@ phases:
         done <artifacts/urls.txt
         [ "$bad" = 0 ] || { echo 'A published URL is unreachable' >&2; exit 1; }
 
-        [ ${#image[@]} = 0 ] || "${image[@]}"
+        [ -z "$image" ] || image tag
 
         # The lifecycle rule expires the replaced prerelease's files.
         if [ "$PRERELEASE" = true ] && [ -n "$previous" ] && [ "$previous" != "$version" ]; then

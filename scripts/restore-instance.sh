@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replaces the data of the Docker stack or an AWS stage with a bundle from
+# Replaces the data of a Docker install or an AWS stage with a bundle from
 # scripts/export-instance.sh: restores the database, applies the target's newer migrations,
 # re-seals two-factor secrets with the target's APP_SECRET, and replaces the blobs.
 # See https://newses.app/guide/self-hosting.
@@ -7,18 +7,21 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/restore-instance.sh <bundle-dir> [--aws dev|prod] [--dry-run] [--yes]
+Usage: scripts/restore-instance.sh <bundle-dir> [--aws dev|prod | --compose FILE] [--dry-run]
+                                   [--yes]
 
   Replaces every user, subscription, entry, and blob of the target with the bundle's. Everyone
   signs in again. The target keeps its APP_SECRET and settings, and must run the bundle's
   version of Newses or a newer one.
-  The Docker stack's database is saved first as newses-pre-restore-<time>.dump in the current
+  A Docker install's database is saved first as newses-pre-restore-<time>.dump in the current
   directory; prod is snapshotted first (<prefix>-prod-pre-restore-<time>).
 
-  --aws STAGE  Restore into that AWS stage (AWS CLI credentials, infra/deploy.config.json);
-               default: the Docker stack in docker/
-  --dry-run    Check the bundle and the target and show what would be replaced, then stop
-  --yes        Restore without asking (not into prod)
+  --aws STAGE     Restore into that AWS stage (AWS CLI credentials, infra/deploy.config.json);
+                  default: a Docker install
+  --compose FILE  The Docker install's compose file, again for each of several (default: the
+                  files COMPOSE_FILE names, else docker/compose.yaml in this checkout)
+  --dry-run       Check the bundle and the target and show what would be replaced, then stop
+  --yes           Restore without asking (not into prod)
 EOF
 }
 
@@ -29,9 +32,11 @@ die() {
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 bundle='' stage='' dry_run=false yes=false
+compose=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --aws) stage=${2:-}; shift 2 || die '--aws needs a stage' ;;
+    --compose) [ $# -ge 2 ] || die '--compose needs a file'; compose+=("$2"); shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     --yes) yes=true; shift ;;
     -h | --help) usage; exit 0 ;;
@@ -41,6 +46,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$bundle" ] || { usage >&2; exit 2; }
 case "$stage" in '' | dev | prod) ;; *) die "--aws takes dev or prod, not $stage" ;; esac
+[ -z "$stage" ] || [ ${#compose[@]} = 0 ] || die '--compose is for a Docker install, not --aws'
 [ "$stage" != prod ] || ! $yes || die '--yes is not for prod'
 
 [ -f "$bundle/manifest" ] || die "$bundle has no manifest: not a bundle, or its export did not finish"
@@ -56,17 +62,20 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 if [ -z "$stage" ]; then
-  target='the Docker stack'
+  target='the Docker install'
   # shellcheck source=lib/docker-stack.sh
   . "$root/scripts/lib/docker-stack.sh"
+  stack_use ${compose[@]+"${compose[@]}"} || exit 2
   stack_check || exit 2
-  stack_cli 2>&1 | grep -q reseal-secrets ||
-    die "the Docker stack's image cannot re-seal secrets: upgrade it first (git pull && docker compose -f docker/compose.yaml up -d --build)"
+  # The usage, which lists the commands, exits non-zero.
+  commands=$(stack_cli 2>&1 || true)
+  grep -q reseal-secrets <<<"$commands" ||
+    die "the Docker install's image cannot re-seal secrets: upgrade it first ($(stack_upgrade))"
   pg() { stack_pg "$@"; }
   cli() { stack_cli "$@"; }
   freeze() { "${stack_compose[@]}" stop server worker; }
   unfreeze() { "${stack_compose[@]}" start server worker; }
-  restart='docker compose -f docker/compose.yaml up -d'
+  restart="$stack_command up -d"
   migrate() { "${stack_compose[@]}" run --rm --no-deps migrate; }
   blobs_in() { tar -C "$bundle/blobs" -cf - . | stack_blobs_in; }
 else

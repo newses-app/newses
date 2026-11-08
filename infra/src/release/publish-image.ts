@@ -1,9 +1,12 @@
-// Publishes the release's server image (infra/buildspec/release-publish.yml), after the downloads:
-// joins the image legs' digests under the version's tag, moves the tags image.ts plans to it,
-// then deletes the superseded prereleases with their images, as ECR Public has no lifecycle
-// rules. A version's tag never moves: publishing it again must join the same images.
-// --dry-run prints the plan and deletes the legs' images instead, which nothing tags.
-//   node infra/src/release/publish-image.ts --dir artifacts --tag v1.2.3 \
+// Publishes the release's server image (infra/buildspec/release-publish.yml) in two steps, in the
+// order the downloads go. `join`, before the uploads, joins the image legs' digests under the
+// version's tag and prints the image's reference, which the published compose file pins. `tag`,
+// after the URL check, moves the tags image.ts plans to it, then deletes the superseded
+// prereleases with their images, as ECR Public has no lifecycle rules. A version's tag never
+// moves: joining it again must join the same images.
+// --dry-run pushes nothing: `join` prints the reference the image would have, and `tag` prints
+// the plan and deletes the legs' images, which nothing tags.
+//   node infra/src/release/publish-image.ts join|tag --dir artifacts --tag v1.2.3 \
 //     --repository public.ecr.aws/<alias>/newses [--dry-run]
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -19,7 +22,8 @@ import {
   planTags,
 } from './image.ts';
 
-const { values } = parseArgs({
+const { values, positionals } = parseArgs({
+  allowPositionals: true,
   options: {
     dir: { type: 'string' },
     tag: { type: 'string' },
@@ -27,16 +31,21 @@ const { values } = parseArgs({
     'dry-run': { type: 'boolean', default: false },
   },
 });
-if (!values.dir || !values.tag || !values.repository) {
-  throw new Error('Usage: publish-image.ts --dir DIR --tag TAG --repository URI [--dry-run]');
+const [step] = positionals;
+if ((step !== 'join' && step !== 'tag') || !values.dir || !values.tag || !values.repository) {
+  throw new Error(
+    'Usage: publish-image.ts join|tag --dir DIR --tag TAG --repository URI [--dry-run]',
+  );
 }
 const { dir, repository } = values;
+const dryRun = values['dry-run'];
 const version = versionFromTag(values.tag).name;
 const name = imageRepositoryName(repository);
 
+// Commands that are not quiet write to stderr, as `join` prints only the reference.
 function run(command: string, args: string[], quiet = true) {
   const result = spawnSync(command, args, {
-    stdio: ['ignore', quiet ? 'pipe' : 'inherit', 'inherit'],
+    stdio: ['ignore', quiet ? 'pipe' : 2, 'inherit'],
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -58,12 +67,15 @@ function tags() {
   return new Map(imageTagDetails.map((d) => [d.imageTag, d.imageDetail.imageDigest]));
 }
 
+const digestOf = (manifest: string) =>
+  `sha256:${createHash('sha256').update(manifest).digest('hex')}`;
+
 /** An image's digest and, for a multi-arch image, its images' digests. */
 function inspect(reference: string) {
   const raw = run('docker', ['buildx', 'imagetools', 'inspect', '--raw', reference]);
   const { manifests = [] } = JSON.parse(raw) as { manifests?: { digest: string }[] };
   return {
-    digest: `sha256:${createHash('sha256').update(raw).digest('hex')}`,
+    digest: digestOf(raw),
     images: manifests.map((m) => m.digest),
   };
 }
@@ -90,17 +102,40 @@ const legs = await Promise.all(
   ),
 );
 const before = tags();
-const plan = planTags(version, [...before.keys()]);
 const published = before.get(version);
 if (published) {
   const { images } = inspect(`${repository}@${published}`);
   if (images.length !== legs.length || !legs.every((digest) => images.includes(digest))) {
-    throw new Error(`${repository}:${version} already holds other images; version tags never move`);
+    throw new Error(
+      `${repository}:${version} already holds other images, and version tags never move: ` +
+        'retry the publish leg alone, with the build legs’ images, or release a new version',
+    );
   }
 }
+const ref = (tag: string) => `${repository}:${tag}`;
+const sources = legs.map((digest) => `${repository}@${digest}`);
 
-if (values['dry-run']) {
-  console.log(`Dry run: would tag ${repository} with ${[version, ...plan.floating].join(', ')}`);
+if (step === 'join') {
+  let digest = published;
+  if (!digest && dryRun) {
+    // What buildx would push, followed by a newline.
+    const manifest = run('docker', ['buildx', 'imagetools', 'create', '--dry-run', ...sources]);
+    digest = digestOf(manifest.replace(/\n$/, ''));
+  } else if (!digest) {
+    run('docker', ['buildx', 'imagetools', 'create', '-t', ref(version), ...sources], false);
+    digest = inspect(ref(version)).digest;
+    if (tags().get(version) !== digest) throw new Error(`${ref(version)} is not on ${digest}`);
+  }
+  console.error(`${dryRun ? 'Dry run: would join' : 'Joined'} ${ref(version)}@${digest}`);
+  console.log(`${repository}@${digest}`);
+  process.exit(0);
+}
+
+const plan = planTags(version, [...before.keys()]);
+if (dryRun) {
+  console.log(
+    `Dry run: would tag ${repository} with ${plan.floating.join(', ') || 'no floating tags'}`,
+  );
   console.log(`Dry run: would delete ${plan.superseded.join(', ') || 'no superseded prereleases'}`);
   if (!published) {
     remove(legs.map((digest) => `imageDigest=${digest}`));
@@ -108,23 +143,9 @@ if (values['dry-run']) {
   }
   process.exit(0);
 }
+if (!published) throw new Error(`${ref(version)} does not exist; join it first`);
 
-const ref = (tag: string) => `${repository}:${tag}`;
-if (!published) {
-  run(
-    'docker',
-    [
-      'buildx',
-      'imagetools',
-      'create',
-      '-t',
-      ref(version),
-      ...legs.map((digest) => `${repository}@${digest}`),
-    ],
-    false,
-  );
-}
-const image = inspect(ref(version));
+const image = inspect(`${repository}@${published}`);
 if (plan.floating.length > 0) {
   // From one multi-arch image, buildx pushes the same manifest: the digest stays the same.
   run(

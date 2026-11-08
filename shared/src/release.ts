@@ -43,7 +43,22 @@ export interface ReleaseFile {
   sha256: string;
 }
 
-/** `/downloads/latest.json`: the latest release on a stage, for the download page and the Android update prompt. */
+/** The server image a release publishes, and the files that install it with Docker Compose. */
+export interface ServerRelease {
+  /** The multi-arch image: `<repository>:<tag>`, or `<repository>@<digest>`. */
+  image: { repository: string; tag: string; digest: string };
+  /** The compose file, pinned to the image. */
+  compose: ReleaseFile;
+  /** The sample `.env`. */
+  env: ReleaseFile;
+  /** The override for running behind nginx-proxy. */
+  nginxProxy: ReleaseFile;
+}
+
+/**
+ * `/downloads/latest.json`: the latest release on a stage, for the download page and the Android
+ * update prompt; `server` only on stages that publish the server image.
+ */
 export interface ReleaseManifest {
   version: string;
   prerelease: boolean;
@@ -52,4 +67,5 @@ export interface ReleaseManifest {
   windows: { installer: ReleaseFile; zip: ReleaseFile; portable: ReleaseFile };
   linux: { appImage: ReleaseFile; deb: ReleaseFile };
   android: ReleaseFile & { versionCode: number };
+  server?: ServerRelease;
 }

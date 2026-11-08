@@ -1,8 +1,0 @@
-apiVersion: 1
-
-providers:
-  - name: newses
-    folder: newses
-    type: file
-    options:
-      path: /otel-lgtm/newses-dashboards

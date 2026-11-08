@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# Imports a TTRSS database dump into the local Docker stack or an AWS stage: restores the dump
+# Imports a TTRSS database dump into a Docker install or an AWS stage: restores the dump
 # into a throwaway PostgreSQL container, runs a dry run, asks, imports, and saves the report.
 # See https://newses.app/guide/migration-ttrss.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/import-ttrss.sh <dump> [--aws dev|prod] [--users a,b] [--since YYYY-MM-DD]
-                               [--force] [--dry-run] [--yes]
+Usage: scripts/import-ttrss.sh <dump> [--aws dev|prod | --compose FILE] [--users a,b]
+                               [--since YYYY-MM-DD] [--force] [--dry-run] [--yes]
 
-  <dump>         pg_dump custom-format file (-Fc), .sql, or .sql.gz of the TTRSS database
-  --aws STAGE    Import into that AWS stage (AWS CLI credentials, infra/deploy.config.json);
-                 default: the Docker stack in docker/
-  --users a,b    Import only these TTRSS logins
-  --since DATE   Skip entries older than DATE unless kept (starred, published, ...)
-  --force        Re-import into users who have used this instance since their last import
-  --dry-run      Stop after the dry run
-  --yes          Import without asking after the dry run
+  <dump>          pg_dump custom-format file (-Fc), .sql, or .sql.gz of the TTRSS database
+  --aws STAGE     Import into that AWS stage (AWS CLI credentials, infra/deploy.config.json);
+                  default: a Docker install
+  --compose FILE  The Docker install's compose file, again for each of several (default: the
+                  files COMPOSE_FILE names, else docker/compose.yaml in this checkout)
+  --users a,b     Import only these TTRSS logins
+  --since DATE    Skip entries older than DATE unless kept (starred, published, ...)
+  --force         Re-import into users who have used this instance since their last import
+  --dry-run       Stop after the dry run
+  --yes           Import without asking after the dry run
 EOF
 }
 
@@ -26,13 +28,13 @@ die() {
 }
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-compose=(docker compose -f "$root/docker/compose.yaml")
 
 dump='' stage='' dry_only=false yes=false
-pass=()
+pass=() compose=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --aws) stage=${2:-}; shift 2 || die '--aws needs a stage' ;;
+    --compose) [ $# -ge 2 ] || die '--compose needs a file'; compose+=("$2"); shift 2 ;;
     --users | --since) [ $# -ge 2 ] || die "$1 needs a value"; pass+=("$1" "$2"); shift 2 ;;
     --force) pass+=(--force); shift ;;
     --dry-run) dry_only=true; shift ;;
@@ -45,13 +47,18 @@ done
 [ -n "$dump" ] || { usage >&2; exit 2; }
 [ -r "$dump" ] || die "cannot read $dump"
 case "$stage" in '' | dev | prod) ;; *) die "--aws takes dev or prod, not $stage" ;; esac
+[ -z "$stage" ] || [ ${#compose[@]} = 0 ] || die '--compose is for a Docker install, not --aws'
 
 docker info >/dev/null 2>&1 || die 'Docker is not running'
 if [ -z "$stage" ]; then
-  target='the Docker stack'
+  target='the Docker install'
   label=docker
-  [ -n "$("${compose[@]}" ps --status running -q server)" ] ||
-    die "the Docker stack is not running; start it with: docker compose -f docker/compose.yaml up -d"
+  # shellcheck source=lib/docker-stack.sh
+  . "$root/scripts/lib/docker-stack.sh"
+  stack_use ${compose[@]+"${compose[@]}"} || exit 2
+  stack_check || exit 2
+  [ -n "$("${stack_compose[@]}" ps --status running -q server)" ] ||
+    die "the Docker install's server is not running; start it with: $stack_command up -d"
 else
   target="AWS stage $stage"
   label="aws-$stage"
@@ -103,12 +110,12 @@ source_url="postgres://postgres@$name:5432/ttrss"
 
 if [ -z "$stage" ]; then
   # The stack's server reaches the source over the stack's network.
-  db_container=$("${compose[@]}" ps -q db)
+  db_container=$("${stack_compose[@]}" ps -q db)
   stack_network=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' \
     "$db_container" | cut -d' ' -f1)
   docker network connect "$stack_network" "$name"
   run_import() {
-    "${compose[@]}" exec -T server newses cli import-ttrss --source "$source_url" "$@"
+    "${stack_compose[@]}" exec -T server newses cli import-ttrss --source "$source_url" "$@"
   }
 else
   aws_stage "$stage" "$tmp"

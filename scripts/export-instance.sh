@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# Exports a Newses instance, the Docker stack or an AWS stage, to a bundle directory that
+# Exports a Newses instance, a Docker install or an AWS stage, to a bundle directory that
 # scripts/restore-instance.sh loads into another: its database without sessions or operations
 # data, its blobs, and its APP_SECRET. See https://newses.app/guide/self-hosting.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/export-instance.sh <bundle-dir> [--aws dev|prod] [--archive-only] [--freeze]
+Usage: scripts/export-instance.sh <bundle-dir> [--aws dev|prod | --compose FILE]
+                                  [--archive-only] [--freeze]
 
   <bundle-dir>    New or empty directory for the bundle
   --aws STAGE     Export that AWS stage (AWS CLI credentials, infra/deploy.config.json);
-                  default: the Docker stack in docker/
+                  default: a Docker install
+  --compose FILE  The Docker install's compose file, again for each of several (default: the
+                  files COMPOSE_FILE names, else docker/compose.yaml in this checkout)
   --archive-only  Leave out favicons and cached images, which the target fetches again
   --freeze        Stop the source first and leave it stopped, so nothing changes after the
                   export (for a cut-over)
@@ -33,9 +36,11 @@ EXCLUDED_SCHEMAS=(pgboss)
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 bundle='' stage='' blobs=all freeze=false
+compose=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --aws) stage=${2:-}; shift 2 || die '--aws needs a stage' ;;
+    --compose) [ $# -ge 2 ] || die '--compose needs a file'; compose+=("$2"); shift 2 ;;
     --archive-only) blobs=archive; shift ;;
     --freeze) freeze=true; shift ;;
     -h | --help) usage; exit 0 ;;
@@ -45,6 +50,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$bundle" ] || { usage >&2; exit 2; }
 case "$stage" in '' | dev | prod) ;; *) die "--aws takes dev or prod, not $stage" ;; esac
+[ -z "$stage" ] || [ ${#compose[@]} = 0 ] || die '--compose is for a Docker install, not --aws'
 [ ! -e "$bundle" ] || [ -z "$(ls -A "$bundle")" ] || die "$bundle is not empty"
 
 docker info >/dev/null 2>&1 || die 'Docker is not running'
@@ -52,15 +58,16 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 if [ -z "$stage" ]; then
-  source_name='the Docker stack'
+  source_name='the Docker install'
   label=docker
   # shellcheck source=lib/docker-stack.sh
   . "$root/scripts/lib/docker-stack.sh"
+  stack_use ${compose[@]+"${compose[@]}"} || exit 2
   stack_check || exit 2
   pg() { stack_pg "$@"; }
   app_secret() { stack_app_secret; }
   freeze() { "${stack_compose[@]}" stop server worker; }
-  restart='docker compose -f docker/compose.yaml start server worker'
+  restart="$stack_command start server worker"
   blobs_out() { stack_blobs_out "$blobs" | tar -xf - -C "$bundle/blobs"; }
 else
   source_name="AWS stage $stage"

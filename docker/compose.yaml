@@ -1,3 +1,4 @@
+# Newses with Docker Compose. Settings go in .env beside this file: copy .env.example.
 name: newses
 
 x-app: &app
@@ -8,7 +9,7 @@ x-app: &app
   restart: unless-stopped
   environment:
     DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-    APP_SECRET: ${APP_SECRET:?set APP_SECRET in docker/.env}
+    APP_SECRET: ${APP_SECRET:?set APP_SECRET in .env}
     LOG_LEVEL: ${LOG_LEVEL:-info}
     COMPAT_TRACE: ${COMPAT_TRACE:-false}
     PUBLIC_URL: ${PUBLIC_URL:-}
@@ -117,9 +118,21 @@ services:
       db:
         condition: service_healthy
 
+  # Copies the image's Grafana dashboards to lgtm's on each start, so an upgrade refreshes them.
+  dashboards:
+    <<: *app
+    profiles: [observability]
+    restart: 'no'
+    entrypoint:
+      - sh
+      - -c
+      - find /data/dashboards -mindepth 1 -delete && cp /app/observability/dashboards/*.json /data/dashboards/
+    volumes:
+      - dashboards:/data/dashboards
+
   # Grafana with Tempo, Loki, and Prometheus for traces, logs, and metrics, on 127.0.0.1 only.
   # Enable with: docker compose --profile observability up -d, and set
-  # OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318 in docker/.env.
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318 in .env.
   lgtm:
     image: grafana/otel-lgtm:0.33.1
     profiles: [observability]
@@ -128,11 +141,28 @@ services:
       - '127.0.0.1:${GRAFANA_PORT:-3000}:3000'
     volumes:
       - lgtm:/data
-      - ./observability/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/newses.yaml:ro
-      - ./observability/dashboards:/otel-lgtm/newses-dashboards:ro
+      - dashboards:/otel-lgtm/newses-dashboards:ro
+    configs:
+      - source: dashboards
+        target: /otel-lgtm/grafana/conf/provisioning/dashboards/newses.yaml
+    depends_on:
+      dashboards:
+        condition: service_completed_successfully
+
+configs:
+  dashboards:
+    content: |
+      apiVersion: 1
+      providers:
+        - name: newses
+          folder: newses
+          type: file
+          options:
+            path: /otel-lgtm/newses-dashboards
 
 volumes:
   db:
   blobs:
   backups:
   lgtm:
+  dashboards:

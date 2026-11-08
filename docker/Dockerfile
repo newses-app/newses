@@ -51,8 +51,10 @@ COPY server/src ./server/src
 COPY shared ./shared
 COPY --from=deps /app/shared/node_modules ./shared/node_modules
 COPY --from=web /app/web/dist ./web/dist
+# For the compose file's observability profile, which copies them to Grafana's volume.
+COPY docker/observability/dashboards ./observability/dashboards
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/newses
-RUN mkdir -p /data/blobs && chown node:node /data/blobs
+RUN mkdir -p /data/blobs /data/dashboards && chown node:node /data/blobs /data/dashboards
 USER node
 EXPOSE 8080
 ENTRYPOINT ["newses"]
