@@ -15,8 +15,9 @@ Usage: scripts/sbom.sh [--tag TAG] [--only LIST] [--out DIR] [--upload]
   --out DIR   Where to write them (default: sbom/); earlier SBOMs there are deleted
   --upload    Upload them to Dependency-Track: DTRACK_URL (default http://localhost:8080) and
               DTRACK_API_KEY, from the environment or dtrack.env at the repository root
-  --from URL  Upload a published release's SBOMs (desktop and mobile) instead of generating
-              them, e.g. https://reader.example.com/downloads/1.2.3/
+  --from URL  Upload a published release's SBOMs (desktop, mobile, and the server image's when
+              it has one) instead of generating them, e.g.
+              https://reader.example.com/downloads/1.2.3/
 
 Needs Docker for the image SBOM and validation; mobile needs JDK 21 and the Android SDK.
 EOF
@@ -27,8 +28,8 @@ die() {
   exit 2
 }
 
-# Versions at least two weeks old when pinned.
-SYFT=anchore/syft:v1.52.0
+# Versions at least two weeks old when pinned. The release pipeline's image leg reads SYFT too.
+SYFT=ghcr.io/anchore/syft:v1.52.0
 CYCLONEDX_CLI=cyclonedx/cyclonedx-cli:0.33.1
 
 tag='' only=server,image,web,desktop,mobile out=sbom upload=false from=''
@@ -67,9 +68,16 @@ if [ -n "$from" ]; then
   from=${from%/}/
   version=$(basename "$from")
   [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$ ]] || die "no version at the end of $from"
-  for deliverable in desktop mobile; do
+  for deliverable in desktop mobile image; do
     name="newses-$version-$deliverable.cdx.json"
-    curl -fsS --max-time 60 -o "$out/$name" "$from$name" || die "cannot download $from$name"
+    code=$(curl -sS --max-time 60 -o "$out/$name" -w '%{http_code}' "$from$name") ||
+      die "cannot download $from$name"
+    # Stages without an image repository publish no image SBOM.
+    if [ "$deliverable" = image ] && { [ "$code" = 403 ] || [ "$code" = 404 ]; }; then
+      rm -f "$out/$name"
+      continue
+    fi
+    [ "$code" = 200 ] || die "cannot download $from$name (HTTP $code)"
   done
   node infra/src/release/upload-sbom.ts --dir "$out" --tag "v$version"
   exit

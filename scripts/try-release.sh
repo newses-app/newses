@@ -6,12 +6,14 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/try-release.sh [--leg all|linux|windows|publish] [--tag TAG] [--publish]
+Usage: scripts/try-release.sh [--leg all|linux|windows|image|publish] [--tag TAG] [--publish]
 
-  --leg LEG   Run one leg (default: all, i.e. linux and windows in parallel, then publish)
+  --leg LEG   Run one leg (default: all, i.e. linux, windows, and image in parallel, then
+              publish); image is both architectures' legs, when the stage has an image repository
   --tag TAG   Release tag to build as (default: v0.0.1-try.<time>); a later --leg publish run
               with the same tag reuses the build legs' files
-  --publish   Really publish to the dev stage's downloads (default: a dry run)
+  --publish   Really publish to the dev stage's downloads and image repository (default: a dry
+              run, which deletes the images the image legs pushed)
 
 Checks the buildspecs first: bash syntax for the Linux legs, ASCII for the Windows leg.
 Always targets the dev stage. Needs AWS CLI credentials, git, zip, and python3 with PyYAML.
@@ -36,7 +38,10 @@ while [ $# -gt 0 ]; do
     *) usage >&2; exit 2 ;;
   esac
 done
-case "$leg" in all | linux | windows | publish) ;; *) die '--leg takes all, linux, windows, or publish' ;; esac
+case "$leg" in
+  all | linux | windows | image | publish) ;;
+  *) die '--leg takes all, linux, windows, image, or publish' ;;
+esac
 # Dev releases are prereleases; a -try.* build's versionCode sorts below any rc, and 0.0.0 would be 0.
 [ -n "$tag" ] || tag="v0.0.1-try.$(date +%s)"
 [[ $tag == v*-* ]] || die "dev releases need a prerelease tag (v1.2.3-x): $tag"
@@ -53,7 +58,12 @@ cd "$root"
 python3 - <<'EOF'
 import subprocess, sys, yaml
 bad = 0
-for path in ["infra/buildspec/release-linux.yml", "infra/buildspec/release-publish.yml"]:
+r = subprocess.run(["bash", "-n", "infra/buildspec/image-setup.sh"], text=True, capture_output=True)
+if r.returncode:
+    bad += 1
+    print(f"infra/buildspec/image-setup.sh: {r.stderr.strip()}", file=sys.stderr)
+for path in ["infra/buildspec/release-linux.yml", "infra/buildspec/release-image.yml",
+             "infra/buildspec/release-publish.yml"]:
     for phase, body in yaml.safe_load(open(path))["phases"].items():
         for i, cmd in enumerate(body.get("commands") or []):
             r = subprocess.run(["bash", "-n"], input=cmd, text=True, capture_output=True)
@@ -81,7 +91,13 @@ declare -A projects=(
   [linux]=$(output LinuxProject)
   [windows]=$(output WindowsProject)
   [publish]=$(output PublishProject)
+  [image-amd64]=$(output ImageAmd64Project)
+  [image-arm64]=$(output ImageArm64Project)
 )
+image_legs=()
+[ -z "${projects[image-amd64]}" ] || image_legs=(image-amd64 image-arm64)
+[ "$leg" != image ] || [ ${#image_legs[@]} -gt 0 ] ||
+  die 'the dev stage has no image legs (no imageRepository in its deploy config)'
 
 # Tracked and untracked files, without ignored ones (signing env files, builds); zip keeps
 # gradlew's executable bit.
@@ -91,6 +107,7 @@ git ls-files -co --exclude-standard -z | xargs -0 zip -q "$work/source.zip"
 key="try/$tag/source.zip"
 echo "Uploading the working tree ($(du -h "$work/source.zip" | cut -f1)) to s3://$bucket/$key"
 aws s3 cp --region "$region" --only-show-errors "$work/source.zip" "s3://$bucket/$key"
+commit=$(git rev-parse HEAD)
 echo "tag=$tag leg=$leg dry_run=$dry_run"
 
 # These are pipeline projects, so the source and artifacts are overridden for a direct run.
@@ -101,6 +118,7 @@ start() {
     --artifacts-override type=NO_ARTIFACTS \
     --environment-variables-override \
     "name=RELEASE_TAG,value=$tag,type=PLAINTEXT" "name=DRY_RUN,value=$dry_run,type=PLAINTEXT" \
+    "name=RELEASE_COMMIT,value=$commit,type=PLAINTEXT" \
     --query build.id --output text)
   echo "Started $1: https://$region.console.aws.amazon.com/codesuite/codebuild/projects/${projects[$1]}/history?region=$region" >&2
   echo "$id"
@@ -119,9 +137,15 @@ wait_for() {
   ! tr '\t' '\n' <<<"$status" | grep -qv SUCCEEDED
 }
 
+if [ "$leg" = image ]; then
+  wait_for "$(start image-amd64)" "$(start image-arm64)"
+  exit
+fi
 if [ "$leg" != all ]; then
   wait_for "$(start "$leg")"
   exit
 fi
-wait_for "$(start linux)" "$(start windows)" || die 'a build leg failed; not publishing'
+builds=("$(start linux)" "$(start windows)")
+for image_leg in "${image_legs[@]}"; do builds+=("$(start "$image_leg")"); done
+wait_for "${builds[@]}" || die 'a build leg failed; not publishing'
 wait_for "$(start publish)"

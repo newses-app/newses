@@ -1,6 +1,8 @@
-// What the release pipeline's publish leg uploads for a version: the files both build legs
+// What the release pipeline's publish leg uploads for a version: the files the build legs
 // handed over, SHA256SUMS, the update feeds pointed at them, latest.json, and the downloads page.
+// `image` is set when the stage publishes the server image, whose legs hand over its SBOM too.
 import type { ReleaseFile, ReleaseManifest } from '@newses/shared/release';
+import { IMAGE_ARCHES, imageDigestName } from './image.ts';
 import { sbomName } from './sbom.ts';
 
 /** A built file: name, size in bytes, and SHA-256 (hex). */
@@ -38,22 +40,26 @@ export const FEEDS = ['latest.yml', 'latest-linux.yml'];
 const blockmapName = (version: string) => `${installerNames(version).windows}.blockmap`;
 
 type Installer = 'windows' | 'windowsZip' | 'windowsPortable' | 'appImage' | 'deb' | 'android';
-type ReleaseSbom = 'desktop' | 'mobile';
+type ReleaseSbom = 'desktop' | 'mobile' | 'image';
 
 /**
- * The apps' CycloneDX SBOMs, built by the Linux leg, and the installers each describes:
- * desktop's packages are the same on every platform.
+ * The CycloneDX SBOMs and the installers each describes: the apps', built by the Linux leg
+ * (desktop's packages are the same on every platform), and the server image's, built by the
+ * amd64 image leg.
  */
 const RELEASE_SBOMS: [ReleaseSbom, Installer[]][] = [
   ['desktop', ['windows', 'windowsZip', 'windowsPortable', 'appImage', 'deb']],
   ['mobile', ['android']],
+  ['image', []],
 ];
-export const sbomNames = (version: string) =>
-  RELEASE_SBOMS.map(([deliverable]) => sbomName(version, deliverable));
+const releaseSboms = (image: boolean) =>
+  RELEASE_SBOMS.filter(([deliverable]) => image || deliverable !== 'image');
+export const sbomNames = (version: string, image = false) =>
+  releaseSboms(image).map(([deliverable]) => sbomName(version, deliverable));
 
 /** Each SBOM's file name and the installers it describes. */
-export const sbomArtifacts = (version: string) =>
-  RELEASE_SBOMS.map(([deliverable, installers]) => ({
+export const sbomArtifacts = (version: string, image = false) =>
+  releaseSboms(image).map(([deliverable, installers]) => ({
     name: sbomName(version, deliverable),
     describes: installers.map((installer) => installerNames(version)[installer]),
   }));
@@ -65,12 +71,16 @@ export const openapiName = (version: string) => `newses-${version}-openapi.json`
 export const CHECKSUMS = 'SHA256SUMS';
 
 /** The files uploaded under `<version>/` that came from the build legs. */
-const versionedNames = (version: string) => [
+const versionedNames = (version: string, image: boolean) => [
   ...Object.values(installerNames(version)),
   blockmapName(version),
-  ...sbomNames(version),
+  ...sbomNames(version, image),
   openapiName(version),
 ];
+
+/** The image legs' digests, for the publish leg alone. */
+export const imageDigestNames = (image: boolean) =>
+  image ? IMAGE_ARCHES.map(imageDigestName) : [];
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const NO_CACHE = 'no-cache';
@@ -100,8 +110,8 @@ const contentType = (name: string) => {
  * Checks that the build legs handed over exactly this version's files: a missing one means a
  * leg failed, and an extra one means a stale or misnamed build.
  */
-export function checkBuiltFiles(version: string, names: string[]) {
-  const expected = [...versionedNames(version), ...FEEDS];
+export function checkBuiltFiles(version: string, names: string[], image = false) {
+  const expected = [...versionedNames(version, image), ...FEEDS, ...imageDigestNames(image)];
   const missing = expected.filter((name) => !names.includes(name));
   const unexpected = names.filter((name) => !expected.includes(name));
   if (missing.length > 0 || unexpected.length > 0) {
@@ -136,6 +146,8 @@ export interface ManifestInput {
   /** The stage's downloads URL, without a trailing slash. */
   baseUrl: string;
   files: BuiltFile[];
+  /** The stage publishes the server image. */
+  image?: boolean;
 }
 
 const releaseFile = (input: ManifestInput, name: string): ReleaseFile => {
@@ -165,21 +177,26 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
   };
 }
 
+/** A release's SBOMs; the image's only when the stage publishes the image. */
+export type SbomFiles = Record<Exclude<ReleaseSbom, 'image'>, ReleaseFile> & {
+  image?: ReleaseFile;
+};
+
 /** The SBOMs, for the downloads page; latest.json leaves them out, as the apps never read them. */
 export const sbomFiles = (input: ManifestInput) =>
   Object.fromEntries(
-    RELEASE_SBOMS.map(([deliverable]) => [
+    releaseSboms(input.image ?? false).map(([deliverable]) => [
       deliverable,
       releaseFile(input, sbomName(input.version, deliverable)),
     ]),
-  ) as Record<ReleaseSbom, ReleaseFile>;
+  ) as SbomFiles;
 
 /** The OpenAPI document, for the downloads page; latest.json leaves it out too. */
 export const openapiFile = (input: ManifestInput) => releaseFile(input, openapiName(input.version));
 
 /** SHA256SUMS: a `sha256sum -c` line for each file from the build legs, and only those. */
-export function renderChecksums(version: string, files: BuiltFile[]) {
-  return versionedNames(version)
+export function renderChecksums(version: string, files: BuiltFile[], image = false) {
+  return versionedNames(version, image)
     .map((name) => {
       const file = files.find((f) => f.name === name);
       if (!file) throw new Error(`Missing ${name}`);
@@ -241,11 +258,7 @@ const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => HTML_ESC
 const megabytes = (size: number) => `${(size / 1024 / 1024).toFixed(1)} MB`;
 
 /** The static downloads page for the latest release. */
-export function renderIndex(
-  manifest: ReleaseManifest,
-  sboms: Record<ReleaseSbom, ReleaseFile>,
-  openapi: ReleaseFile,
-) {
+export function renderIndex(manifest: ReleaseManifest, sboms: SbomFiles, openapi: ReleaseFile) {
   const installers: [string, string, Installer | 'file', ReleaseFile][] = [
     [
       'Windows',
@@ -282,6 +295,16 @@ export function renderIndex(
   const documents: typeof installers = [
     ['Desktop SBOM', 'CycloneDX bill of materials for the desktop apps', 'file', sboms.desktop],
     ['Android SBOM', 'CycloneDX bill of materials for the Android app', 'file', sboms.mobile],
+    ...(sboms.image
+      ? ([
+          [
+            'Server image SBOM',
+            'CycloneDX bill of materials for the server image, from its linux/amd64 build',
+            'file',
+            sboms.image,
+          ],
+        ] as typeof installers)
+      : []),
     ['API description', 'OpenAPI document of the native API, /api/v1', 'file', openapi],
   ];
   const list = (rows: typeof installers) =>
@@ -344,8 +367,8 @@ ${list(documents)}
 }
 
 /** Versioned files first, then the feeds, latest.json, and the page that point at them. */
-export function uploadPlan(version: string, prefix: string): Upload[] {
-  const versioned = [...versionedNames(version), CHECKSUMS].map((name) => ({
+export function uploadPlan(version: string, prefix: string, image = false): Upload[] {
+  const versioned = [...versionedNames(version, image), CHECKSUMS].map((name) => ({
     name,
     key: `${prefix}/${version}/${name}`,
     contentType: contentType(name),

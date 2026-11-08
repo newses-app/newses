@@ -3,6 +3,7 @@ import {
   buildManifest,
   checkBuiltFiles,
   FEEDS,
+  imageDigestNames,
   installCommands,
   installerNames,
   openapiFile,
@@ -21,6 +22,8 @@ const names = installerNames(version);
 const sboms = sbomNames(version);
 const openapi = openapiName(version);
 const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, openapi, ...FEEDS];
+const imageSbom = `newses-${version}-image.cdx.json`;
+const builtWithImage = [...built, imageSbom, 'image-amd64.digest', 'image-arm64.digest'];
 
 // electron-builder's latest-linux.yml, as built.
 const linuxFeed = `version: 1.2.3-rc.1
@@ -57,6 +60,23 @@ describe('checkBuiltFiles', () => {
         built.filter((name) => name !== openapi),
       );
     }).toThrow(/missing \[newses-1\.2\.3-rc\.1-openapi\.json\]/);
+  });
+
+  it("takes the server image's SBOM and digests only when the stage publishes the image", () => {
+    expect(() => {
+      checkBuiltFiles(version, builtWithImage, true);
+    }).not.toThrow();
+    expect(() => {
+      checkBuiltFiles(version, builtWithImage);
+    }).toThrow(/unexpected \[newses-1\.2\.3-rc\.1-image\.cdx\.json, image-amd64\.digest/);
+    expect(() => {
+      checkBuiltFiles(
+        version,
+        builtWithImage.filter((name) => name !== 'image-arm64.digest'),
+        true,
+      );
+    }).toThrow(/missing \[image-arm64\.digest\]/);
+    expect(imageDigestNames(false)).toEqual([]);
   });
 });
 
@@ -101,6 +121,10 @@ describe('sbomArtifacts', () => {
       { name: sboms[1], describes: [names.android] },
     ]);
   });
+
+  it("adds the server image's, which describes no installer", () => {
+    expect(sbomArtifacts(version, true).at(-1)).toEqual({ name: imageSbom, describes: [] });
+  });
 });
 
 describe('renderChecksums', () => {
@@ -115,6 +139,18 @@ describe('renderChecksums', () => {
 
   it('refuses a missing file', () => {
     expect(() => renderChecksums(version, files.slice(1))).toThrow(/Missing/);
+  });
+
+  it("lists the server image's SBOM, but not the digests", () => {
+    const withImage = builtWithImage.map((name, i) => ({
+      name,
+      size: i,
+      sha256: `hash${String(i)}`,
+    }));
+    const lines = renderChecksums(version, withImage, true).trimEnd().split('\n');
+    expect(lines).toHaveLength(11);
+    expect(lines.at(-2)).toBe(`hash12  ${imageSbom}`);
+    expect(lines.some((line) => line.endsWith('.digest'))).toBe(false);
   });
 });
 
@@ -203,6 +239,19 @@ describe('renderIndex', () => {
     // Commands are escaped: the shell quotes and pipe survive as text.
     expect(page).toContain(`echo &#39;hash4  ${names.deb}&#39; | sha256sum -c`);
     expect(page.match(/<details>/g)).toHaveLength(9);
+    expect(page).not.toContain('Server image SBOM');
+  });
+
+  it("links the server image's SBOM when the stage publishes the image", () => {
+    const withImage = {
+      ...input,
+      image: true,
+      files: [...files, { name: imageSbom, size: 1, sha256: 'imagehash' }],
+    };
+    const imagePage = renderIndex(manifest, sbomFiles(withImage), openapiFile(withImage));
+    expect(imagePage).toContain('<h2>Server image SBOM</h2>');
+    expect(imagePage).toContain(`<a href="${folder}${imageSbom}">`);
+    expect(imagePage.match(/<details>/g)).toHaveLength(10);
   });
 });
 
@@ -249,5 +298,11 @@ describe('uploadPlan', () => {
     expect(plan.find((u) => u.name === 'latest.yml')).toEqual(
       expect.objectContaining({ contentType: 'text/yaml', cacheControl: 'no-cache' }),
     );
+  });
+
+  it("uploads the server image's SBOM, but not the digests", () => {
+    const keys = uploadPlan(version, 'downloads', true).map((u) => u.key);
+    expect(keys).toContain(`downloads/${version}/${imageSbom}`);
+    expect(keys.some((key) => key.endsWith('.digest'))).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import {
   SIGNING_PARAMETERS,
 } from './deploy-config.ts';
 import { notifyResults, pipelinesTopicName } from './pipeline-notifications.ts';
+import { IMAGE_ARCHES, imageRepositoryName } from './release/image.ts';
 
 /** Build-environment variables read from SSM SecureString parameters; CodeBuild grants the reads. */
 const signingParameters = (group: string, names: Record<string, string>) =>
@@ -35,9 +36,10 @@ export interface ReleaseStackProps extends StackProps {
 
 /**
  * The stage's release pipeline: a version tag builds the desktop and Android apps on Linux and
- * Windows in parallel, signs them, and publishes them to the stage's downloads bucket. Branch
- * runs (the run on creation, a manual release) skip the build and publish stages. Each run's
- * result goes to the stage's pipelines topic.
+ * Windows, and the server image on x64 and ARM when the stage has an image repository, all in
+ * parallel; signs the apps; and publishes them to the stage's downloads bucket and the image to
+ * its repository. Branch runs (the run on creation, a manual release) skip the build and publish
+ * stages. Each run's result goes to the stage's pipelines topic.
  */
 export class ReleaseStack extends Stack {
   constructor(scope: Construct, id: string, props: ReleaseStackProps) {
@@ -77,11 +79,14 @@ export class ReleaseStack extends Stack {
       leg: string,
       environment: codebuild.BuildEnvironment,
       timeout: Duration,
+      buildspec = leg,
     ) =>
       new codebuild.PipelineProject(this, id, {
         projectName: resourceName(stage, 'release', leg),
         description: `Release ${leg} leg for ${stage.domainName}`,
-        buildSpec: codebuild.BuildSpec.fromSourceFilename(`infra/buildspec/release-${leg}.yml`),
+        buildSpec: codebuild.BuildSpec.fromSourceFilename(
+          `infra/buildspec/release-${buildspec}.yml`,
+        ),
         environment,
         timeout,
         logging: { cloudWatch: { logGroup: buildLogs } },
@@ -129,28 +134,86 @@ export class ReleaseStack extends Stack {
       },
       Duration.hours(1),
     );
+    // Each architecture builds natively; Docker needs privileged mode.
+    const repository = stage.imageRepository;
+    const imageLegs = (repository ? IMAGE_ARCHES : []).map((arch) => {
+      const id = arch === 'amd64' ? 'ImageAmd64' : 'ImageArm64';
+      return {
+        id,
+        project: project(
+          id,
+          `image-${arch}`,
+          {
+            buildImage:
+              arch === 'amd64'
+                ? codebuild.LinuxBuildImage.STANDARD_7_0
+                : codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
+            computeType: codebuild.ComputeType.MEDIUM,
+            privileged: true,
+            environmentVariables: {
+              ARTIFACT_BUCKET: { value: scratch.bucketName },
+              IMAGE_REPOSITORY: { value: repository },
+              IMAGE_ARCH: { value: arch },
+              NEWSES_SOURCE: { value: `https://github.com/${GITHUB_REPO}` },
+            },
+          },
+          Duration.hours(1),
+          'image',
+        ),
+      };
+    });
     const publish = project(
       'Publish',
       'publish',
       {
         buildImage: codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0,
         computeType: codebuild.ComputeType.SMALL,
+        privileged: Boolean(repository),
         environmentVariables: {
           ARTIFACT_BUCKET: { value: scratch.bucketName },
           DOWNLOADS_BUCKET: { value: downloads.bucketName },
           DOWNLOADS_URL: { value: downloadsUrl },
           // Prereleases are published only to dev, and superseded ones expire.
           PRERELEASE: { value: String(stage.name !== 'prod') },
+          ...(repository && { IMAGE_REPOSITORY: { value: repository } }),
         },
       },
       Duration.minutes(30),
     );
-    scratch.grantReadWrite(linux, 'releases/*');
-    scratch.grantRead(linux, 'try/*');
-    scratch.grantReadWrite(windows, 'releases/*');
-    scratch.grantRead(windows, 'try/*');
+    for (const leg of [linux, windows, ...imageLegs.map((image) => image.project)]) {
+      scratch.grantReadWrite(leg, 'releases/*');
+      scratch.grantRead(leg, 'try/*');
+    }
     scratch.grantRead(publish);
     downloads.grantReadWrite(publish, `${DOWNLOADS_PREFIX}/*`);
+
+    // The image legs push by digest; the publish leg tags and deletes too. Pulls need no grant.
+    if (repository) {
+      const repositoryArn = this.formatArn({
+        service: 'ecr-public',
+        region: '',
+        resource: 'repository',
+        resourceName: imageRepositoryName(repository),
+      });
+      const push = [
+        'ecr-public:BatchCheckLayerAvailability',
+        'ecr-public:InitiateLayerUpload',
+        'ecr-public:UploadLayerPart',
+        'ecr-public:CompleteLayerUpload',
+        'ecr-public:PutImage',
+      ];
+      const grantImage = (leg: codebuild.PipelineProject, actions: string[]) => {
+        leg.addToRolePolicy(new iam.PolicyStatement({ actions, resources: [repositoryArn] }));
+        leg.addToRolePolicy(
+          new iam.PolicyStatement({
+            actions: ['ecr-public:GetAuthorizationToken', 'sts:GetServiceBearerToken'],
+            resources: ['*'],
+          }),
+        );
+      };
+      for (const { project: leg } of imageLegs) grantImage(leg, push);
+      grantImage(publish, [...push, 'ecr-public:DescribeImageTags', 'ecr-public:BatchDeleteImage']);
+    }
 
     const source = new codepipeline.Artifact('Source');
     // CDK grants only the legacy codestar-connections prefix; this connection is codeconnections.
@@ -197,6 +260,7 @@ export class ReleaseStack extends Stack {
       ],
     };
     const releaseTag = { RELEASE_TAG: { value: '#{SourceVariables.TagName}' } };
+    const releaseCommit = { RELEASE_COMMIT: { value: '#{SourceVariables.CommitId}' } };
 
     const pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
       pipelineName: resourceName(stage, 'release'),
@@ -228,6 +292,15 @@ export class ReleaseStack extends Stack {
               input: source,
               environmentVariables: releaseTag,
             }),
+            ...imageLegs.map(
+              ({ id, project: leg }) =>
+                new actions.CodeBuildAction({
+                  actionName: id,
+                  project: leg,
+                  input: source,
+                  environmentVariables: { ...releaseTag, ...releaseCommit },
+                }),
+            ),
           ],
         },
         {
@@ -260,6 +333,9 @@ export class ReleaseStack extends Stack {
       LinuxProject: linux.projectName,
       WindowsProject: windows.projectName,
       PublishProject: publish.projectName,
+      ...Object.fromEntries(
+        imageLegs.map(({ id, project: leg }) => [`${id}Project`, leg.projectName]),
+      ),
     };
     for (const [key, value] of Object.entries(outputs)) new CfnOutput(this, key, { value });
   }

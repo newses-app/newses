@@ -1,9 +1,10 @@
 // Prepares a release for upload (infra/buildspec/release-publish.yml): checks the files the build
-// legs handed over, names the installers in their SBOMs, writes SHA256SUMS, the feeds,
+// legs handed over (with --image, the server image's too), names the installers in their SBOMs,
+// writes SHA256SUMS, the feeds,
 // latest.json and index.html beside them, and writes
 // plan.tsv (file, key, content type, cache control, disposition) and urls.txt for the upload
 // and the checks that follow.
-//   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads
+//   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads [--image]
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -17,6 +18,7 @@ import {
   CHECKSUMS,
   checkBuiltFiles,
   FEEDS,
+  imageDigestNames,
   openapiFile,
   renderChecksums,
   renderIndex,
@@ -34,12 +36,15 @@ const { values } = parseArgs({
     tag: { type: 'string' },
     url: { type: 'string' },
     prerelease: { type: 'boolean', default: false },
+    image: { type: 'boolean', default: false },
   },
 });
 if (!values.dir || !values.tag || !values.url) {
-  throw new Error('Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease]');
+  throw new Error(
+    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--image]',
+  );
 }
-const { dir, url } = values;
+const { dir, url, image } = values;
 const baseUrl = url.replace(/\/$/, '');
 const version = versionFromTag(values.tag);
 if (values.prerelease !== version.name.includes('-')) {
@@ -58,16 +63,18 @@ const sha256 = (path: string) =>
   });
 
 const names = await readdir(dir);
-checkBuiltFiles(version.name, names);
+checkBuiltFiles(version.name, names, image);
 const built = async (name: string): Promise<BuiltFile> => {
   const path = join(dir, name);
   return { name, size: (await stat(path)).size, sha256: await sha256(path) };
 };
 
-// The SBOMs name the installers' hashes, so they are hashed after that.
-const sboms = sbomNames(version.name);
-const installers = await Promise.all(names.filter((name) => !sboms.includes(name)).map(built));
-for (const { name, describes } of sbomArtifacts(version.name)) {
+// The SBOMs name the installers' hashes, so they are hashed after that; publish-image.ts reads
+// the digests.
+const sboms = sbomNames(version.name, image);
+const handover = [...sboms, ...imageDigestNames(image)];
+const installers = await Promise.all(names.filter((name) => !handover.includes(name)).map(built));
+for (const { name, describes } of sbomArtifacts(version.name, image)) {
   const path = join(dir, name);
   const bom = JSON.parse(await readFile(path, 'utf8')) as Bom;
   const files = describes.map((described) => {
@@ -78,7 +85,7 @@ for (const { name, describes } of sbomArtifacts(version.name)) {
   await writeFile(path, `${JSON.stringify(addDistributions(bom, files), null, 2)}\n`);
 }
 const files = [...installers, ...(await Promise.all(sboms.map(built)))];
-await writeFile(join(dir, CHECKSUMS), renderChecksums(version.name, files));
+await writeFile(join(dir, CHECKSUMS), renderChecksums(version.name, files, image));
 
 for (const feed of FEEDS) {
   const path = join(dir, feed);
@@ -91,6 +98,7 @@ const input = {
   published: new Date(),
   baseUrl,
   files,
+  image,
 };
 const manifest = buildManifest(input);
 await writeFile(join(dir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -99,7 +107,7 @@ await writeFile(
   renderIndex(manifest, sbomFiles(input), openapiFile(input)),
 );
 
-const plan = uploadPlan(version.name, DOWNLOADS_PREFIX);
+const plan = uploadPlan(version.name, DOWNLOADS_PREFIX, image);
 await writeFile(
   join(dir, 'plan.tsv'),
   plan

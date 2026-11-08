@@ -562,19 +562,20 @@ Constraints:
 
 #### Releases
 
-A version tag releases the apps to one stage: prerelease tags (`v1.2.3-rc.1`) to dev, other `v*` tags to prod. The version comes from the tag only.
+A version tag releases the apps, and the server image when the stage has an `imageRepository`, to one stage: prerelease tags (`v1.2.3-rc.1`) to dev, other `v*` tags to prod. The version comes from the tag only.
 
 | Stage | Runs |
 |---|---|
 | Source | The tagged commit, over the GitHub connection. Runs without a tag (creation, a manual release) skip the next stages. |
-| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK, desktop and mobile SBOMs, the OpenAPI document; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`, zip of the signed app, signed portable exe). Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`. |
-| Publish | `release-publish.yml`: checks the full set, adds the installers' URLs and hashes to the SBOMs, writes `SHA256SUMS`, the feeds, `latest.json`, and `index.html`, uploads to the downloads bucket, HEAD-checks every URL, then tags the prerelease it replaced `superseded=true`. |
+| Build | In parallel: Linux x64 (`release-linux.yml`: AppImage, deb, `latest-linux.yml`, signed APK, desktop and mobile SBOMs, the OpenAPI document; installs the Android SDK and JDK 21) and Windows Server 2022 (`release-windows.yml`: Node 24 by download, the Artifact Signing client tools, signed NSIS installer, block map, `latest.yml`, zip of the signed app, signed portable exe). With an image repository, also the image legs (`release-image.yml`, privileged): x64 and ARM each build the server image natively with buildx and push it by digest alone, without provenance attestations; the x64 leg adds the image SBOM, from syft on the pushed image. Each hands exactly its files to a scratch bucket (7-day lifecycle) under `releases/<tag>/`, the image legs their digests as `image-<arch>.digest`. |
+| Publish | `release-publish.yml`: checks the full set, adds the installers' URLs and hashes to the SBOMs, writes `SHA256SUMS`, the feeds, `latest.json`, and `index.html`, uploads to the downloads bucket, HEAD-checks every URL, publishes the server image (`publish-image.ts`), then tags the prerelease it replaced `superseded=true`. |
 
-- Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`, SBOMs `newses-<version>-{desktop,mobile}.cdx.json` inline as `application/vnd.cyclonedx+json`, each naming the installers it describes by URL and SHA-256, `newses-<version>-openapi.json` inline as `application/vnd.oai.openapi+json`, the release's `/api/v1/openapi.json` built without a database, and `SHA256SUMS` for every versioned file); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@newses/shared/release`), and `index.html` (no-cache; per file its SHA-256 and commands to download, check, and install it, as no scripts run on the page).
+- Downloads layout: `downloads/<version>/<file>` (immutable; installers download as attachments, `.apk` as `application/vnd.android.package-archive`, SBOMs `newses-<version>-{desktop,mobile,image}.cdx.json` inline as `application/vnd.cyclonedx+json`, the apps' naming the installers they describe by URL and SHA-256, `newses-<version>-openapi.json` inline as `application/vnd.oai.openapi+json`, the release's `/api/v1/openapi.json` built without a database, and `SHA256SUMS` for every versioned file); `downloads/latest.yml`, `latest-linux.yml` (electron-updater, pointing into the version folder), `latest.json` (`ReleaseManifest` in `@newses/shared/release`), and `index.html` (no-cache; per file its SHA-256 and commands to download, check, and install it, as no scripts run on the page).
 - Superseded prereleases expire 30 days after upload; prod releases are kept.
+- Server image: the publish leg joins the legs' digests into one multi-arch image under the version's tag (`X.Y.Z`, `X.Y.Z-rc.N`), then moves the floating tags to it (`infra/src/release/image.ts`): a release moves `X.Y`, `X`, and `latest` when it is the newest release each covers; a prerelease moves `next` and deletes every other prerelease tag with its images. A version's tag never moves: publishing it again must join the same images. The build stage pulls the Node base from ECR Public's mirror of Docker Hub's official images, at the Dockerfile's digest; BuildKit and the Dockerfile frontend come from Docker Hub.
 - Release builds embed the stage's `/downloads` URL: desktop as electron-updater's generic feed (`electron-builder.release.cjs`, no update channels), Android as `DOWNLOADS_URL` in the bridge.
-- Signing material is SecureString parameters under `/<prefix>/release/windows-signing/` and `/<prefix>/release/android-signing/`, shared by both stages and written by `scripts/windows-signing-setup.sh` and `scripts/android-signing-setup.sh`. Each build project reads only its own platform's parameters, as project environment variables; only the publish project writes the downloads bucket, and only its stage's.
-- `scripts/try-release.sh` runs the dev legs on the working tree under a made-up prerelease tag, with a dry-run publish unless `--publish`.
+- Signing material is SecureString parameters under `/<prefix>/release/windows-signing/` and `/<prefix>/release/android-signing/`, shared by both stages and written by `scripts/windows-signing-setup.sh` and `scripts/android-signing-setup.sh`. Each build project reads only its own platform's parameters, as project environment variables; only the publish project writes the downloads bucket, and only its stage's. The image legs push to the stage's image repository; only the publish project also tags and deletes there.
+- `scripts/try-release.sh` runs the dev legs on the working tree under a made-up prerelease tag, with a dry-run publish unless `--publish`; the dry run deletes the images the image legs pushed.
 
 Deployment config:
 - The account-specific values live in `infra/deploy.config.json`, never committed; `infra/deploy.config.example.json` shows the shape, validated by `infra/src/deploy-config.ts`: `resourcePrefix` (`<prefix>` in this section: the start of every physical name, tag, and parameter path, with `_` for `-` in database names; the example's is `newses`), account, region, GitHub repository and CodeConnections connection, certificate, hosted zone, ADOT layer, budget, and the stages (`dev` and/or `prod`: branch, release tags, domain, data retention, backups, compatibility trace, archive, trace sampling, downloads CORS origins, server image repository).
@@ -618,13 +619,13 @@ CycloneDX 1.6, one per deliverable, composed by `infra/src/release/build-sbom.ts
 | Deliverable | Contents | Source |
 |---|---|---|
 | `server` | Server `dependencies` (Lambdas and Docker) | `pnpm sbom --prod` |
-| `image` | Docker image: Alpine packages, Node, `node_modules` | syft on the built image; local only |
+| `image` | Docker image: Alpine packages, Node, `node_modules` | syft on the built image (released: the `linux/amd64` one) |
 | `web` | Web app `dependencies` | `pnpm sbom --prod` |
 | `desktop` | Web app, Electron, `electron-updater` and its dependencies | `pnpm sbom`, selected (the main process is bundled, so all are devDependencies) |
 | `mobile` | Web app, Capacitor packages, the APK's release runtime classpath | `pnpm sbom --prod`, CycloneDX Gradle plugin (`:app:cyclonedxDirectBom`) |
 
 - Workspace packages and Gradle projects are first party and left out; the root component is `newses-<deliverable>`, linked to the `repository` URL in the root `package.json`.
-- The release pipeline publishes the desktop and mobile SBOMs; the others are made locally.
+- The release pipeline publishes the desktop and mobile SBOMs, and the image's when the stage publishes the image; the others are made locally.
 - Dependency-Track is an external server; uploads run locally (`PUT /api/v1/bom`, auto-creating the project). Project `newses-<deliverable>`, version the release's or, untagged, the branch's; tags `newses` and `prod` (release), `dev` (prerelease), or `local` (untagged); tagged uploads become the latest version. The API key needs `BOM_UPLOAD`, `PROJECT_CREATION_UPLOAD`, and `VIEW_PORTFOLIO`.
 
 ### Project site

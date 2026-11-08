@@ -1,0 +1,68 @@
+# The release pipeline's image legs (infra/src/release-stack.ts), one per architecture, each on
+# its own: builds the server image and pushes it to the stage's ECR Public repository by digest
+# alone, handing the digest to the publish leg as releases/<tag>/image-<arch>.digest, which tags
+# it. The amd64 leg also hands over the image's SBOM.
+# RELEASE_TAG and RELEASE_COMMIT come from the pipeline or scripts/try-release.sh; the rest from
+# the project.
+
+version: 0.2
+
+env:
+  # The default shell is sh, which has no pipefail.
+  shell: bash
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 24
+    commands:
+      - bash infra/buildspec/image-setup.sh --builder
+      - |
+        set -euo pipefail
+        if [ "$IMAGE_ARCH" = amd64 ]; then
+          corepack enable
+          pnpm install --frozen-lockfile --filter '@newses/infra...'
+        fi
+
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        : "${RELEASE_TAG:?not set; expected from the pipeline or try-release.sh}"
+        : "${IMAGE_REPOSITORY:?not set; expected from the project}"
+        : "${IMAGE_ARCH:?not set; expected from the project}"
+        version=${RELEASE_TAG#v}
+        echo "tag=$RELEASE_TAG version=$version arch=$IMAGE_ARCH commit=${RELEASE_COMMIT:-}"
+
+        # Docker Hub limits anonymous pulls; ECR Public mirrors its official images, digests
+        # and all.
+        base=$(sed -n 's/^ARG NODE_IMAGE=//p' docker/Dockerfile)
+        [ -n "$base" ] || { echo 'No NODE_IMAGE in docker/Dockerfile' >&2; exit 1; }
+        # No provenance attestation until images are signed: the image is a plain manifest.
+        docker buildx build -f docker/Dockerfile --platform "linux/$IMAGE_ARCH" --provenance=false \
+          --build-arg "NODE_IMAGE=public.ecr.aws/docker/library/$base" \
+          --build-arg "NEWSES_VERSION=$version" \
+          --build-arg "NEWSES_REVISION=${RELEASE_COMMIT:-}" \
+          --build-arg "NEWSES_SOURCE=$NEWSES_SOURCE" \
+          --output "type=image,name=$IMAGE_REPOSITORY,push-by-digest=true,name-canonical=true,push=true" \
+          --metadata-file image.json .
+        digest=$(node -p 'require("./image.json")["containerimage.digest"]')
+        [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "No image digest: $digest" >&2; exit 1; }
+        echo "Pushed $IMAGE_REPOSITORY@$digest"
+        echo "$digest" >"image-$IMAGE_ARCH.digest"
+        files=("image-$IMAGE_ARCH.digest")
+
+        if [ "$IMAGE_ARCH" = amd64 ]; then
+          # Packages only, as scripts/sbom.sh does, with its syft.
+          syft=$(sed -n 's/^SYFT=//p' scripts/sbom.sh)
+          docker run --rm -e SYFT_FILE_METADATA_SELECTION=none "$syft" -q \
+            "registry:$IMAGE_REPOSITORY@$digest" -o cyclonedx-json@1.6 >syft.json
+          node infra/src/release/build-sbom.ts --deliverable image --tag "$RELEASE_TAG" \
+            --input syft.json --out sbom
+          files+=("sbom/newses-$version-image.cdx.json")
+        fi
+
+        for file in "${files[@]}"; do
+          aws s3 cp --only-show-errors "$file" "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/"
+        done
+        echo "Handed over ${#files[@]} files"

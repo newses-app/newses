@@ -542,6 +542,8 @@ describe('Release', () => {
           Actions: [
             Match.objectLike({ Name: 'LinuxAndroid' }),
             Match.objectLike({ Name: 'Windows' }),
+            Match.objectLike({ Name: 'ImageAmd64' }),
+            Match.objectLike({ Name: 'ImageArm64' }),
           ],
         }),
         Match.objectLike({ Name: 'Publish', BeforeEntry: Match.anyValue() }),
@@ -569,6 +571,66 @@ describe('Release', () => {
       );
       expect(document).not.toContain('newses-prod');
     }
+  });
+
+  it('builds the server image natively on each architecture, privileged', () => {
+    release.hasResourceProperties('AWS::CodeBuild::Project', {
+      Name: 'newses-dev-release-image-amd64',
+      Source: Match.objectLike({ BuildSpec: 'infra/buildspec/release-image.yml' }),
+      Environment: Match.objectLike({
+        Type: 'LINUX_CONTAINER',
+        PrivilegedMode: true,
+        EnvironmentVariables: Match.arrayWith([
+          {
+            Name: 'IMAGE_REPOSITORY',
+            Type: 'PLAINTEXT',
+            Value: 'public.ecr.aws/your-alias/newses',
+          },
+          { Name: 'IMAGE_ARCH', Type: 'PLAINTEXT', Value: 'amd64' },
+        ]),
+      }),
+    });
+    release.hasResourceProperties('AWS::CodeBuild::Project', {
+      Name: 'newses-dev-release-image-arm64',
+      Environment: Match.objectLike({ Type: 'ARM_CONTAINER', PrivilegedMode: true }),
+    });
+    release.hasResourceProperties('AWS::CodeBuild::Project', {
+      Name: 'newses-dev-release-publish',
+      Environment: Match.objectLike({ PrivilegedMode: true }),
+    });
+    release.hasOutput('ImageArm64Project', { Value: Match.anyValue() });
+  });
+
+  it('lets the image legs push to the repository, and only publish tag and delete', () => {
+    const policies = Object.entries(release.findResources('AWS::IAM::Policy')).map(
+      ([id, policy]) => [id, JSON.stringify(policy)] as const,
+    );
+    for (const [id, document] of policies) {
+      const image = id.startsWith('ImageAmd64Role') || id.startsWith('ImageArm64Role');
+      const publishes = id.startsWith('PublishRole');
+      expect(document.includes('ecr-public:PutImage')).toBe(image || publishes);
+      expect(document.includes('ecr-public:BatchDeleteImage')).toBe(publishes);
+      if (image || publishes) {
+        expect(document).toContain(':ecr-public::');
+        expect(document).toContain(':repository/newses"');
+        expect(document).toContain('sts:GetServiceBearerToken');
+      }
+    }
+  });
+
+  it('builds and publishes no image for a stage without a repository', () => {
+    const template = Template.fromStack(
+      new NewsesStage(newApp(), 'Test', {
+        stage: { ...dev, imageRepository: undefined },
+        webDir,
+      }).release,
+    );
+    template.resourceCountIs('AWS::CodeBuild::Project', 3);
+    template.hasResourceProperties('AWS::CodeBuild::Project', {
+      Name: 'newses-dev-release-publish',
+      Environment: Match.objectLike({ PrivilegedMode: false }),
+    });
+    expect(JSON.stringify(template.toJSON())).not.toContain('ecr-public');
   });
 
   it("reports each run's result to the stage's pipelines topic", () => {

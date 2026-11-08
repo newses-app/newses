@@ -1,6 +1,8 @@
-# The release pipeline's publish leg (infra/src/release-stack.ts), after both build legs:
-# uploads the release to the stage's downloads bucket, checks every published URL, then marks
-# the prerelease it replaced to expire. DRY_RUN=true (scripts/try-release.sh) uploads nothing.
+# The release pipeline's publish leg (infra/src/release-stack.ts), after the build legs:
+# uploads the release to the stage's downloads bucket, checks every published URL, tags the
+# server image when the stage publishes it (IMAGE_REPOSITORY), then marks the prerelease it
+# replaced to expire. DRY_RUN=true (scripts/try-release.sh) uploads and tags nothing, and deletes
+# the image legs' images.
 # RELEASE_TAG comes from the pipeline or scripts/try-release.sh; the rest from the project.
 
 version: 0.2
@@ -16,6 +18,7 @@ phases:
     commands:
       - corepack enable
       - pnpm install --frozen-lockfile --filter '@newses/infra...'
+      - if [ -n "${IMAGE_REPOSITORY:-}" ]; then bash infra/buildspec/image-setup.sh; fi
 
   build:
     commands:
@@ -25,8 +28,13 @@ phases:
         : "${DOWNLOADS_BUCKET:?not set; expected from the project}"
         dry_run=${DRY_RUN:-false}
         version=${RELEASE_TAG#v}
-        flag=()
+        flag=() image=()
         [ "$PRERELEASE" = true ] && flag=(--prerelease)
+        if [ -n "${IMAGE_REPOSITORY:-}" ]; then
+          flag+=(--image)
+          image=(node infra/src/release/publish-image.ts --dir artifacts --tag "$RELEASE_TAG"
+            --repository "$IMAGE_REPOSITORY")
+        fi
 
         mkdir -p artifacts
         aws s3 sync --only-show-errors "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/" artifacts/
@@ -36,6 +44,7 @@ phases:
         if [ "$dry_run" = true ]; then
           echo "Dry run: would upload to s3://$DOWNLOADS_BUCKET:"
           cut -f2- artifacts/plan.tsv
+          [ ${#image[@]} = 0 ] || "${image[@]}" --dry-run
           exit 0
         fi
 
@@ -55,6 +64,8 @@ phases:
           [ "$code" = 200 ] || bad=1
         done <artifacts/urls.txt
         [ "$bad" = 0 ] || { echo 'A published URL is unreachable' >&2; exit 1; }
+
+        [ ${#image[@]} = 0 ] || "${image[@]}"
 
         # The lifecycle rule expires the replaced prerelease's files.
         if [ "$PRERELEASE" = true ] && [ -n "$previous" ] && [ "$previous" != "$version" ]; then
