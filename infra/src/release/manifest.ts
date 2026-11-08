@@ -1,7 +1,8 @@
 // What the release pipeline's publish leg uploads for a version: the files the build legs
 // handed over, SHA256SUMS, the update feeds pointed at them, latest.json, and the downloads page.
 // `image` is set when the stage publishes the server image, whose legs hand over its SBOM too,
-// and whose compose file, sample config, and nginx-proxy override the publish leg adds.
+// and whose compose file, sample config, nginx-proxy override, and signing key the publish leg
+// adds.
 import type { ReleaseFile, ReleaseManifest, ServerRelease } from '@newses/shared/release';
 import { IMAGE_ARCHES, imageDigestName } from './image.ts';
 import { sbomName } from './sbom.ts';
@@ -70,18 +71,23 @@ export const openapiName = (version: string) => `newses-${version}-openapi.json`
 
 type ServerFile = Exclude<keyof ServerRelease, 'image'>;
 
-/** The server's files, from `docker/`, which the publish leg adds when it publishes the image. */
+/** The server's files, which the publish leg adds when it publishes the image. */
 export const serverNames = (version: string): Record<ServerFile, string> => ({
   compose: `newses-${version}-compose.yaml`,
   env: `newses-${version}-env.example`,
   nginxProxy: `newses-${version}-compose.nginx-proxy.yaml`,
+  publicKey: `newses-${version}-cosign.pub`,
 });
 
-/** Each server file's source in `docker/`, and the name the install commands give it. */
+/**
+ * The name the install commands give each server file, and, but for the signing key, its source
+ * in `docker/`.
+ */
 export const SERVER_FILES: Record<ServerFile, string> = {
   compose: 'compose.yaml',
   env: '.env.example',
   nginxProxy: 'compose.nginx-proxy.yaml',
+  publicKey: 'cosign.pub',
 };
 
 /** The checksums of a version's files, for `sha256sum -c`. */
@@ -118,6 +124,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.yml': 'text/yaml',
   '.yaml': 'text/yaml',
   '.example': 'text/plain; charset=utf-8',
+  '.pub': 'text/plain; charset=utf-8',
   '.json': 'application/json',
   '.html': 'text/html',
 };
@@ -237,6 +244,7 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
         compose: file(server.compose),
         env: file(server.env),
         nginxProxy: file(server.nginxProxy),
+        publicKey: file(server.publicKey),
       },
     }),
   };
@@ -314,7 +322,7 @@ export function installCommands(kind: Installer | 'file', file: ReleaseFile) {
 
 /**
  * The commands that download and check each server file under the name Compose looks for, and
- * install or start the server with it.
+ * install or start the server with it, or verify the image with the signing key.
  */
 export function serverCommands(server: ServerRelease): Record<ServerFile, string[]> {
   return {
@@ -330,6 +338,10 @@ export function serverCommands(server: ServerRelease): Record<ServerFile, string
       ...fetchAndCheck(server.nginxProxy, 'sh', SERVER_FILES.nginxProxy),
       '# In .env, set VIRTUAL_HOST, and LETSENCRYPT_HOST with acme-companion',
       `docker compose -f ${SERVER_FILES.compose} -f ${SERVER_FILES.nginxProxy} up -d`,
+    ],
+    publicKey: [
+      ...fetchAndCheck(server.publicKey, 'sh', SERVER_FILES.publicKey),
+      `cosign verify --key ${SERVER_FILES.publicKey} ${server.image.repository}:${server.image.tag}`,
     ],
   };
 }
@@ -378,6 +390,13 @@ ${list([
     server.nginxProxy,
     commands.nginxProxy,
     'Install and verify',
+  ],
+  [
+    'Signing key',
+    'cosign public key that verifies the image’s signature, which Sigstore’s transparency log also records',
+    server.publicKey,
+    commands.publicKey,
+    'Verify the image',
   ],
 ])}
       <li>

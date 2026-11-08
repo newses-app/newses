@@ -164,12 +164,13 @@ describe('renderChecksums', () => {
       sha256: `hash${String(i)}`,
     }));
     const lines = renderChecksums(version, withImage, true).trimEnd().split('\n');
-    expect(lines).toHaveLength(14);
+    expect(lines).toHaveLength(15);
     expect(lines).toContain(`hash12  ${imageSbom}`);
-    expect(lines.slice(-3)).toEqual([
+    expect(lines.slice(-4)).toEqual([
       `hash15  ${server.compose}`,
       `hash16  ${server.env}`,
       `hash17  ${server.nginxProxy}`,
+      `hash18  ${server.publicKey}`,
     ]);
     expect(lines.some((line) => line.endsWith('.digest'))).toBe(false);
   });
@@ -252,6 +253,7 @@ describe('serverCommands', () => {
     compose: file(server.compose, 'c1'),
     env: file(server.env, 'e1'),
     nginxProxy: file(server.nginxProxy, 'n1'),
+    publicKey: file(server.publicKey, 'p1'),
   });
 
   it('saves each file under the name Compose looks for, and checks it', () => {
@@ -271,6 +273,14 @@ describe('serverCommands', () => {
     expect(commands.nginxProxy.at(-1)).toBe(
       'docker compose -f compose.yaml -f compose.nginx-proxy.yaml up -d',
     );
+  });
+
+  it("verifies the image's signature by tag with the signing key", () => {
+    expect(commands.publicKey).toEqual([
+      `curl -fL -o cosign.pub ${folder}${server.publicKey}`,
+      "echo 'p1  cosign.pub' | sha256sum -c",
+      `cosign verify --key cosign.pub ${repository}:${version}`,
+    ]);
   });
 });
 
@@ -310,6 +320,7 @@ describe('buildManifest', () => {
       compose: { url: `${folder}${server.compose}`, size: 100, sha256: 'compose' },
       env: { url: `${folder}${server.env}`, size: 101, sha256: 'env' },
       nginxProxy: { url: `${folder}${server.nginxProxy}`, size: 102, sha256: 'nginxProxy' },
+      publicKey: { url: `${folder}${server.publicKey}`, size: 103, sha256: 'publicKey' },
     });
   });
 });
@@ -349,8 +360,9 @@ describe('renderIndex', () => {
       `docker pull ${repository}:${version}\ndocker pull ${repository}@${digest}`,
     );
     expect(imagePage).toContain('echo &#39;compose  compose.yaml&#39; | sha256sum -c');
-    // The server's three files and the image, then the image SBOM.
-    expect(imagePage.match(/<details>/g)).toHaveLength(14);
+    expect(imagePage).toContain(`cosign verify --key cosign.pub ${repository}:${version}`);
+    // The server's four files and the image, then the image SBOM.
+    expect(imagePage.match(/<details>/g)).toHaveLength(15);
     expect(imagePage.indexOf('<h2>Server</h2>')).toBeLessThan(imagePage.indexOf('Checksums'));
   });
 });
@@ -415,8 +427,10 @@ describe('uploadPlan', () => {
         attachment: false,
       }),
     );
-    expect(plan.find((u) => u.name === server.env)).toEqual(
-      expect.objectContaining({ contentType: 'text/plain; charset=utf-8', attachment: false }),
-    );
+    for (const name of [server.env, server.publicKey]) {
+      expect(plan.find((u) => u.name === name)).toEqual(
+        expect.objectContaining({ contentType: 'text/plain; charset=utf-8', attachment: false }),
+      );
+    }
   });
 });

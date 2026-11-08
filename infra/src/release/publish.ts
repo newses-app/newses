@@ -1,11 +1,11 @@
 // Prepares a release for upload (infra/buildspec/release-publish.yml): checks the files the build
 // legs handed over (with --image, the server image's too), names the installers in their SBOMs,
-// adds the server's files from docker/ with --image (publish-image.ts join's reference, which
-// the compose file pins), writes SHA256SUMS, the feeds, latest.json and index.html beside them,
+// adds the server's files from docker/ and the image's signing key (--public-key) with --image
+// (publish-image.ts join's reference, which the compose file pins), writes SHA256SUMS, the feeds, latest.json and index.html beside them,
 // and writes plan.tsv (file, key, content type, cache control, disposition) and urls.txt for the
 // upload and the checks that follow.
 //   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads \
-//     [--image public.ecr.aws/<alias>/newses@sha256:…]
+//     [--image public.ecr.aws/<alias>/newses@sha256:… --public-key cosign.pub]
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -44,12 +44,16 @@ const { values } = parseArgs({
     url: { type: 'string' },
     prerelease: { type: 'boolean', default: false },
     image: { type: 'string' },
+    'public-key': { type: 'string' },
   },
 });
 if (!values.dir || !values.tag || !values.url) {
   throw new Error(
-    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--image REPOSITORY@DIGEST]',
+    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--image REPOSITORY@DIGEST --public-key FILE]',
   );
+}
+if (Boolean(values.image) !== Boolean(values['public-key'])) {
+  throw new Error('--image and --public-key go together');
 }
 const { dir, url } = values;
 const baseUrl = url.replace(/\/$/, '');
@@ -97,16 +101,17 @@ for (const { name, describes } of sbomArtifacts(version.name, image)) {
   await writeFile(path, `${JSON.stringify(addDistributions(bom, files), null, 2)}\n`);
 }
 
-// The server's files, the compose file pinned to the image.
+// The server's files, the compose file pinned to the image, and the image's signing key.
 const server: BuiltFile[] = [];
 if (serverImage) {
   const names = serverNames(version.name);
   const pinned = `${serverImage.repository}:${version.name}@${serverImage.digest}`;
   for (const [file, source] of Object.entries(SERVER_FILES) as [keyof typeof names, string][]) {
-    const text = await readFile(
-      fileURLToPath(new URL(`../../../docker/${source}`, import.meta.url)),
-      'utf8',
-    );
+    const path =
+      file === 'publicKey'
+        ? (values['public-key'] ?? '')
+        : fileURLToPath(new URL(`../../../docker/${source}`, import.meta.url));
+    const text = await readFile(path, 'utf8');
     await writeFile(
       join(dir, names[file]),
       file === 'compose' ? renderCompose(text, pinned) : text,

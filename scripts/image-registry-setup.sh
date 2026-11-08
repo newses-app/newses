@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Creates the ECR Public repository the release pipelines publish the server image to, or updates
 # its gallery listing, and prints its URI for the stages' imageRepository in the deployment config.
-# ECR Public lives in us-east-1 whatever the deployment's region. A custom registry alias is
-# claimed in the ECR Public console.
+# Also creates the KMS key the publish legs sign the image with (alias/<prefix>-image-signing, in
+# the deployment's region) and prints its public key. ECR Public lives in us-east-1 whatever the
+# deployment's region. A custom registry alias is claimed in the ECR Public console.
 set -euo pipefail
 
 usage() {
@@ -10,11 +11,13 @@ usage() {
 Usage: scripts/image-registry-setup.sh [--name NAME] [--dry-run]
 
   --name NAME  Repository name (default: the deployment's resourcePrefix, else newses)
-  --dry-run    Show the registry alias and the repository, then stop before any change
+  --dry-run    Show the registry alias, the repository, and the signing key, then stop before
+               any change
 
 Creates the repository with its gallery listing (description, logo, about and usage text,
-architectures), or updates the listing of an existing one; every run can be repeated. Needs AWS
-CLI credentials for the deployment's account (infra/deploy.config.json).
+architectures), or updates the listing of an existing one, and the image signing key unless it
+exists; every run can be repeated. Needs AWS CLI credentials for the deployment's account
+(infra/deploy.config.json), and openssl.
 EOF
 }
 
@@ -47,7 +50,11 @@ done
 
 command -v aws >/dev/null || die 'needs the AWS CLI (aws)'
 command -v node >/dev/null || die 'needs Node'
+command -v openssl >/dev/null || die 'needs openssl'
 ecr=(aws ecr-public --region us-east-1)
+region=$(deploy_region) || die 'no region in infra/deploy.config.json'
+kms=(aws kms --region "$region")
+key_alias=alias/$prefix-image-signing
 
 account=$(aws sts get-caller-identity --query Account --output text 2>/dev/null) ||
   die 'no AWS credentials (set AWS_PROFILE or sign in)'
@@ -67,8 +74,12 @@ uri=$("${ecr[@]}" describe-repositories --repository-names "$name" \
   --query 'repositories[0].repositoryUri' --output text 2>/dev/null || true)
 echo "Repository: ${uri:-$name, not created yet}"
 
+key=$("${kms[@]}" describe-key --key-id "$key_alias" --query KeyMetadata.Arn --output text \
+  2>/dev/null || true)
+echo "Signing key: ${key:-$key_alias in $region, not created yet}"
+
 if $dry_run; then
-  echo "Dry run: would ${uri:+update the listing of}${uri:-create} $name."
+  echo "Dry run: would ${uri:+update the listing of}${uri:-create} $name${key:+.}${key:- and create $key_alias.}"
   exit 0
 fi
 
@@ -106,8 +117,11 @@ URI=$uri LOGO=$logo node -e '
       "",
       "The command picks the role: `server` (default), `worker`, `migrate`, or `cli`. Version tags (`1.2.3`) never move; `1.2`, `1`, and `latest` follow the newest release, and `next` the newest prerelease.",
       "",
+      "Each version is signed with cosign; verify it with the `cosign.pub` its release publishes beside the compose file.",
+      "",
       "```sh",
       `docker pull ${process.env.URI}:latest`,
+      `cosign verify --key cosign.pub ${process.env.URI}:latest`,
       "```",
     ].join("\n"),
   }));
@@ -116,7 +130,23 @@ URI=$uri LOGO=$logo node -e '
   --catalog-data "file://$catalog" >/dev/null
 echo "Gallery listing updated"
 
+# ECDSA P-256, cosign's default; only the release stacks' publish roles may sign with it.
+if [ -z "$key" ]; then
+  step='creating the signing key'
+  key=$("${kms[@]}" create-key --key-spec ECC_NIST_P256 --key-usage SIGN_VERIFY \
+    --description "Signs the $prefix server image (cosign)" --tags "TagKey=project,TagValue=$prefix" \
+    --query KeyMetadata.Arn --output text)
+  "${kms[@]}" create-alias --alias-name "$key_alias" --target-key-id "$key"
+  echo "Created $key_alias ($key)"
+fi
+step='reading the public key'
+public_key=$("${kms[@]}" get-public-key --key-id "$key_alias" --query PublicKey --output text |
+  openssl base64 -d -A | openssl pkey -pubin -inform DER)
+
 cat <<EOF
+
+The image's cosign public key, which each release also publishes beside its compose file:
+$public_key
 
 Set "imageRepository": "$uri" on each stage that publishes the image in
 infra/deploy.config.json, then store the config (AGENTS.md). Once a custom registry alias is

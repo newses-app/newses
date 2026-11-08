@@ -118,6 +118,9 @@ export const DB_ENDPOINT_PARAMETER = `/${PROJECT}/db/endpoint`;
 /** SecureString parameters with the signing material, shared by both stages' release pipelines. */
 export const SIGNING_PARAMETERS = `/${PROJECT}/release`;
 
+/** The KMS key the publish legs sign the server image with, made by image-registry-setup.sh. */
+export const IMAGE_SIGNING_KEY_ALIAS = `alias/${PROJECT}-image-signing`;
+
 /** String parameter with this config, which the pipelines' synth step fetches. */
 export const DEPLOY_CONFIG_PARAMETER = `/${PROJECT}/deploy-config`;
 

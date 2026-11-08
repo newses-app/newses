@@ -564,7 +564,7 @@ describe('Release', () => {
     expect(policy('LinuxRole')).not.toContain('windows-signing');
     expect(policy('WindowsRole')).toContain('/newses/release/windows-signing/client-secret');
     expect(policy('WindowsRole')).not.toContain('android-signing');
-    expect(policy('PublishRole')).not.toContain('-signing');
+    expect(policy('PublishRole')).not.toMatch(/(windows|android)-signing/);
     for (const [id, document] of policies) {
       expect(document.includes(`newses-dev-downloads-${ACCOUNT}`)).toBe(
         id.startsWith('PublishRole'),
@@ -631,6 +631,35 @@ describe('Release', () => {
       Environment: Match.objectLike({ PrivilegedMode: false }),
     });
     expect(JSON.stringify(template.toJSON())).not.toContain('ecr-public');
+    expect(JSON.stringify(template.toJSON())).not.toContain('image-signing');
+  });
+
+  it('lets only the publish leg sign the image, with the key the alias names', () => {
+    const policies = Object.entries(release.findResources('AWS::IAM::Policy')).map(
+      ([id, policy]) => [id, JSON.stringify(policy)] as const,
+    );
+    for (const [id, document] of policies) {
+      expect(document.includes('kms:Sign')).toBe(id.startsWith('PublishRole'));
+    }
+    release.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: ['kms:Sign', 'kms:GetPublicKey', 'kms:DescribeKey'],
+            Condition: {
+              'ForAnyValue:StringEquals': { 'kms:ResourceAliases': 'alias/newses-image-signing' },
+            },
+          }),
+        ]),
+      }),
+    });
+    const publish = JSON.stringify(
+      Object.values(release.findResources('AWS::CodeBuild::Project')).find((project) =>
+        JSON.stringify(project).includes('newses-dev-release-publish'),
+      ),
+    );
+    expect(publish).toContain('IMAGE_SIGNING_KEY');
+    expect(publish).toContain(':alias/newses-image-signing');
   });
 
   it("reports each run's result to the stage's pipelines topic", () => {

@@ -1,13 +1,15 @@
 // Publishes the release's server image (infra/buildspec/release-publish.yml) in two steps, in the
 // order the downloads go. `join`, before the uploads, joins the image legs' digests under the
-// version's tag and prints the image's reference, which the published compose file pins. `tag`,
-// after the URL check, moves the tags image.ts plans to it, then deletes the superseded
-// prereleases with their images, as ECR Public has no lifecycle rules. A version's tag never
-// moves: joining it again must join the same images.
+// version's tag, signs the image with cosign and --key (once; the signature goes to Rekor and
+// under the tag sha256-<digest>.sig, which cosign 2 and 3 both verify), and prints the image's
+// reference, which the published compose file pins. `tag`, after the URL check, moves the tags
+// image.ts plans to it, then deletes the superseded prereleases with their images and signatures,
+// as ECR Public has no lifecycle rules. A version's tag never moves: joining it again must join
+// the same images.
 // --dry-run pushes nothing: `join` prints the reference the image would have, and `tag` prints
 // the plan and deletes the legs' images, which nothing tags.
 //   node infra/src/release/publish-image.ts join|tag --dir artifacts --tag v1.2.3 \
-//     --repository public.ecr.aws/<alias>/newses [--dry-run]
+//     --repository public.ecr.aws/<alias>/newses --key awskms:///<key alias ARN> [--dry-run]
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -28,16 +30,23 @@ const { values, positionals } = parseArgs({
     dir: { type: 'string' },
     tag: { type: 'string' },
     repository: { type: 'string' },
+    key: { type: 'string' },
     'dry-run': { type: 'boolean', default: false },
   },
 });
 const [step] = positionals;
-if ((step !== 'join' && step !== 'tag') || !values.dir || !values.tag || !values.repository) {
+if (
+  (step !== 'join' && step !== 'tag') ||
+  !values.dir ||
+  !values.tag ||
+  !values.repository ||
+  !values.key
+) {
   throw new Error(
-    'Usage: publish-image.ts join|tag --dir DIR --tag TAG --repository URI [--dry-run]',
+    'Usage: publish-image.ts join|tag --dir DIR --tag TAG --repository URI --key KEY [--dry-run]',
   );
 }
-const { dir, repository } = values;
+const { dir, repository, key } = values;
 const dryRun = values['dry-run'];
 const version = versionFromTag(values.tag).name;
 const name = imageRepositoryName(repository);
@@ -113,6 +122,8 @@ if (published) {
   }
 }
 const ref = (tag: string) => `${repository}:${tag}`;
+/** cosign's tag for an image's signatures, in its legacy layout. */
+const signatureTag = (digest: string) => `${digest.replace(':', '-')}.sig`;
 const sources = legs.map((digest) => `${repository}@${digest}`);
 
 if (step === 'join') {
@@ -127,6 +138,25 @@ if (step === 'join') {
     if (tags().get(version) !== digest) throw new Error(`${ref(version)} is not on ${digest}`);
   }
   console.error(`${dryRun ? 'Dry run: would join' : 'Joined'} ${ref(version)}@${digest}`);
+  const image = `${repository}@${digest}`;
+  if (dryRun) {
+    console.error(`Dry run: would sign ${image}`);
+  } else if (!tags().has(signatureTag(digest))) {
+    run(
+      'cosign',
+      [
+        'sign',
+        '--yes',
+        '--key',
+        key,
+        '--new-bundle-format=false',
+        '--use-signing-config=false',
+        image,
+      ],
+      false,
+    );
+  }
+  if (!dryRun) run('cosign', ['verify', '--key', key, image], false);
   console.log(`${repository}@${digest}`);
   process.exit(0);
 }
@@ -180,7 +210,11 @@ for (const tag of plan.superseded) {
   }
 }
 // Removing an image's last tag deletes it, as a rule; the images it joins go after it.
-remove(plan.superseded.map((tag) => `imageTag=${tag}`));
+remove(
+  [...plan.superseded, ...[...indexes].map(signatureTag)]
+    .filter((tag) => after.has(tag))
+    .map((tag) => `imageTag=${tag}`),
+);
 remove([...indexes].map((digest) => `imageDigest=${digest}`));
 remove([...images].map((digest) => `imageDigest=${digest}`));
 if (plan.superseded.length > 0) console.log(`Deleted ${plan.superseded.join(', ')}`);

@@ -12,6 +12,7 @@ import {
   downloadsBucketName,
   GITHUB_CONNECTION_ARN,
   GITHUB_REPO,
+  IMAGE_SIGNING_KEY_ALIAS,
   resourceName,
   SIGNING_PARAMETERS,
 } from './deploy-config.ts';
@@ -37,8 +38,8 @@ export interface ReleaseStackProps extends StackProps {
 /**
  * The stage's release pipeline: a version tag builds the desktop and Android apps on Linux and
  * Windows, and the server image on x64 and ARM when the stage has an image repository, all in
- * parallel; signs the apps; and publishes them to the stage's downloads bucket and the image to
- * its repository. Branch runs (the run on creation, a manual release) skip the build and publish
+ * parallel; signs the apps and the image; and publishes them to the stage's downloads bucket and
+ * the image to its repository. Branch runs (the run on creation, a manual release) skip the build and publish
  * stages. Each run's result goes to the stage's pipelines topic.
  */
 export class ReleaseStack extends Stack {
@@ -175,7 +176,12 @@ export class ReleaseStack extends Stack {
           DOWNLOADS_URL: { value: downloadsUrl },
           // Prereleases are published only to dev, and superseded ones expire.
           PRERELEASE: { value: String(stage.name !== 'prod') },
-          ...(repository && { IMAGE_REPOSITORY: { value: repository } }),
+          ...(repository && {
+            IMAGE_REPOSITORY: { value: repository },
+            IMAGE_SIGNING_KEY: {
+              value: `awskms:///${this.formatArn({ service: 'kms', resource: IMAGE_SIGNING_KEY_ALIAS })}`,
+            },
+          }),
         },
       },
       Duration.minutes(30),
@@ -213,6 +219,16 @@ export class ReleaseStack extends Stack {
       };
       for (const { project: leg } of imageLegs) grantImage(leg, push);
       grantImage(publish, [...push, 'ecr-public:DescribeImageTags', 'ecr-public:BatchDeleteImage']);
+      // The signing key is outside the stacks; its alias names it.
+      publish.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['kms:Sign', 'kms:GetPublicKey', 'kms:DescribeKey'],
+          resources: [this.formatArn({ service: 'kms', resource: 'key', resourceName: '*' })],
+          conditions: {
+            'ForAnyValue:StringEquals': { 'kms:ResourceAliases': IMAGE_SIGNING_KEY_ALIAS },
+          },
+        }),
+      );
     }
 
     const source = new codepipeline.Artifact('Source');

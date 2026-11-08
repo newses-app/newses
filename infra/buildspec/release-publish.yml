@@ -1,8 +1,8 @@
 # The release pipeline's publish leg (infra/src/release-stack.ts), after the build legs:
 # uploads the release to the stage's downloads bucket, checks every published URL, then marks the
 # prerelease it replaced to expire. When the stage publishes the server image (IMAGE_REPOSITORY),
-# its version's tag goes before the uploads, as the compose file pins it, and its other tags after
-# the check. DRY_RUN=true (scripts/try-release.sh) uploads and tags nothing, and deletes the image
+# its version's tag and signature go before the uploads, as the compose file pins it and the page
+# shows how to verify it, and its other tags after the check. DRY_RUN=true (scripts/try-release.sh) uploads and tags nothing, and deletes the image
 # legs' images.
 # RELEASE_TAG comes from the pipeline or scripts/try-release.sh; the rest from the project.
 
@@ -19,7 +19,7 @@ phases:
     commands:
       - corepack enable
       - pnpm install --frozen-lockfile --filter '@newses/infra...'
-      - if [ -n "${IMAGE_REPOSITORY:-}" ]; then bash infra/buildspec/image-setup.sh; fi
+      - if [ -n "${IMAGE_REPOSITORY:-}" ]; then bash infra/buildspec/image-setup.sh --cosign; fi
 
   build:
     commands:
@@ -33,14 +33,17 @@ phases:
         [ "$PRERELEASE" = true ] && flag=(--prerelease)
         image() {
           node infra/src/release/publish-image.ts "$1" --dir artifacts --tag "$RELEASE_TAG" \
-            --repository "$IMAGE_REPOSITORY" "${@:2}"
+            --repository "$IMAGE_REPOSITORY" --key "$IMAGE_SIGNING_KEY" "${@:2}"
         }
 
         mkdir -p artifacts
         aws s3 sync --only-show-errors "s3://$ARTIFACT_BUCKET/releases/$RELEASE_TAG/" artifacts/
         # The image the compose file pins, before anything is pushed.
-        [ -z "${IMAGE_REPOSITORY:-}" ] || image=$(image join --dry-run)
-        [ -z "$image" ] || flag+=(--image "$image")
+        if [ -n "${IMAGE_REPOSITORY:-}" ]; then
+          image=$(image join --dry-run)
+          cosign public-key --key "$IMAGE_SIGNING_KEY" >cosign.pub
+          flag+=(--image "$image" --public-key cosign.pub)
+        fi
         node infra/src/release/publish.ts --dir artifacts --tag "$RELEASE_TAG" \
           --url "$DOWNLOADS_URL" "${flag[@]}"
 
