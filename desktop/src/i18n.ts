@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, LOCALES, negotiateLocale } from '@newses/shared/locales';
+import { DEFAULT_LOCALE, isolate, LOCALES, negotiateLocale } from '@newses/shared/locales';
 import de from './locales/de.json' with { type: 'json' };
 import en from './locales/en.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
@@ -23,8 +23,14 @@ export function setLanguage(requested: readonly string[]): string {
   return shown;
 }
 
-/** Text of the app's own menus; what the window shows comes from the web app's locale files. */
+/**
+ * Text of the app's own menus, with params isolated as the web app's are; what the window shows
+ * comes from the web app's locale files.
+ */
 export function t(key: keyof Messages, params: Record<string, string> = {}): string {
   const message = MESSAGES[shown]?.[key] ?? en[key];
-  return message.replace(/\{(\w+)\}/g, (_match, name: string) => params[name] ?? '');
+  const rightToLeft = LOCALES.find((locale) => locale.code === shown)?.direction === 'rtl';
+  return message.replace(/\{(\w+)\}/g, (_match, name: string) =>
+    isolate(params[name] ?? '', rightToLeft),
+  );
 }

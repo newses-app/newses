@@ -42,3 +42,18 @@ export const negotiateLocale = (
   requested: readonly string[],
   available: readonly string[] = LOCALE_CODES,
 ): string => matchLocale(requested, available) ?? DEFAULT_LOCALE;
+
+const FIRST_STRONG_ISOLATE = '\u2068';
+const POP_DIRECTIONAL_ISOLATE = '\u2069';
+
+/** Hebrew, Arabic, and the other right-to-left scripts, with their presentation forms. */
+const RIGHT_TO_LEFT = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/;
+
+/**
+ * Text set apart from the message around it where directions can mix: always in a right-to-left
+ * UI, else only when it holds right-to-left text, so left-to-right text in such a UI is unchanged.
+ */
+export const isolate = (text: string, rightToLeft: boolean): string =>
+  text && (rightToLeft || RIGHT_TO_LEFT.test(text))
+    ? `${FIRST_STRONG_ISOLATE}${text}${POP_DIRECTIONAL_ISOLATE}`
+    : text;

@@ -108,6 +108,21 @@ describe('share links', () => {
     expect(proxied.body).toMatch(/src="\/api\/v1\/images\/[^"]+"/);
     await services.prefs.update(alice.id, { proxyImages: false });
 
+    const viewers = await app.inject({
+      url: `/public/share/${shareId}`,
+      headers: { 'accept-language': 'es-MX,es;q=0.9' },
+    });
+    expect(viewers.body).toContain('<html lang="es" dir="ltr">');
+    await services.prefs.update(alice.id, { language: 'es' });
+    const owners = await app.inject({ url: `/public/share/${shareId}` });
+    expect(owners.body).toContain('<html lang="es" dir="ltr">');
+    const viewerFirst = await app.inject({
+      url: `/public/share/${shareId}`,
+      headers: { 'accept-language': 'it' },
+    });
+    expect(viewerFirst.body).toContain('<html lang="it" dir="ltr">');
+    await services.prefs.update(alice.id, { language: null });
+
     const revoked = await app.inject({
       method: 'DELETE',
       url: `/api/v1/entries/${String(fish)}/share`,
@@ -200,6 +215,15 @@ describe('published feed', () => {
     expect(proxied.body).toContain('https://reader.example/api/v1/images/');
     expect(proxied.headers.etag).not.toBe(etag);
     await services.prefs.update(alice.id, { proxyImages: false });
+
+    await services.prefs.update(alice.id, { language: 'es' });
+    const spanish = await app.inject({
+      url: `/public/feeds/${key}`,
+      headers: { 'accept-language': 'it' },
+    });
+    expect(spanish.body).toContain('<title>Artículos publicados</title>');
+    expect(spanish.body).not.toContain('<language>');
+    await services.prefs.update(alice.id, { language: null });
 
     const regenerated = await app.inject({
       method: 'POST',

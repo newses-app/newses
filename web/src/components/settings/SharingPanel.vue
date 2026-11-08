@@ -106,12 +106,13 @@ const revoke = (entry: Entry) => run(() => actions.unshare(entry), t('sharing.re
       {{ t('sharing.noShares') }}
     </p>
     <v-list v-else density="compact">
-      <v-list-item
-        v-for="entry in shares.data.value"
-        :key="entry.id"
-        :title="entry.title ?? t('entries.untitled')"
-        :subtitle="entry.feedTitle ?? ''"
-      >
+      <v-list-item v-for="entry in shares.data.value" :key="entry.id">
+        <template #title
+          ><bdi>{{ entry.title ?? t('entries.untitled') }}</bdi></template
+        >
+        <template #subtitle
+          ><bdi>{{ entry.feedTitle }}</bdi></template
+        >
         <template #append>
           <v-btn
             :icon="mdiOpenInNew"

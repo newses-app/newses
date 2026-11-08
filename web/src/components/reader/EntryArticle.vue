@@ -170,7 +170,7 @@ async function toggleFullText() {
             :prepend-icon="mdiTagOutline"
             size="small"
             variant="outlined"
-            >{{ tag }}</v-chip
+            ><bdi>{{ tag }}</bdi></v-chip
           >
         </li>
       </ul>

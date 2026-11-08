@@ -68,7 +68,8 @@ const aspectRatio = ({ enclosure }: EnclosureView) =>
         :style="{ aspectRatio: aspectRatio(view) }"
       />
       <figcaption class="text-body-small text-medium-emphasis">
-        {{ view.name }}<span v-if="details(view)"> · {{ details(view) }}</span>
+        <bdi>{{ view.name }}</bdi
+        ><span v-if="details(view)"> · {{ details(view) }}</span>
       </figcaption>
     </figure>
     <ul v-if="images.length" class="enclosure-gallery mb-3">
@@ -94,9 +95,12 @@ const aspectRatio = ({ enclosure }: EnclosureView) =>
           target="_blank"
           rel="noopener noreferrer"
           :prepend-icon="mdiPaperclip"
-          :title="view.name"
           :subtitle="details(view)"
-        />
+        >
+          <template #title
+            ><bdi>{{ view.name }}</bdi></template
+          >
+        </v-list-item>
       </div>
     </v-list>
   </div>

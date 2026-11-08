@@ -114,7 +114,7 @@ export default defineConfig(
     rules: {
       'vue/multi-word-component-names': ['error', { ignores: ['App'] }],
       // Left and right don't flip with the document's direction; `ms-`, `me-`, `ps-`, and `pe-` do.
-      'vue/no-restricted-class': ['error', '/^[mp][lr]-(n?\\d+|auto)$/'],
+      'vue/no-restricted-class': ['error', '/^[mp][lr]-([a-z]{2,4}-)?(n?\\d+|auto)$/'],
       // UI text comes from web/src/locales; the attributes are this rule's, and Vuetify's for text.
       'vue/no-bare-strings-in-template': [
         'error',

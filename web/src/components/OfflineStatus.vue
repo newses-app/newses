@@ -49,7 +49,9 @@ const status = computed(() => {
   if (back.value) return { icon: mdiCloudCheckOutline, text: [t('offline.backOnline')] };
   return null;
 });
-const text = computed(() => status.value?.text.filter(Boolean).join(' · ') ?? '');
+const text = computed(
+  () => status.value?.text.filter(Boolean).join(t('common.detailSeparator')) ?? '',
+);
 </script>
 
 <template>

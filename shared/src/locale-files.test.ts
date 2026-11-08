@@ -35,7 +35,7 @@ describe('Vuetify messages', () => {
 describe('Android per-app languages', () => {
   const config = repositoryFile('mobile/android/app/src/main/res/xml/locales_config.xml');
 
-  it.runIf(existsSync(config))('are the languages in the registry', () => {
+  it('are the languages in the registry', () => {
     const declared = [...readFileSync(config, 'utf8').matchAll(/android:name="([^"]+)"/g)];
     expect(declared.map((match) => match[1]).sort()).toEqual(codes);
   });

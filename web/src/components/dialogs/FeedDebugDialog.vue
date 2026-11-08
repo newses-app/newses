@@ -180,16 +180,18 @@ const bytes = (value: number) =>
 
           <v-list v-if="result.entries.length > 0" density="compact" class="mt-2">
             <v-list-item v-for="entry in result.entries" :key="entry.guid">
-              <v-list-item-title>{{ entry.title ?? t('entries.untitled') }}</v-list-item-title>
+              <v-list-item-title
+                ><bdi>{{ entry.title ?? t('entries.untitled') }}</bdi></v-list-item-title
+              >
               <v-list-item-subtitle>
                 <template v-if="entry.publishedAt">
                   {{ formatDateTime(entry.publishedAt, locale) }} ·
                 </template>
-                {{ entry.link ?? entry.guid }}
+                <bdi dir="ltr">{{ entry.link ?? entry.guid }}</bdi>
               </v-list-item-subtitle>
               <div class="d-flex flex-wrap ga-1 mt-1">
                 <v-chip v-for="tag in entry.tags" :key="`tag:${tag}`" size="x-small">
-                  {{ tag }}
+                  <bdi>{{ tag }}</bdi>
                 </v-chip>
                 <v-chip
                   v-for="id in entry.filterIds"

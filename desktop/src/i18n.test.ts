@@ -41,4 +41,8 @@ describe('t', () => {
     expect(t('signedOut', { name: 'Home' })).toBe('Home (signed out)');
     expect(t('signedOut', { name: "$& {name} $'" })).toBe("$& {name} $' (signed out)");
   });
+
+  it('isolates right-to-left params from the text around them', () => {
+    expect(t('signedOut', { name: 'בית' })).toBe('\u2068בית\u2069 (signed out)');
+  });
 });

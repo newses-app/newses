@@ -77,7 +77,7 @@ const profileDetails = (profile: Profile) => {
     bytes !== undefined && t('profiles.stored', { size: formatStorage(bytes, locale.value) }),
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(t('common.detailSeparator'));
 };
 
 /** Deletes a profile's downloaded articles, which download again when it next syncs. */

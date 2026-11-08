@@ -527,12 +527,14 @@ async function toggle(filter: Filter, enabled: boolean) {
                 }}
               </p>
               <v-list density="compact" :aria-label="t('filters.testResults')">
-                <v-list-item
-                  v-for="entry in preview.matches"
-                  :key="entry.id"
-                  :title="entry.title ?? t('entries.untitled')"
-                  :subtitle="entry.feedTitle ?? ''"
-                />
+                <v-list-item v-for="entry in preview.matches" :key="entry.id">
+                  <template #title
+                    ><bdi>{{ entry.title ?? t('entries.untitled') }}</bdi></template
+                  >
+                  <template #subtitle
+                    ><bdi>{{ entry.feedTitle }}</bdi></template
+                  >
+                </v-list-item>
               </v-list>
             </section>
           </v-form>

@@ -195,4 +195,14 @@ describe('useLanguagePicker', () => {
     expect(localStorage.getItem(CACHE_KEY)).toBe('en-XA');
     expect(picker.value.value).toBe('en-XA');
   });
+
+  it('keeps a choice on this device until preferences load', async () => {
+    loaded.value = false;
+    const picker = inComponent(useLanguagePicker);
+    picker.change('en-XA');
+    await settle();
+    expect(update).not.toHaveBeenCalled();
+    expect(shown()).toBe('en-XA');
+    expect(localStorage.getItem(CACHE_KEY)).toBe('en-XA');
+  });
 });

@@ -70,7 +70,7 @@ export function useLanguage(): void {
 /** The language picker's items and value. */
 export function useLanguagePicker() {
   const { t } = useI18n();
-  const { prefs, update } = usePrefs();
+  const { prefs, loaded, update } = usePrefs();
   const onServer = computed(() => serverChoice(prefs.value) !== undefined);
   return {
     items: computed(() => [
@@ -81,8 +81,9 @@ export function useLanguagePicker() {
     onServer,
     change(value: string) {
       const language = value === SYSTEM_DEFAULT ? null : value;
-      // Sending it to an older server would be refused, along with any changes merged into it.
-      if (onServer.value) update({ language });
+      // Sending it to an older server would be refused, along with any changes merged into it;
+      // until preferences load, the defaults can't tell which server this is.
+      if (loaded.value && onServer.value) update({ language });
       else void choose(language);
     },
   };

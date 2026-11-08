@@ -500,7 +500,10 @@ async function pick(value: unknown) {
       <h3 class="text-title-medium mt-6 mb-1">{{ t('offline.draftsTitle') }}</h3>
       <p class="text-body-medium text-medium-emphasis mb-2">{{ t('offline.draftsHint') }}</p>
       <v-list density="compact">
-        <v-list-item v-for="(draft, i) in themeDrafts" :key="i" :title="draft.name">
+        <v-list-item v-for="(draft, i) in themeDrafts" :key="i">
+          <template #title
+            ><bdi>{{ draft.name }}</bdi></template
+          >
           <template #append>
             <v-btn size="small" variant="text" @click="exportTheme(draft)">
               {{ t('appearance.export') }}

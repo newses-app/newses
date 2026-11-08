@@ -81,6 +81,7 @@
     "first": "First",
     "after": "After {name}",
     "groupSeparator": "; ",
+    "detailSeparator": " · ",
     "sentences": "{first} {second}"
   },
   "errors": {

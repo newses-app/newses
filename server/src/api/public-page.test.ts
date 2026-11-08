@@ -19,9 +19,11 @@ const entry = {
   enclosures: [{ url: 'https://news.example/a.mp3' }],
 } as unknown as Entry;
 
+const spanish = { ...MESSAGES.es };
+
 describe('public pages', () => {
   afterEach(() => {
-    delete MESSAGES.es;
+    MESSAGES.es = spanish;
   });
 
   it('take their text from the locale file', () => {

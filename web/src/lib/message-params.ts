@@ -1,8 +1,4 @@
-const FIRST_STRONG_ISOLATE = '\u2068';
-const POP_DIRECTIONAL_ISOLATE = '\u2069';
-
-/** Hebrew, Arabic, and the other right-to-left scripts, with their presentation forms. */
-const RIGHT_TO_LEFT = /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufefc]/;
+import { isolate } from '@newses/shared/locales';
 
 const numberFormats = new Map<string, Intl.NumberFormat>();
 
@@ -19,10 +15,7 @@ function numberFormat(locale: string): Intl.NumberFormat {
  */
 export function shownParam(value: unknown, locale: string, rightToLeft: boolean): unknown {
   if (typeof value === 'number') return numberFormat(locale).format(value);
-  if (typeof value !== 'string' || !value) return value;
-  return rightToLeft || RIGHT_TO_LEFT.test(value)
-    ? `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`
-    : value;
+  return typeof value === 'string' ? isolate(value, rightToLeft) : value;
 }
 
 /** A message as plain data, for text that is stored rather than shown. */
