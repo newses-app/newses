@@ -585,7 +585,8 @@
       "sketch": "Schizzo",
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
-      "amber": "Monitor ambra"
+      "amber": "Monitor ambra",
+      "eink": "Inchiostro elettronico"
     },
     "adjust": "Personalizza questo tema",
     "adjustHint": "Le modifiche si applicano al tema che usi e vengono salvate man mano.",
@@ -616,7 +617,8 @@
     "styles": {
       "standard": "Standard",
       "terminal": "Terminale",
-      "sketch": "Schizzo"
+      "sketch": "Schizzo",
+      "eink": "Inchiostro elettronico"
     },
     "radius": "Angoli",
     "radii": {

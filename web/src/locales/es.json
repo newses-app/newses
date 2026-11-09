@@ -585,7 +585,8 @@
       "sketch": "Boceto",
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
-      "amber": "Monitor ámbar"
+      "amber": "Monitor ámbar",
+      "eink": "Tinta electrónica"
     },
     "adjust": "Ajustar este tema",
     "adjustHint": "Los cambios se aplican al tema que usas y se guardan al hacerlos.",
@@ -616,7 +617,8 @@
     "styles": {
       "standard": "Estándar",
       "terminal": "Terminal",
-      "sketch": "Boceto"
+      "sketch": "Boceto",
+      "eink": "Tinta electrónica"
     },
     "radius": "Esquinas",
     "radii": {

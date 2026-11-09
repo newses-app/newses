@@ -585,7 +585,8 @@
       "sketch": "Skizze",
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
-      "amber": "Bernstein-Monitor"
+      "amber": "Bernstein-Monitor",
+      "eink": "E-Ink"
     },
     "adjust": "Dieses Theme anpassen",
     "adjustHint": "Änderungen gelten für das verwendete Theme und werden sofort gespeichert.",
@@ -616,7 +617,8 @@
     "styles": {
       "standard": "Standard",
       "terminal": "Terminal",
-      "sketch": "Skizze"
+      "sketch": "Skizze",
+      "eink": "E-Ink"
     },
     "radius": "Ecken",
     "radii": {

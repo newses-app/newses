@@ -43,6 +43,12 @@ describe('theme tokens', () => {
         expect(hue(hex), color).toBeLessThanOrEqual(60);
   });
 
+  it('keeps E-ink to greys', () => {
+    for (const palette of Object.values(BUILTIN_THEMES.eink.palette))
+      for (const [color, hex] of Object.entries(palette))
+        expect(hex, color).toMatch(/^#([0-9a-f]{2})\1\1$/);
+  });
+
   it('takes colours as #rrggbb only', () => {
     for (const primary of ['#B35900', '#b35900'])
       expect(partialThemeTokensSchema.safeParse({ palette: { light: { primary } } }).success).toBe(

@@ -2,11 +2,12 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './axe.ts';
 import { signIn } from './login.ts';
 
-/** The built-in themes with a style beyond standard, with the font each one's interface uses. */
-const STYLES = [
+/** The built-in themes with a style beyond standard, with the bundled font its interface uses. */
+const STYLES: { key: string; style: string; name: string; font?: string }[] = [
   { key: 'terminal', style: 'terminal', name: 'Terminal', font: 'IBM Plex Mono' },
   { key: 'amber', style: 'terminal', name: 'Amber monitor', font: 'IBM Plex Mono' },
   { key: 'sketch', style: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
+  { key: 'eink', style: 'eink', name: 'E-ink' },
 ];
 /** The built-in themes that are a palette on the standard style. */
 const PALETTES = [
@@ -66,20 +67,26 @@ for (const colorScheme of ['light', 'dark'] as const)
         await expect(root).toHaveAttribute('data-theme-style', style.style);
 
         // The bundled font, served by the app itself.
-        const font = await page
-          .locator('.v-app-bar h1')
-          .evaluate((h1) => getComputedStyle(h1).fontFamily);
-        expect(font).toContain(style.font);
-        await expect
-          .poll(() =>
-            page.evaluate((family) => document.fonts.check(`16px "${family}"`), style.font),
-          )
-          .toBe(true);
+        const family = style.font;
+        if (family) {
+          const font = await page
+            .locator('.v-app-bar h1')
+            .evaluate((h1) => getComputedStyle(h1).fontFamily);
+          expect(font).toContain(family);
+          await expect
+            .poll(() => page.evaluate((f) => document.fonts.check(`16px "${f}"`), family))
+            .toBe(true);
+        }
+        if (style.style === 'eink')
+          await expect(page.locator('.v-app-bar .v-btn').first()).toHaveCSS(
+            'transition-duration',
+            '0s',
+          );
 
         await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
         const selected = page.locator('.headline.selected');
         await expect(selected).toBeVisible();
-        if (style.style === 'terminal') {
+        if (style.style === 'terminal' || style.style === 'eink') {
           // Inverse video: the text colour as background.
           const [background, text] = await page.evaluate(() => {
             const row = document.querySelector('.headline.selected');

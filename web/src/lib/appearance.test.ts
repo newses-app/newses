@@ -196,6 +196,14 @@ describe('resolveAppearance', () => {
     });
   });
 
+  it('turns off transitions and ripples in the E-ink style', () => {
+    expect(resolveAppearance({ ...original, style: 'eink' }).defaults.global).toEqual({
+      transition: false,
+      ripple: false,
+    });
+    expect(resolveAppearance(original).defaults.global).toEqual({});
+  });
+
   it('sets fonts, scale, style, and effects on the document root', () => {
     const appearance = resolveAppearance({
       ...original,

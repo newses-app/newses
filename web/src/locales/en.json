@@ -585,7 +585,8 @@
       "sketch": "Sketch",
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
-      "amber": "Amber monitor"
+      "amber": "Amber monitor",
+      "eink": "E-ink"
     },
     "adjust": "Adjust this theme",
     "adjustHint": "Changes apply to the theme you use and are saved as you make them.",
@@ -616,7 +617,8 @@
     "styles": {
       "standard": "Standard",
       "terminal": "Terminal",
-      "sketch": "Sketch"
+      "sketch": "Sketch",
+      "eink": "E-ink"
     },
     "radius": "Corners",
     "radii": {

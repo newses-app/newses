@@ -3,7 +3,7 @@ import type { ThemeTokens } from './themes.ts';
 // Theme token values and the built-in themes; no Zod, so browsers can import them.
 
 /** `standard` is plain Vuetify; the others add a stylesheet scoped to `data-theme-style`. */
-export const THEME_STYLES = ['standard', 'terminal', 'sketch'] as const;
+export const THEME_STYLES = ['standard', 'terminal', 'sketch', 'eink'] as const;
 /**
  * Font keys, never font-family text. `default` is the app's font; for articles, the UI font.
  * `patrickHand` and `plexMono` are bundled with the app.
@@ -28,6 +28,7 @@ export const BUILTIN_THEME_KEYS = [
   'catppuccin',
   'solarized',
   'amber',
+  'eink',
 ] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
@@ -39,12 +40,14 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   catppuccin: 8,
   solarized: 8,
   amber: 8,
+  eink: 8,
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
   standard: 0,
   terminal: 0,
   sketch: 0,
+  eink: 8,
 };
 
 /**
@@ -257,5 +260,39 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     border: 'thin',
     elevation: 'flat',
     effects: { texture: true, animation: true },
+  },
+  // For e-ink screens: black and white only, with nothing moving.
+  eink: {
+    style: 'eink',
+    palette: {
+      light: {
+        background: '#ffffff',
+        surface: '#ffffff',
+        text: '#000000',
+        primary: '#000000',
+        star: '#000000',
+        error: '#000000',
+        warning: '#000000',
+        success: '#000000',
+      },
+      dark: {
+        background: '#000000',
+        surface: '#000000',
+        text: '#ffffff',
+        primary: '#ffffff',
+        star: '#ffffff',
+        error: '#ffffff',
+        warning: '#ffffff',
+        success: '#ffffff',
+      },
+    },
+    uiFont: 'default',
+    articleFont: 'default',
+    fontScale: 1,
+    radius: 'none',
+    density: 'default',
+    border: 'thick',
+    elevation: 'flat',
+    effects: { texture: false, animation: false },
   },
 };

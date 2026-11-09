@@ -1,0 +1,56 @@
+/*
+ * E-ink style: black and white with nothing moving, for screens that ghost on motion and dither
+ * greys. Unlayered, so it overrides Vuetify's layered styles. Vuetify's own transitions and
+ * ripples are off through the theme's defaults (lib/appearance.ts).
+ */
+
+/* Nothing moves; important, so it also stops transitions Vuetify sets inline. */
+html[data-theme-style='eink'] *,
+html[data-theme-style='eink'] ::before,
+html[data-theme-style='eink'] ::after {
+  transition: none !important;
+  animation: none !important;
+}
+html[data-theme-style='eink'] {
+  scroll-behavior: auto;
+}
+
+/* Text at full strength and no hover tints; Vuetify sets these on each theme's class too. */
+html[data-theme-style='eink'],
+html[data-theme-style='eink'] :is(.v-theme--light, .v-theme--dark) {
+  --v-high-emphasis-opacity: 1;
+  --v-medium-emphasis-opacity: 1;
+  --v-hover-opacity: 0;
+}
+html[data-theme-style='eink'] .headline .headline-title {
+  opacity: 1;
+}
+
+/* The chrome's borders in the text colour rather than a faint grey. */
+html[data-theme-style='eink'] :is(.v-app-bar, .v-card, .v-navigation-drawer, .v-toolbar) {
+  border-color: rgb(var(--v-theme-on-surface));
+}
+
+/* Overlays leave the page undimmed, and still close when it is tapped; menus are outlined. */
+html[data-theme-style='eink'] :is(.v-overlay__scrim, .v-navigation-drawer__scrim) {
+  opacity: 0;
+}
+html[data-theme-style='eink'] :is(.v-menu, .v-tooltip) > .v-overlay__content {
+  border: var(--theme-border-width, 2px) solid rgb(var(--v-theme-on-surface));
+}
+
+/* Inverse video for the selected headline and feed, tooltips, and notices, rather than grey. */
+html[data-theme-style='eink'] :is(.headline.selected, .tree .v-list-item--active),
+html[data-theme-style='eink'] .v-tooltip > .v-overlay__content,
+html[data-theme-style='eink'] .v-snackbar__wrapper {
+  background: rgb(var(--v-theme-on-surface));
+  color: rgb(var(--v-theme-surface));
+}
+html[data-theme-style='eink']
+  :is(.headline.selected, .tree .v-list-item--active)
+  .v-list-item__overlay {
+  opacity: 0;
+}
+html[data-theme-style='eink'] .headline.selected .score.high {
+  color: inherit;
+}

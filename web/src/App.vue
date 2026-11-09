@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AppTheme } from '@newses/shared';
+import { mdiAlertCircleOutline } from '@mdi/js';
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
@@ -113,7 +114,13 @@ function changeServer() {
     <v-snackbar :model-value="slow && !starting" location="top" timeout="-1">
       {{ t('app.waking') }}
     </v-snackbar>
-    <v-snackbar v-model="open" :color="ui.notice?.error ? 'error' : undefined" timeout="4000">
+    <!-- An error shows by its icon as well as its colour, which some themes and readers lack. -->
+    <v-snackbar
+      v-model="open"
+      :color="ui.notice?.error ? 'error' : undefined"
+      :prepend-icon="ui.notice?.error ? mdiAlertCircleOutline : undefined"
+      timeout="4000"
+    >
       {{ ui.notice?.text }}
     </v-snackbar>
   </v-app>

@@ -215,6 +215,9 @@ function vuetifyDefaults(tokens: ThemeTokens): Appearance['defaults'] {
   if (tokens.radius !== 'default') global.rounded = ROUNDED[tokens.radius];
   if (tokens.density !== 'default') global.density = tokens.density;
   if (tokens.elevation === 'flat') global.elevation = 0;
+  // E-ink screens ghost on motion: no transitions (dialogs and menus animate by script, which
+  // themes/eink.css can't stop) and no ripples.
+  if (tokens.style === 'eink') Object.assign(global, { transition: false, ripple: false });
   const defaults: Appearance['defaults'] = { global };
   if (tokens.border !== 'none') {
     const border = tokens.border === 'thin' ? 'sm' : 'md';
