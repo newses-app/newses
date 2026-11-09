@@ -584,7 +584,8 @@
       "terminal": "Terminal",
       "sketch": "Skizze",
       "catppuccin": "Catppuccin",
-      "solarized": "Solarized"
+      "solarized": "Solarized",
+      "amber": "Bernstein-Monitor"
     },
     "adjust": "Dieses Theme anpassen",
     "adjustHint": "Änderungen gelten für das verwendete Theme und werden sofort gespeichert.",

@@ -584,7 +584,8 @@
       "terminal": "Terminal",
       "sketch": "Boceto",
       "catppuccin": "Catppuccin",
-      "solarized": "Solarized"
+      "solarized": "Solarized",
+      "amber": "Monitor ámbar"
     },
     "adjust": "Ajustar este tema",
     "adjustHint": "Los cambios se aplican al tema que usas y se guardan al hacerlos.",

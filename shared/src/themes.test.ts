@@ -27,6 +27,22 @@ describe('theme tokens', () => {
       );
   });
 
+  it('keeps Amber monitor to warm colours, red to yellow, for reading at night', () => {
+    // The HSL hue of `#rrggbb` in degrees; 0 for greys.
+    const hue = (hex: string) => {
+      const [r = 0, g = 0, b = 0] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+      const max = Math.max(r, g, b);
+      const range = max - Math.min(r, g, b);
+      if (range === 0) return 0;
+      const sector =
+        max === r ? (g - b) / range : max === g ? (b - r) / range + 2 : (r - g) / range + 4;
+      return (sector * 60 + 360) % 360;
+    };
+    for (const palette of Object.values(BUILTIN_THEMES.amber.palette))
+      for (const [color, hex] of Object.entries(palette))
+        expect(hue(hex), color).toBeLessThanOrEqual(60);
+  });
+
   it('takes colours as #rrggbb only', () => {
     for (const primary of ['#B35900', '#b35900'])
       expect(partialThemeTokensSchema.safeParse({ palette: { light: { primary } } }).success).toBe(

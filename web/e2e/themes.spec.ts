@@ -2,10 +2,11 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './axe.ts';
 import { signIn } from './login.ts';
 
-/** The built-in styles beyond Original, with the font each one's interface uses. */
+/** The built-in themes with a style beyond standard, with the font each one's interface uses. */
 const STYLES = [
-  { key: 'terminal', name: 'Terminal', font: 'IBM Plex Mono' },
-  { key: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
+  { key: 'terminal', style: 'terminal', name: 'Terminal', font: 'IBM Plex Mono' },
+  { key: 'amber', style: 'terminal', name: 'Amber monitor', font: 'IBM Plex Mono' },
+  { key: 'sketch', style: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
 ];
 /** The built-in themes that are a palette on the standard style. */
 const PALETTES = [
@@ -62,7 +63,7 @@ for (const colorScheme of ['light', 'dark'] as const)
         await pickTheme(page, style.name);
         await page.goto('/all');
         const root = page.locator('html');
-        await expect(root).toHaveAttribute('data-theme-style', style.key);
+        await expect(root).toHaveAttribute('data-theme-style', style.style);
 
         // The bundled font, served by the app itself.
         const font = await page
@@ -78,7 +79,7 @@ for (const colorScheme of ['light', 'dark'] as const)
         await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
         const selected = page.locator('.headline.selected');
         await expect(selected).toBeVisible();
-        if (style.key === 'terminal') {
+        if (style.style === 'terminal') {
           // Inverse video: the text colour as background.
           const [background, text] = await page.evaluate(() => {
             const row = document.querySelector('.headline.selected');

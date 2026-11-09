@@ -58,7 +58,7 @@
 | Keyboard shortcuts | P1 | TTRSS default bindings (`j`/`k`, `n`/`p`, `s`, `u`, `o`, `/`, `f a`, `g a`, …); `?` shows a help overlay |
 | Remappable shortcuts | P2 | Per-user keys or two-key sequences per action; settings record them, flag clashes, and reset to defaults; the help overlay shows the user's bindings |
 | Themes | P1 | Light, dark, follow system |
-| Custom themes | Custom Themes | Built-in Original, Terminal, Sketch, Catppuccin, and Solarized themes; per-user adjustments of colours, fonts, text scale, corners, density, borders, shadows, and effects; named themes saved, renamed, duplicated, deleted, imported, and exported as JSON; themes published to everyone on the server, which admins can unpublish; built-in palettes meet WCAG AA, and others warn below it |
+| Custom themes | Custom Themes | Built-in Original, Terminal, Sketch, Catppuccin, Solarized, and Amber monitor themes; per-user adjustments of colours, fonts, text scale, corners, density, borders, shadows, and effects; named themes saved, renamed, duplicated, deleted, imported, and exported as JSON; themes published to everyone on the server, which admins can unpublish; built-in palettes meet WCAG AA, and others warn below it |
 | Reading preferences | P2 | Font family, size, line width per user |
 | Enclosures | Later | Inline audio/video players and image galleries for enclosures |
 | Open original | P1 | Opens article link in a new tab/browser without marking unrelated items |

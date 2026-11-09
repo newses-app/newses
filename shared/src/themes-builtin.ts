@@ -27,6 +27,7 @@ export const BUILTIN_THEME_KEYS = [
   'sketch',
   'catppuccin',
   'solarized',
+  'amber',
 ] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
@@ -37,6 +38,7 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   sketch: 0,
   catppuccin: 8,
   solarized: 8,
+  amber: 8,
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
@@ -221,5 +223,39 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     border: 'none',
     elevation: 'default',
     effects: { texture: false, animation: false },
+  },
+  // Terminal in amber phosphor for reading at night: warm colours only, or amber-brown ink on paper.
+  amber: {
+    style: 'terminal',
+    palette: {
+      light: {
+        background: '#f6efe0',
+        surface: '#fbf7ee',
+        text: '#241400',
+        primary: '#8a4b00',
+        star: '#a35d00',
+        error: '#b3261e',
+        warning: '#9a3a00',
+        success: '#7a5800',
+      },
+      dark: {
+        background: '#0d0a05',
+        surface: '#16100a',
+        text: '#ffb000',
+        primary: '#ffd27a',
+        star: '#ffe9b3',
+        error: '#ff5a3c',
+        warning: '#ff8c1a',
+        success: '#ffb000',
+      },
+    },
+    uiFont: 'plexMono',
+    articleFont: 'default',
+    fontScale: 1,
+    radius: 'none',
+    density: 'compact',
+    border: 'thin',
+    elevation: 'flat',
+    effects: { texture: true, animation: true },
   },
 };

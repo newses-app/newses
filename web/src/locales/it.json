@@ -584,7 +584,8 @@
       "terminal": "Terminale",
       "sketch": "Schizzo",
       "catppuccin": "Catppuccin",
-      "solarized": "Solarized"
+      "solarized": "Solarized",
+      "amber": "Monitor ambra"
     },
     "adjust": "Personalizza questo tema",
     "adjustHint": "Le modifiche si applicano al tema che usi e vengono salvate man mano.",
