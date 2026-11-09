@@ -37,6 +37,6 @@ export const bomUploadRequest = (target: UploadTarget, bom: string) => ({
   projectVersion: target.projectVersion,
   projectTags: target.tags.map((name) => ({ name })),
   autoCreate: true,
-  isLatest: target.isLatest,
+  isLatestProjectVersion: target.isLatest,
   bom: Buffer.from(bom).toString('base64'),
 });

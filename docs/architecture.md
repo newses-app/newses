@@ -638,4 +638,4 @@ CycloneDX 1.6, one per deliverable, composed by `infra/src/release/build-sbom.ts
 - The landing page, user guides, contributor pages, and download page are a VitePress site in `newses-app/newses.app`, with its own CDK app and pipeline, in this deployment's AWS account but in separate stacks. This repository's builds, image, and stacks never reference it.
 - Domains: `newses.app` (`www.newses.app` redirects to it) and `dev.newses.app` (not indexed), both under the `newses.app` hosted zone and certificate. No analytics or cookies.
 - The site's `dev` and `main` branches build from this repository's matching branch, reading `docs/architecture.md`, `docs/adr/`, and `AGENTS.md` at build time and publishing them under `/contributing/`; `requirements.md` is not published.
-- `/download` reads the matching app stage's `/downloads/latest.json` in the browser, so a release needs no site rebuild.
+- `/download` and the self-hosting guides read the matching app stage's `/downloads/latest.json` in the browser, and the guides the server's files it names, so a release needs no site rebuild.

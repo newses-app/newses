@@ -44,7 +44,7 @@ describe('bomUploadRequest', () => {
       projectVersion: '1.2.3',
       projectTags: [{ name: 'newses' }, { name: 'prod' }],
       autoCreate: true,
-      isLatest: true,
+      isLatestProjectVersion: true,
       bom: Buffer.from('{"bomFormat":"CycloneDX"}').toString('base64'),
     });
   });
