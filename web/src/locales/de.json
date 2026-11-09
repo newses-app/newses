@@ -586,7 +586,8 @@
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
       "amber": "Bernstein-Monitor",
-      "eink": "E-Ink"
+      "eink": "E-Ink",
+      "synthwave": "Synthwave"
     },
     "adjust": "Dieses Theme anpassen",
     "adjustHint": "Änderungen gelten für das verwendete Theme und werden sofort gespeichert.",
@@ -618,7 +619,8 @@
       "standard": "Standard",
       "terminal": "Terminal",
       "sketch": "Skizze",
-      "eink": "E-Ink"
+      "eink": "E-Ink",
+      "synthwave": "Synthwave"
     },
     "radius": "Ecken",
     "radii": {

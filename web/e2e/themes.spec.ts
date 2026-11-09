@@ -8,6 +8,7 @@ const STYLES: { key: string; style: string; name: string; font?: string }[] = [
   { key: 'amber', style: 'terminal', name: 'Amber monitor', font: 'IBM Plex Mono' },
   { key: 'sketch', style: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
   { key: 'eink', style: 'eink', name: 'E-ink' },
+  { key: 'synthwave', style: 'synthwave', name: 'Synthwave' },
 ];
 /** The built-in themes that are a palette on the standard style. */
 const PALETTES = [
@@ -98,6 +99,18 @@ for (const colorScheme of ['light', 'dark'] as const)
             ];
           });
           expect(background).toBe(text);
+        } else if (style.style === 'synthwave') {
+          // A neon edge fading from the primary colour.
+          const [edge, primary] = await page.evaluate(() => {
+            const row = document.querySelector('.headline.selected');
+            const app = document.querySelector('.v-application');
+            const rgb = app ? getComputedStyle(app).getPropertyValue('--v-theme-primary') : '';
+            return [
+              row ? getComputedStyle(row, '::before').backgroundImage : '',
+              `rgb(${rgb.split(',').join(', ')})`,
+            ];
+          });
+          expect(edge).toContain(primary);
         } else {
           // A highlighter mark behind the title.
           await expect(selected.locator('.headline-title')).toHaveCSS(

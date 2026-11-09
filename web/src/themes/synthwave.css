@@ -1,0 +1,163 @@
+/*
+ * Synthwave style: neon on deep purple, from 80s retro-futurism. Unlayered, so it overrides
+ * Vuetify's layered styles. Decorations take no clicks and are generated content without text.
+ * Colours come from the palette: pink primary, orange warning, teal or cyan success, and the
+ * surface, which carries the blue of the night sky.
+ */
+
+/*
+ * Rules, focus rings, and scrollbars in the success colour; dividers and row rules in a
+ * stronger tint than Vuetify's grey.
+ */
+html[data-theme-style='synthwave'] :is(.v-theme--light, .v-theme--dark) {
+  --v-border-color: var(--v-theme-success);
+  --v-border-opacity: 0.35;
+  scrollbar-color: rgba(var(--v-theme-success), 0.5) transparent;
+}
+html[data-theme-style='synthwave'] :is(.v-app-bar, .v-card, .v-navigation-drawer, .v-toolbar) {
+  border-color: rgb(var(--v-theme-success));
+}
+html[data-theme-style='synthwave'] :focus-visible:not(input, textarea) {
+  outline: 2px solid rgb(var(--v-theme-success));
+  outline-offset: 2px;
+}
+
+/* The feed list: icons and the open feed in the success colour, unread counts in orange. */
+html[data-theme-style='synthwave'] .tree .v-list-item__prepend > .v-icon {
+  color: rgb(var(--v-theme-success));
+  opacity: 1;
+}
+html[data-theme-style='synthwave'] .tree .v-list-item--active {
+  box-shadow: inset var(--edge-mark) 0 rgb(var(--v-theme-success));
+}
+html[data-theme-style='synthwave'] .tree .v-list-item--active > .v-list-item__overlay {
+  background: rgb(var(--v-theme-success));
+  opacity: var(--synthwave-active);
+}
+html[data-theme-style='synthwave'] .tree .unread-count {
+  color: rgb(var(--v-theme-warning));
+}
+
+/* A neon edge on the selected headline, pink fading to orange. */
+html[data-theme-style='synthwave'] .headline.selected::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 3px;
+  background: linear-gradient(rgb(var(--v-theme-primary)), rgb(var(--v-theme-warning)));
+}
+
+/*
+ * Tints for the open feed and the app bar's scene, faint enough that text over them keeps
+ * WCAG AA contrast, secondary text in the app bar included where a grid line crosses the sun.
+ */
+html[data-theme-style='synthwave'] .v-theme--light {
+  --synthwave-active: 0.1;
+  --synthwave-sun: 0.12;
+  --synthwave-grid: 0.16;
+  --synthwave-glow: 0.35;
+}
+html[data-theme-style='synthwave'] .v-theme--dark {
+  --synthwave-active: 0.14;
+  --synthwave-sun: 0.18;
+  --synthwave-grid: 0.14;
+  --synthwave-glow: 0.6;
+}
+
+@media (forced-colors: none) {
+  /* The app bar's lower edge as a horizon, from teal through pink to orange. */
+  html[data-theme-style='synthwave'] .v-app-bar {
+    border-image: linear-gradient(
+        90deg,
+        rgb(var(--v-theme-success)),
+        rgb(var(--v-theme-primary)),
+        rgb(var(--v-theme-warning))
+      )
+      1;
+  }
+
+  /*
+   * The article's heading in a sunset gradient, from pink to orange; both pass AA as text, and
+   * so does every shade between them.
+   */
+  html[data-theme-style='synthwave'] .entry-heading {
+    inline-size: fit-content;
+    background: linear-gradient(90deg, rgb(var(--v-theme-primary)), rgb(var(--v-theme-warning)));
+    background-clip: text;
+    color: transparent;
+  }
+  html[data-theme-style='synthwave'] .entry-heading .entry-title {
+    text-decoration-color: rgb(var(--v-theme-primary));
+  }
+
+  /*
+   * Neon glow around headings and primary buttons, never on article text or rows; text by night
+   * only. The gradient heading glows through a filter, as a text shadow would cover its fill.
+   */
+  html[data-theme-style='synthwave']
+    .v-theme--dark
+    :is(h1, h2):not(.article-content *, .entry-heading) {
+    text-shadow: 0 0 0.35em rgba(var(--v-theme-primary), 0.8);
+  }
+  html[data-theme-style='synthwave'] .v-theme--dark .entry-heading {
+    filter: drop-shadow(0 0 0.3em rgba(var(--v-theme-primary), 0.6));
+  }
+  html[data-theme-style='synthwave'] .v-btn.bg-primary,
+  html[data-theme-style='synthwave'] .headline.selected::before {
+    box-shadow: 0 0 12px rgba(var(--v-theme-primary), var(--synthwave-glow));
+  }
+
+  /* A sunset over a perspective grid, behind the app bar's content and cut off at its edges. */
+  html[data-theme-style='synthwave'][data-effects~='texture'] .v-app-bar {
+    overflow: hidden;
+  }
+  html[data-theme-style='synthwave'][data-effects~='texture'] .v-app-bar .v-toolbar__content {
+    position: relative;
+    z-index: 1;
+  }
+  html[data-theme-style='synthwave'][data-effects~='texture'] .v-app-bar::before,
+  html[data-theme-style='synthwave'][data-effects~='texture'] .v-app-bar::after {
+    content: '';
+    content: '' / '';
+    position: absolute;
+    inset-block: 0;
+    pointer-events: none;
+  }
+  html[data-theme-style='synthwave'][data-effects~='texture'] .v-app-bar::before {
+    inset-inline: 0;
+    background: radial-gradient(
+      ellipse 50% 160% at 50% 100%,
+      rgba(var(--v-theme-warning), var(--synthwave-sun)),
+      rgba(var(--v-theme-primary), var(--synthwave-sun)) 45%,
+      transparent 75%
+    );
+  }
+  html[data-theme-style='synthwave'][data-effects~='texture'] .v-app-bar::after {
+    inset-inline: -50%;
+    background-image:
+      linear-gradient(rgba(var(--v-theme-success), var(--synthwave-grid)) 1px, transparent 1px),
+      linear-gradient(
+        90deg,
+        rgba(var(--v-theme-success), var(--synthwave-grid)) 1px,
+        transparent 1px
+      );
+    background-size: 32px 12px;
+    transform: perspective(40px) rotateX(35deg);
+    transform-origin: 50% 100%;
+    mask-image: linear-gradient(transparent, #000 70%);
+  }
+
+  /* The grid rolls towards the reader. */
+  @media (prefers-reduced-motion: no-preference) {
+    html[data-theme-style='synthwave'][data-effects~='animation'] .v-app-bar::after {
+      animation: synthwave-grid 2s linear infinite;
+    }
+  }
+}
+
+@keyframes synthwave-grid {
+  to {
+    background-position: 0 12px;
+  }
+}

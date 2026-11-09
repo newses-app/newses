@@ -3,7 +3,7 @@ import type { ThemeTokens } from './themes.ts';
 // Theme token values and the built-in themes; no Zod, so browsers can import them.
 
 /** `standard` is plain Vuetify; the others add a stylesheet scoped to `data-theme-style`. */
-export const THEME_STYLES = ['standard', 'terminal', 'sketch', 'eink'] as const;
+export const THEME_STYLES = ['standard', 'terminal', 'sketch', 'eink', 'synthwave'] as const;
 /**
  * Font keys, never font-family text. `default` is the app's font; for articles, the UI font.
  * `patrickHand` and `plexMono` are bundled with the app.
@@ -29,6 +29,7 @@ export const BUILTIN_THEME_KEYS = [
   'solarized',
   'amber',
   'eink',
+  'synthwave',
 ] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
@@ -41,6 +42,7 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   solarized: 8,
   amber: 8,
   eink: 8,
+  synthwave: 8,
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
@@ -48,6 +50,7 @@ export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number
   terminal: 0,
   sketch: 0,
   eink: 8,
+  synthwave: 8,
 };
 
 /**
@@ -294,5 +297,40 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     border: 'thick',
     elevation: 'flat',
     effects: { texture: false, animation: false },
+  },
+  // Neon pink, orange, and cyan on deep purple under a navy sky, from 80s retro-futurism; by day,
+  // magenta, orange, and teal ink on lavender under a pale blue sky.
+  synthwave: {
+    style: 'synthwave',
+    palette: {
+      light: {
+        background: '#f6eaff',
+        surface: '#e8f1ff',
+        text: '#140528',
+        primary: '#a8106f',
+        star: '#b07200',
+        error: '#b3261e',
+        warning: '#a84600',
+        success: '#00756f',
+      },
+      dark: {
+        background: '#1a0b2e',
+        surface: '#141a4d',
+        text: '#f4e8ff',
+        primary: '#ff3dbb',
+        star: '#fff35c',
+        error: '#ff6b5e',
+        warning: '#ff8a3d',
+        success: '#36f9f6',
+      },
+    },
+    uiFont: 'default',
+    articleFont: 'default',
+    fontScale: 1,
+    radius: 'small',
+    density: 'default',
+    border: 'thin',
+    elevation: 'flat',
+    effects: { texture: true, animation: true },
   },
 };

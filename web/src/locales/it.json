@@ -586,7 +586,8 @@
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
       "amber": "Monitor ambra",
-      "eink": "Inchiostro elettronico"
+      "eink": "Inchiostro elettronico",
+      "synthwave": "Synthwave"
     },
     "adjust": "Personalizza questo tema",
     "adjustHint": "Le modifiche si applicano al tema che usi e vengono salvate man mano.",
@@ -618,7 +619,8 @@
       "standard": "Standard",
       "terminal": "Terminale",
       "sketch": "Schizzo",
-      "eink": "Inchiostro elettronico"
+      "eink": "Inchiostro elettronico",
+      "synthwave": "Synthwave"
     },
     "radius": "Angoli",
     "radii": {

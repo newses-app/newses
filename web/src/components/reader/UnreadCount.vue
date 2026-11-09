@@ -6,7 +6,7 @@ const { t } = useI18n();
 </script>
 
 <template>
-  <span class="text-label-medium">
+  <span class="unread-count text-label-medium">
     <span aria-hidden="true">{{ n }}</span
     >{{ ' ' }}<span class="d-sr-only">{{ t('tree.unread', { n }) }}</span>
   </span>

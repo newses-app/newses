@@ -586,7 +586,8 @@
       "catppuccin": "Catppuccin",
       "solarized": "Solarized",
       "amber": "Monitor ámbar",
-      "eink": "Tinta electrónica"
+      "eink": "Tinta electrónica",
+      "synthwave": "Synthwave"
     },
     "adjust": "Ajustar este tema",
     "adjustHint": "Los cambios se aplican al tema que usas y se guardan al hacerlos.",
@@ -618,7 +619,8 @@
       "standard": "Estándar",
       "terminal": "Terminal",
       "sketch": "Boceto",
-      "eink": "Tinta electrónica"
+      "eink": "Tinta electrónica",
+      "synthwave": "Synthwave"
     },
     "radius": "Esquinas",
     "radii": {

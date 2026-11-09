@@ -27,6 +27,7 @@ import './themes/fonts.css';
 import './themes/terminal.css';
 import './themes/sketch.css';
 import './themes/eink.css';
+import './themes/synthwave.css';
 
 document.documentElement.dataset.platform = bridge.platform;
 trackWindowControls(document.documentElement);
