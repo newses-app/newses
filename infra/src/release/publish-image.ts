@@ -14,6 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import { versionFromTag } from '@newses/shared/release';
 import {
@@ -50,6 +51,9 @@ const { dir, repository, key } = values;
 const dryRun = values['dry-run'];
 const version = versionFromTag(values.tag).name;
 const name = imageRepositoryName(repository);
+
+const VERIFY_ATTEMPTS = 7;
+const VERIFY_DELAY_MS = 10_000;
 
 // Commands that are not quiet write to stderr, as `join` prints only the reference.
 function run(command: string, args: string[], quiet = true) {
@@ -156,7 +160,18 @@ if (step === 'join') {
       false,
     );
   }
-  if (!dryRun) run('cosign', ['verify', '--key', key, image], false);
+  // The registry can answer for a while with the signature tag's absence, which cosign looked up
+  // before pushing it.
+  for (let attempt = 1; !dryRun; attempt++) {
+    try {
+      run('cosign', ['verify', '--key', key, image], false);
+      break;
+    } catch (error) {
+      if (attempt === VERIFY_ATTEMPTS) throw error;
+      console.error(`Verifying again in ${String(VERIFY_DELAY_MS / 1000)} s`);
+      await sleep(VERIFY_DELAY_MS);
+    }
+  }
   console.log(`${repository}@${digest}`);
   process.exit(0);
 }
