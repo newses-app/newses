@@ -582,7 +582,8 @@
     "themes": {
       "original": "Original",
       "terminal": "Terminal",
-      "sketch": "Boceto"
+      "sketch": "Boceto",
+      "catppuccin": "Catppuccin"
     },
     "adjust": "Ajustar este tema",
     "adjustHint": "Los cambios se aplican al tema que usas y se guardan al hacerlos.",

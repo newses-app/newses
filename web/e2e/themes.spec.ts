@@ -7,6 +7,8 @@ const STYLES = [
   { key: 'terminal', name: 'Terminal', font: 'IBM Plex Mono' },
   { key: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
 ];
+/** The built-in themes that are a palette on the standard style. */
+const PALETTES = [{ key: 'catppuccin', name: 'Catppuccin' }];
 
 /** Back to Original without adjustments, deleting the themes these tests create. */
 async function restoreAppearance(page: Page): Promise<void> {
@@ -97,6 +99,21 @@ for (const colorScheme of ['light', 'dark'] as const)
         if (process.env.SCREENSHOTS)
           await page.screenshot({
             path: `${process.env.SCREENSHOTS}/${info.project.name}-${style.key}-${colorScheme}.png`,
+          });
+      });
+
+    for (const palette of PALETTES)
+      test(`shows the reader in ${palette.name}`, async ({ page, expectNoViolations }, info) => {
+        await pickTheme(page, palette.name);
+        await page.goto('/all');
+        await expect(page.locator('html')).toHaveAttribute('data-theme-style', 'standard');
+        await page.getByRole('list', { name: 'Articles' }).getByRole('link').first().click();
+        await expect(page.locator('.headline.selected')).toBeVisible();
+
+        await expectNoViolations(`${palette.key}-${colorScheme}-reader`);
+        if (process.env.SCREENSHOTS)
+          await page.screenshot({
+            path: `${process.env.SCREENSHOTS}/${info.project.name}-${palette.key}-${colorScheme}.png`,
           });
       });
   });

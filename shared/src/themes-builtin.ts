@@ -21,7 +21,7 @@ export const THEME_ELEVATIONS = ['default', 'flat'] as const;
 export const MIN_FONT_SCALE = 0.875;
 export const MAX_FONT_SCALE = 1.25;
 
-export const BUILTIN_THEME_KEYS = ['original', 'terminal', 'sketch'] as const;
+export const BUILTIN_THEME_KEYS = ['original', 'terminal', 'sketch', 'catppuccin'] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
 /** The API minor that added each built-in theme; older servers refuse its key. */
@@ -29,6 +29,7 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   original: 0,
   terminal: 0,
   sketch: 0,
+  catppuccin: 8,
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
@@ -143,5 +144,40 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     border: 'thick',
     elevation: 'flat',
     effects: { texture: true, animation: false },
+  },
+  // Catppuccin (MIT): Latte by day, Mocha by night. Mocha is as published; Latte's text and
+  // accents are darkened, keeping their hue, to the nearest shade that passes.
+  catppuccin: {
+    style: 'standard',
+    palette: {
+      light: {
+        background: '#eff1f5',
+        surface: '#e6e9ef',
+        text: '#1a1b32',
+        primary: '#8738ee',
+        star: '#be7501',
+        error: '#d10d38',
+        warning: '#b64401',
+        success: '#399923',
+      },
+      dark: {
+        background: '#1e1e2e',
+        surface: '#181825',
+        text: '#cdd6f4',
+        primary: '#cba6f7',
+        star: '#f9e2af',
+        error: '#f38ba8',
+        warning: '#fab387',
+        success: '#a6e3a1',
+      },
+    },
+    uiFont: 'default',
+    articleFont: 'default',
+    fontScale: 1,
+    radius: 'large',
+    density: 'default',
+    border: 'none',
+    elevation: 'default',
+    effects: { texture: false, animation: false },
   },
 };
