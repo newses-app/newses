@@ -21,7 +21,13 @@ export const THEME_ELEVATIONS = ['default', 'flat'] as const;
 export const MIN_FONT_SCALE = 0.875;
 export const MAX_FONT_SCALE = 1.25;
 
-export const BUILTIN_THEME_KEYS = ['original', 'terminal', 'sketch', 'catppuccin'] as const;
+export const BUILTIN_THEME_KEYS = [
+  'original',
+  'terminal',
+  'sketch',
+  'catppuccin',
+  'solarized',
+] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
 /** The API minor that added each built-in theme; older servers refuse its key. */
@@ -30,6 +36,7 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   terminal: 0,
   sketch: 0,
   catppuccin: 8,
+  solarized: 8,
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
@@ -175,6 +182,41 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     articleFont: 'default',
     fontScale: 1,
     radius: 'large',
+    density: 'default',
+    border: 'none',
+    elevation: 'default',
+    effects: { texture: false, animation: false },
+  },
+  // Solarized (MIT), light and dark. Text and accents are lightened in dark mode and darkened in
+  // light mode, keeping their hue, to the nearest shade that passes.
+  solarized: {
+    style: 'standard',
+    palette: {
+      light: {
+        background: '#fdf6e3',
+        surface: '#eee8d5',
+        text: '#0c2027',
+        primary: '#026dad',
+        star: '#a87f00',
+        error: '#cd1e21',
+        warning: '#bb3e01',
+        success: '#7b8e00',
+      },
+      dark: {
+        background: '#002b36',
+        surface: '#073642',
+        text: '#b7c9cb',
+        primary: '#3f9fe7',
+        star: '#b58900',
+        error: '#ff665b',
+        warning: '#f47142',
+        success: '#859900',
+      },
+    },
+    uiFont: 'default',
+    articleFont: 'default',
+    fontScale: 1,
+    radius: 'default',
     density: 'default',
     border: 'none',
     elevation: 'default',

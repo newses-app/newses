@@ -583,7 +583,8 @@
       "original": "Original",
       "terminal": "Terminal",
       "sketch": "Skizze",
-      "catppuccin": "Catppuccin"
+      "catppuccin": "Catppuccin",
+      "solarized": "Solarized"
     },
     "adjust": "Dieses Theme anpassen",
     "adjustHint": "Änderungen gelten für das verwendete Theme und werden sofort gespeichert.",

@@ -8,7 +8,10 @@ const STYLES = [
   { key: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
 ];
 /** The built-in themes that are a palette on the standard style. */
-const PALETTES = [{ key: 'catppuccin', name: 'Catppuccin' }];
+const PALETTES = [
+  { key: 'catppuccin', name: 'Catppuccin' },
+  { key: 'solarized', name: 'Solarized' },
+];
 
 /** Back to Original without adjustments, deleting the themes these tests create. */
 async function restoreAppearance(page: Page): Promise<void> {
