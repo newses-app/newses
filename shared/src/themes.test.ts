@@ -1,13 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PREFS } from './prefs-defaults.ts';
 import { updatePrefsRequestSchema } from './prefs.ts';
-import { BUILTIN_THEMES } from './themes-builtin.ts';
+import { API_VERSION } from './api-version.ts';
+import {
+  BUILTIN_THEME_API_MINOR,
+  BUILTIN_THEMES,
+  THEME_STYLE_API_MINOR,
+} from './themes-builtin.ts';
 import { partialThemeTokensSchema, themeTokensSchema } from './themes.ts';
 
 describe('theme tokens', () => {
   it('has valid built-in themes', () => {
     for (const tokens of Object.values(BUILTIN_THEMES))
       expect(themeTokensSchema.parse(tokens)).toEqual(tokens);
+  });
+
+  it('dates built-in themes and styles no later than this API version', () => {
+    for (const [key, minor] of Object.entries({
+      ...BUILTIN_THEME_API_MINOR,
+      ...THEME_STYLE_API_MINOR,
+    }))
+      expect(minor, key).toBeLessThanOrEqual(API_VERSION.minor);
+    for (const [key, tokens] of Object.entries(BUILTIN_THEMES))
+      expect(THEME_STYLE_API_MINOR[tokens.style], key).toBeLessThanOrEqual(
+        BUILTIN_THEME_API_MINOR[key as keyof typeof BUILTIN_THEME_API_MINOR],
+      );
   });
 
   it('takes colours as #rrggbb only', () => {

@@ -2,6 +2,7 @@ import type { ThemeTokens } from '@newses/shared';
 import { BUILTIN_THEMES, DEFAULT_PREFS } from '@newses/shared/client';
 import { describe, expect, it } from 'vitest';
 import {
+  builtinKey,
   contrastIssues,
   isDark,
   contrastRatio,
@@ -136,6 +137,22 @@ describe('themeTokens', () => {
         themeAdjustments: {},
       }),
     ).toEqual(original);
+  });
+
+  it("shows Original for a built-in base this app doesn't have, from a newer server", () => {
+    const newer = { base: 'newer' as typeof custom.base, tokens: { radius: 'none' as const } };
+    expect(themeTokens({ appearanceTheme: 7, themeAdjustments: {} }, () => newer)).toEqual({
+      ...original,
+      radius: 'none',
+    });
+  });
+});
+
+describe('builtinKey', () => {
+  it('keeps the built-in themes this app has and gives Original for others', () => {
+    expect(builtinKey('terminal')).toBe('terminal');
+    expect(builtinKey('newer')).toBe('original');
+    expect(builtinKey('constructor')).toBe('original');
   });
 });
 

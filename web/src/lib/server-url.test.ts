@@ -4,6 +4,7 @@ import {
   checkServer,
   compatibility,
   normaliseServerUrl,
+  supportsApiMinor,
   supportsPublishing,
 } from './server-url.ts';
 
@@ -61,6 +62,15 @@ describe('supportsPublishing', () => {
     expect(supportsPublishing(info(1, 9))).toBe(true);
     expect(supportsPublishing(info(1, 4))).toBe(false);
     expect(supportsPublishing(info(2, 5))).toBe(false);
+  });
+});
+
+describe('supportsApiMinor', () => {
+  it('needs that minor or a later one of this major', () => {
+    expect(supportsApiMinor(info(1, 8), 8)).toBe(true);
+    expect(supportsApiMinor(info(1, 9), 8)).toBe(true);
+    expect(supportsApiMinor(info(1, 7), 8)).toBe(false);
+    expect(supportsApiMinor(info(2, 8), 8)).toBe(false);
   });
 });
 

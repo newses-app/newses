@@ -143,10 +143,12 @@ export function mergeAdjustments(
   return merged;
 }
 
-const builtin = (key: string): ThemeTokens =>
-  Object.hasOwn(BUILTIN_THEMES, key)
-    ? BUILTIN_THEMES[key as BuiltinThemeKey]
-    : BUILTIN_THEMES.original;
+/** `key` if this app has that built-in theme, else Original: a newer server may have more. */
+export const builtinKey = (key: string): BuiltinThemeKey =>
+  Object.hasOwn(BUILTIN_THEMES, key) ? (key as BuiltinThemeKey) : 'original';
+
+/** The tokens of built-in theme `key`, or of Original when this app doesn't have it. */
+export const builtin = (key: string): ThemeTokens => BUILTIN_THEMES[builtinKey(key)];
 
 /**
  * The reader's theme: its base, then its overrides, then the reader's adjustments. A reference

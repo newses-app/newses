@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PartialThemeTokens, Prefs, Theme, ThemePalette } from '@newses/shared';
 import {
+  BUILTIN_THEME_API_MINOR,
   BUILTIN_THEME_KEYS,
   BUILTIN_THEMES,
   FONT_KEYS,
@@ -11,13 +12,15 @@ import {
   THEME_DENSITIES,
   THEME_ELEVATIONS,
   THEME_RADII,
+  THEME_STYLE_API_MINOR,
   THEME_STYLES,
 } from '@newses/shared/client';
 import { mdiAlertCircleOutline, mdiDotsVertical, mdiUpload } from '@mdi/js';
+import { useQuery } from '@tanstack/vue-query';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useTheme } from 'vuetify';
-import { ApiError } from '../../api.ts';
+import { api, ApiError } from '../../api.ts';
 import { useErrorText } from '../../composables/useErrorText.ts';
 import { adjustmentsPreview } from '../../composables/useAppearance.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
@@ -25,6 +28,8 @@ import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { useThemeActions, useThemes } from '../../composables/useThemes.ts';
 import {
+  builtin,
+  builtinKey,
   contrastIssues,
   type CustomTheme,
   mergeAdjustments,
@@ -33,6 +38,7 @@ import {
 } from '../../lib/appearance.ts';
 import { ONE_DECIMAL } from '../../lib/format.ts';
 import { withoutIsolates } from '../../lib/message-params.ts';
+import { supportsApiMinor } from '../../lib/server-url.ts';
 import { readThemeFile, themeFile, themeFileName, uniqueName } from '../../lib/theme-files.ts';
 import { isTemporary } from '../../lib/offline-resources.ts';
 import { saveThemeDrafts, themeDrafts } from '../../offline/status.ts';
@@ -49,6 +55,18 @@ const themes = useThemes();
 const actions = useThemeActions();
 const { session } = useSession();
 const isAdmin = computed(() => session.value?.user.role === 'admin');
+
+/**
+ * Built-in themes and styles newer than the server would be refused, so they are left out; until
+ * the server answers, all show.
+ */
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+});
+const accepted = (minor: number) =>
+  !serverInfo.data.value || supportsApiMinor(serverInfo.data.value, minor);
 
 const COLORS = [
   'background',
@@ -72,7 +90,12 @@ const uiFontItems = options(FONT_KEYS, (font) =>
 const articleFontItems = options(FONT_KEYS, (font) =>
   font === 'default' ? t('appearance.sameAsUi') : t(`reading.fonts.${font}`),
 );
-const styleItems = options(THEME_STYLES, (style) => t(`appearance.styles.${style}`));
+const styleItems = computed(() =>
+  THEME_STYLES.filter((style) => accepted(THEME_STYLE_API_MINOR[style])).map((style) => ({
+    title: t(`appearance.styles.${style}`),
+    value: style,
+  })),
+);
 const radiusItems = options(THEME_RADII, (radius) => t(`appearance.radii.${radius}`));
 const densityItems = options(THEME_DENSITIES, (density) => t(`appearance.densities.${density}`));
 const borderItems = options(THEME_BORDERS, (border) => t(`appearance.borders.${border}`));
@@ -118,12 +141,12 @@ const current = computed(() => {
 /** The theme in use as a base and overrides, which the adjustments apply to. */
 const source = computed<CustomTheme>(() => {
   const reference = prefs.value.appearanceTheme;
-  if (typeof reference === 'string') return { base: reference, tokens: {} };
+  if (typeof reference === 'string') return { base: builtinKey(reference), tokens: {} };
   return current.value ?? { base: 'original', tokens: {} };
 });
 const currentName = computed(() =>
   typeof prefs.value.appearanceTheme === 'string'
-    ? t(`appearance.themes.${prefs.value.appearanceTheme}`)
+    ? t(`appearance.themes.${builtinKey(prefs.value.appearanceTheme)}`)
     : (current.value?.name ?? t('appearance.themes.original')),
 );
 
@@ -162,7 +185,7 @@ interface ThemeOption {
 const customOption = (theme: Theme): ThemeOption => ({
   value: theme.id,
   name: theme.name,
-  palette: mergeTokens(BUILTIN_THEMES[theme.base], theme.tokens).palette[mode.value],
+  palette: mergeTokens(builtin(theme.base), theme.tokens).palette[mode.value],
   theme,
 });
 const mine = computed(() => (themes.data.value ?? []).filter((theme) => theme.mine));
@@ -170,11 +193,13 @@ const groups = computed(() =>
   [
     {
       title: t('appearance.builtIn'),
-      options: BUILTIN_THEME_KEYS.map((key): ThemeOption => ({
-        value: key,
-        name: t(`appearance.themes.${key}`),
-        palette: BUILTIN_THEMES[key].palette[mode.value],
-      })),
+      options: BUILTIN_THEME_KEYS.filter((key) => accepted(BUILTIN_THEME_API_MINOR[key])).map(
+        (key): ThemeOption => ({
+          value: key,
+          name: t(`appearance.themes.${key}`),
+          palette: BUILTIN_THEMES[key].palette[mode.value],
+        }),
+      ),
     },
     { title: t('appearance.mine'), options: mine.value.map(customOption) },
     {
@@ -262,7 +287,7 @@ async function duplicate(theme: Theme) {
 
 /** Publishing shares the theme with everyone on the server; below WCAG AA it asks first. */
 async function publish(theme: Theme) {
-  const tokens = mergeTokens(BUILTIN_THEMES[theme.base], theme.tokens);
+  const tokens = mergeTokens(builtin(theme.base), theme.tokens);
   const lowContrast =
     contrastIssues(tokens.palette.light, 'light').length +
       contrastIssues(tokens.palette.dark, 'dark').length >
@@ -344,6 +369,14 @@ async function importTheme(event: Event) {
   const theme = readThemeFile(await file.text());
   if (!theme) {
     ui.notify(t('appearance.importInvalid'), true);
+    return;
+  }
+  const style = theme.tokens.style;
+  if (
+    !accepted(BUILTIN_THEME_API_MINOR[theme.base]) ||
+    (style !== undefined && !accepted(THEME_STYLE_API_MINOR[style] ?? 0))
+  ) {
+    ui.notify(t('appearance.importNewer'), true);
     return;
   }
   const name = uniqueName(theme.name, ownNames());

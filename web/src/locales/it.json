@@ -654,6 +654,7 @@
     "import": "Importa tema",
     "imported": "Tema importato: {name}.",
     "importInvalid": "Il file non è un tema accettato da questo server.",
+    "importNewer": "Questo tema richiede una versione più recente di Newses su questo server.",
     "saveAsNew": "Salva come nuovo tema",
     "updateTheme": "Aggiorna tema",
     "saved": "Tema salvato: {name}.",

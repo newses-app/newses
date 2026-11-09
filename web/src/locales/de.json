@@ -654,6 +654,7 @@
     "import": "Theme importieren",
     "imported": "{name} importiert.",
     "importInvalid": "Diese Datei ist kein Theme, das dieser Server akzeptiert.",
+    "importNewer": "Dieses Theme braucht eine neuere Version von Newses auf diesem Server.",
     "saveAsNew": "Als neues Theme speichern",
     "updateTheme": "Theme aktualisieren",
     "saved": "{name} gespeichert.",

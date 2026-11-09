@@ -24,6 +24,19 @@ export const MAX_FONT_SCALE = 1.25;
 export const BUILTIN_THEME_KEYS = ['original', 'terminal', 'sketch'] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
+/** The API minor that added each built-in theme; older servers refuse its key. */
+export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
+  original: 0,
+  terminal: 0,
+  sketch: 0,
+};
+/** The API minor that added each style; older servers refuse tokens with it. */
+export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
+  standard: 0,
+  terminal: 0,
+  sketch: 0,
+};
+
 /**
  * Each palette meets WCAG AA on its background and surface: text 4.5:1, also faded to secondary
  * text, and icons 3:1.

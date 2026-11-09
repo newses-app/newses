@@ -51,6 +51,10 @@ const FEED_DEBUG_API_MINOR = 6;
 export const supportsFeedDebugger = ({ apiVersion }: ServerInfo) =>
   apiVersion.major === API_VERSION.major && apiVersion.minor >= FEED_DEBUG_API_MINOR;
 
+/** Whether the server has what API minor `minor` added, such as a built-in theme. */
+export const supportsApiMinor = ({ apiVersion }: ServerInfo, minor: number) =>
+  apiVersion.major === API_VERSION.major && apiVersion.minor >= minor;
+
 /** Asks `GET /server` at `origin`, without credentials. */
 export async function checkServer(origin: string, fetch?: typeof globalThis.fetch) {
   const api = createApiClient({ baseUrl: origin, token: () => null, ...(fetch && { fetch }) });
