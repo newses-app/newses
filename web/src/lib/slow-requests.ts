@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 
-/** A request still pending after this long is probably waiting for the server to wake up. */
+/** A request still pending after this long shows the app's progress bar. */
 export const SLOW_MS = 3000;
 
 const slowCount = ref(0);

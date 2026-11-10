@@ -63,7 +63,7 @@ async function currentSession(queryClient: QueryClient): Promise<CurrentSession>
       staleTime: Infinity,
       // Tried even while the server seems unreachable, so the app can say so instead of waiting.
       networkMode: 'always',
-      // A waking server may fail at first.
+      // A server restarting may fail at first.
       retry: (count, error) => retryable(error) && count < 3,
     });
   } catch (error) {

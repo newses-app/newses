@@ -2,7 +2,6 @@
   "app": {
     "name": "Newses",
     "pageTitle": "{view} – {app}",
-    "waking": "Der Server wird geweckt. Nach einer Zeit ohne Aktivität kann das bis zu 30 Sekunden dauern.",
     "unreachable": "Der Server ist nicht erreichbar.",
     "retry": "Erneut versuchen"
   },

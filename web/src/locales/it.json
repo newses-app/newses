@@ -2,7 +2,6 @@
   "app": {
     "name": "Newses",
     "pageTitle": "{view} – {app}",
-    "waking": "Riattivazione del server in corso. Dopo un periodo di inattività possono servire fino a 30 secondi.",
     "unreachable": "Impossibile raggiungere il server.",
     "retry": "Riprova"
   },

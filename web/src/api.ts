@@ -8,7 +8,7 @@ const fetch = trackSlow(trackConnectivity(globalThis.fetch.bind(globalThis)));
 /**
  * In the browser, a same-origin client: the session cookie authenticates and the client keeps the
  * CSRF token. In the apps, the chosen server with the bearer token. Slow requests are tracked, so
- * the app can say when the server is waking up, and every request tells whether it is reachable.
+ * the app can show it is waiting, and every request tells whether it is reachable.
  */
 /** Tells the server which app is calling, for its activity statistics. */
 const client = NATIVE ? (bridge.platform === 'android' ? 'mobile' : 'desktop') : 'web';

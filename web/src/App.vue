@@ -40,7 +40,7 @@ const open = computed({
   },
 });
 
-/** The first navigation waits for the session, so for the server to wake up when it is idle. */
+/** The first navigation waits for the session. */
 const starting = ref(true);
 const failed = ref(false);
 router.isReady().then(
@@ -75,7 +75,7 @@ function changeServer() {
       v-if="slow"
       indeterminate
       color="primary"
-      :aria-label="t('app.waking')"
+      :aria-label="t('common.loading')"
       :style="{ position: 'fixed', top: 0, zIndex: 3000 }"
     />
     <div
@@ -95,10 +95,7 @@ function changeServer() {
           {{ t('connect.change') }}
         </v-btn>
       </template>
-      <template v-else>
-        <v-progress-circular indeterminate color="primary" :aria-label="t('common.loading')" />
-        <p role="status" class="text-body-medium">{{ slow ? t('app.waking') : '' }}</p>
-      </template>
+      <v-progress-circular v-else indeterminate color="primary" :aria-label="t('common.loading')" />
     </div>
     <v-defaults-provider :defaults="themeDefaults">
       <router-view />
@@ -111,9 +108,6 @@ function changeServer() {
         <feDisplacementMap in="SourceGraphic" scale="3" xChannelSelector="R" yChannelSelector="G" />
       </filter>
     </svg>
-    <v-snackbar :model-value="slow && !starting" location="top" timeout="-1">
-      {{ t('app.waking') }}
-    </v-snackbar>
     <!-- An error shows by its icon as well as its colour, which some themes and readers lack. -->
     <v-snackbar
       v-model="open"

@@ -2,7 +2,6 @@
   "app": {
     "name": "Newses",
     "pageTitle": "{view} – {app}",
-    "waking": "Activando el servidor. Puede tardar hasta 30 segundos después de un periodo de inactividad.",
     "unreachable": "No se pudo conectar con el servidor.",
     "retry": "Reintentar"
   },

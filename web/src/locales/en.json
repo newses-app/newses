@@ -2,7 +2,6 @@
   "app": {
     "name": "Newses",
     "pageTitle": "{view} – {app}",
-    "waking": "Waking up the server. This can take up to 30 seconds after a period of inactivity.",
     "unreachable": "Couldn't reach the server.",
     "retry": "Try again"
   },
