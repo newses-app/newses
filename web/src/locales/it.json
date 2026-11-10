@@ -433,7 +433,9 @@
       "serif": "Con grazie",
       "mono": "Monospaziato",
       "patrickHand": "Scrittura a mano (Patrick Hand)",
-      "plexMono": "Macchina da scrivere (IBM Plex Mono)"
+      "plexMono": "Macchina da scrivere (IBM Plex Mono)",
+      "courierPrime": "Courier (Courier Prime)",
+      "oswald": "Condensato (Oswald)"
     },
     "size": "Dimensione del testo",
     "width": "Larghezza della riga",
@@ -588,7 +590,9 @@
       "amber": "Monitor ambra",
       "eink": "Inchiostro elettronico",
       "synthwave": "Synthwave",
-      "gruvbox": "Gruvbox"
+      "gruvbox": "Gruvbox",
+      "noir": "Noir",
+      "saul": "Saul"
     },
     "adjust": "Personalizza questo tema",
     "adjustHint": "Le modifiche si applicano al tema che usi e vengono salvate man mano.",
@@ -621,7 +625,9 @@
       "terminal": "Terminale",
       "sketch": "Schizzo",
       "eink": "Inchiostro elettronico",
-      "synthwave": "Synthwave"
+      "synthwave": "Synthwave",
+      "noir": "Noir",
+      "saul": "Saul"
     },
     "radius": "Angoli",
     "radii": {

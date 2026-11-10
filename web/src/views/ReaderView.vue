@@ -20,6 +20,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { api, ApiError } from '../api.ts';
+import JitterText from '../components/JitterText.vue';
 import ArticlePane from '../components/reader/ArticlePane.vue';
 import CombinedList from '../components/reader/CombinedList.vue';
 import HeadlineList from '../components/reader/HeadlineList.vue';
@@ -440,7 +441,7 @@ const showArticle = computed(
       <v-app-bar-nav-icon v-else :aria-label="t('nav.menu')" @click="ui.drawer = !ui.drawer" />
     </template>
     <v-app-bar-title v-if="!compact || !searchOpen" tag="h1">
-      <bdi>{{ title }}</bdi>
+      <bdi><JitterText :text="title" /></bdi>
       <span v-if="unread > 0" class="text-body-medium text-medium-emphasis ms-1">
         {{ t('entries.unreadCount', { n: unread }) }}
       </span>

@@ -13,6 +13,9 @@ const CACHE_KEY = 'newses.appearance';
 /** The theme's Vuetify defaults; App.vue provides them over the static ones. */
 export const themeDefaults = shallowRef<Appearance['defaults']>({});
 
+/** The theme on screen, adjustments being made included; components that draw per theme read it. */
+export const appliedTokens = shallowRef<ThemeTokens>(BUILTIN_THEMES.original);
+
 /** Adjustments being made, shown before they are saved. */
 export const adjustmentsPreview = shallowRef<PartialThemeTokens | null>(null);
 
@@ -43,7 +46,8 @@ function cacheTokens(tokens: ThemeTokens): void {
 }
 
 /** Sets the theme's custom properties and attributes on the document root, and its defaults. */
-function applyToDocument(appearance: Appearance): void {
+function applyToDocument(tokens: ThemeTokens, appearance: Appearance): void {
+  appliedTokens.value = tokens;
   const root = document.documentElement;
   for (const [name, value] of Object.entries(appearance.variables)) {
     if (value) root.style.setProperty(name, value);
@@ -57,7 +61,7 @@ function applyToDocument(appearance: Appearance): void {
 export function startAppearance(): Appearance {
   startupTokens = cachedTokens();
   const appearance = resolveAppearance(startupTokens);
-  applyToDocument(appearance);
+  applyToDocument(startupTokens, appearance);
   return appearance;
 }
 
@@ -94,7 +98,7 @@ export function useAppearance(): void {
         Object.assign(target.colors, appearance.themes[mode].colors);
         Object.assign(target.variables, appearance.themes[mode].variables);
       }
-      applyToDocument(appearance);
+      applyToDocument(current, appearance);
       // Only saved adjustments, so a reload never starts with ones that were not kept.
       if (adjustmentsPreview.value === null) cacheTokens(current);
     },

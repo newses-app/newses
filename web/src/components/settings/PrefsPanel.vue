@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { Prefs } from '@newses/shared';
-import { FONT_KEYS, MAX_SCORE } from '@newses/shared/client';
-import { computed, onBeforeUnmount, reactive, ref } from 'vue';
+import { FONT_API_MINOR, FONT_KEYS, MAX_SCORE } from '@newses/shared/client';
+import { useQuery } from '@tanstack/vue-query';
+import { computed, type MaybeRefOrGetter, onBeforeUnmount, reactive, ref, toValue } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { api } from '../../api.ts';
 import { useDurations } from '../../composables/useDurations.ts';
 import { useLanguagePicker } from '../../composables/useLanguage.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { parseScore } from '../../lib/score.ts';
+import { supportsApiMinor } from '../../lib/server-url.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, n } = useI18n();
@@ -15,12 +18,30 @@ const { prefs, update } = usePrefs();
 const language = useLanguagePicker();
 const { intervalItems, purgeItems } = useDurations();
 
-const choices = <K extends keyof Prefs>(key: K, values: readonly Prefs[K][], prefix: string) =>
-  computed(() => values.map((value) => ({ title: t(`${prefix}.${String(value)}`), value })));
+const choices = <K extends keyof Prefs>(
+  key: K,
+  values: MaybeRefOrGetter<readonly Prefs[K][]>,
+  prefix: string,
+) =>
+  computed(() =>
+    toValue(values).map((value) => ({ title: t(`${prefix}.${String(value)}`), value })),
+  );
 const viewItems = choices('viewMode', ['adaptive', 'all', 'unread'], 'view');
 const orderItems = choices('sortOrder', ['newest', 'oldest', 'title'], 'order');
 const layoutItems = choices('layout', ['threePane', 'combined'], 'layout');
-const fontItems = choices('articleFont', FONT_KEYS, 'reading.fonts');
+/** Fonts newer than the server would be refused, so they are left out; until it answers, all show. */
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+});
+const fonts = computed(() =>
+  FONT_KEYS.filter(
+    (font) =>
+      !serverInfo.data.value || supportsApiMinor(serverInfo.data.value, FONT_API_MINOR[font]),
+  ),
+);
+const fontItems = choices('articleFont', fonts, 'reading.fonts');
 const widthItems = choices('articleWidth', ['narrow', 'medium', 'wide', 'full'], 'reading.widths');
 /** The slider shows changes as it moves (mouse or keys) and saves once it rests. */
 const fontSize = ref<number | null>(null);

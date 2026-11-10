@@ -433,7 +433,9 @@
       "serif": "Serif",
       "mono": "Monospace",
       "patrickHand": "Handwriting (Patrick Hand)",
-      "plexMono": "Typewriter (IBM Plex Mono)"
+      "plexMono": "Typewriter (IBM Plex Mono)",
+      "courierPrime": "Courier (Courier Prime)",
+      "oswald": "Condensed (Oswald)"
     },
     "size": "Text size",
     "width": "Line width",
@@ -588,7 +590,9 @@
       "amber": "Amber monitor",
       "eink": "E-ink",
       "synthwave": "Synthwave",
-      "gruvbox": "Gruvbox"
+      "gruvbox": "Gruvbox",
+      "noir": "Noir",
+      "saul": "Saul"
     },
     "adjust": "Adjust this theme",
     "adjustHint": "Changes apply to the theme you use and are saved as you make them.",
@@ -621,7 +625,9 @@
       "terminal": "Terminal",
       "sketch": "Sketch",
       "eink": "E-ink",
-      "synthwave": "Synthwave"
+      "synthwave": "Synthwave",
+      "noir": "Noir",
+      "saul": "Saul"
     },
     "radius": "Corners",
     "radii": {

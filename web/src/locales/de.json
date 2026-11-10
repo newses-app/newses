@@ -433,7 +433,9 @@
       "serif": "Serif",
       "mono": "Festbreite",
       "patrickHand": "Handschrift (Patrick Hand)",
-      "plexMono": "Schreibmaschine (IBM Plex Mono)"
+      "plexMono": "Schreibmaschine (IBM Plex Mono)",
+      "courierPrime": "Courier (Courier Prime)",
+      "oswald": "Schmal (Oswald)"
     },
     "size": "Textgröße",
     "width": "Zeilenbreite",
@@ -588,7 +590,9 @@
       "amber": "Bernstein-Monitor",
       "eink": "E-Ink",
       "synthwave": "Synthwave",
-      "gruvbox": "Gruvbox"
+      "gruvbox": "Gruvbox",
+      "noir": "Noir",
+      "saul": "Saul"
     },
     "adjust": "Dieses Theme anpassen",
     "adjustHint": "Änderungen gelten für das verwendete Theme und werden sofort gespeichert.",
@@ -621,7 +625,9 @@
       "terminal": "Terminal",
       "sketch": "Skizze",
       "eink": "E-Ink",
-      "synthwave": "Synthwave"
+      "synthwave": "Synthwave",
+      "noir": "Noir",
+      "saul": "Saul"
     },
     "radius": "Ecken",
     "radii": {

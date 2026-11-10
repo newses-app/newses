@@ -14,6 +14,7 @@ import { withLazyImages } from '../../lib/article-html.ts';
 import { formatDateTime, safeUrl } from '../../lib/format.ts';
 import { resolveContentUrls } from '../../lib/native-urls.ts';
 import { appServer } from '../../platform/index.ts';
+import JitterText from '../JitterText.vue';
 import EntryEnclosures from './EntryEnclosures.vue';
 import FeedIcon from './FeedIcon.vue';
 
@@ -37,10 +38,10 @@ const content = computed(
   <article class="entry-article">
     <header class="mb-4">
       <h2 class="entry-heading text-headline-small mt-0 mb-1" tabindex="-1" dir="auto" :lang>
-        <a v-if="link" :href="link" target="_blank" rel="noopener noreferrer" class="entry-title">{{
-          title
-        }}</a>
-        <span v-else>{{ title }}</span>
+        <a v-if="link" :href="link" target="_blank" rel="noopener noreferrer" class="entry-title"
+          ><JitterText :text="title"
+        /></a>
+        <span v-else><JitterText :text="title" /></span>
       </h2>
       <div class="text-body-medium text-medium-emphasis">
         <span v-if="entry.feedTitle">

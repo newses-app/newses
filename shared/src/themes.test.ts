@@ -5,6 +5,7 @@ import { API_VERSION } from './api-version.ts';
 import {
   BUILTIN_THEME_API_MINOR,
   BUILTIN_THEMES,
+  FONT_API_MINOR,
   THEME_STYLE_API_MINOR,
 } from './themes-builtin.ts';
 import { partialThemeTokensSchema, themeTokensSchema } from './themes.ts';
@@ -15,16 +16,19 @@ describe('theme tokens', () => {
       expect(themeTokensSchema.parse(tokens)).toEqual(tokens);
   });
 
-  it('dates built-in themes and styles no later than this API version', () => {
+  it('dates built-in themes, styles, and fonts no later than this API version', () => {
     for (const [key, minor] of Object.entries({
       ...BUILTIN_THEME_API_MINOR,
       ...THEME_STYLE_API_MINOR,
+      ...FONT_API_MINOR,
     }))
       expect(minor, key).toBeLessThanOrEqual(API_VERSION.minor);
-    for (const [key, tokens] of Object.entries(BUILTIN_THEMES))
-      expect(THEME_STYLE_API_MINOR[tokens.style], key).toBeLessThanOrEqual(
-        BUILTIN_THEME_API_MINOR[key as keyof typeof BUILTIN_THEME_API_MINOR],
-      );
+    for (const [key, tokens] of Object.entries(BUILTIN_THEMES)) {
+      const minor = BUILTIN_THEME_API_MINOR[key as keyof typeof BUILTIN_THEME_API_MINOR];
+      expect(THEME_STYLE_API_MINOR[tokens.style], key).toBeLessThanOrEqual(minor);
+      expect(FONT_API_MINOR[tokens.uiFont], key).toBeLessThanOrEqual(minor);
+      expect(FONT_API_MINOR[tokens.articleFont], key).toBeLessThanOrEqual(minor);
+    }
   });
 
   it('keeps Amber monitor to warm colours, red to yellow, for reading at night', () => {

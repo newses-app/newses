@@ -19,6 +19,8 @@ Newses is built on the work of others. Each app lists every package it bundles, 
 |---|---|---|
 | [IBM Plex Mono](https://github.com/IBM/plex) | IBM Corp. | OFL-1.1 |
 | [Patrick Hand](https://fonts.google.com/specimen/Patrick+Hand) | Patrick Wagesreiter | OFL-1.1 |
+| [Courier Prime](https://github.com/quoteunquoteapps/CourierPrime) | The Courier Prime Project Authors | OFL-1.1 |
+| [Oswald](https://github.com/googlefonts/OswaldFont) | The Oswald Project Authors | OFL-1.1 |
 
 ## Icons
 

@@ -4,6 +4,7 @@ import {
   BUILTIN_THEME_API_MINOR,
   BUILTIN_THEME_KEYS,
   BUILTIN_THEMES,
+  FONT_API_MINOR,
   FONT_KEYS,
   MAX_FONT_SCALE,
   MAX_THEME_NAME_LENGTH,
@@ -17,7 +18,7 @@ import {
 } from '@newses/shared/client';
 import { mdiAlertCircleOutline, mdiDotsVertical, mdiUpload } from '@mdi/js';
 import { useQuery } from '@tanstack/vue-query';
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, type MaybeRefOrGetter, onBeforeUnmount, ref, toValue } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useTheme } from 'vuetify';
 import { api, ApiError } from '../../api.ts';
@@ -57,8 +58,8 @@ const { session } = useSession();
 const isAdmin = computed(() => session.value?.user.role === 'admin');
 
 /**
- * Built-in themes and styles newer than the server would be refused, so they are left out; until
- * the server answers, all show.
+ * Built-in themes, styles, and fonts newer than the server would be refused, so they are left out;
+ * until the server answers, all show.
  */
 const serverInfo = useQuery({
   queryKey: ['server-info'],
@@ -81,13 +82,16 @@ const COLORS = [
 /** Shown on each theme's card, over its background. */
 const SWATCHES = ['surface', 'text', 'primary', 'star'] as const;
 
-const options = <T extends string>(values: readonly T[], label: (value: T) => string) =>
-  computed(() => values.map((value) => ({ title: label(value), value })));
+const options = <T extends string>(
+  values: MaybeRefOrGetter<readonly T[]>,
+  label: (value: T) => string,
+) => computed(() => toValue(values).map((value) => ({ title: label(value), value })));
 const modeItems = options(['system', 'light', 'dark'] as const, (mode) => t(`theme.${mode}`));
-const uiFontItems = options(FONT_KEYS, (font) =>
+const fonts = computed(() => FONT_KEYS.filter((font) => accepted(FONT_API_MINOR[font])));
+const uiFontItems = options(fonts, (font) =>
   font === 'default' ? t('appearance.standard') : t(`reading.fonts.${font}`),
 );
-const articleFontItems = options(FONT_KEYS, (font) =>
+const articleFontItems = options(fonts, (font) =>
   font === 'default' ? t('appearance.sameAsUi') : t(`reading.fonts.${font}`),
 );
 const styleItems = computed(() =>
@@ -374,7 +378,10 @@ async function importTheme(event: Event) {
   const style = theme.tokens.style;
   if (
     !accepted(BUILTIN_THEME_API_MINOR[theme.base]) ||
-    (style !== undefined && !accepted(THEME_STYLE_API_MINOR[style] ?? 0))
+    (style !== undefined && !accepted(THEME_STYLE_API_MINOR[style] ?? 0)) ||
+    [theme.tokens.uiFont, theme.tokens.articleFont].some(
+      (font) => font !== undefined && !accepted(FONT_API_MINOR[font] ?? 0),
+    )
   ) {
     ui.notify(t('appearance.importNewer'), true);
     return;

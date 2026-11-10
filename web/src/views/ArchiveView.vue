@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { useErrorText } from '../composables/useErrorText.ts';
+import JitterText from '../components/JitterText.vue';
 import ArchivedArticle from '../components/reader/ArchivedArticle.vue';
 import ArchiveList from '../components/reader/ArchiveList.vue';
 import { useArchivedEntry, useArchiveList, useRestore } from '../composables/useArchive.ts';
@@ -155,7 +156,9 @@ watch(key, () => scroller.value?.scrollTo({ top: 0 }));
         @click="back"
       />
     </template>
-    <v-app-bar-title v-if="!compact || !searchOpen" tag="h1">{{ title }}</v-app-bar-title>
+    <v-app-bar-title v-if="!compact || !searchOpen" tag="h1"
+      ><JitterText :text="title"
+    /></v-app-bar-title>
     <v-text-field
       v-if="!compact || searchOpen"
       ref="searchField"

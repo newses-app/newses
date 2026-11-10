@@ -4,12 +4,40 @@ import type { ThemeTokens } from './themes.ts';
 // Theme token values and the built-in themes; no Zod, so browsers can import them.
 
 /** `standard` is plain Vuetify; the others add a stylesheet scoped to `data-theme-style`. */
-export const THEME_STYLES = ['standard', 'terminal', 'sketch', 'eink', 'synthwave'] as const;
+export const THEME_STYLES = [
+  'standard',
+  'terminal',
+  'sketch',
+  'eink',
+  'synthwave',
+  'noir',
+  'saul',
+] as const;
 /**
  * Font keys, never font-family text. `default` is the app's font; for articles, the UI font.
- * `patrickHand` and `plexMono` are bundled with the app.
+ * `patrickHand`, `plexMono`, `courierPrime`, and `oswald` are bundled with the app.
  */
-export const FONT_KEYS = ['default', 'sans', 'serif', 'mono', 'patrickHand', 'plexMono'] as const;
+export const FONT_KEYS = [
+  'default',
+  'sans',
+  'serif',
+  'mono',
+  'patrickHand',
+  'plexMono',
+  'courierPrime',
+  'oswald',
+] as const;
+/** The API minor that added each font key; older servers refuse it. */
+export const FONT_API_MINOR: Record<(typeof FONT_KEYS)[number], number> = {
+  default: 0,
+  sans: 0,
+  serif: 0,
+  mono: 0,
+  patrickHand: 0,
+  plexMono: 0,
+  courierPrime: 10,
+  oswald: 10,
+};
 /** Corner rounding; `default` keeps each component's own. */
 export const THEME_RADII = ['default', 'none', 'small', 'large'] as const;
 /** `default` keeps each component's own density. */
@@ -32,6 +60,8 @@ export const BUILTIN_THEME_KEYS = [
   'eink',
   'synthwave',
   'gruvbox',
+  'noir',
+  'saul',
 ] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
@@ -46,6 +76,8 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   eink: 8,
   synthwave: 8,
   gruvbox: 10,
+  noir: 10,
+  saul: 10,
 };
 /** The published palettes built-ins are adapted from, credited in the About tab. */
 export const BUILTIN_THEME_ADAPTED_FROM: Partial<Record<BuiltinThemeKey, CreditKey>> = {
@@ -60,6 +92,8 @@ export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number
   sketch: 0,
   eink: 8,
   synthwave: 8,
+  noir: 10,
+  saul: 10,
 };
 
 /**
@@ -376,5 +410,76 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     border: 'none',
     elevation: 'default',
     effects: { texture: false, animation: false },
+  },
+  // A detective's case file: typed ink on white paper in manila chrome, stamped in red; by night,
+  // white type on black, with vivid red, yellow, and blue kept for marks.
+  noir: {
+    style: 'noir',
+    palette: {
+      light: {
+        background: '#f8f4e8',
+        surface: '#ecd9a8',
+        text: '#141210',
+        primary: '#a3201a',
+        star: '#8a5a00',
+        error: '#8f1d14',
+        warning: '#954702',
+        success: '#1f6b78',
+      },
+      dark: {
+        background: '#0a0a0a',
+        surface: '#141414',
+        text: '#fafafa',
+        primary: '#ff2a2a',
+        star: '#ffd400',
+        error: '#ff5252',
+        warning: '#ffb000',
+        success: '#2f6bff',
+      },
+    },
+    uiFont: 'courierPrime',
+    articleFont: 'courierPrime',
+    fontScale: 1,
+    radius: 'none',
+    density: 'default',
+    border: 'thin',
+    elevation: 'flat',
+    effects: { texture: true, animation: true },
+  },
+  // A 60s cut-paper title sequence, and the anime openings it inspired: bold blocks of red-orange,
+  // mustard, and teal-blue, in condensed type; ink on cream and mustard by day, cream on black by
+  // night.
+  saul: {
+    style: 'saul',
+    palette: {
+      light: {
+        background: '#f7f0e1',
+        surface: '#f4d27a',
+        text: '#141210',
+        primary: '#b02901',
+        star: '#9c6a00',
+        error: '#a3201a',
+        warning: '#944802',
+        success: '#1f6b78',
+      },
+      dark: {
+        background: '#121110',
+        surface: '#1f1c1a',
+        text: '#f2e8d5',
+        primary: '#ff5a36',
+        star: '#f2b632',
+        error: '#ff6b6b',
+        warning: '#ff9a3c',
+        success: '#4ea8c4',
+      },
+    },
+    uiFont: 'oswald',
+    articleFont: 'sans',
+    fontScale: 1,
+    radius: 'none',
+    density: 'default',
+    border: 'thin',
+    elevation: 'flat',
+    effects: { texture: true, animation: false },
   },
 };

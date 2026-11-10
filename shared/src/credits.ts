@@ -93,6 +93,22 @@ export const CREDITS = {
     kind: 'font',
     package: '@fontsource/patrick-hand',
   },
+  courierPrime: {
+    name: 'Courier Prime',
+    author: 'The Courier Prime Project Authors',
+    url: 'https://github.com/quoteunquoteapps/CourierPrime',
+    license: 'OFL-1.1',
+    kind: 'font',
+    package: '@fontsource/courier-prime',
+  },
+  oswald: {
+    name: 'Oswald',
+    author: 'The Oswald Project Authors',
+    url: 'https://github.com/googlefonts/OswaldFont',
+    license: 'OFL-1.1',
+    kind: 'font',
+    package: '@fontsource/oswald',
+  },
   mdi: {
     name: 'Material Design Icons',
     author: 'Pictogrammers',

@@ -1,0 +1,52 @@
+/*
+ * Noir style: a detective's case file, typed on paper in a manila folder and stamped in red; by
+ * night, white type on black, with vivid red, yellow, and blue kept for marks. Unlayered, so it
+ * overrides Vuetify's layered styles. Titles jitter letter by letter (JitterText.vue);
+ * decorations take no clicks and are generated content without text.
+ */
+
+/* The chrome's edges in the text colour, and rules in typed dashes. */
+html[data-theme-style='noir'] :is(.v-app-bar, .v-card, .v-navigation-drawer, .v-toolbar) {
+  border-color: rgb(var(--v-theme-on-surface));
+}
+html[data-theme-style='noir'] :is(.v-divider, .headline-row) {
+  border-style: dashed;
+}
+
+/* The selected headline stamped in the primary colour. */
+html[data-theme-style='noir'] .headline.selected::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 2px solid rgb(var(--v-theme-primary));
+  transform: rotate(-0.6deg);
+  pointer-events: none;
+}
+
+/*
+ * Grain: dark by day, like paper, and light by night, like film; faint enough that text over it
+ * keeps WCAG AA contrast.
+ */
+@media (forced-colors: none) {
+  html[data-theme-style='noir'][data-effects~='texture'] .v-application.v-theme--light {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
+  html[data-theme-style='noir'][data-effects~='texture'] .v-application.v-theme--dark {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
+}
+
+/* A title types itself in, letter by letter, when it changes. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme-style='noir'][data-effects~='animation'] .jitter-letter {
+    animation: noir-strike 90ms steps(2, jump-none) backwards;
+    animation-delay: calc(var(--ji) * 25ms);
+  }
+}
+
+@keyframes noir-strike {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--jy) - 0.3em)) rotate(var(--jr));
+  }
+}

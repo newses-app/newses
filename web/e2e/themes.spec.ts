@@ -9,6 +9,8 @@ const STYLES: { key: string; style: string; name: string; font?: string }[] = [
   { key: 'sketch', style: 'sketch', name: 'Sketch', font: 'Patrick Hand' },
   { key: 'eink', style: 'eink', name: 'E-ink' },
   { key: 'synthwave', style: 'synthwave', name: 'Synthwave' },
+  { key: 'noir', style: 'noir', name: 'Noir', font: 'Courier Prime' },
+  { key: 'saul', style: 'saul', name: 'Saul', font: 'Oswald' },
 ];
 /** The built-in themes that are a palette on the standard style. */
 const PALETTES = [
@@ -79,6 +81,13 @@ for (const colorScheme of ['light', 'dark'] as const)
             .poll(() => page.evaluate((f) => document.fonts.check(`16px "${f}"`), family))
             .toBe(true);
         }
+        if (style.style === 'noir') {
+          // The title jittered letter by letter, and whole for screen readers.
+          const title = page.locator('.v-app-bar h1');
+          await expect(title.locator('.d-sr-only')).toHaveText('All articles');
+          await expect(title.locator('.jitter-letter').first()).not.toHaveCSS('transform', 'none');
+          await expect(title).toHaveAccessibleName(/^All articles(\s+\d.*)?$/);
+        }
         if (style.style === 'eink')
           await expect(page.locator('.v-app-bar .v-btn').first()).toHaveCSS(
             'transition-duration',
@@ -112,6 +121,19 @@ for (const colorScheme of ['light', 'dark'] as const)
             ];
           });
           expect(edge).toContain(primary);
+        } else if (style.style === 'noir' || style.style === 'saul') {
+          // Stamped in the primary colour (Noir), or cut out by a block of it (Saul).
+          const [mark, primary] = await page.evaluate((saul) => {
+            const row = document.querySelector('.headline.selected');
+            const app = document.querySelector('.v-application');
+            const rgb = app ? getComputedStyle(app).getPropertyValue('--v-theme-primary') : '';
+            const before = row ? getComputedStyle(row, '::before') : null;
+            return [
+              (saul ? before?.backgroundColor : before?.borderTopColor) ?? '',
+              `rgb(${rgb.split(',').join(', ')})`,
+            ];
+          }, style.style === 'saul');
+          expect(mark).toBe(primary);
         } else {
           // A highlighter mark behind the title.
           await expect(selected.locator('.headline-title')).toHaveCSS(

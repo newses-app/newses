@@ -35,6 +35,7 @@ import { isHighScore } from '../../lib/score.ts';
 import { labelKey, streamPath, tagKey } from '../../lib/streams.ts';
 import { appServer } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
+import JitterText from '../JitterText.vue';
 import LabelChip from '../labels/LabelChip.vue';
 import EntryEnclosures from './EntryEnclosures.vue';
 import FeedIcon from './FeedIcon.vue';
@@ -138,9 +139,9 @@ async function toggleFullText() {
           rel="noopener noreferrer"
           class="entry-title"
           @click="emit('select')"
-          >{{ title }}</a
-        >
-        <span v-else>{{ title }}</span>
+          ><JitterText :text="title"
+        /></a>
+        <span v-else><JitterText :text="title" /></span>
       </h2>
       <div class="text-body-medium text-medium-emphasis">
         <span v-if="entry.feedTitle">

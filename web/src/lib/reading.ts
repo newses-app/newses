@@ -8,6 +8,8 @@ export const FONTS: Record<FontKey, string> = {
   mono: 'ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace',
   patrickHand: '"Patrick Hand", "Segoe Print", "Bradley Hand", cursive',
   plexMono: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
+  courierPrime: '"Courier Prime", "Courier New", ui-monospace, monospace',
+  oswald: 'Oswald, "Arial Narrow", sans-serif',
 };
 
 const WIDTHS: Record<Prefs['articleWidth'], string> = {

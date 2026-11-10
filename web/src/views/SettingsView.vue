@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import JitterText from '../components/JitterText.vue';
 import AboutPanel from '../components/settings/AboutPanel.vue';
 import AccountPanel from '../components/settings/AccountPanel.vue';
 import AppearancePanel from '../components/settings/AppearancePanel.vue';
@@ -50,7 +51,7 @@ useDocumentTitle(() =>
     <template #prepend>
       <v-app-bar-nav-icon :aria-label="t('nav.menu')" @click="ui.drawer = !ui.drawer" />
     </template>
-    <v-app-bar-title tag="h1">{{ t('nav.settings') }}</v-app-bar-title>
+    <v-app-bar-title tag="h1"><JitterText :text="t('nav.settings')" /></v-app-bar-title>
     <template #extension>
       <v-tabs :model-value="tab" color="primary">
         <v-tab

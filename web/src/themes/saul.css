@@ -1,0 +1,52 @@
+/*
+ * Saul style: a 60s cut-paper title sequence, and the anime openings it inspired; bold blocks of
+ * colour cut askew, in condensed type. Unlayered, so it overrides Vuetify's layered styles.
+ * Decorations take no clicks and are generated content without text. Colours come from the
+ * palette: primary, star, and success.
+ */
+
+/* The chrome's edges in the text colour. */
+html[data-theme-style='saul'] :is(.v-app-bar, .v-card, .v-navigation-drawer, .v-toolbar) {
+  border-color: rgb(var(--v-theme-on-surface));
+}
+
+/* The selected headline cut out by an askew block of the primary colour. */
+html[data-theme-style='saul'] .headline.selected::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: 8px;
+  background: rgb(var(--v-theme-primary));
+  clip-path: polygon(0 0, 100% 8%, 60% 100%, 0 100%);
+  pointer-events: none;
+}
+
+@media (forced-colors: none) {
+  /* Primary buttons and cards cast hard shadows, like paper cut-outs. */
+  html[data-theme-style='saul'] .v-btn.bg-primary {
+    box-shadow: var(--edge-mark) 3px 0 rgb(var(--v-theme-star));
+  }
+  html[data-theme-style='saul'] .v-card {
+    box-shadow: var(--edge-mark) 3px 0 rgb(var(--v-theme-success));
+  }
+
+  /* Cut-paper blocks of colour along the app bar's lower edge. */
+  html[data-theme-style='saul'][data-effects~='texture'] .v-app-bar::after {
+    content: '';
+    content: '' / '';
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 4px;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      rgb(var(--v-theme-primary)) 0 42%,
+      transparent 42% 44%,
+      rgb(var(--v-theme-star)) 44% 68%,
+      transparent 68% 70%,
+      rgb(var(--v-theme-success)) 70%
+    );
+  }
+}
