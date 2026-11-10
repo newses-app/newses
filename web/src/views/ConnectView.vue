@@ -114,9 +114,12 @@ async function submit() {
             <v-btn variant="text" block @click="router.back()">{{ t('common.cancel') }}</v-btn>
           </v-card-actions>
         </v-form>
-        <p v-if="bridge.appVersion" class="text-body-small text-medium-emphasis text-center pb-2">
+        <p v-if="bridge.appVersion" class="text-body-small text-medium-emphasis text-center">
           {{ t('connect.appVersion', { version: bridge.appVersion }) }}
         </p>
+        <div class="text-center pb-2">
+          <v-btn variant="text" size="small" :to="{ name: 'about' }">{{ t('about.title') }}</v-btn>
+        </div>
       </v-card>
     </v-container>
   </v-main>

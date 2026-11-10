@@ -693,7 +693,8 @@
       "offline": "Offline",
       "account": "Account",
       "users": "Utenti",
-      "operations": "Operazioni"
+      "operations": "Operazioni",
+      "about": "Informazioni"
     },
     "reading": "Lettura",
     "language": "Lingua",
@@ -757,6 +758,42 @@
     "lastSeen": "Ultima attività: {when}",
     "thisDevice": "Questo dispositivo",
     "signOut": "Disconnetti"
+  },
+  "about": {
+    "title": "Informazioni su Newses",
+    "back": "Indietro",
+    "license": "Licenza",
+    "copyright": "Copyright © contributori di Newses",
+    "licenseNotice": "Newses è software libero: puoi ridistribuirlo e modificarlo secondo i termini della GNU Affero General Public License, versione 3 o qualsiasi versione successiva.",
+    "warranty": "È fornito senza alcuna garanzia.",
+    "licenseLink": "GNU AGPL",
+    "source": "Codice sorgente",
+    "appSource": "Codice sorgente di quest'app",
+    "serverSource": "Codice sorgente di questo server",
+    "credits": "Riconoscimenti",
+    "creditsIntro": "Newses si basa sul lavoro di altri.",
+    "kinds": {
+      "framework": "Framework",
+      "font": "Caratteri",
+      "icons": "Icone",
+      "palette": "Palette dei temi",
+      "data": "Dati",
+      "translations": "Traduzioni"
+    },
+    "licenses": "Licenze",
+    "licensesIntro": "Ogni pacchetto incluso in quest'app e nel suo server, con la sua licenza.",
+    "groups": {
+      "app": "App",
+      "desktop": "Desktop",
+      "android": "Android",
+      "server": "Server"
+    },
+    "filter": "Filtra per nome o licenza",
+    "packageCount": "{n} pacchetto | {n} pacchetti",
+    "serverOlder": "Questo server è troppo vecchio per elencare i suoi pacchetti.",
+    "unavailable": "Questa build non elenca i suoi pacchetti.",
+    "noText": "Questo pacchetto non include il testo della licenza.",
+    "notInBuild": "Non fa parte di questa build."
   },
   "twoFactor": {
     "title": "Autenticazione a due fattori",

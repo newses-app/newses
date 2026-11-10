@@ -11,6 +11,8 @@ coverage/
 !.env.example
 .DS_Store
 cdk.out/
+# The server image's and Lambda builds' dependency licences
+/server/src/third-party-licenses.json
 playwright-report/
 test-results/
 # TTRSS import reports hold temporary passwords

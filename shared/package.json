@@ -9,6 +9,7 @@
     "./locales": "./src/locales.ts",
     "./profiles": "./src/profiles.ts",
     "./release": "./src/release.ts",
+    "./third-party-licenses": "./src/third-party-licenses.ts",
     "./web-csp": "./src/web-csp.ts"
   },
   "scripts": {

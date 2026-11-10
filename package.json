@@ -20,7 +20,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "locales:status": "node shared/src/locale-status.ts"
+    "locales:status": "node shared/src/locale-status.ts",
+    "credits": "node shared/src/credits-md.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

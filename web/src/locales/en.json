@@ -693,7 +693,8 @@
       "offline": "Offline",
       "account": "Account",
       "users": "Users",
-      "operations": "Operations"
+      "operations": "Operations",
+      "about": "About"
     },
     "reading": "Reading",
     "language": "Language",
@@ -757,6 +758,42 @@
     "lastSeen": "Last active {when}",
     "thisDevice": "This device",
     "signOut": "Sign out"
+  },
+  "about": {
+    "title": "About Newses",
+    "back": "Back",
+    "license": "Licence",
+    "copyright": "Copyright © Newses contributors",
+    "licenseNotice": "Newses is free software: you can redistribute it and modify it under the terms of the GNU Affero General Public License, version 3 or any later version.",
+    "warranty": "It comes with absolutely no warranty.",
+    "licenseLink": "GNU AGPL",
+    "source": "Source code",
+    "appSource": "Source code of this app",
+    "serverSource": "Source code of this server",
+    "credits": "Credits",
+    "creditsIntro": "Newses is built on the work of others.",
+    "kinds": {
+      "framework": "Frameworks",
+      "font": "Fonts",
+      "icons": "Icons",
+      "palette": "Theme palettes",
+      "data": "Data",
+      "translations": "Translations"
+    },
+    "licenses": "Licences",
+    "licensesIntro": "Every package this app and its server include, with its licence.",
+    "groups": {
+      "app": "App",
+      "desktop": "Desktop",
+      "android": "Android",
+      "server": "Server"
+    },
+    "filter": "Filter by name or licence",
+    "packageCount": "{n} package | {n} packages",
+    "serverOlder": "This server is too old to list its packages.",
+    "unavailable": "This build doesn't list its packages.",
+    "noText": "This package ships no licence text.",
+    "notInBuild": "Not part of this build."
   },
   "twoFactor": {
     "title": "Two-factor authentication",

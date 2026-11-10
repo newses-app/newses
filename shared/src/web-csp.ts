@@ -25,7 +25,8 @@ const directives = (connectSrc: string) => [
 export const WEB_CSP = [...directives("'self'"), "frame-ancestors 'none'"].join('; ');
 
 /**
- * The apps' bundled build: the server is chosen at runtime, so the API may be any HTTPS origin.
- * Without `frame-ancestors`, which a `<meta>` policy cannot carry.
+ * The apps' bundled build: the server is chosen at runtime, so the API may be any HTTPS origin, and
+ * the build reads its own licence files (desktop's origin is `app:`). Without `frame-ancestors`,
+ * which a `<meta>` policy cannot carry.
  */
-export const NATIVE_CSP = directives('https:').join('; ');
+export const NATIVE_CSP = directives("'self' https:").join('; ');

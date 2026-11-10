@@ -11,6 +11,18 @@ export const serverInfoSchema = z.object({
   apiVersion: z.object({ major: z.number().int(), minor: z.number().int() }),
   /** What the operator calls this server (`INSTANCE_NAME`); apps name profiles `user @ name`. */
   name: z.string().max(MAX_INSTANCE_NAME_LENGTH).optional(),
+  /** Where to get this server's source code (`SOURCE_URL`, AGPL §13); from API 1.9. */
+  source: z.url().optional(),
 });
 
 export type ServerInfo = z.infer<typeof serverInfoSchema>;
+
+/** `GET /server/licenses`: a package the server runs, with its licence (`ThirdPartyLicense`). */
+export const thirdPartyLicenseSchema = z.object({
+  name: z.string(),
+  version: z.string(),
+  license: z.string(),
+  text: z.string().optional(),
+  notice: z.string().optional(),
+  url: z.string().optional(),
+});

@@ -4,6 +4,7 @@ export * from './prefs.ts';
 export * from './prefs-defaults.ts';
 export * from './themes.ts';
 export * from './themes-builtin.ts';
+export * from './credits.ts';
 export * from './entries.ts';
 export * from './enclosures.ts';
 export * from './archive.ts';

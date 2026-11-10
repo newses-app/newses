@@ -19,6 +19,21 @@ describe('appMenu', () => {
     expect(roles(true)).toContain('toggleDevTools');
   });
 
+  it("opens the About page and Chromium's licences from Help", () => {
+    const calls: string[] = [];
+    const help = items(
+      appMenu({
+        developer: false,
+        windows: false,
+        about: () => calls.push('about'),
+        chromiumLicenses: () => calls.push('chromium'),
+      }),
+    ).filter((item) => item.click);
+    for (const item of help) (item.click as () => void)();
+    expect(help.map((item) => item.label)).toEqual(['About Newses', 'Chromium Licences']);
+    expect(calls).toEqual(['about', 'chromium']);
+  });
+
   it('says Exit on Windows', () => {
     const quit = (windows: boolean) =>
       items(appMenu({ developer: false, windows })).find((item) => item.role === 'quit')?.label;

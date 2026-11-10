@@ -1,5 +1,5 @@
 // The desktop app: the native web build in a hardened window, served from app://newses.
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -272,7 +272,18 @@ function registerBridge(settings: SettingsStore) {
 function buildMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate(
-      appMenu({ developer: !app.isPackaged, windows: process.platform === 'win32' }),
+      appMenu({
+        developer: !app.isPackaged,
+        windows: process.platform === 'win32',
+        about: () => {
+          showWindow();
+          // Signed in, the app shows Settings → About instead.
+          window?.webContents.send('bridge:navigate', '/about');
+        },
+        // electron-builder puts it beside the executable, as Electron's own dist has it.
+        chromiumLicenses: () =>
+          void shell.openPath(join(dirname(process.execPath), 'LICENSES.chromium.html')),
+      }),
     ),
   );
 }

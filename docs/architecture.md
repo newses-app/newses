@@ -404,7 +404,7 @@ Admins:
 
 ### Native REST API
 
-- `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), and the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
+- `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config), and where its source is (`source`, see Third-party notices). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
 - Names, titles, notes, and addresses have one set of length limits (`shared/src/limits.ts`). The schemas check them, and the services check them again, so the compatibility APIs and OPML import hold to them too. Titles a feed gives itself are cut to the limit instead.
 - `/api/v1` responses over 1 KB are compressed for clients that accept it (Brotli at quality 4, else gzip), except event streams and images. On AWS, CloudFront's API behaviour does not cache, so it forwards `Accept-Encoding` to the API and passes compressed responses through, and the Lambda adapter returns them base64-encoded, which keeps large sync and content pages under Lambda's 6 MB response limit.
 - CORS on `/api/v1/*` allows the app origins `app://newses` (Electron) and `https://localhost` (Capacitor Android): requests with `Authorization` and `Content-Type`, `Retry-After` exposed, preflights cached for a day. Credentials are never allowed, so apps use bearer tokens and cookie sessions stay same-origin. Other origins get no CORS headers. CORS is applied before authentication, so apps can read errors too.
@@ -634,6 +634,21 @@ CycloneDX 1.6, one per deliverable, composed by `infra/src/release/build-sbom.ts
 - Workspace packages and Gradle projects are first party and left out; the root component is `newses-<deliverable>`, linked to the `repository` URL in the root `package.json`.
 - The release pipeline publishes the desktop and mobile SBOMs, and the image's when the stage publishes the image; the others are made locally.
 - Dependency-Track is an external server; uploads run locally (`PUT /api/v1/bom`, auto-creating the project). Project `newses-<deliverable>`, version the release's or, untagged, the branch's; tags `newses` and `prod` (release), `dev` (prerelease), or `local` (untagged); tagged uploads become the latest version. The API key needs `BOM_UPLOAD`, `PROJECT_CREATION_UPLOAD`, and `VIEW_PORTFOLIO`.
+
+### Third-party notices
+
+What each build bundles, as `{ name, version, license, text, notice, url }` entries (`shared/src/third-party-licenses.ts`), shown in the About tab with the acknowledgements in `shared/src/credits.ts`:
+
+| Build | File | From |
+|---|---|---|
+| Web (both modes) | `third-party-licenses.json` beside `index.html`, precached | Rollup chunks and assets of the app and service worker builds (`web/vite.config.ts`) |
+| Desktop | `third-party-licenses-platform.json` beside the web build | esbuild metafile of the main and preload bundles, and Electron; Electron's `LICENSE.electron.txt` and `LICENSES.chromium.html` sit beside the executable |
+| Android | `third-party-licenses-platform.json` beside the web build | esbuild metafile of the bridge, the plugin packages, and, with an APK, the release classpath's CycloneDX SBOM (texts linked, not shipped) |
+| Server | `third-party-licenses.json` beside `server/src/licenses.ts` (Docker) or the Lambda handler | Docker: installed `node_modules`; AWS: esbuild metafile and the installed argon2 |
+
+- Each build fails on a package whose licence is outside `ALLOWED_LICENSES` (AGPL-compatible) or unknown; `pnpm check` checks the production dependencies of `server`, `web`, `mobile`, and `shared` the same way.
+- `GET /server/licenses` returns the server's to signed-in users, 404 where the build wrote none (development).
+- `source` in `GET /server`: `SOURCE_URL` (Docker), the stage's `sourceUrl` (AWS), else the root `package.json` `repository` at the release tag (`/tree/v1.2.3`) or commit (`/tree/<sha>`), or the repository itself for other builds.
 
 ### Project site
 

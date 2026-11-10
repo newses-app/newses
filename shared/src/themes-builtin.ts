@@ -1,3 +1,4 @@
+import type { CreditKey } from './credits.ts';
 import type { ThemeTokens } from './themes.ts';
 
 // Theme token values and the built-in themes; no Zod, so browsers can import them.
@@ -43,6 +44,11 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   amber: 8,
   eink: 8,
   synthwave: 8,
+};
+/** The published palettes built-ins are adapted from, credited in the About tab. */
+export const BUILTIN_THEME_ADAPTED_FROM: Partial<Record<BuiltinThemeKey, CreditKey>> = {
+  catppuccin: 'catppuccin',
+  solarized: 'solarized',
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
@@ -160,7 +166,7 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     elevation: 'flat',
     effects: { texture: true, animation: false },
   },
-  // Catppuccin (MIT): Latte by day, Mocha by night. Mocha is as published; Latte's text and
+  // Catppuccin: Latte by day, Mocha by night. Mocha is as published; Latte's text and
   // accents are darkened, keeping their hue, to the nearest shade that passes.
   catppuccin: {
     style: 'standard',
@@ -195,7 +201,7 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     elevation: 'default',
     effects: { texture: false, animation: false },
   },
-  // Solarized (MIT), light and dark. Text and accents are lightened in dark mode and darkened in
+  // Solarized, light and dark. Text and accents are lightened in dark mode and darkened in
   // light mode, keeping their hue, to the nearest shade that passes.
   solarized: {
     style: 'standard',

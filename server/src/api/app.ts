@@ -91,6 +91,8 @@ export interface AppDeps {
   version?: string;
   /** What the operator calls this server, reported to apps; null or omitted for none. */
   instanceName?: string | null;
+  /** Where users get the server's source, reported to apps; null or omitted for none. */
+  sourceUrl?: string | null;
   /** Origin of public links (published feeds); null or omitted uses each request's origin. */
   publicUrl?: string | null;
   /** Log every compatibility-API call, credentials redacted. */
@@ -207,6 +209,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(serverRoutes, {
           version: deps.version ?? 'dev',
           name: deps.instanceName ?? null,
+          source: deps.sourceUrl ?? null,
         });
         await api.register(authRoutes, {
           ...services,

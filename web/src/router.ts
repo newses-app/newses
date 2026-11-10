@@ -33,6 +33,12 @@ export const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/about',
+      name: 'about',
+      component: () => import('./views/AboutView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/change-password',
       name: 'change-password',
       component: () => import('./views/ChangePasswordView.vue'),
@@ -62,7 +68,7 @@ export const router = createRouter({
           if (link) shares.offer(link);
         }),
         {
-          path: 'settings/:tab(preferences|appearance|shortcuts|feeds|labels|filters|sharing|offline|account|users|operations)?',
+          path: 'settings/:tab(preferences|appearance|shortcuts|feeds|labels|filters|sharing|offline|account|about|users|operations)?',
           name: 'settings',
           component: () => import('./views/SettingsView.vue'),
         },

@@ -11,6 +11,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm install` | Install and link workspace packages |
 | `pnpm check` | Lint, typecheck, format check, tests (run before every commit; the AWS pipeline runs the same) |
 | `pnpm locales:status` | The messages each language has yet to translate, by package |
+| `pnpm credits` | Rewrite `CREDITS.md` from `shared/src/credits.ts` |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
 | `pnpm --filter @newses/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @newses/server db:migrate` | Apply migrations |
@@ -50,6 +51,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - A changed meaning takes a new key in `en.json`: nothing else flags a translation gone stale.
 - Web layout is logical: `ms-`, `me-`, `ps-`, and `pe-` classes, and `inline-start` and `inline-end` in CSS. Physical sides fail the lint and `web/src/logical-css.test.ts`.
 - Text a reader or feed wrote sits in `<bdi>` or has `dir="auto"`, in inputs too; URLs, codes, and patterns have `dir="ltr"`. `t()` isolates parameters itself, so a message that gets stored goes through `withoutIsolates`.
+- Third-party work adapted or shipped outside a package (palettes, data, assets), and packages worth naming, are credited in `shared/src/credits.ts`; `pnpm credits` rewrites `CREDITS.md`.
 - A new workspace package is a top-level folder, registered in `pnpm-workspace.yaml` and `vitest.config.ts` `projects`.
 - No hardcoded deployment URLs (stage domains, downloads, repositories): self-hosters redeploy the app, so they come from the deploy config or the environment, with placeholders in examples. Links to the project site (its documentation and images), and the community files' links to the project's repositories, are the exception.
 <!-- #endregion conventions -->
@@ -69,6 +71,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `docs/adr/` | Decision history |
 | `README.md` | The repository's front page: what Newses is, a screenshot, links to the site |
 | `CONTRIBUTING.md` | The contribution workflow: issues, pull requests, license of contributions |
+| `CREDITS.md` | Third-party work the apps ship or adapt (generated from `shared/src/credits.ts`) |
 | `CODE_OF_CONDUCT.md`, `.github/` | Code of conduct, security policy, issue forms, pull request template |
 
 Put each new fact in the doc that owns it. Never state the same fact in two places.

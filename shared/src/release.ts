@@ -36,6 +36,19 @@ export function versionFromTag(tag: string | undefined): AppVersion {
   return { name: tag.replace(/^v/, ''), code };
 }
 
+/**
+ * Where a build's source is: `repository` (a package.json `repository.url`) at the build's release
+ * tag (`1.2.3`, `1.2.3-rc.1`) or commit (as on AWS); the repository itself for other builds, such as
+ * `dev` and `0.0.0-dev`.
+ */
+export function sourceAt(repository: string, version: string): string {
+  const url = repository.replace(/^git\+/, '').replace(/\.git$/, '');
+  const tag = TAG.exec(version);
+  if (tag && (!tag[4] || RC.test(tag[4]))) return `${url}/tree/v${version.replace(/^v/, '')}`;
+  if (/^[0-9a-f]{7,40}$/.test(version)) return `${url}/tree/${version}`;
+  return url;
+}
+
 /** A published file: its download URL, size in bytes, and SHA-256 (hex). */
 export interface ReleaseFile {
   url: string;

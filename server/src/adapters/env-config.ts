@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { MAX_INSTANCE_NAME_LENGTH, passwordSchema } from '@newses/shared';
+import { sourceAt } from '@newses/shared/release';
+// The image and the Lambda bundles carry it; forks name their own repository there.
+import rootPackage from '../../../package.json' with { type: 'json' };
 import type { AppConfig } from '../core/config.ts';
 
 const schema = z
@@ -39,6 +42,7 @@ const schema = z
     ARCHIVE_ATHENA_DATABASE: z.string().min(1).optional(),
     NEWSES_VERSION: z.string().default('dev'),
     INSTANCE_NAME: z.string().trim().min(1).max(MAX_INSTANCE_NAME_LENGTH).optional(),
+    SOURCE_URL: z.url({ protocol: /^https?$/ }).optional(),
     FEED_UPDATE_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
     FEED_PURGE_DAYS: z.coerce.number().int().min(0).default(180),
     FEED_DISABLE_AFTER_FAILURES: z.coerce.number().int().min(1).default(20),
@@ -87,6 +91,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   return {
     version: e.NEWSES_VERSION,
     instanceName: e.INSTANCE_NAME ?? null,
+    sourceUrl: e.SOURCE_URL ?? sourceAt(rootPackage.repository.url, e.NEWSES_VERSION),
     databaseUrl: e.DATABASE_URL,
     http: { host: e.HOST, port: e.PORT, trustProxy: e.TRUST_PROXY },
     logLevel: e.LOG_LEVEL,

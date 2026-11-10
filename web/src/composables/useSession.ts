@@ -101,6 +101,12 @@ export function installAuthGuard(router: Router, queryClient: QueryClient): void
   });
   router.beforeEach(async (to) => {
     if (to.name === 'connect') return NATIVE || '/all';
+    // The licences and notices need no server; signed in, the About tab adds the server's.
+    if (to.name === 'about') {
+      return queryClient.getQueryData(SESSION_KEY)
+        ? { name: 'settings', params: { tab: 'about' } }
+        : true;
+    }
     if (NATIVE && !connection.state.serverUrl) return { name: 'connect' };
     if (to.meta.public) return true;
     if (NATIVE && !connection.state.token) {

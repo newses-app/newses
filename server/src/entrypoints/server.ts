@@ -54,6 +54,7 @@ const app = buildApp({
   webDir: config.webDir,
   version: config.version,
   instanceName: config.instanceName,
+  sourceUrl: config.sourceUrl,
   publicUrl: config.publicUrl,
   compatTrace: config.compatTrace,
   diagnostics: { snapshot: processSnapshot(pool) },

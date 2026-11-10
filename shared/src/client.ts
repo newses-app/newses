@@ -67,6 +67,7 @@ import type {
   OpsUser,
   OpsWindow,
 } from './ops.ts';
+import type { ThirdPartyLicense } from './credits.ts';
 import type { ServerInfo } from './server.ts';
 
 export interface ApiClientOptions {
@@ -214,6 +215,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     /** Product, build, and API version; needs no session. */
     serverInfo: () => request<ServerInfo>('GET', '/server'),
+
+    /** The server's packages and their licences (API 1.9); 404 from development builds. */
+    serverLicenses: () => request<ThirdPartyLicense[]>('GET', '/server/licenses'),
 
     auth: {
       /** Opens a session, or returns a challenge to finish with `loginTwoFactor`. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { versionFromTag } from './release.ts';
+import { sourceAt, versionFromTag } from './release.ts';
 
 describe('versionFromTag', () => {
   it('derives the version name and code from a release tag', () => {
@@ -45,5 +45,21 @@ describe('versionFromTag', () => {
       expect(() => versionFromTag(tag)).toThrow(/-rc\.1 to -rc\.98/);
     expect(() => versionFromTag('v0.0.0-try.1')).toThrow(/start at 0\.0\.1/);
     expect(() => versionFromTag('v0.0.0-rc.1')).toThrow(/start at 0\.0\.1/);
+  });
+});
+
+describe('sourceAt', () => {
+  const repository = 'git+https://github.com/example/newses.git';
+  it('links the release tag or commit a build is from', () => {
+    expect(sourceAt(repository, '1.2.3')).toBe('https://github.com/example/newses/tree/v1.2.3');
+    expect(sourceAt(repository, 'v1.2.3-rc.1')).toBe(
+      'https://github.com/example/newses/tree/v1.2.3-rc.1',
+    );
+    expect(sourceAt(repository, 'abc1234')).toBe('https://github.com/example/newses/tree/abc1234');
+  });
+
+  it('links the repository for other builds', () => {
+    for (const version of ['dev', '0.0.0-dev', '1.2.3-try.1', 'v1.2.3-4-gabc1234'])
+      expect(sourceAt(repository, version), version).toBe('https://github.com/example/newses');
   });
 });

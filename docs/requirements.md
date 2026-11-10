@@ -18,6 +18,7 @@
 | Published pages | Sharing | Family members publish any web page to their published feed from the web, desktop, and Android apps, bookmarklets, and TTRSS clients; imported pages stay private to their owner; on Docker and AWS |
 | Missing requirements | Conformance | Feed errors show when they happened; logs below debug carry no secret keys or feed URLs; every fetch honours host pauses and a host's feeds are never fetched by two processes at once; family members debug feeds and keep the images of kept entries; OWASP ASVS L1 verified again; on Docker and AWS |
 | Multiple Server Profiles | Native apps | Family members keep several servers and accounts in the desktop and Android apps and switch between them without signing in again, keeping each one's offline articles and waiting changes; on Docker and AWS |
+| Credits | Licensing | Anyone sees the AGPL notices, a link to the source the server runs, the third-party work Newses builds on, and every package each app and the server ship with its licence, in the web, desktop, and Android apps; builds fail on a licence incompatible with the AGPL; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -130,6 +131,7 @@
 | Desktop app | P4 | Electron app for Windows (installer, zip, portable exe) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, and a prompt to install newer versions |
 | Server profiles | Multiple Server Profiles | The desktop and Android apps keep several profiles (a server and a user), one active, each with its token in secure storage and its own offline store; the drawer, sign-in page, settings, and the desktop tray switch between them |
+| About and credits | Credits | Settings → About, and a public About page linked from sign-in and connect, show the app and server versions, the copyright, the AGPL licence and absence of warranty, the source of the app and of the server (`SOURCE_URL`), credits for adapted and bundled work, and the licence and NOTICE texts of every package the app, its desktop or Android shell, and (signed in) the server ship; the desktop Help menu opens it and Chromium's licences |
 | macOS desktop app | Later | The desktop app, signed and notarised for macOS |
 
 ### Offline

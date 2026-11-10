@@ -24,6 +24,8 @@ export interface StageConfig {
   traceSampling: number;
   /** What the apps call this server (`INSTANCE_NAME`); omitted for none. */
   instanceName?: string | undefined;
+  /** Where the apps link this stage's source (`SOURCE_URL`); omitted for the repository at the commit. */
+  sourceUrl?: string | undefined;
   /** Origins whose pages may fetch the downloads (the project site's `latest.json` reads). */
   downloadsCorsOrigins?: string[] | undefined;
   /**

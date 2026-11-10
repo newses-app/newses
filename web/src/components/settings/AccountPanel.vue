@@ -10,7 +10,7 @@ import { useErrorText } from '../../composables/useErrorText.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { formatRelative, formatStorage } from '../../lib/format.ts';
 import { syncRequests } from '../../offline/status.ts';
-import { bridge, connection, desktop, NATIVE, updates } from '../../platform/index.ts';
+import { bridge, connection, desktop, NATIVE } from '../../platform/index.ts';
 import {
   clearProfileStore,
   pendingChanges,
@@ -18,7 +18,6 @@ import {
   removeProfile,
   switchProfile,
 } from '../../platform/profiles.ts';
-import { updateSummary } from '../../platform/updates.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import ProfileAvatar from '../profiles/ProfileAvatar.vue';
 import AppPasswordsSection from './AppPasswordsSection.vue';
@@ -31,8 +30,6 @@ const ui = useUiStore();
 const queryClient = useQueryClient();
 const { session, logout } = useSession();
 const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.auth.sessions() });
-const update = computed(() => updateSummary(updates.status.value));
-const checking = computed(() => updates.status.value.state === 'checking');
 
 const desktopOptions = computed(() => desktop.options.value);
 const DESKTOP_OPTIONS: (keyof DesktopOptions)[] = ['notifications', 'closeToTray', 'launchAtLogin'];
@@ -43,10 +40,6 @@ const shownDesktopOptions = computed(() =>
 
 function setOption(key: keyof DesktopOptions, value: boolean | null | undefined) {
   void desktop.set({ [key]: value === true });
-}
-
-function updateAction() {
-  void (update.value.action === 'check' ? updates.check() : updates.install());
 }
 
 async function passwordChanged() {
@@ -221,28 +214,8 @@ async function revoke(id: number) {
         </v-card>
       </v-dialog>
 
-      <h2 class="text-title-large mb-2">{{ t('connect.app') }}</h2>
-      <v-list density="compact" class="mb-6">
-        <!-- The action sits below the text, so narrow screens never cover the version. -->
-        <v-list-item v-if="bridge.appVersion">
-          <v-list-item-title class="text-wrap">
-            {{ t('connect.appVersion', { version: bridge.appVersion }) }}
-          </v-list-item-title>
-          <v-list-item-subtitle v-if="update.message" class="text-wrap">
-            {{ t(`updates.${update.message}`, update.params) }}
-          </v-list-item-subtitle>
-          <v-btn
-            v-if="update.action"
-            class="mt-2"
-            variant="tonal"
-            size="small"
-            :loading="checking"
-            @click="updateAction"
-          >
-            {{ t(`updates.${update.action}`) }}
-          </v-btn>
-        </v-list-item>
-      </v-list>
+      <!-- The app's version and updates are in the About tab. -->
+      <h2 v-if="desktopOptions" class="text-title-large mb-2">{{ t('connect.app') }}</h2>
       <div v-if="desktopOptions" class="mb-6">
         <v-switch
           v-for="key in shownDesktopOptions"

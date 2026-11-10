@@ -5,6 +5,7 @@ export * from './limits.ts';
 export * from './shortcuts.ts';
 export * from './prefs-defaults.ts';
 export * from './themes-builtin.ts';
+export * from './credits.ts';
 export * from './filter-options.ts';
 export * from './api-version.ts';
 export * from './error-reasons.ts';

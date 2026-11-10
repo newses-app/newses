@@ -50,6 +50,9 @@ COPY server/package.json ./server/
 COPY server/src ./server/src
 COPY shared ./shared
 COPY --from=deps /app/shared/node_modules ./shared/node_modules
+# The licences of the server's dependencies, read by GET /server/licenses.
+RUN node shared/src/third-party-licenses.ts --node-modules node_modules \
+    --out server/src/third-party-licenses.json
 COPY --from=web /app/web/dist ./web/dist
 # For the compose file's observability profile, which copies them to Grafana's volume.
 COPY docker/observability/dashboards ./observability/dashboards

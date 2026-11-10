@@ -1,13 +1,20 @@
 import type { MenuItemConstructorOptions } from 'electron';
 import { t } from './i18n.ts';
 
-/** The application menu. Electron's role labels stay English, so each role has its label here. */
+/**
+ * The application menu. Electron's role labels stay English, so each role has its label here.
+ * Help opens the app's About page and Chromium's licences, which come with Electron.
+ */
 export function appMenu({
   developer,
   windows,
+  about = () => undefined,
+  chromiumLicenses = () => undefined,
 }: {
   developer: boolean;
   windows: boolean;
+  about?: () => void;
+  chromiumLicenses?: () => void;
 }): MenuItemConstructorOptions[] {
   const view: MenuItemConstructorOptions[] = [
     { role: 'reload', label: t('reload') },
@@ -36,5 +43,12 @@ export function appMenu({
       ],
     },
     { label: t('viewMenu'), submenu: view },
+    {
+      label: t('helpMenu'),
+      submenu: [
+        { label: t('about'), click: about },
+        { label: t('chromiumLicenses'), click: chromiumLicenses },
+      ],
+    },
   ];
 }

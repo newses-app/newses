@@ -25,6 +25,11 @@ export interface AppConfig {
   version: string;
   /** What the operator calls this server; apps name profiles `user @ name` (`INSTANCE_NAME`). */
   instanceName: string | null;
+  /**
+   * Where users get the server's source (AGPL §13): `SOURCE_URL`, else the repository in the root
+   * package.json at this build's tag or commit.
+   */
+  sourceUrl: string;
   databaseUrl: string;
   /** `trustProxy` is true, false, a hop count, or comma-separated proxy addresses/CIDRs. */
   http: { host: string; port: number; trustProxy: boolean | number | string };

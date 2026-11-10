@@ -279,7 +279,7 @@ describe('App', () => {
     }
   });
 
-  it('names the instance only when the stage has a name', () => {
+  it('names the instance and links the source only when the stage sets them', () => {
     const variables = (template: Template) =>
       Object.values(
         template.findResources('AWS::Lambda::Function', {
@@ -294,13 +294,17 @@ describe('App', () => {
           (fn as { Properties: { Environment: { Variables: Record<string, unknown> } } }).Properties
             .Environment.Variables,
       );
-    const stage = (instanceName: string | undefined) =>
+    const stage = (instanceName?: string, sourceUrl?: string) =>
       Template.fromStack(
-        new NewsesStage(newApp(), 'Test', { stage: { ...dev, instanceName }, webDir }).app,
+        new NewsesStage(newApp(), 'Test', { stage: { ...dev, instanceName, sourceUrl }, webDir })
+          .app,
       );
-    for (const env of variables(stage(undefined))) expect(env).not.toHaveProperty('INSTANCE_NAME');
-    for (const env of variables(stage('Home')))
-      expect(env).toMatchObject({ INSTANCE_NAME: 'Home' });
+    for (const env of variables(stage())) {
+      expect(env).not.toHaveProperty('INSTANCE_NAME');
+      expect(env).not.toHaveProperty('SOURCE_URL');
+    }
+    for (const env of variables(stage('Home', 'https://git.example/fork')))
+      expect(env).toMatchObject({ INSTANCE_NAME: 'Home', SOURCE_URL: 'https://git.example/fork' });
   });
 
   it('publishes operations alerts from tick to the stage topic', () => {

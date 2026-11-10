@@ -142,6 +142,7 @@ export class AppStack extends Stack {
           ARCHIVE_ATHENA_DATABASE: archive.database,
           NEWSES_VERSION: BUILD_VERSION,
           ...(stage.instanceName && { INSTANCE_NAME: stage.instanceName }),
+          ...(stage.sourceUrl && { SOURCE_URL: stage.sourceUrl }),
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
@@ -157,6 +158,8 @@ export class AppStack extends Stack {
           target: 'node24',
           mainFields: ['module', 'main'],
           sourceMap: true,
+          // For the licences of what the bundle includes; removed after bundling.
+          metafile: true,
           banner:
             "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
           // The runtime provides the AWS SDK; argon2 is native and installed for the target below.
@@ -170,6 +173,8 @@ export class AppStack extends Stack {
               `cp -r ${input}/server/src/db/migrations ${output}/migrations`,
               // A package.json of its own stops npm from resolving the enclosing workspace.
               `cd ${output} && echo '{}' > package.json && npm install --no-save --no-package-lock --os=linux --cpu=arm64 --libc=glibc @node-rs/argon2@${ARGON2_VERSION ?? 'latest'}`,
+              // The licences of the bundled and installed packages, read by GET /server/licenses.
+              `cd ${input} && node shared/src/third-party-licenses.ts --metafile ${output}/index.meta.json --node-modules ${output}/node_modules --out ${output}/third-party-licenses.json && rm ${output}/index.meta.json`,
             ],
           },
         },

@@ -8,6 +8,7 @@
   "fileMenu": "File",
   "editMenu": "Modifica",
   "viewMenu": "Visualizza",
+  "helpMenu": "Aiuto",
   "undo": "Annulla",
   "redo": "Ripeti",
   "cut": "Taglia",
@@ -19,5 +20,7 @@
   "resetZoom": "Dimensioni effettive",
   "zoomIn": "Ingrandisci",
   "zoomOut": "Riduci",
-  "toggleFullscreen": "Schermo intero"
+  "toggleFullscreen": "Schermo intero",
+  "about": "Informazioni su Newses",
+  "chromiumLicenses": "Licenze di Chromium"
 }

@@ -8,6 +8,7 @@ describe('loadConfig', () => {
     expect(loadConfig({ DATABASE_URL: 'postgres://u:p@db:5432/app', APP_SECRET })).toEqual({
       version: 'dev',
       instanceName: null,
+      sourceUrl: 'https://github.com/newses-app/newses',
       databaseUrl: 'postgres://u:p@db:5432/app',
       http: { host: '0.0.0.0', port: 8080, trustProxy: false },
       logLevel: 'info',
@@ -30,6 +31,17 @@ describe('loadConfig', () => {
     const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
     expect(loadConfig({ ...base, INSTANCE_NAME: ' Home ' }).instanceName).toBe('Home');
     expect(() => loadConfig({ ...base, INSTANCE_NAME: 'x'.repeat(101) })).toThrow(ConfigError);
+  });
+
+  it("links the source: SOURCE_URL, else the repository at the build's tag or commit", () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig({ ...base, NEWSES_VERSION: '1.2.3' }).sourceUrl).toBe(
+      'https://github.com/newses-app/newses/tree/v1.2.3',
+    );
+    expect(loadConfig({ ...base, SOURCE_URL: 'https://git.example/fork' }).sourceUrl).toBe(
+      'https://git.example/fork',
+    );
+    expect(() => loadConfig({ ...base, SOURCE_URL: 'ftp://git.example' })).toThrow(ConfigError);
   });
 
   it('trims the public URL and accepts only http(s)', () => {

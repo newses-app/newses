@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
+import AboutPanel from '../components/settings/AboutPanel.vue';
 import AccountPanel from '../components/settings/AccountPanel.vue';
 import AppearancePanel from '../components/settings/AppearancePanel.vue';
 import FeedsPanel from '../components/settings/FeedsPanel.vue';
@@ -34,6 +35,7 @@ const tabs = computed(() => [
   'offline',
   'account',
   ...(isAdmin.value ? ['users', 'operations'] : []),
+  'about',
 ]);
 const tab = computed(
   () => (typeof route.params.tab === 'string' && route.params.tab) || 'preferences',
@@ -75,6 +77,7 @@ useDocumentTitle(() =>
       <AccountPanel v-else-if="tab === 'account'" />
       <UsersPanel v-else-if="tab === 'users' && isAdmin" />
       <OperationsPanel v-else-if="tab === 'operations' && isAdmin" />
+      <AboutPanel v-else-if="tab === 'about'" signed-in />
     </v-container>
   </v-main>
 </template>

@@ -205,16 +205,38 @@ describe('server info', () => {
     });
   });
 
-  it('names the instance when the operator set a name', async () => {
+  it('names the instance and its source when the operator set them', async () => {
     const named = buildApp({
       logger: pino({ level: 'silent' }),
       healthChecks: {},
       services,
       instanceName: 'Home',
+      sourceUrl: 'https://git.example/fork',
     });
     const res = await named.inject({ url: '/api/v1/server' });
-    expect(res.json()).toMatchObject({ product: 'newses', name: 'Home' });
+    expect(res.json()).toMatchObject({
+      product: 'newses',
+      name: 'Home',
+      source: 'https://git.example/fork',
+    });
     await named.close();
+  });
+
+  it('lists the licences of its dependencies to signed-in users, when the build wrote them', async () => {
+    expect((await app.inject({ url: '/api/v1/server/licenses' })).statusCode).toBe(401);
+    // Alice changed her password above.
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'alice', password: 'alice password 2', tokenType: 'bearer' },
+    });
+    const { token } = login.json<{ token: string }>();
+    // Development builds write none.
+    const res = await app.inject({
+      url: '/api/v1/server/licenses',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('is documented as needing no session', async () => {

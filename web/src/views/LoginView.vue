@@ -173,6 +173,9 @@ async function submit() {
             <v-btn variant="text" block @click="startOver()">{{ t('login.startOver') }}</v-btn>
           </v-card-actions>
         </v-form>
+        <div class="text-center pb-2">
+          <v-btn variant="text" size="small" :to="{ name: 'about' }">{{ t('about.title') }}</v-btn>
+        </div>
       </v-card>
     </v-container>
   </v-main>
