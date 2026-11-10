@@ -127,11 +127,9 @@ html[data-platform='android'] #app {
   transform: translateZ(0);
   overflow: hidden;
 }
-/* The WebView paints one tile of a scroller's tiled background (textures) unless it scrolls along. */
 html[data-platform='android'] #app > .v-application {
   height: 100%;
   overflow-y: auto;
-  background-attachment: local;
 }
 html[data-platform='android'] .v-application__wrap {
   min-height: 100%;

@@ -143,6 +143,8 @@ html[data-theme-style='synthwave'] .v-theme--dark {
         transparent 1px
       );
     background-size: 32px 12px;
+    /* Vuetify's reset repeats no background. */
+    background-repeat: repeat;
     transform: perspective(40px) rotateX(35deg);
     transform-origin: 50% 100%;
     mask-image: linear-gradient(transparent, #000 70%);
