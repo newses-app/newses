@@ -587,7 +587,8 @@
       "solarized": "Solarized",
       "amber": "Monitor ámbar",
       "eink": "Tinta electrónica",
-      "synthwave": "Synthwave"
+      "synthwave": "Synthwave",
+      "gruvbox": "Gruvbox"
     },
     "adjust": "Ajustar este tema",
     "adjustHint": "Los cambios se aplican al tema que usas y se guardan al hacerlos.",

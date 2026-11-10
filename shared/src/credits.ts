@@ -117,6 +117,14 @@ export const CREDITS = {
     kind: 'palette',
     copyright: 'Copyright (c) 2011 Ethan Schoonover',
   },
+  gruvbox: {
+    name: 'Gruvbox',
+    author: 'Pavel Pertsev',
+    url: 'https://github.com/morhetz/gruvbox',
+    license: 'MIT',
+    kind: 'palette',
+    copyright: 'Copyright (c) 2012 Pavel Pertsev',
+  },
   secLists: {
     name: 'SecLists',
     author: 'Daniel Miessler',

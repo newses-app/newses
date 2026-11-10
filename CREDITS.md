@@ -32,6 +32,7 @@ Newses is built on the work of others. Each app lists every package it bundles, 
 |---|---|---|
 | [Catppuccin](https://catppuccin.com) | Catppuccin | MIT |
 | [Solarized](https://ethanschoonover.com/solarized/) | Ethan Schoonover | MIT |
+| [Gruvbox](https://github.com/morhetz/gruvbox) | Pavel Pertsev | MIT |
 
 ## Data
 

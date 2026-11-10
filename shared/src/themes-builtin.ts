@@ -31,6 +31,7 @@ export const BUILTIN_THEME_KEYS = [
   'amber',
   'eink',
   'synthwave',
+  'gruvbox',
 ] as const;
 export type BuiltinThemeKey = (typeof BUILTIN_THEME_KEYS)[number];
 
@@ -44,11 +45,13 @@ export const BUILTIN_THEME_API_MINOR: Record<BuiltinThemeKey, number> = {
   amber: 8,
   eink: 8,
   synthwave: 8,
+  gruvbox: 10,
 };
 /** The published palettes built-ins are adapted from, credited in the About tab. */
 export const BUILTIN_THEME_ADAPTED_FROM: Partial<Record<BuiltinThemeKey, CreditKey>> = {
   catppuccin: 'catppuccin',
   solarized: 'solarized',
+  gruvbox: 'gruvbox',
 };
 /** The API minor that added each style; older servers refuse tokens with it. */
 export const THEME_STYLE_API_MINOR: Record<(typeof THEME_STYLES)[number], number> = {
@@ -338,5 +341,40 @@ export const BUILTIN_THEMES: Record<BuiltinThemeKey, ThemeTokens> = {
     border: 'thin',
     elevation: 'flat',
     effects: { texture: true, animation: true },
+  },
+  // Gruvbox's hard contrast: bright accents on dark, faded ones on light. Dark red, light text,
+  // and light yellow as a warning are moved, keeping their hue, to the nearest shade that passes.
+  gruvbox: {
+    style: 'standard',
+    palette: {
+      light: {
+        background: '#f9f5d7',
+        surface: '#fbf1c7',
+        text: '#202020',
+        primary: '#af3a03',
+        star: '#b57614',
+        error: '#9d0006',
+        warning: '#996201',
+        success: '#79740e',
+      },
+      dark: {
+        background: '#1d2021',
+        surface: '#282828',
+        text: '#ebdbb2',
+        primary: '#fe8019',
+        star: '#fabd2f',
+        error: '#ff4f39',
+        warning: '#fabd2f',
+        success: '#b8bb26',
+      },
+    },
+    uiFont: 'default',
+    articleFont: 'default',
+    fontScale: 1,
+    radius: 'default',
+    density: 'default',
+    border: 'none',
+    elevation: 'default',
+    effects: { texture: false, animation: false },
   },
 };

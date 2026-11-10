@@ -14,6 +14,7 @@ const STYLES: { key: string; style: string; name: string; font?: string }[] = [
 const PALETTES = [
   { key: 'catppuccin', name: 'Catppuccin' },
   { key: 'solarized', name: 'Solarized' },
+  { key: 'gruvbox', name: 'Gruvbox' },
 ];
 
 /** Back to Original without adjustments, deleting the themes these tests create. */
