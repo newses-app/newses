@@ -281,10 +281,15 @@ export class EdgeStack extends Stack {
       responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'ChangesHeaders', {
         responseHeadersPolicyName: resourceName(stage, 'changes-headers'),
         customHeadersBehavior: {
-          customHeaders: [
-            { header: 'cache-control', value: 'no-cache', override: true },
-            { header: 'access-control-allow-origin', value: '*', override: true },
-          ],
+          customHeaders: [{ header: 'cache-control', value: 'no-cache', override: true }],
+        },
+        // The apps poll from their own origins; CloudFront sets CORS headers only from here.
+        corsBehavior: {
+          accessControlAllowOrigins: ['*'],
+          accessControlAllowMethods: ['GET', 'HEAD'],
+          accessControlAllowHeaders: ['*'],
+          accessControlAllowCredentials: false,
+          originOverride: true,
         },
         securityHeadersBehavior: {
           contentTypeOptions: { override: true },

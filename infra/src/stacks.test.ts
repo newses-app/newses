@@ -516,13 +516,35 @@ describe('Change markers', () => {
       ResponseHeadersPolicyConfig: Match.objectLike({
         Name: 'newses-dev-changes-headers',
         CustomHeadersConfig: {
-          Items: [
-            { Header: 'cache-control', Value: 'no-cache', Override: true },
-            { Header: 'access-control-allow-origin', Value: '*', Override: true },
-          ],
+          Items: [{ Header: 'cache-control', Value: 'no-cache', Override: true }],
+        },
+        CorsConfig: {
+          AccessControlAllowOrigins: { Items: ['*'] },
+          AccessControlAllowMethods: { Items: ['GET', 'HEAD'] },
+          AccessControlAllowHeaders: { Items: ['*'] },
+          AccessControlAllowCredentials: false,
+          OriginOverride: true,
         },
       }),
     });
+  });
+
+  it('leaves CORS headers to the CORS config, as CloudFront refuses them as custom headers', () => {
+    const custom = Object.values(edge.findResources('AWS::CloudFront::ResponseHeadersPolicy'))
+      .flatMap(
+        (policy) =>
+          (
+            policy as {
+              Properties: {
+                ResponseHeadersPolicyConfig: {
+                  CustomHeadersConfig?: { Items: { Header: string }[] };
+                };
+              };
+            }
+          ).Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig?.Items ?? [],
+      )
+      .map((item) => item.Header.toLowerCase());
+    expect(custom.filter((header) => header.startsWith('access-control-'))).toEqual([]);
   });
 });
 
