@@ -1,4 +1,10 @@
-import type { NetworkStatus, PlatformBridge, SaveFile, StagedPage } from '@newses/shared';
+import type {
+  NetworkStatus,
+  NotificationAccess,
+  PlatformBridge,
+  SaveFile,
+  StagedPage,
+} from '@newses/shared';
 import { createProfiles, memoryProfileStorage } from '@newses/shared/client';
 
 export type { NetworkStatus, PlatformBridge, SaveFile, StagedPage };
@@ -38,6 +44,16 @@ function onBrowserNetworkChange(listener: (status: NetworkStatus) => void): () =
 
 const noProfiles = () => Promise.reject(new Error('The browser uses its own server'));
 
+/** The Notifications API's permission; without the API (some browsers, insecure pages), denied. */
+async function browserNotificationAccess(ask: boolean): Promise<NotificationAccess> {
+  if (typeof Notification === 'undefined') return 'denied';
+  const permission =
+    ask && Notification.permission === 'default'
+      ? await Notification.requestPermission()
+      : Notification.permission;
+  return permission === 'default' ? 'prompt' : permission;
+}
+
 /** The browser: same-origin server, cookie session, new tabs, and downloads. */
 export const webBridge: PlatformBridge = {
   platform: 'web',
@@ -57,6 +73,7 @@ export const webBridge: PlatformBridge = {
   },
   saveFile: download,
   notify: () => Promise.resolve(),
+  notificationAccess: browserNotificationAccess,
   onNavigate: () => undefined,
   onRefresh: () => () => undefined,
   getNetwork: () => Promise.resolve(browserNetwork()),

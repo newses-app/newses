@@ -129,7 +129,7 @@
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app for Windows (installer, zip, portable exe) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
-| Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, and a prompt to install newer versions |
+| Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, a prompt to install newer versions, and optional notifications of new entries found while it is closed |
 | Server profiles | Multiple Server Profiles | The desktop and Android apps keep several profiles (a server and a user), one active, each with its token in secure storage and its own offline store; the drawer, sign-in page, settings, and the desktop tray switch between them |
 | About and credits | Credits | Settings → About, and a public About page linked from sign-in and connect, show the app and server versions, the copyright, the AGPL licence and absence of warranty, the source of the app and of the server (`SOURCE_URL`), credits for adapted and bundled work, and the licence and NOTICE texts of every package the app, its desktop or Android shell, and (signed in) the server ship; the desktop Help menu opens it and Chromium's licences |
 | macOS desktop app | Later | The desktop app, signed and notarised for macOS |

@@ -22,6 +22,8 @@ export interface OfflineSettings {
    * from a background job on Android.
    */
   background: boolean;
+  /** On Android, the background job notifies of new entries it finds. */
+  notify: boolean;
 }
 
 const KEY = 'newses.offline.settings';
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: OfflineSettings = {
   wifiOnly: true,
   limitBytes: DEFAULT_STORAGE_LIMIT,
   background: true,
+  notify: false,
 };
 
 /** The settings a profile starts with: profiles after the first keep less. */

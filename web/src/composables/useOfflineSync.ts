@@ -1,10 +1,12 @@
-import type { Entry, SyncResponse } from '@newses/shared';
+import type { Category, Entry, Subscription, SyncResponse } from '@newses/shared';
+import { LOCALES } from '@newses/shared/locales';
 import { type QueryClient, useQueryClient } from '@tanstack/vue-query';
 import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api.ts';
 import { replaceEntries } from '../lib/entry-cache.ts';
 import { failureText } from '../lib/error-text.ts';
+import { newEntriesHandover, notificationStrings } from '../lib/new-entries.ts';
 import { upsertById } from '../lib/offline-keep.ts';
 import { lastAccount, markFilled, wasEvicted } from '../offline/account.ts';
 import { reportOf, takeWorkerReport, type WorkerReport } from '../offline/background.ts';
@@ -186,19 +188,33 @@ export function useOfflineSync(): void {
 
   /** Hands the background syncs what they need: settings, and where the store's sync stands. */
   async function publishBackground(db: OfflineDb): Promise<void> {
-    const { background, wifiOnly, unread, limitBytes } = offlineSettings;
+    const { background, wifiOnly, unread, limitBytes, notify } = offlineSettings;
     if (NATIVE) {
       if (bridge.platform === 'android')
         await bridge.setBackgroundSync({
           enabled: background,
           wifiOnly,
           syncToken: await storedSyncToken(db),
+          notify: background && notify ? await handover(db) : null,
         });
       return;
     }
     const account = lastAccount();
     await writeWorkerConfig(account ? { dbName: account.name, unread, limitBytes } : null);
     backgroundState.value = await setPeriodicSync(background);
+  }
+
+  /** What the Android job needs to notify of new entries, in the app's language. */
+  async function handover(db: OfflineDb) {
+    const locale = i18n.locale.value;
+    const plurals = LOCALES.find((l) => l.code === locale)?.plurals ?? ['one', 'other'];
+    const entryMark = Number((await db.entries.orderBy('id').lastKey()) ?? 0);
+    return newEntriesHandover(
+      notificationStrings(t, locale, plurals),
+      entryMark,
+      queryClient.getQueryData<Subscription[]>(SUBSCRIPTIONS_KEY) ?? [],
+      queryClient.getQueryData<Category[]>(CATEGORIES_KEY) ?? [],
+    );
   }
 
   /** Sends the changes kept on this device, oldest first; one tab at a time. */
@@ -318,6 +334,10 @@ export function useOfflineSync(): void {
     if (state === 'online') run();
   });
   const stopRequests = watch([syncRequests, flushRequests, sessionVerified], run);
+  // The Android job's notification follows the app's language.
+  const stopLocale = watch(i18n.locale, () => {
+    if (bridge.platform === 'android' && offlineSettings.notify) run();
+  });
 
   onMounted(() => {
     const db = currentStore();
@@ -336,5 +356,6 @@ export function useOfflineSync(): void {
     stopRefresh();
     stopOnline();
     stopRequests();
+    stopLocale();
   });
 }

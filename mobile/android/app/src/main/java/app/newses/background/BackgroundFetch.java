@@ -21,6 +21,11 @@ final class BackgroundFetch {
         Response send(String method, String url, String token, String body) throws IOException;
     }
 
+    /** Told of each `/sync` page kept for the app. */
+    interface SyncPages {
+        void read(JSONObject page) throws JSONException;
+    }
+
     static final class Response {
         final int status;
         final String body;
@@ -61,12 +66,18 @@ final class BackgroundFetch {
     private final StagedPages pages;
     private final String api;
     private final String token;
+    private final SyncPages listener;
 
     BackgroundFetch(Transport transport, StagedPages pages, String serverUrl, String token) {
+        this(transport, pages, serverUrl, token, (page) -> {});
+    }
+
+    BackgroundFetch(Transport transport, StagedPages pages, String serverUrl, String token, SyncPages listener) {
         this.transport = transport;
         this.pages = pages;
         this.api = serverUrl.replaceAll("/+$", "") + "/api/v1";
         this.token = token;
+        this.listener = listener;
     }
 
     Result run(String since) throws IOException {
@@ -83,6 +94,7 @@ final class BackgroundFetch {
                 if (response.status != 200) return new Result(Outcome.RETRY, next);
                 if (!pages.add("sync", next, response.body)) return new Result(Outcome.DONE, next);
                 JSONObject page = new JSONObject(response.body);
+                listener.read(page);
                 next = page.getString("next");
                 JSONArray entries = page.getJSONArray("entries");
                 for (int e = 0; e < entries.length(); e++) {

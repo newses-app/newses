@@ -42,4 +42,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Whether there is a network and if it is Wi-Fi (@capacitor/network). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- New-entry notifications from the background job, asked for when turned on (Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

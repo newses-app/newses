@@ -16,6 +16,8 @@ import { Share } from '@capacitor/share';
 import { createProfiles } from '@newses/shared/profiles';
 import type {
   NetworkStatus,
+  NewEntriesHandover,
+  NotificationAccess,
   PlatformBridge,
   SaveFile,
   StagedPage,
@@ -63,19 +65,27 @@ const ShareTarget = registerPlugin<{
 
 /**
  * The app's own plugin (android/…/BackgroundSyncPlugin.java): a WorkManager job that fetches
- * changes and article text while the app is closed, for the web app to store when it opens.
+ * changes and article text while the app is closed, for the web app to store when it opens, and
+ * notifies of new entries it finds.
  */
 const BackgroundSync = registerPlugin<{
   configure(options: {
     enabled: boolean;
     wifiOnly: boolean;
     syncToken: string | null;
+    notify?: NewEntriesHandover | null;
     profileId: string | null;
     serverUrl: string | null;
     token: string | null;
   }): Promise<void>;
   /** Pages fetched for the profile; any other profile's are dropped. */
   take(options: { profileId: string | null }): Promise<{ pages: StagedPage[] }>;
+  notificationAccess(options: { ask: boolean }): Promise<{ state: NotificationAccess }>;
+  /** A tapped notification's stream, including one that launched the app. */
+  addListener(
+    event: 'navigate',
+    listener: (data: { target: string }) => void,
+  ): Promise<PluginListenerHandle>;
 }>('BackgroundSync');
 
 /** Shares wait here until the web app sets its handler. */
@@ -84,6 +94,14 @@ const sharedTexts: { text: string; subject: string | null }[] = [];
 void ShareTarget.addListener('share', ({ text, subject }) => {
   if (shareHandler) shareHandler(text, subject ?? null);
   else sharedTexts.push({ text, subject: subject ?? null });
+});
+
+/** A tapped notification's stream waits here until the web app sets its handler. */
+let navigateHandler: ((target: string) => void) | null = null;
+let navigateTarget: string | null = null;
+void BackgroundSync.addListener('navigate', ({ target }) => {
+  if (navigateHandler) navigateHandler(target);
+  else navigateTarget = target;
 });
 
 const refreshers = new Set<() => void>();
@@ -188,9 +206,14 @@ const bridge: PlatformBridge = {
   // Custom Tabs: the system browser, over the app.
   openExternal: (url) => Browser.open({ url }),
   saveFile,
-  // Android notifications are not part of the app yet.
+  // The background job shows the only notification, of new entries while the app is closed.
   notify: () => Promise.resolve(),
-  onNavigate: () => undefined,
+  notificationAccess: async (ask) => (await BackgroundSync.notificationAccess({ ask })).state,
+  onNavigate: (handler) => {
+    navigateHandler = handler;
+    if (navigateTarget !== null) handler(navigateTarget);
+    navigateTarget = null;
+  },
   onRefresh: (listener) => {
     refreshers.add(listener);
     return () => {

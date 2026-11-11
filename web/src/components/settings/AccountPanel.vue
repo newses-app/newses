@@ -21,6 +21,7 @@ import {
 import { useUiStore } from '../../stores/ui.ts';
 import ProfileAvatar from '../profiles/ProfileAvatar.vue';
 import AppPasswordsSection from './AppPasswordsSection.vue';
+import NotificationsSection from './NotificationsSection.vue';
 import PasswordForm from './PasswordForm.vue';
 import TwoFactorSection from './TwoFactorSection.vue';
 
@@ -32,7 +33,8 @@ const { session, logout } = useSession();
 const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.auth.sessions() });
 
 const desktopOptions = computed(() => desktop.options.value);
-const DESKTOP_OPTIONS: (keyof DesktopOptions)[] = ['notifications', 'closeToTray', 'launchAtLogin'];
+// Notifications are with Android's, in their own section.
+const DESKTOP_OPTIONS: (keyof DesktopOptions)[] = ['closeToTray', 'launchAtLogin'];
 /** The options this install offers: the Windows portable exe does not start at login. */
 const shownDesktopOptions = computed(() =>
   DESKTOP_OPTIONS.filter((key) => desktopOptions.value?.[key] !== undefined),
@@ -213,6 +215,8 @@ async function revoke(id: number) {
           </v-form>
         </v-card>
       </v-dialog>
+
+      <NotificationsSection />
 
       <!-- The app's version and updates are in the About tab. -->
       <h2 v-if="desktopOptions" class="text-title-large mb-2">{{ t('connect.app') }}</h2>

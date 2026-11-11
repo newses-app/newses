@@ -188,7 +188,13 @@
   },
   "notifications": {
     "title": "{n} new entry | {n} new entries",
-    "more": "{places} and {n} more"
+    "more": "{places} and {n} more",
+    "heading": "Notifications",
+    "channel": "New entries",
+    "android": "Notify me about new entries while the app is closed",
+    "androidHint": "Found by the sync while the app is closed; one notification with the running total.",
+    "needsBackground": "Needs “Sync while the app is closed” in the Offline settings.",
+    "denied": "Newses isn't allowed to notify; allow it in Android's settings for the app."
   },
   "updates": {
     "title": "Update available",

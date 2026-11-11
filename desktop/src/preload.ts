@@ -61,6 +61,8 @@ const bridge: PlatformBridge = {
   openExternal: (url: string) => invoke<undefined>('openExternal', url),
   saveFile: (file: SaveFile) => invoke<boolean>('saveFile', file),
   notify: (notification: AppNotification) => invoke<undefined>('notify', notification),
+  // The window is granted the notification permission; the system's own settings may still mute them.
+  notificationAccess: () => Promise.resolve('granted'),
   onNavigate: (handler) => {
     navigate = handler;
   },

@@ -1,6 +1,12 @@
 import type { Category, Counters, Subscription } from '@newses/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { awayNotifier, type NewEntries, newEntries } from './new-entries.ts';
+import {
+  awayNotifier,
+  type NewEntries,
+  newEntries,
+  newEntriesHandover,
+  notificationStrings,
+} from './new-entries.ts';
 
 const counters = (unread: Record<number, number>): Counters => ({
   subscriptions: Object.entries(unread).map(([id, count]) => ({ id: Number(id), unread: count })),
@@ -99,5 +105,68 @@ describe('awayNotifier', () => {
     expect(shown).toEqual([2]);
     away.reading(counters({ 1: 3 }), counters({ 1: 4 }));
     expect(shown).toEqual([2, 1]);
+  });
+});
+
+describe('notificationStrings', () => {
+  // As the app's `t()`: parameters isolated, and the plural choice picking the form.
+  const isolated = (text: string | undefined) => `\u2068${text ?? ''}\u2069`;
+  const messages: Record<string, (p: Record<string, string>, plural?: number) => string> = {
+    'notifications.title': (p, plural) =>
+      plural === 1 ? `${isolated(p.n)} nuevo` : `${isolated(p.n)} nuevos`,
+    'notifications.more': (p) => `${isolated(p.places)} y ${isolated(p.n)} más`,
+    'notifications.channel': () => 'Artículos nuevos',
+  };
+  const t = (key: string, params: Record<string, string>, plural?: number) =>
+    messages[key]?.(params, plural) ?? key;
+
+  it('gives each plural form with placeholders, without isolates', () => {
+    expect(notificationStrings(t, 'es', ['one', 'other'])).toMatchObject({
+      locale: 'es',
+      title: { one: '{n} nuevo', other: '{n} nuevos' },
+      more: '{places} y {n} más',
+      channel: 'Artículos nuevos',
+    });
+  });
+
+  it('lists places as the desktop does', () => {
+    expect(notificationStrings(t, 'en', ['one', 'other']).lists).toEqual([
+      '{0}',
+      '{0}, {1}',
+      '{0}, {1}, {2}',
+    ]);
+  });
+});
+
+describe('newEntriesHandover', () => {
+  it('gives the marks and where each subscription is', () => {
+    const strings = notificationStrings(() => '', 'en', ['other']);
+    expect(newEntriesHandover(strings, 900, subscriptions, categories)).toEqual({
+      strings,
+      entryMark: 900,
+      subscriptionMark: 5,
+      subscriptions: [
+        [1, 10, 'Ars'],
+        [2, 10, 'Verge'],
+        [3, 20, 'BBC'],
+        [4, null, 'Blog'],
+        [5, null, 'Other blog'],
+      ],
+      categories: [
+        [10, 'Tech'],
+        [20, 'News'],
+      ],
+    });
+  });
+
+  it('marks no subscriptions before they have loaded', () => {
+    expect(
+      newEntriesHandover(
+        notificationStrings(() => '', 'en', []),
+        0,
+        [],
+        [],
+      ).subscriptionMark,
+    ).toBe(0);
   });
 });

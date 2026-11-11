@@ -1,5 +1,16 @@
-import type { Category, Counters, Subscription } from '@newses/shared';
+import type {
+  Category,
+  Counters,
+  NewEntriesHandover,
+  NotificationStrings,
+  Subscription,
+} from '@newses/shared';
+import { formatList } from './format.ts';
+import { withoutIsolates } from './message-params.ts';
 import { categoryKey, streamPath, type StreamKey, subscriptionKey } from './streams.ts';
+
+/** Places named in a notification before "and N more". */
+export const PLACES = 3;
 
 /** What one notification says: how many new entries, where, and which stream a click opens. */
 export interface NewEntries {
@@ -102,5 +113,54 @@ export function awayNotifier(options: {
       shownCount = 0;
       shownAt = null;
     },
+  };
+}
+
+/** `t()` with a plural choice. */
+type Translate = (key: string, params: Record<string, string>, plural?: number) => string;
+
+/** Counts tried for an example of each plural form. */
+const SAMPLES = Array.from({ length: 201 }, (_, n) => n);
+
+/**
+ * The notification's messages for the Android job, which words it while the app is closed: the
+ * title for each plural form the language's messages have (`plurals`), lists of one to `PLACES`
+ * places, and the "and N more" form, with placeholders for what it fills in.
+ */
+export function notificationStrings(
+  t: Translate,
+  locale: string,
+  plurals: readonly string[],
+): NotificationStrings {
+  const rules = new Intl.PluralRules(locale);
+  const title: Record<string, string> = {};
+  for (const form of plurals) {
+    const sample = SAMPLES.find((n) => rules.select(n) === form);
+    if (sample !== undefined)
+      title[form] = withoutIsolates(t('notifications.title', { n: '{n}' }, sample));
+  }
+  const places = Array.from({ length: PLACES }, (_, i) => `{${String(i)}}`);
+  return {
+    locale,
+    title,
+    lists: places.map((_, i) => formatList(places.slice(0, i + 1), locale)),
+    more: withoutIsolates(t('notifications.more', { places: '{places}', n: '{n}' })),
+    channel: t('notifications.channel', {}),
+  };
+}
+
+/** What the Android job needs to count new entries against the store and say where they are. */
+export function newEntriesHandover(
+  strings: NotificationStrings,
+  entryMark: number,
+  subscriptions: readonly Subscription[],
+  categories: readonly Category[],
+): NewEntriesHandover {
+  return {
+    strings,
+    entryMark,
+    subscriptionMark: Math.max(0, ...subscriptions.map((s) => s.id)),
+    subscriptions: subscriptions.map((s) => [s.id, s.categoryId, s.title]),
+    categories: categories.map((c) => [c.id, c.title]),
   };
 }

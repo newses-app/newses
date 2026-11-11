@@ -70,7 +70,46 @@ export interface BackgroundSyncOptions {
   wifiOnly: boolean;
   /** Where the store's sync stands, for the job to carry on from. */
   syncToken: string | null;
+  /** New-entry notifications from the job; absent or null: none. */
+  notify?: NewEntriesHandover | null;
 }
+
+/**
+ * A notification's messages in the app's language, with placeholders the job fills in: `{n}` a
+ * number, `{places}` the list of places, `{0}`… a place.
+ */
+export interface NotificationStrings {
+  /** BCP 47 tag, for the plural form and number format. */
+  locale: string;
+  /** The title by CLDR plural category (`one`, `other`, …), with `{n}`. */
+  title: Record<string, string>;
+  /** The list of one, two, and three places: `{0}`, `{0}, {1}`, … */
+  lists: string[];
+  /** The list followed by how many more places, with `{places}` and `{n}`. */
+  more: string;
+  /** The notification channel's name in the system settings. */
+  channel: string;
+}
+
+/**
+ * What the Android job needs to tell new entries from changed ones and name where they are. Entries
+ * and subscriptions above the marks are new to the store (ids only grow); new subscriptions'
+ * entries never notify.
+ */
+export interface NewEntriesHandover {
+  strings: NotificationStrings;
+  /** The highest entry id in the store. */
+  entryMark: number;
+  /** The highest subscription id the app knows. */
+  subscriptionMark: number;
+  /** `[id, categoryId, title]` of each subscription. */
+  subscriptions: [number, number | null, string][];
+  /** `[id, title]` of each category. */
+  categories: [number, string][];
+}
+
+/** Whether the app may show notifications; `prompt` until the reader is asked. */
+export type NotificationAccess = 'granted' | 'denied' | 'prompt';
 
 /**
  * A response the background job fetched while the app was closed: a `/sync` page (with the token
@@ -135,7 +174,12 @@ export interface PlatformBridge {
   saveFile(file: SaveFile): Promise<boolean>;
   /** Shows a system notification. */
   notify(notification: AppNotification): Promise<void>;
-  /** Called with a clicked notification's target (desktop); replaces the previous handler. */
+  /** Whether notifications may show; `ask` asks the reader first when they have not been. */
+  notificationAccess(ask: boolean): Promise<NotificationAccess>;
+  /**
+   * Called with a clicked notification's target (desktop, Android), including one that launched
+   * the app; replaces the previous handler.
+   */
   onNavigate(handler: (target: string) => void): void;
   /**
    * Adds a listener for when server data should be refreshed now: after the computer resumes or

@@ -2,13 +2,11 @@ import type { Counters } from '@newses/shared';
 import { onScopeDispose, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { formatList } from '../lib/format.ts';
-import { awayNotifier, newEntries } from '../lib/new-entries.ts';
+import { awayNotifier, newEntries, PLACES } from '../lib/new-entries.ts';
 import { bridge, desktop } from '../platform/index.ts';
 import { pollInBackground, useCounters } from './useCounters.ts';
 import { useCategories, useSubscriptions } from './useFeeds.ts';
 
-/** Places named in a notification before "and N more". */
-const PLACES = 3;
 /** The running total shows again at most this often while the window is in the background. */
 export const NOTIFY_GAP_MS = 15 * 60_000;
 
