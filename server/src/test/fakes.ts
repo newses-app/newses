@@ -15,6 +15,10 @@ import type {
   EnqueueOptions,
   JobQueue,
   Logger,
+  PushOptions,
+  PushOutcome,
+  PushSender,
+  PushTarget,
   Realtime,
   RealtimeEvent,
 } from '../core/ports.ts';
@@ -36,6 +40,19 @@ export const silentLogger: Logger = {
   warn: () => undefined,
   error: () => undefined,
 };
+
+/** Records push messages; `outcomes` answers by endpoint, `sent` otherwise. */
+export class RecordingPushSender implements PushSender {
+  readonly publicKey =
+    'BOr3ZRwn1H9y3qJqSyFH6zNWm2KYtjytVyfiwDmXp3YqZ9Qg0LBV7ATZsBzZt37GQRC7lWSkWs0kj4kSqmhnFh8';
+  readonly sent: { endpoint: string; payload: unknown; options: PushOptions }[] = [];
+  readonly outcomes = new Map<string, PushOutcome>();
+
+  send(target: PushTarget, payload: string, options: PushOptions): Promise<PushOutcome> {
+    this.sent.push({ endpoint: target.endpoint, payload: JSON.parse(payload), options });
+    return Promise.resolve(this.outcomes.get(target.endpoint) ?? 'sent');
+  }
+}
 
 /** Records published events and delivers them to local subscribers, as LISTEN/NOTIFY would. */
 export class RecordingRealtime implements Realtime {
@@ -179,6 +196,7 @@ export function testFeedDeps(
     fetcher,
     queue: new RecordingQueue(),
     realtime: new RecordingRealtime(),
+    push: new RecordingPushSender(),
     blobs: new MemoryBlobStore(),
     archive: null,
     settings: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 3 },

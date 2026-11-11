@@ -9,7 +9,7 @@ import {
 
 /** Each use of the app secret gets its own key, so one key's output never verifies under another. */
 export type KeyPurpose =
-  'totp' | 'feed-credentials' | 'image-url' | 'login-challenge' | 'feed-icons';
+  'totp' | 'feed-credentials' | 'image-url' | 'login-challenge' | 'feed-icons' | 'vapid';
 
 export type Keys = Record<KeyPurpose, Buffer>;
 
@@ -19,6 +19,7 @@ const PURPOSES: KeyPurpose[] = [
   'image-url',
   'login-challenge',
   'feed-icons',
+  'vapid',
 ];
 const VERSION = 'v1';
 const IV_BYTES = 12;

@@ -38,6 +38,15 @@ async function run(event: TickEvent): Promise<void> {
     case 'dispatch': {
       const dispatched = await feeds.updater.dispatchDue();
       logger.info({ dispatched }, 'Dispatched feed fetches');
+      // New entries from the last cycle's fetches that waited for a user's push window to end.
+      await trackRun(
+        ops.recorder,
+        'push.flush',
+        async () => {
+          logger.info({ pushed: await feeds.push.flush() }, 'Pushed new entries');
+        },
+        { kind: 'task' },
+      );
       // Rides the dispatch schedule rather than a schedule of its own.
       await ops.recorder.flush();
       await trackRun(ops.recorder, 'ops.check', () => ops.checker.run(), { kind: 'task' });

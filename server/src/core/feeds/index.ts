@@ -5,7 +5,8 @@ import { UserRateLimiter } from '../rate-limit.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
 import { PrefsService } from '../prefs.ts';
-import type { ArchiveWriter, BlobStore, JobQueue, Logger, Realtime } from '../ports.ts';
+import type { ArchiveWriter, BlobStore, JobQueue, Logger, PushSender, Realtime } from '../ports.ts';
+import { PushService } from '../push/push-service.ts';
 import { FeedDebugger } from './debugger.ts';
 import { FaviconService, IconTokens } from './favicons.ts';
 import { FullTextService } from './fulltext.ts';
@@ -26,6 +27,8 @@ export interface FeedDeps {
   fetcher: Fetcher;
   queue: JobQueue<Jobs>;
   realtime: Realtime;
+  /** Delivers push messages to users' devices. */
+  push: PushSender;
   blobs: BlobStore;
   /** Where purge writes entries before deleting them; null when the archive is off. */
   archive: ArchiveWriter | null;
@@ -47,7 +50,8 @@ export function createFeedServices(deps: FeedDeps) {
   const hosts = new HostLimiter(PER_HOST_CONCURRENCY, deps.hostGapMs ?? PER_HOST_GAP_MS);
   const fetcher = new PoliteFetcher({ db, fetcher: deps.fetcher, hosts });
   const limits = new UserRateLimiter(db);
-  const ingester = new Ingester(db, deps.realtime, settings);
+  const push = new PushService({ db, sender: deps.push, logger });
+  const ingester = new Ingester(db, deps.realtime, settings, push);
   const fullText = new FullTextService({ db, fetcher, queue: deps.queue, logger, limits });
   const updater = new FeedUpdater({
     fullText,
@@ -81,6 +85,7 @@ export function createFeedServices(deps: FeedDeps) {
       limits,
     }),
     rateLimits: limits,
+    push,
   };
 }
 

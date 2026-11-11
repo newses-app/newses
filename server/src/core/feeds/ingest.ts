@@ -7,6 +7,7 @@ import type { FeedSettings } from '../config.ts';
 import type { Realtime } from '../ports.ts';
 import { runFilters } from '../filters/run.ts';
 import { userPrefInt } from '../prefs.ts';
+import type { PushService } from '../push/push-service.ts';
 import type { ParsedEntry } from './parse.ts';
 import { sanitizeContent, sanitizeTitle, stripControlChars } from './sanitize.ts';
 
@@ -100,11 +101,18 @@ export class Ingester {
   readonly #db: Db;
   readonly #realtime: Realtime;
   readonly #settings: FeedSettings;
+  readonly #push: Pick<PushService, 'newEntries'> | null;
 
-  constructor(db: Db, realtime: Realtime, settings: FeedSettings) {
+  constructor(
+    db: Db,
+    realtime: Realtime,
+    settings: FeedSettings,
+    push: Pick<PushService, 'newEntries'> | null = null,
+  ) {
     this.#db = db;
     this.#realtime = realtime;
     this.#settings = settings;
+    this.#push = push;
   }
 
   async ingest(
@@ -179,6 +187,8 @@ export class Ingester {
     });
 
     await this.#notify(result.users);
+    // Only entries a fetch found are pushed, not a new subscription's backfill.
+    await this.#push?.newEntries(result.users);
     return { inserted: result.inserted, updated: result.updated };
   }
 

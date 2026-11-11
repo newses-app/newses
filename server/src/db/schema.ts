@@ -123,6 +123,38 @@ export const appPasswords = pgTable(
   (t) => [index('app_passwords_user_id_idx').on(t.userId)],
 );
 
+// Where a session's device receives Web Push messages; ends with the session.
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sessionId: bigint('session_id', { mode: 'number' })
+      .notNull()
+      .unique()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+    lastSuccessAt: tstz('last_success_at'),
+  },
+  (t) => [index('push_subscriptions_user_id_idx').on(t.userId)],
+);
+
+// Per user with push subscriptions: entries up to `watermark` (a user_entries id) have been
+// pushed; `pending` new ones wait for the next window after `last_sent_at`.
+export const pushState = pgTable('push_state', {
+  userId: integer('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  watermark: bigint('watermark', { mode: 'number' }).notNull(),
+  pending: boolean('pending').notNull().default(false),
+  lastSentAt: tstz('last_sent_at'),
+});
+
 // Image proxy cache index: the blob lives at `key`; failures are remembered so hosts are not
 // asked again until the entry expires.
 export const imageCache = pgTable(

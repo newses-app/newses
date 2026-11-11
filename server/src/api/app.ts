@@ -44,6 +44,7 @@ import { imageRoutes } from './routes/images.ts';
 import { labelRoutes } from './routes/labels.ts';
 import { tagRoutes } from './routes/tags.ts';
 import { prefsRoutes } from './routes/prefs.ts';
+import { pushRoutes } from './routes/push.ts';
 import { themeRoutes } from './routes/themes.ts';
 import { legacyPublicRoutes, publicRoutes } from './routes/public.ts';
 import { serverRoutes } from './routes/server.ts';
@@ -210,6 +211,7 @@ export function buildApp(deps: AppDeps) {
           version: deps.version ?? 'dev',
           name: deps.instanceName ?? null,
           source: deps.sourceUrl ?? null,
+          pushKey: services.feeds.push.publicKey,
         });
         await api.register(authRoutes, {
           ...services,
@@ -246,6 +248,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs, updater: services.feeds.updater });
         await api.register(themeRoutes, { themes: services.themes });
+        await api.register(pushRoutes, { push: services.feeds.push });
         if (deps.events === false) await api.register(noEventRoutes);
         else await api.register(eventRoutes, { realtime: services.realtime, ...deps.events });
       },

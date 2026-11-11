@@ -60,6 +60,7 @@ const deps = createFeedDeps({
   ops: ops.recorder,
 });
 onShutdown(() => deps.fetcher.close());
+onShutdown(() => deps.push.close());
 const feeds = createFeedServices(deps);
 const { sessions, throttle } = createAuthServices(db, config.appSecret);
 const sync = new SyncService(db);
@@ -96,6 +97,11 @@ task('feeds.dispatch', 60, async () => {
   await writeFile(HEARTBEAT_FILE, new Date().toISOString()).catch((err: unknown) => {
     logger.warn({ err }, 'Could not write the worker heartbeat');
   });
+});
+// New entries that waited for a user's push window to end.
+task('push.flush', 5 * 60, async () => {
+  const pushed = await feeds.push.flush();
+  if (pushed > 0) logger.debug({ pushed }, 'Pushed new entries');
 });
 task('images.keep', 5 * 60, async () => {
   const kept = await feeds.images.keep(IMAGES_KEEP_BUDGET_MS);

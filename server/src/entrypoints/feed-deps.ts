@@ -10,10 +10,11 @@ import { LocalBlobStore } from '../adapters/local-blob-store.ts';
 import { ParquetArchiveWriter } from '../adapters/parquet-archive-writer.ts';
 import { S3BlobStore } from '../adapters/s3-blob-store.ts';
 import { SmtpNotifier } from '../adapters/smtp-notifier.ts';
+import { WebPushSender } from '../adapters/web-push-sender.ts';
 import { PgBossJobQueue } from '../adapters/pg-boss-job-queue.ts';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import type { AppConfig } from '../core/config.ts';
-import { deriveKeys } from '../core/crypto.ts';
+import { deriveKeys, type Keys } from '../core/crypto.ts';
 import { HttpFetcher, userAgentFor } from '../core/feeds/http.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import { JOB_DEFINITIONS, type Jobs } from '../core/jobs.ts';
@@ -29,18 +30,20 @@ export function createFeedDeps(args: {
   realtime: PgNotifyRealtime;
   logger: Logger;
   ops: OpsRecorder;
-}): FeedDeps & { fetcher: InstrumentedFetcher } {
+}): FeedDeps & { fetcher: InstrumentedFetcher; push: WebPushSender } {
   const blobs = createBlobStore(args.config);
+  const keys = deriveKeys(args.config.appSecret);
   return {
     db: args.db,
     fetcher: createFetcher(args.config, args.ops),
     queue: new PgBossJobQueue<Jobs>(args.boss, JOB_DEFINITIONS),
     realtime: args.realtime,
+    push: createPushSender(args.config, keys, args.logger),
     blobs,
     archive: createArchiveWriter(args.config, blobs),
     settings: args.config.feeds,
     logger: args.logger,
-    keys: deriveKeys(args.config.appSecret),
+    keys,
   };
 }
 
@@ -60,6 +63,20 @@ export function createFetcher(config: AppConfig, ops: OpsRecorder): Instrumented
     }),
     ops,
   );
+}
+
+/**
+ * Web Push to the push services devices subscribed with, signed with the VAPID key from the app
+ * secret. Push services may write to the sender's contact: the public URL when it is https (as
+ * RFC 8292 asks), else the project site.
+ */
+export function createPushSender(config: AppConfig, keys: Keys, logger: Logger): WebPushSender {
+  return new WebPushSender({
+    seed: keys.vapid,
+    subject: config.publicUrl?.startsWith('https:') ? config.publicUrl : 'https://newses.app',
+    allowPrivateNetworks: config.fetchAllowPrivateNetworks,
+    logger,
+  });
 }
 
 /** Alert emails when SMTP is configured; otherwise alerts stay on the Operations page. */

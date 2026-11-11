@@ -75,6 +75,7 @@ Rules:
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
 | `Notifier` | Tell operators when alerts open or resolve | Email over SMTP, when configured | The stage's SNS alert topic |
+| `PushSender` | Deliver encrypted Web Push messages to the push services devices subscribed with | Web Push over HTTPS | Web Push over HTTPS |
 
 ## Web app
 
@@ -193,6 +194,7 @@ Scheduler ─▶ claim due sources ─▶ feed.fetch job per host (≤ 20 source
              the entry's feed categories become the subscriber's tags
   filter     each recipient's enabled filters, in order, until "stop" (see Filters)
   notify     Realtime `counters` event per user who received entries
+  push       Web Push message to each such user's devices, at most one per window (see Push)
   full text  `entry.extract` job for the source when a subscriber opted in and entries were added
   schedule   next fetch after the interval, or after backoff on failure; favicon refresh when older than 30 days
 ```
@@ -302,6 +304,8 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `recovery_codes` | User | SHA-256 hash, used time |
 | `sessions` | User | Token hash, kind (`cookie`/`bearer`/`api`), user agent, app password (`api` only), last seen, expiry |
 | `app_passwords` | User | Name, hash, last used |
+| `push_subscriptions` | User | → session (one each, deleted with it); push service endpoint (unique), device public key and auth secret, last delivery. Not synced |
+| `push_state` | User | Highest user entry id pushed (`watermark`), whether entries wait for the window to end, last message time. Not synced |
 | `image_cache` | Instance | Blob key, fetch time, size, failed flag, failures in a row |
 | `entry_images` | Entry | Images (blob key, URL) of a kept entry's content version, which `entry_image_sets` records |
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
@@ -394,7 +398,7 @@ Admins:
 | Surface | Path | Notes |
 |---|---|---|
 | Native REST | `/api/v1/*` | OpenAPI at `/api/v1/openapi.json`: the input rules (types, required fields, lengths, ranges), generated from the `shared` Zod schemas; typed client in `shared` |
-| Server info | `/api/v1/server` | Product, build, API version, and instance name |
+| Server info | `/api/v1/server` | Product, build, API version, instance name, and push key |
 | Events | `/api/v1/events` | SSE: `counters` invalidation events |
 | Images | `/api/v1/images/<hmac>/<url>` | Proxied entry images |
 | Public | `/public/*` | Published feeds and share links |
@@ -405,7 +409,7 @@ Admins:
 
 ### Native REST API
 
-- `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config), and where its source is (`source`, see Third-party notices). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
+- `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config), where its source is (`source`, see Third-party notices), and the VAPID public key devices subscribe to push with (`push.key`, API 1.11). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
 - Names, titles, notes, and addresses have one set of length limits (`shared/src/limits.ts`). The schemas check them, and the services check them again, so the compatibility APIs and OPML import hold to them too. Titles a feed gives itself are cut to the limit instead.
 - `/api/v1` responses over 1 KB are compressed for clients that accept it (Brotli at quality 4, else gzip), except event streams and images. On AWS, CloudFront's API behaviour does not cache, so it forwards `Accept-Encoding` to the API and passes compressed responses through, and the Lambda adapter returns them base64-encoded, which keeps large sync and content pages under Lambda's 6 MB response limit.
 - CORS on `/api/v1/*` allows the app origins `app://newses` (Electron) and `https://localhost` (Capacitor Android): requests with `Authorization` and `Content-Type`, `Retry-After` exposed, preflights cached for a day. Credentials are never allowed, so apps use bearer tokens and cookie sessions stay same-origin. Other origins get no CORS headers. CORS is applied before authentication, so apps can read errors too.
@@ -436,6 +440,13 @@ Filters:
 Events stream:
 - Events are per-user invalidation signals; clients refetch what they describe. Events of one type within 1 s are sent once.
 - `X-Accel-Buffering: no` disables nginx buffering; a comment line every 25 s keeps proxies from timing out; streams end after 30 minutes and clients reconnect, which re-checks the session.
+
+Push:
+- `PUT /push/subscription` (API 1.11) takes the endpoint (https, at most 2,048 characters) and keys of `PushSubscription.toJSON()` as the calling session's one subscription; another session's with the same endpoint moves to it. `DELETE` removes it, as does the session ending (sign-out, revocation, expiry).
+- The VAPID key pair is derived from `APP_SECRET` (`vapid`); the contact it names to push services is `PUBLIC_URL` when it is https, else the project site.
+- Ingest pushes the unread entries a fetch delivered to users with subscriptions: one message per user per window of 27 minutes, so a 30-minute dispatch schedule pushes every cycle. Entries within a window wait for it to end and go out on the next flush (every 5 minutes on Docker, after each dispatch on AWS). A user's first subscription counts from then on; a new subscription's backfill, imports, and entries already read are not counted. With nothing to count, nothing is sent and the window stays as it was.
+- Messages are JSON, encrypted for the device (RFC 8291, `aes128gcm`) and signed (RFC 8292): `count`, up to 5 places (the category, else the feed, titles cut to 80 characters) with their counts, `morePlaces`, and `target`, the stream to open (the one feed, the one category, else `/all`). TTL 12 h, `Topic: new-entries`, `Urgency: normal`.
+- Requests to push services have the fetcher's private-address guard (`FETCH_ALLOW_PRIVATE_NETWORKS`) and a 10 s timeout, and are counted in the outbound metrics with purpose `push`, not in per-host statistics. 404 and 410 delete the subscription; other failures are logged and the message is dropped.
 
 ### Public pages
 
@@ -608,7 +619,7 @@ Operator setup, once per account:
 | Bundle file | Contents |
 |---|---|
 | `manifest` | `key=value` lines: format (`1`), source, export time, whether blobs are archive only, user, subscription, entry, and blob counts; written last, so a bundle without it is incomplete |
-| `db.dump` | `pg_dump -Fc --no-owner --no-acl`, without the `pgboss` schema or the rows of `sessions`, `login_attempts`, `rate_limits`, the hourly stats, `ops_alerts`, and `ops_state` |
+| `db.dump` | `pg_dump -Fc --no-owner --no-acl`, without the `pgboss` schema or the rows of `sessions`, `push_subscriptions`, `push_state`, `login_attempts`, `rate_limits`, the hourly stats, `ops_alerts`, and `ops_state` |
 | `migrations` | The source's applied migration hashes |
 | `blobs/` | `LocalBlobStore` layout (data files, content types under `.meta/`); `cli blobs pull\|push DIR` copies it from and to S3 |
 | `app-secret` | The source's `APP_SECRET`, for re-sealing only |

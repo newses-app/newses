@@ -15,13 +15,16 @@ export const serverRoutes: FastifyPluginAsyncZod<{
   version: string;
   name: string | null;
   source: string | null;
-}> = (app, { version, name, source }) => {
+  /** The VAPID public key devices subscribe to push messages with. */
+  pushKey: string;
+}> = (app, { version, name, source, pushKey }) => {
   app.get('/server', { schema: { security: [], response: { 200: serverInfoSchema } } }, () => ({
     product: PRODUCT_NAME,
     version,
     apiVersion: API_VERSION,
     ...(name && { name }),
     ...(source && { source }),
+    push: { key: pushKey },
   }));
 
   // Signed in only: exact versions would tell anyone which known vulnerabilities to try.

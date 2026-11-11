@@ -195,13 +195,14 @@ describe('feed icon path', () => {
 });
 
 describe('server info', () => {
-  it('names the product and versions without a session', async () => {
+  it('names the product, versions, and push key without a session', async () => {
     const res = await app.inject({ url: '/api/v1/server' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       product: 'newses',
       version: 'dev',
       apiVersion: API_VERSION,
+      push: { key: services.feeds.push.publicKey },
     });
   });
 

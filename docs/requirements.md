@@ -19,6 +19,7 @@
 | Missing requirements | Conformance | Feed errors show when they happened; logs below debug carry no secret keys or feed URLs; every fetch honours host pauses and a host's feeds are never fetched by two processes at once; family members debug feeds and keep the images of kept entries; OWASP ASVS L1 verified again; on Docker and AWS |
 | Multiple Server Profiles | Native apps | Family members keep several servers and accounts in the desktop and Android apps and switch between them without signing in again, keeping each one's offline articles and waiting changes; on Docker and AWS |
 | Credits | Licensing | Anyone sees the AGPL notices, a link to the source the server runs, the third-party work Newses builds on, and every package each app and the server ship with its licence, in the web, desktop, and Android apps; builds fail on a licence incompatible with the AGPL; on Docker and AWS |
+| Push and notifications | Timely updates | Family members are notified of new entries in browsers, installed web apps, and the Android app while they are closed, soon after the fetch that finds them and at most every 30 minutes; open apps on AWS no longer poll the API; with no vendor account or key to set up; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -127,6 +128,7 @@
 | Web app | P1 | Vue SPA; installable PWA; works in current Chrome, Firefox, Safari |
 | TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe; TTRSS clients can share pages to the published feed |
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
+| Push to devices | Push and notifications | The server pushes a user's new entries to the devices they turned notifications on for, over Web Push (browsers' push services, UnifiedPush distributors), at most once every 30 minutes; signing out stops it |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app for Windows (installer, zip, portable exe) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, a prompt to install newer versions, and optional notifications of new entries found while it is closed |

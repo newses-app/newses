@@ -162,3 +162,27 @@ export interface AlertNotice {
 export interface Notifier {
   notify(notices: AlertNotice[]): Promise<void>;
 }
+
+/** A device's Web Push subscription (RFC 8030): its push service address and keys (RFC 8291). */
+export interface PushTarget {
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
+/** `sent`; `gone` when the push service no longer knows the subscription; else `failed`. */
+export type PushOutcome = 'sent' | 'gone' | 'failed';
+
+export interface PushOptions {
+  /** How long the push service may hold the message for an offline device. */
+  ttlSeconds: number;
+  /** A newer message with the same topic replaces one the push service still holds. */
+  topic: string;
+}
+
+/** Sends encrypted Web Push messages, signed with the server's VAPID key (RFC 8292). */
+export interface PushSender {
+  /** The VAPID public key (uncompressed P-256, base64url) devices subscribe with. */
+  readonly publicKey: string;
+  send(target: PushTarget, payload: string, options: PushOptions): Promise<PushOutcome>;
+}

@@ -28,10 +28,10 @@ die() {
   exit 2
 }
 
-# Not exported: sign-ins, the source's own operations data, and Docker's job queue (pg-boss,
-# which recreates its schema when it starts).
-EXCLUDED_TABLES=(sessions login_attempts rate_limits request_stats_hourly host_fetch_stats_hourly
-  job_stats_hourly ops_alerts ops_state)
+# Not exported: sign-ins and the devices they push to, the source's own operations data, and
+# Docker's job queue (pg-boss, which recreates its schema when it starts).
+EXCLUDED_TABLES=(sessions push_subscriptions push_state login_attempts rate_limits
+  request_stats_hourly host_fetch_stats_hourly job_stats_hourly ops_alerts ops_state)
 EXCLUDED_SCHEMAS=(pgboss)
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)

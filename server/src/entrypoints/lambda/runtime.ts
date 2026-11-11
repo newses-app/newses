@@ -18,6 +18,7 @@ import {
   createArchiveWriter,
   createBlobStore,
   createFetcher,
+  createPushSender,
 } from '../feed-deps.ts';
 import { createLogger, createPool } from '../runtime.ts';
 import { trackRun } from '../tracking.ts';
@@ -100,6 +101,7 @@ export async function createLambdaRuntime(role: string) {
       ? new SnsNotifier({ topicArn: alertTopicArn, publicUrl: config.publicUrl })
       : undefined,
   });
+  const keys = deriveKeys(config.appSecret);
   const feedDeps: FeedDeps = {
     db,
     fetcher: createFetcher(config, ops.recorder),
@@ -112,10 +114,11 @@ export async function createLambdaRuntime(role: string) {
       new SQSClient({}),
     ),
     realtime: new NoopRealtime(),
+    push: createPushSender(config, keys, logger),
     blobs,
     archive: createArchiveWriter(config, blobs),
     settings: config.feeds,
-    keys: deriveKeys(config.appSecret),
+    keys,
     logger,
   };
   return {

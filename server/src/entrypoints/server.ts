@@ -37,6 +37,7 @@ onShutdown(() => realtime.stop());
 
 const feedDeps = createFeedDeps({ config, db, boss, realtime, logger, ops: ops.recorder });
 onShutdown(() => feedDeps.fetcher.close());
+onShutdown(() => feedDeps.push.close());
 const services = {
   ...createAuthServices(db, config.appSecret),
   feeds: createFeedServices(feedDeps),

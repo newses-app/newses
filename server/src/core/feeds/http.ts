@@ -138,6 +138,55 @@ function cidrList(cidrs: string[]): BlockList {
   return list;
 }
 
+/**
+ * Whether an address may be connected to: public addresses always; private ones when `allow` is
+ * true or lists a CIDR they lie in.
+ */
+export function addressFilter(allow: boolean | string[] = false): (address: string) => boolean {
+  if (allow === true) return () => true;
+  const blocked = new BlockList();
+  for (const [address, prefix, family] of PRIVATE_RANGES)
+    blocked.addSubnet(address, prefix, family);
+  const allowed = cidrList(Array.isArray(allow) ? allow : []);
+  return (address) => {
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address)?.[1];
+    const ip = mapped ?? address;
+    const family = isIP(ip) === 6 ? 'ipv6' : 'ipv4';
+    return allowed.check(ip, family) || !blocked.check(ip, family);
+  };
+}
+
+/**
+ * A DNS lookup for undici's `connect` that refuses hosts resolving to an address `isAllowed`
+ * rejects. Checking at connect time (not before the request) defeats DNS rebinding.
+ */
+export function guardedLookup(isAllowed: (address: string) => boolean): LookupFunction {
+  return (hostname, lookupOptions, callback) => {
+    dnsLookup(hostname, { ...lookupOptions, all: true }, (err, addresses: LookupAddress[]) => {
+      if (err) {
+        callback(err, '', 0);
+        return;
+      }
+      const denied = addresses.find((a) => !isAllowed(a.address));
+      if (denied) {
+        callback(
+          new FetchError('blocked_address', `${hostname} resolves to a private address`),
+          '',
+          0,
+        );
+        return;
+      }
+      if (lookupOptions.all)
+        (callback as unknown as (e: null, a: LookupAddress[]) => void)(null, addresses);
+      else {
+        const first = addresses[0];
+        if (first) callback(null, first.address, first.family);
+        else callback(new FetchError('network', `No address for ${hostname}`), '', 0);
+      }
+    });
+  };
+}
+
 /** HTTP client for untrusted URLs: SSRF guard, timeout, size and redirect limits. */
 export class HttpFetcher implements Fetcher {
   readonly #agent: Agent;
@@ -153,47 +202,11 @@ export class HttpFetcher implements Fetcher {
     this.#maxRedirects = options.maxRedirects ?? 5;
     this.#userAgent = options.userAgent ?? userAgentFor();
 
-    const blocked = new BlockList();
-    for (const [address, prefix, family] of PRIVATE_RANGES)
-      blocked.addSubnet(address, prefix, family);
-    const allowAll = options.allowPrivateNetworks === true;
-    const allowed = cidrList(
-      Array.isArray(options.allowPrivateNetworks) ? options.allowPrivateNetworks : [],
-    );
-    this.#isAllowed = (address) => {
-      if (allowAll) return true;
-      const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address)?.[1];
-      const ip = mapped ?? address;
-      const family = isIP(ip) === 6 ? 'ipv6' : 'ipv4';
-      return allowed.check(ip, family) || !blocked.check(ip, family);
-    };
-
-    // Checking addresses at connect time (not before the request) defeats DNS rebinding.
-    const lookup: LookupFunction = (hostname, lookupOptions, callback) => {
-      dnsLookup(hostname, { ...lookupOptions, all: true }, (err, addresses: LookupAddress[]) => {
-        if (err) {
-          callback(err, '', 0);
-          return;
-        }
-        const denied = addresses.find((a) => !this.#isAllowed(a.address));
-        if (denied) {
-          callback(
-            new FetchError('blocked_address', `${hostname} resolves to a private address`),
-            '',
-            0,
-          );
-          return;
-        }
-        if (lookupOptions.all)
-          (callback as unknown as (e: null, a: LookupAddress[]) => void)(null, addresses);
-        else {
-          const first = addresses[0];
-          if (first) callback(null, first.address, first.family);
-          else callback(new FetchError('network', `No address for ${hostname}`), '', 0);
-        }
-      });
-    };
-    this.#agent = new Agent({ connect: { lookup }, connections: 64 });
+    this.#isAllowed = addressFilter(options.allowPrivateNetworks);
+    this.#agent = new Agent({
+      connect: { lookup: guardedLookup(this.#isAllowed) },
+      connections: 64,
+    });
   }
 
   async fetch(url: string, request: FetchRequest = {}): Promise<FetchResult> {
