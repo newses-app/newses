@@ -10,7 +10,8 @@
   "scripts": {
     "typecheck": "tsc",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node src/entrypoints/migrate.ts"
+    "db:migrate": "node src/entrypoints/migrate.ts",
+    "feeds:auth": "node src/test/auth-feed-server.ts"
   },
   "dependencies": {
     "@aws-sdk/client-athena": "^3.1149.0",

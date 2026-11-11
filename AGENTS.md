@@ -16,6 +16,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm --filter @newses/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @newses/server db:migrate` | Apply migrations |
 | `docker compose -f docker/compose.yaml --profile observability up -d` | Local stack with Grafana, Tempo, Loki, and Prometheus on `127.0.0.1:3000`; set `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` in `docker/.env` |
+| `pnpm --filter @newses/server feeds:auth` | Test feeds behind HTTP Basic auth on `0.0.0.0:8090` (`--port`, `--every` minutes per item), listing their URLs and logins; from the Docker stack via `host.docker.internal`, with `FETCH_ALLOW_PRIVATE_NETWORKS=true` |
 | `pnpm --filter @newses/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
 | `pnpm --filter @newses/web build:native` | Web app for the desktop and mobile apps, in `web/dist-native` |
 | `pnpm --filter @newses/desktop dev` | Desktop app against the web app's dev server, with hot reload |
