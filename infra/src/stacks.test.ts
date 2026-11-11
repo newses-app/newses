@@ -407,6 +407,12 @@ describe('Edge', () => {
             CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
           }),
           Match.objectLike({ PathPattern: '/favicons/*', AllowedMethods: ['GET', 'HEAD'] }),
+          // Managed CachingDisabled policy.
+          Match.objectLike({
+            PathPattern: '/changes/*',
+            AllowedMethods: ['GET', 'HEAD'],
+            CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+          }),
           ...API_PATHS.map((path) => Match.objectLike({ PathPattern: path })),
         ],
       }),
@@ -444,25 +450,39 @@ describe('Feed icons', () => {
     });
   });
 
-  it('lets CloudFront read only the icons in the blob bucket', () => {
+  it('lets CloudFront read only the icons and change markers in the blob bucket', () => {
+    const objects = (prefix: string) => ({
+      'Fn::Join': ['', [Match.objectLike({ 'Fn::GetAtt': Match.anyValue() }), `/${prefix}/*`]],
+    });
     data.hasResourceProperties('AWS::S3::BucketPolicy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
           Match.objectLike({
             Principal: { Service: 'cloudfront.amazonaws.com' },
             Action: 's3:GetObject',
-            Resource: {
-              'Fn::Join': [
-                '',
-                [Match.objectLike({ 'Fn::GetAtt': Match.anyValue() }), '/favicons/*'],
-              ],
-            },
+            Resource: [objects('favicons'), objects('changes')],
             Condition: {
               ArnLike: { 'AWS:SourceArn': `arn:aws:cloudfront::${ACCOUNT}:distribution/*` },
             },
           }),
         ]),
       },
+    });
+  });
+});
+
+describe('Change markers', () => {
+  it('reach the bucket on every poll, readable from the apps, never cached by browsers', () => {
+    edge.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        Name: 'newses-dev-changes-headers',
+        CustomHeadersConfig: {
+          Items: [
+            { Header: 'cache-control', Value: 'no-cache', Override: true },
+            { Header: 'access-control-allow-origin', Value: '*', Override: true },
+          ],
+        },
+      }),
     });
   });
 });

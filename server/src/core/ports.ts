@@ -145,6 +145,11 @@ export interface Realtime {
   publish(userId: number, event: RealtimeEvent): Promise<void>;
   /** Returns an unsubscribe function. */
   subscribe(userId: number, listener: (event: RealtimeEvent) => void): () => void;
+  /**
+   * Where no process holds streams open: the path of the user's change marker, which clients
+   * poll instead, and which changes with each event.
+   */
+  changesPath?(userId: number): string;
 }
 
 /** An ops alert that opened or resolved during a check. */

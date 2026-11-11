@@ -26,6 +26,7 @@ import type { SessionService } from '../../core/auth/sessions.ts';
 import type { TwoFactorService } from '../../core/auth/two-factor.ts';
 import type { IconTokens } from '../../core/feeds/favicons.ts';
 import { DomainError } from '../../core/errors.ts';
+import type { Realtime } from '../../core/ports.ts';
 import { clearSessionCookie, requireAuth, requireUser, setSessionCookie } from '../auth.ts';
 import { toAppPassword, toSession, toUser } from '../dto.ts';
 import { iconsPath } from '../icons.ts';
@@ -37,6 +38,8 @@ export interface AuthRoutesOptions {
   twoFactor: TwoFactorService;
   appPasswords: AppPasswordService;
   iconTokens: IconTokens;
+  /** Gives the change marker's path where there is no event stream. */
+  realtime: Realtime;
   /** Origin shown to apps; null uses each request's origin. */
   publicUrl: string | null;
 }
@@ -68,21 +71,34 @@ async function logFailure<T>(
 async function sessionResponse(
   request: FastifyRequest,
   reply: FastifyReply,
-  { sessions, iconTokens }: Pick<AuthRoutesOptions, 'sessions' | 'iconTokens'>,
+  {
+    sessions,
+    iconTokens,
+    realtime,
+  }: Pick<AuthRoutesOptions, 'sessions' | 'iconTokens' | 'realtime'>,
   result: LoggedIn,
 ) {
   const { token, session, user } = result;
   if (request.auth) await sessions.revoke(request.auth.user.id, request.auth.session.id);
   logSecurity(request, 'login', { userId: user.id, kind: session.kind });
-  const icons = iconsPath(iconTokens, user.id);
-  if (session.kind === 'bearer') return { user: toUser(user), token, iconsPath: icons };
+  const paths = userPaths({ iconTokens, realtime }, user.id);
+  if (session.kind === 'bearer') return { user: toUser(user), token, ...paths };
   setSessionCookie(reply, token);
-  return { user: toUser(user), csrfToken: session.csrfToken ?? undefined, iconsPath: icons };
+  return { user: toUser(user), csrfToken: session.csrfToken ?? undefined, ...paths };
+}
+
+/** The user's feed icons, and their change marker where there is no event stream (API 1.11). */
+function userPaths(
+  { iconTokens, realtime }: Pick<AuthRoutesOptions, 'iconTokens' | 'realtime'>,
+  userId: number,
+) {
+  const changesPath = realtime.changesPath?.(userId);
+  return { iconsPath: iconsPath(iconTokens, userId), ...(changesPath && { changesPath }) };
 }
 
 export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
   app,
-  { auth, sessions, twoFactor, appPasswords, iconTokens, publicUrl },
+  { auth, sessions, twoFactor, appPasswords, iconTokens, realtime, publicUrl },
 ) => {
   const client = (request: FastifyRequest) => ({
     ip: request.ip,
@@ -104,7 +120,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
         logSecurity(request, 'login_second_factor_required', { userId: result.user.id });
         return { twoFactorRequired: true as const, challenge: result.challenge };
       }
-      return sessionResponse(request, reply, { sessions, iconTokens }, result);
+      return sessionResponse(request, reply, { sessions, iconTokens, realtime }, result);
     },
   );
 
@@ -115,7 +131,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
       const result = await logFailure(request, 'two_factor_failed', () =>
         auth.completeLogin({ ...request.body, ...client(request) }),
       );
-      return sessionResponse(request, reply, { sessions, iconTokens }, result);
+      return sessionResponse(request, reply, { sessions, iconTokens, realtime }, result);
     },
   );
 
@@ -135,7 +151,7 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = (
       return Promise.resolve({
         user: toUser(user),
         csrfToken: session.csrfToken,
-        iconsPath: iconsPath(iconTokens, user.id),
+        ...userPaths({ iconTokens, realtime }, user.id),
       });
     },
   );

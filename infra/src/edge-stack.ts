@@ -12,7 +12,7 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import type { Construct } from 'constructs';
 import { REPO_ROOT, type StageConfig } from './config.ts';
-import { FAVICONS_PREFIX } from './data-stack.ts';
+import { CHANGES_PREFIX, FAVICONS_PREFIX } from './data-stack.ts';
 import {
   CERTIFICATE_ARN,
   downloadsBucketName,
@@ -222,17 +222,18 @@ export class EdgeStack extends Stack {
       responseHeadersPolicy: apiHeaders,
     };
 
+    const blobsOrigin = origins.S3BucketOrigin.withOriginAccessControl(
+      s3.Bucket.fromBucketName(this, 'Blobs', props.blobBucketName),
+      {
+        originAccessControl: new cloudfront.S3OriginAccessControl(this, 'BlobsAccess', {
+          originAccessControlName: resourceName(stage, 'blobs'),
+        }),
+      },
+    );
     // Feed icons are named by their content, so the edge and browsers keep them for good. They
     // come straight from the blob bucket, where S3 stores no Cache-Control, so the policies set it.
     const faviconBehavior: cloudfront.BehaviorOptions = {
-      origin: origins.S3BucketOrigin.withOriginAccessControl(
-        s3.Bucket.fromBucketName(this, 'Blobs', props.blobBucketName),
-        {
-          originAccessControl: new cloudfront.S3OriginAccessControl(this, 'BlobsAccess', {
-            originAccessControlName: resourceName(stage, 'blobs'),
-          }),
-        },
-      ),
+      origin: blobsOrigin,
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
       cachePolicy: new cloudfront.CachePolicy(this, 'FaviconCache', {
@@ -269,9 +270,35 @@ export class EdgeStack extends Stack {
         },
       }),
     };
+    // Change markers are polled every minute by open apps, so they are never cached: each poll
+    // reaches S3, never Lambda. Their paths are secret enough (an HMAC per user) to need no
+    // session, so the apps read them from their own origins.
+    const changesBehavior: cloudfront.BehaviorOptions = {
+      origin: blobsOrigin,
+      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'ChangesHeaders', {
+        responseHeadersPolicyName: resourceName(stage, 'changes-headers'),
+        customHeadersBehavior: {
+          customHeaders: [
+            { header: 'cache-control', value: 'no-cache', override: true },
+            { header: 'access-control-allow-origin', value: '*', override: true },
+          ],
+        },
+        securityHeadersBehavior: {
+          contentTypeOptions: { override: true },
+          strictTransportSecurity: {
+            accessControlMaxAge: Duration.days(365),
+            includeSubdomains: false,
+            override: true,
+          },
+        },
+      }),
+    };
     Annotations.of(this).acknowledgeWarning(
       '@aws-cdk/aws-cloudfront-origins:updateImportedBucketPolicyOac',
-      "The Data stack's bucket policy grants CloudFront the icons",
+      "The Data stack's bucket policy grants CloudFront the icons and change markers",
     );
 
     // Versioned files are immutable and the rest no-cache (set by the publisher), so the
@@ -333,6 +360,7 @@ export class EdgeStack extends Stack {
         '/downloads/*': downloadsBehavior,
         '/api/v1/images/*': imageBehavior,
         [`/${FAVICONS_PREFIX}/*`]: faviconBehavior,
+        [`/${CHANGES_PREFIX}/*`]: changesBehavior,
         ...Object.fromEntries(API_PATHS.map((path) => [path, apiBehavior])),
       },
     });

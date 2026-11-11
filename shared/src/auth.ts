@@ -53,11 +53,19 @@ export const loginRequestSchema = z.object({
  */
 const iconsPathSchema = z.string();
 
+/**
+ * From API 1.11, where the server holds no event stream (AWS): the path of the user's change
+ * marker, which needs no session and whose text changes with each `counters` event; clients poll
+ * it instead of the counters.
+ */
+const changesPathSchema = z.string().optional();
+
 export const loggedInResponseSchema = z.object({
   user: userSchema,
   csrfToken: z.string().optional(),
   token: z.string().optional(),
   iconsPath: iconsPathSchema,
+  changesPath: changesPathSchema,
 });
 
 /** The password was right and 2FA is on: send a code with the challenge to `/auth/login/2fa`. */
@@ -125,6 +133,7 @@ export const currentSessionSchema = z.object({
   user: userSchema,
   csrfToken: z.string().nullable(),
   iconsPath: iconsPathSchema,
+  changesPath: changesPathSchema,
 });
 
 export const sessionSchema = z.object({

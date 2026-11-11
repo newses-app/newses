@@ -3,7 +3,7 @@ import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/cl
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import type pg from 'pg';
 import { loadConfig } from '../../adapters/env-config.ts';
-import { NoopRealtime } from '../../adapters/noop-realtime.ts';
+import { MarkerRealtime } from '../../adapters/marker-realtime.ts';
 import { SnsNotifier } from '../../adapters/sns-notifier.ts';
 import { SqsJobQueue } from '../../adapters/sqs-job-queue.ts';
 import { deriveKeys } from '../../core/crypto.ts';
@@ -113,7 +113,8 @@ export async function createLambdaRuntime(role: string) {
       },
       new SQSClient({}),
     ),
-    realtime: new NoopRealtime(),
+    // No function holds client streams open; clients poll each user's marker from the edge.
+    realtime: new MarkerRealtime(blobs, keys.changes, logger),
     push: createPushSender(config, keys, logger),
     blobs,
     archive: createArchiveWriter(config, blobs),

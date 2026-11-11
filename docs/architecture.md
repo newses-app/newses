@@ -60,7 +60,7 @@ Rules:
 - The server logs a warning, with pool usage and the longest event-loop delay, for responses slower than 2 s and for requests the client abandons before a response.
 - `buildApp()` constructs the Fastify app without listening, so it can be mounted by `listen()` or a Lambda adapter.
 - The SPA is a standalone static build and talks only to the API.
-- Clients treat realtime as optional and poll counters when no stream is available.
+- Clients treat realtime as optional and poll counters when no stream is available, or the user's change marker when the server gives one.
 
 ### Ports
 
@@ -71,7 +71,7 @@ Rules:
 | `BlobStore` | Favicons, cached images, archive files | Local volume | S3 |
 | `ArchiveWriter` | Write entries to the cold-storage archive | Parquet through `BlobStore` | Parquet through `BlobStore`, catalogued in Glue for Athena |
 | `ArchiveReader` | List, search, and get archived articles; compact the archive | DuckDB in-process, over the local blob directory | Athena over the Glue table |
-| `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE | Postgres LISTEN/NOTIFY | None: the stream answers 204 and clients poll |
+| `Realtime` | Publish per-user invalidation events from any process; server streams them to clients over SSE, or gives the path of a marker they poll | Postgres LISTEN/NOTIFY | Change markers in the blob bucket, served by CloudFront; the stream answers 204 |
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
 | `Notifier` | Tell operators when alerts open or resolve | Email over SMTP, when configured | The stage's SNS alert topic |
@@ -157,7 +157,7 @@ Native build (`build:native`, `web/dist-native`), bundled by the desktop and mob
 - Portable exe (`portable` target): unpacks the app into a new temporary folder on each launch (`unpackDirName: false`) and deletes it on exit. With `PORTABLE_EXECUTABLE_DIR` set, the app moves `userData` (settings, the offline store, Chromium's data) to `Newses Data` beside the exe before taking the single-instance lock, or keeps the default when that folder cannot be written. On another PC or Windows user, DPAPI cannot decrypt the tokens, so each profile signs in again.
 - One instance at a time. Closing saves the window bounds unless the window is minimized or off every screen; they are restored while still on a screen, else the window opens centred on the primary screen. The menu (File, Edit, View) has no bar; its shortcuts work.
 - WSLg places Linux windows itself, ignoring the bounds the app asks for, and does not report Windows-side moves or minimizing to the app. A window closed while minimized there reopens minimized and off-screen.
-- New entries: while the window is hidden or unfocused, the main process shows one notification of the unread entries added to existing subscriptions since it went there ("12 new entries": the categories, most first). The first shows at once; it is then replaced with the running total, when that has grown, at most every 15 min, and closed when the window is focused. Clicking it opens the feed or category, or All; after a move to another profile it only shows the window. Hidden windows poll counters every 30 min (the AWS dispatch interval) instead of pausing; resume, unlock, and the tray's Check now refresh at once. Notifications can be turned off.
+- New entries: while the window is hidden or unfocused, the main process shows one notification of the unread entries added to existing subscriptions since it went there ("12 new entries": the categories, most first). The first shows at once; it is then replaced with the running total, when that has grown, at most every 15 min, and closed when the window is focused. Clicking it opens the feed or category, or All; after a move to another profile it only shows the window. Hidden windows poll counters (on AWS, the change marker) every 30 min (the AWS dispatch interval) instead of pausing; resume, unlock, and the tray's Check now refresh at once. Notifications can be turned off.
 - The tray and application menu use `desktop/src/locales`, in the language the app reports (`setLanguage`), kept in `settings.json` for menus built before the window runs; on first run, the system's. Each menu role has its label, as Electron's stay English.
 - Optional, in settings: keep running in the tray when the window closes (Open, Check now, with several profiles a Profiles submenu marking the active one, Quit; picking another shows the window and moves the app there), and start at login (`--hidden`, straight to the tray when it is on; a login item on Windows, an XDG autostart entry on Linux; not offered by the portable exe). Desktop options live in `settings.json`.
 - Updates (release builds only; electron-updater on the stage's `/downloads` feed): checked at launch and every 6 h. AppImages and signed NSIS installs (uninstaller beside the exe, publisher in the feed config) download in the background and install on restart or quit; updates must carry the same Windows publisher. A deb, the Windows zip, or the portable exe gets a link to the downloads page instead. Prereleases update to newer prereleases (semver order).
@@ -408,6 +408,7 @@ Admins:
 | TTRSS-compatible | `/api/`, `/api/index.php` (POST, `op`) | See below |
 | Icons | `/favicons/<sha256>` | Subscriptions' `iconUrl`; from the blob bucket through CloudFront on AWS |
 | Feed icons | `/feed-icons/<user segment>/<id>.ico` | For TTRSS clients and the apps (`iconsPath`); see below |
+| Change markers | `/changes/<HMAC of the user id>` | AWS only (`changesPath`): from the blob bucket through CloudFront, never cached |
 | Google Reader | `/accounts/ClientLogin`, `/reader/api/0/*`; also under `/api/greader.php` | See below |
 
 ### Native REST API
@@ -578,7 +579,7 @@ flowchart LR
 
 Constraints:
 - Responses are capped at 6 MB; list pages with content, and contents batches, end early past 2 MB of content and full text (UTF-8).
-- No SSE; clients poll counters every 60 s while visible (hidden desktop apps with notifications on: every 30 min).
+- No SSE. Each `counters` event rewrites the user's change marker, `changes/<HMAC of the user id>` (`changes` key) in the blob bucket, with new text (one more write for events during one in flight). Login and session responses give its path as `changesPath` (API 1.11). Open apps poll it every 60 s while visible (hidden desktop apps with notifications on: every 30 min) through CloudFront's `/changes/*` behaviour, never cached and answered by S3, so polls reach neither Lambda nor the database; counters are fetched only when its text changed. Apps open no event stream then. Responses are `no-cache`, revalidated by the browser, and readable from the apps' origins (`Access-Control-Allow-Origin: *`); the path needs no session. Before a first event S3 answers 403, read as no marker yet.
 
 #### Releases
 

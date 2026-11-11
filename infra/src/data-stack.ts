@@ -18,6 +18,8 @@ import { resourceName } from './deploy-config.ts';
 
 /** Feed icons' prefix in the blob bucket, which is also their path on the site. */
 export const FAVICONS_PREFIX = 'favicons';
+/** Each user's change marker, which open apps poll from the edge (`MarkerRealtime`). */
+export const CHANGES_PREFIX = 'changes';
 
 /** Athena writes query results under this prefix of the blob bucket. */
 const ATHENA_RESULTS = 'athena-results';
@@ -62,13 +64,16 @@ export class DataStack extends Stack {
         { id: 'archive-staging', prefix: 'archive/staging/', expiration: Duration.days(1) },
       ],
     });
-    // CloudFront serves feed icons from here, and nothing else. The distribution is in the Edge
+    // CloudFront serves feed icons and change markers from here, and nothing else. The distribution is in the Edge
     // stack, which references this one, so any of the account's distributions is named.
     this.blobs.addToResourcePolicy(
       new iam.PolicyStatement({
         principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
         actions: ['s3:GetObject'],
-        resources: [this.blobs.arnForObjects(`${FAVICONS_PREFIX}/*`)],
+        resources: [
+          this.blobs.arnForObjects(`${FAVICONS_PREFIX}/*`),
+          this.blobs.arnForObjects(`${CHANGES_PREFIX}/*`),
+        ],
         conditions: {
           ArnLike: { 'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/*` },
         },

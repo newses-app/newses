@@ -155,6 +155,7 @@ export function useSession() {
       user: result.user,
       csrfToken: result.csrfToken ?? null,
       iconsPath: result.iconsPath,
+      ...(result.changesPath && { changesPath: result.changesPath }),
     });
   }
 
