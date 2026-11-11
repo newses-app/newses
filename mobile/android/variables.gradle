@@ -10,6 +10,7 @@ ext {
     coreSplashScreenVersion = '1.2.0'
     androidxWebkitVersion = '1.14.0'
     workRuntimeVersion = '2.11.2'
+    unifiedPushConnectorVersion = '3.3.5'
     orgJsonVersion = '20240303'
     junitVersion = '4.13.2'
     androidxJunitVersion = '1.3.0'

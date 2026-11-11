@@ -34,11 +34,15 @@ const target = (path: string) => ({
   p256dh: device.getPublicKey().toString('base64url'),
   auth: Buffer.alloc(16, 1).toString('base64url'),
 });
-const sender = (allowPrivateNetworks: boolean | string[] = ['127.0.0.0/8']) =>
+const sender = (
+  allowPrivateNetworks: boolean | string[] = ['127.0.0.0/8'],
+  trustedHosts?: string[],
+) =>
   new WebPushSender({
     seed: Buffer.alloc(32, 3),
     subject: 'https://reader.example',
     allowPrivateNetworks,
+    ...(trustedHosts && { trustedHosts }),
     logger: silentLogger,
   });
 const options = { ttlSeconds: 600, topic: 'new-entries' };
@@ -86,6 +90,16 @@ describe('WebPushSender', () => {
       ),
     ).toBe('failed');
     expect(seen).toHaveLength(before);
+    await push.close();
+  });
+
+  it("reaches the operator's own distributor wherever it is", async () => {
+    const push = sender(false, ['localhost']);
+    const local = { ...target('/'), endpoint: `http://localhost:${new URL(base).port}/send/d` };
+    expect(await push.send(local, '{}', options)).toBe('sent');
+    expect(seen.at(-1)?.path).toBe('/send/d');
+    // Only that host.
+    expect(await push.send(target('/send/e'), '{}', options)).toBe('failed');
     await push.close();
   });
 });

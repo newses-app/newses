@@ -36,6 +36,19 @@ const schema = z
               .map((s) => s.trim())
               .filter(Boolean),
       ),
+    PUSH_TRUSTED_HOSTS: z
+      .string()
+      .default('')
+      .transform((v) =>
+        v
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    PUSH_DISTRIBUTOR_URL: z
+      .url({ protocol: /^https$/ })
+      .transform((v) => v.replace(/\/+$/, ''))
+      .optional(),
     COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
     ARCHIVE_ENABLED: z.enum(['true', 'false']).default('true'),
     ARCHIVE_ATHENA_WORKGROUP: z.string().min(1).optional(),
@@ -123,6 +136,10 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       e.FETCH_ALLOW_PRIVATE_NETWORKS === true || e.FETCH_ALLOW_PRIVATE_NETWORKS.length > 0
         ? e.FETCH_ALLOW_PRIVATE_NETWORKS
         : false,
+    push: {
+      trustedHosts: e.PUSH_TRUSTED_HOSTS,
+      distributorUrl: e.PUSH_DISTRIBUTOR_URL ?? null,
+    },
     appSecret: e.APP_SECRET,
     bootstrapAdmin:
       e.ADMIN_LOGIN && e.ADMIN_PASSWORD

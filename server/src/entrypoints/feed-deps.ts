@@ -75,6 +75,7 @@ export function createPushSender(config: AppConfig, keys: Keys, logger: Logger):
     seed: keys.vapid,
     subject: config.publicUrl?.startsWith('https:') ? config.publicUrl : 'https://newses.app',
     allowPrivateNetworks: config.fetchAllowPrivateNetworks,
+    trustedHosts: config.push.trustedHosts,
     logger,
   });
 }

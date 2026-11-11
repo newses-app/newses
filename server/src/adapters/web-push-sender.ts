@@ -15,6 +15,8 @@ export interface WebPushSenderOptions {
   subject: string;
   /** Private addresses push services may be reached at, as for feeds; blocked by default. */
   allowPrivateNetworks?: boolean | string[];
+  /** Hosts (lower case) whose endpoints may be at any address: the operator's own distributor. */
+  trustedHosts?: string[];
   logger: Logger;
   timeoutMs?: number;
 }
@@ -30,6 +32,9 @@ export class WebPushSender implements PushSender {
   readonly #subject: string;
   readonly #isAllowed: (address: string) => boolean;
   readonly #agent: Agent;
+  readonly #trusted: Set<string>;
+  /** For trusted hosts, without the address guard. */
+  readonly #trustedAgent: Agent;
   readonly #logger: Logger;
   readonly #timeoutMs: number;
 
@@ -39,6 +44,8 @@ export class WebPushSender implements PushSender {
     this.#subject = options.subject;
     this.#isAllowed = addressFilter(options.allowPrivateNetworks);
     this.#agent = new Agent({ connect: { lookup: guardedLookup(this.#isAllowed) } });
+    this.#trusted = new Set(options.trustedHosts);
+    this.#trustedAgent = new Agent();
     this.#logger = options.logger;
     this.#timeoutMs = options.timeoutMs ?? 10_000;
   }
@@ -85,15 +92,16 @@ export class WebPushSender implements PushSender {
   }
 
   async close(): Promise<void> {
-    await this.#agent.close();
+    await Promise.all([this.#agent.close(), this.#trustedAgent.close()]);
   }
 
   async #post(target: PushTarget, payload: string, options: PushOptions): Promise<number> {
     // The API only takes https endpoints.
     const url = new URL(target.endpoint);
+    const trusted = this.#trusted.has(url.hostname.toLowerCase());
     // IP literals skip DNS lookup, so check them here.
     const literal = url.hostname.replace(/^\[|\]$/g, '');
-    if (isIP(literal) && !this.#isAllowed(literal))
+    if (!trusted && isIP(literal) && !this.#isAllowed(literal))
       throw new FetchError('blocked_address', `${literal} is a private address`);
     const response = await fetch(url, {
       method: 'POST',
@@ -109,7 +117,7 @@ export class WebPushSender implements PushSender {
       // Push services answer directly; a redirect could only point somewhere unchecked.
       redirect: 'manual',
       signal: AbortSignal.timeout(this.#timeoutMs),
-      dispatcher: this.#agent,
+      dispatcher: trusted ? this.#trustedAgent : this.#agent,
     });
     await response.body?.cancel();
     return response.status;

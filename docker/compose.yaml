@@ -17,6 +17,9 @@ x-app: &app
     SOURCE_URL: ${SOURCE_URL:-}
     TRUST_PROXY: ${TRUST_PROXY:-false}
     FETCH_ALLOW_PRIVATE_NETWORKS: ${FETCH_ALLOW_PRIVATE_NETWORKS:-}
+    # The ntfy profile's distributor: the Android app suggests it, and it may be on the LAN.
+    PUSH_DISTRIBUTOR_URL: ${NTFY_HOST:+https://${NTFY_HOST:-}}
+    PUSH_TRUSTED_HOSTS: ${NTFY_HOST:-}
     FEED_UPDATE_INTERVAL_MINUTES: ${FEED_UPDATE_INTERVAL_MINUTES:-30}
     FEED_PURGE_DAYS: ${FEED_PURGE_DAYS:-180}
     ARCHIVE_ENABLED: ${ARCHIVE_ENABLED:-true}
@@ -119,6 +122,33 @@ services:
       db:
         condition: service_healthy
 
+  # A UnifiedPush distributor for the Android app, at its own hostname (NTFY_HOST, behind your
+  # proxy). Anyone may publish to UnifiedPush topics (`up*`), as servers push there; reading needs
+  # a user given access to them. Enable with COMPOSE_PROFILES=ntfy in .env.
+  ntfy:
+    image: binwiederhier/ntfy:v2.33.1@sha256:29bc952294d58957f6ca6638eca9a653a33555989224edbdf4bb9433ee606497
+    profiles: [ntfy]
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: ${NTFY_HOST:+https://${NTFY_HOST:-}}
+      NTFY_BEHIND_PROXY: 'true'
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_AUTH_ACCESS: '*:up*:wo'
+      NTFY_WEB_ROOT: disable
+    ports:
+      - '${NTFY_PORT:-8081}:80'
+    volumes:
+      - ntfy:/var/lib/ntfy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/v1/health | grep -q ''"healthy":true''']
+      interval: 60s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
   # Copies the image's Grafana dashboards to lgtm's on each start, so an upgrade refreshes them.
   dashboards:
     <<: *app
@@ -167,3 +197,4 @@ volumes:
   backups:
   lgtm:
   dashboards:
+  ntfy:

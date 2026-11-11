@@ -87,6 +87,8 @@ const bridge: PlatformBridge = {
   // The desktop app keeps running in the tray, where it syncs on its own schedule.
   setBackgroundSync: () => Promise.resolve(),
   takeBackgroundSync: () => Promise.resolve([]),
+  pushStatus: () => Promise.resolve({ state: 'unsupported' }),
+  choosePushService: () => Promise.resolve({ state: 'unsupported' }),
   getDesktopOptions: () => invoke<DesktopOptions>('getDesktopOptions'),
   setDesktopOptions: (options) => invoke<undefined>('setDesktopOptions', options),
   // Sharing to the app is Android's.

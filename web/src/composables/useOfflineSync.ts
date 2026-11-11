@@ -22,6 +22,7 @@ import { flushOutbox, loadPending } from '../offline/outbox.ts';
 import { setPeriodicSync } from '../offline/registration.ts';
 import {
   backgroundState,
+  pushStatus,
   syncFailure,
   flushRequests,
   keepThemeDrafts,
@@ -62,6 +63,8 @@ const SETTLE_MS = 2000;
 interface ServerSupport {
   offline: boolean;
   conflicts: boolean;
+  /** The server's VAPID key, when it pushes (API 1.11). */
+  pushKey: string | null;
 }
 
 /**
@@ -82,7 +85,7 @@ function serverSupport(): Promise<ServerSupport | null> {
       if (NATIVE) void connection.rememberServerName(info.name ?? null).catch(() => undefined);
       const offline = supportsOffline(info);
       if (!offline) forget();
-      return { offline, conflicts: detectsConflicts(info) };
+      return { offline, conflicts: detectsConflicts(info), pushKey: info.push?.key ?? null };
     },
     () => {
       forget();
@@ -185,17 +188,23 @@ export function useOfflineSync(): void {
     }
   }
 
-  /** Hands the background syncs what they need: settings, and where the store's sync stands. */
-  async function publishBackground(db: OfflineDb): Promise<void> {
+  /**
+   * Hands the background syncs what they need: settings, where the store's sync stands, and on
+   * Android the server's push key, for the job to register with the reader's distributor.
+   */
+  async function publishBackground(db: OfflineDb, pushKey: string | null): Promise<void> {
     const { background, wifiOnly, unread, limitBytes, notify } = offlineSettings;
     if (NATIVE) {
-      if (bridge.platform === 'android')
+      if (bridge.platform === 'android') {
         await bridge.setBackgroundSync({
           enabled: background,
           wifiOnly,
           syncToken: await storedSyncToken(db),
           notify: background && notify ? await handover(db) : null,
+          pushKey: background ? pushKey : null,
         });
+        pushStatus.value = await bridge.pushStatus().catch(() => null);
+      }
       return;
     }
     const account = lastAccount();
@@ -244,7 +253,7 @@ export function useOfflineSync(): void {
     syncStatus.unsupported = server?.offline === false;
     if (!server) return;
     if (syncStatus.unsupported) return;
-    const { conflicts } = server;
+    const { conflicts, pushKey } = server;
     syncStatus.running = true;
     if (!NATIVE) warmThemeFonts();
     try {
@@ -277,7 +286,7 @@ export function useOfflineSync(): void {
         await downloadContents({ ...downloads, images: false });
         await downloadImages({ ...downloads, images: imagesNow(networkStatus.value.wifi) });
       });
-      await publishBackground(db).catch(() => undefined);
+      await publishBackground(db, pushKey).catch(() => undefined);
     } catch (error) {
       syncStatus.lastError = syncFailure(error);
       throw error;

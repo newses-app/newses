@@ -18,6 +18,7 @@ const app = buildApp({
   instanceName: config.instanceName,
   sourceUrl: config.sourceUrl,
   publicUrl: config.publicUrl,
+  pushDistributorUrl: config.push.distributorUrl,
   compatTrace: config.compatTrace,
   // Lambda responses are buffered, so event streams cannot be held open; clients poll.
   events: false,

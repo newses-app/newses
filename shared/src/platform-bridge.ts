@@ -72,6 +72,23 @@ export interface BackgroundSyncOptions {
   syncToken: string | null;
   /** New-entry notifications from the job; absent or null: none. */
   notify?: NewEntriesHandover | null;
+  /**
+   * The server's VAPID key (`push.key`), so its pushes run the job through the reader's
+   * UnifiedPush distributor; absent or null: the job runs on its timer only.
+   */
+  pushKey?: string | null;
+}
+
+/**
+ * How the server's pushes reach the background job (Android): `pushed` through `distributor`;
+ * `registering` with it; `failed` when it refused (it may need the reader to sign in to it);
+ * `choose` when several distributors are installed and none is chosen; `none` when none is
+ * installed; `off` without background sync or a server that pushes; `unsupported` elsewhere.
+ */
+export interface PushServiceStatus {
+  state: 'pushed' | 'registering' | 'failed' | 'choose' | 'none' | 'off' | 'unsupported';
+  /** The distributor app's name, when one is chosen. */
+  distributor?: string;
 }
 
 /**
@@ -194,6 +211,10 @@ export interface PlatformBridge {
   setBackgroundSync(options: BackgroundSyncOptions): Promise<void>;
   /** What the background job fetched since last asked, removed as it is taken; elsewhere empty. */
   takeBackgroundSync(): Promise<StagedPage[]>;
+  /** How the server's pushes reach the background job; `unsupported` outside Android. */
+  pushStatus(): Promise<PushServiceStatus>;
+  /** Asks the reader which installed distributor to use, then registers with it. */
+  choosePushService(): Promise<PushServiceStatus>;
   /** Null outside the desktop app. */
   getDesktopOptions(): Promise<DesktopOptions | null>;
   setDesktopOptions(options: Partial<DesktopOptions>): Promise<void>;

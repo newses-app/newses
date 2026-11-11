@@ -57,6 +57,7 @@ const app = buildApp({
   instanceName: config.instanceName,
   sourceUrl: config.sourceUrl,
   publicUrl: config.publicUrl,
+  pushDistributorUrl: config.push.distributorUrl,
   compatTrace: config.compatTrace,
   diagnostics: { snapshot: processSnapshot(pool) },
   services,

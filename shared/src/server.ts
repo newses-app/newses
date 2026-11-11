@@ -13,8 +13,11 @@ export const serverInfoSchema = z.object({
   name: z.string().max(MAX_INSTANCE_NAME_LENGTH).optional(),
   /** Where to get this server's source code (`SOURCE_URL`, AGPL §13); from API 1.9. */
   source: z.url().optional(),
-  /** Web Push (RFC 8292): the server's VAPID public key, base64url; from API 1.11. */
-  push: z.object({ key: z.string() }).optional(),
+  /**
+   * Web Push (RFC 8292), from API 1.11: the server's VAPID public key, base64url, and a UnifiedPush
+   * distributor its operator offers readers (`PUSH_DISTRIBUTOR_URL`), when there is one.
+   */
+  push: z.object({ key: z.string(), distributor: z.url().optional() }).optional(),
 });
 
 export type ServerInfo = z.infer<typeof serverInfoSchema>;

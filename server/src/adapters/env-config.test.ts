@@ -22,6 +22,7 @@ describe('loadConfig', () => {
       feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
       ops: { retentionDays: 90, auditRetentionDays: 365, hostHourlyBudget: 200, alertEmail: null },
       fetchAllowPrivateNetworks: false,
+      push: { trustedHosts: [], distributorUrl: null },
       appSecret: APP_SECRET,
       bootstrapAdmin: null,
     });
@@ -116,6 +117,24 @@ describe('loadConfig', () => {
         .fetchAllowPrivateNetworks,
     ).toEqual(['192.168.1.0/24', '10.0.0.5']);
     expect(loadConfig({ ...base, ADMIN_LOGIN: '', ADMIN_PASSWORD: '' }).bootstrapAdmin).toBeNull();
+  });
+
+  it('parses the push distributor and the hosts trusted to be on private networks', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig(base).push).toEqual({ trustedHosts: [], distributorUrl: null });
+    expect(
+      loadConfig({
+        ...base,
+        PUSH_TRUSTED_HOSTS: 'Ntfy.Example.com, push.lan',
+        PUSH_DISTRIBUTOR_URL: 'https://ntfy.example.com/',
+      }).push,
+    ).toEqual({
+      trustedHosts: ['ntfy.example.com', 'push.lan'],
+      distributorUrl: 'https://ntfy.example.com',
+    });
+    expect(() => loadConfig({ ...base, PUSH_DISTRIBUTOR_URL: 'http://ntfy.example.com' })).toThrow(
+      /PUSH_DISTRIBUTOR_URL/,
+    );
   });
 
   it('reports every invalid variable', () => {

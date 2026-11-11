@@ -94,6 +94,8 @@ export interface AppDeps {
   instanceName?: string | null;
   /** Where users get the server's source, reported to apps; null or omitted for none. */
   sourceUrl?: string | null;
+  /** A UnifiedPush distributor `GET /server` suggests to the apps; null or omitted for none. */
+  pushDistributorUrl?: string | null;
   /** Origin of public links (published feeds); null or omitted uses each request's origin. */
   publicUrl?: string | null;
   /** Log every compatibility-API call, credentials redacted. */
@@ -212,6 +214,7 @@ export function buildApp(deps: AppDeps) {
           name: deps.instanceName ?? null,
           source: deps.sourceUrl ?? null,
           pushKey: services.feeds.push.publicKey,
+          pushDistributor: deps.pushDistributorUrl ?? null,
         });
         await api.register(authRoutes, {
           ...services,

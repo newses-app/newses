@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useQuery } from '@tanstack/vue-query';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { api } from '../../api.ts';
 import { formatRelative, formatStorage } from '../../lib/format.ts';
 import { persisted, requestPersistence, storageEstimate } from '../../offline/db.ts';
 import {
@@ -14,6 +16,7 @@ import {
 import {
   backgroundState,
   outboxPending,
+  pushStatus,
   storeSummary,
   syncRequests,
   describeFailure,
@@ -62,6 +65,52 @@ const backgroundHint = computed(() => {
     default:
       return t('offline.backgroundUnsupported');
   }
+});
+
+/**
+ * On Android, how the server's pushes reach the job: through the reader's UnifiedPush distributor,
+ * or a suggestion to install one (the server's own, when its operator runs one).
+ */
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+  enabled: android,
+});
+const pushText = computed(() => {
+  const status = pushStatus.value;
+  if (!android || !offlineSettings.background || !status) return null;
+  const distributor = status.distributor ?? '';
+  const offered = serverInfo.data.value?.push?.distributor;
+  switch (status.state) {
+    case 'pushed':
+      return t('offline.pushThrough', { distributor });
+    case 'registering':
+      return t('offline.pushRegistering', { distributor });
+    case 'failed':
+      return t('offline.pushFailed', { distributor });
+    case 'choose':
+      return t('offline.pushChoose');
+    case 'none':
+      return offered ? t('offline.pushNoneServer', { url: offered }) : t('offline.pushNone');
+    default:
+      return null;
+  }
+});
+const choosingPush = ref(false);
+async function choosePush() {
+  choosingPush.value = true;
+  try {
+    pushStatus.value = await bridge.choosePushService();
+    // The distributor answers on its own time.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    pushStatus.value = await bridge.pushStatus();
+  } finally {
+    choosingPush.value = false;
+  }
+}
+onMounted(async () => {
+  if (android) pushStatus.value = await bridge.pushStatus().catch(() => pushStatus.value);
 });
 
 /** Safari deletes a site's storage after 7 days without a visit, unless it is on the Home Screen. */
@@ -202,6 +251,17 @@ async function clear() {
       <p v-else-if="!desktop" class="text-body-medium text-medium-emphasis mb-2">
         {{ backgroundHint }}
       </p>
+      <div v-if="pushText" class="d-flex flex-wrap align-center ga-2 mb-2">
+        <p class="text-body-medium text-medium-emphasis">{{ pushText }}</p>
+        <v-btn
+          v-if="pushStatus?.state === 'choose' || pushStatus?.state === 'failed'"
+          size="small"
+          variant="tonal"
+          :loading="choosingPush"
+          @click="choosePush"
+          >{{ t('offline.pushChooseButton') }}</v-btn
+        >
+      </div>
       <v-switch
         v-if="android"
         :model-value="offlineSettings.wifiOnly"

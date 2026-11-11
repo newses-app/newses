@@ -2,7 +2,8 @@
 # compose.yaml (docker/ in a checkout):
 #   docker compose -f compose.yaml -f compose.nginx-proxy.yaml up -d
 # The server joins nginx-proxy's network and is no longer published on the host,
-# so forwarded headers can only come from the proxy.
+# so forwarded headers can only come from the proxy. So does ntfy, with the ntfy profile, at
+# NTFY_HOST (with a certificate too when LETSENCRYPT_HOST is set).
 services:
   server:
     ports: !reset []
@@ -11,6 +12,16 @@ services:
       VIRTUAL_PORT: '8080'
       LETSENCRYPT_HOST: ${LETSENCRYPT_HOST:-}
       TRUST_PROXY: ${TRUST_PROXY:-1}
+    networks:
+      - default
+      - proxy
+
+  ntfy:
+    ports: !reset []
+    environment:
+      VIRTUAL_HOST: ${NTFY_HOST:-}
+      VIRTUAL_PORT: '80'
+      LETSENCRYPT_HOST: ${LETSENCRYPT_HOST:+${NTFY_HOST:-}}
     networks:
       - default
       - proxy

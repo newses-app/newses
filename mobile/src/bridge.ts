@@ -18,6 +18,7 @@ import type {
   NetworkStatus,
   NewEntriesHandover,
   NotificationAccess,
+  PushServiceStatus,
   PlatformBridge,
   SaveFile,
   StagedPage,
@@ -74,6 +75,7 @@ const BackgroundSync = registerPlugin<{
     wifiOnly: boolean;
     syncToken: string | null;
     notify?: NewEntriesHandover | null;
+    pushKey?: string | null;
     profileId: string | null;
     serverUrl: string | null;
     token: string | null;
@@ -81,6 +83,8 @@ const BackgroundSync = registerPlugin<{
   /** Pages fetched for the profile; any other profile's are dropped. */
   take(options: { profileId: string | null }): Promise<{ pages: StagedPage[] }>;
   notificationAccess(options: { ask: boolean }): Promise<{ state: NotificationAccess }>;
+  pushStatus(): Promise<PushServiceStatus>;
+  choosePushService(): Promise<PushServiceStatus>;
   /** A tapped notification's stream, including one that launched the app. */
   addListener(
     event: 'navigate',
@@ -237,6 +241,8 @@ const bridge: PlatformBridge = {
     }),
   takeBackgroundSync: async () =>
     (await BackgroundSync.take({ profileId: (await profiles.list()).active })).pages,
+  pushStatus: () => BackgroundSync.pushStatus(),
+  choosePushService: () => BackgroundSync.choosePushService(),
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: (handler) => {

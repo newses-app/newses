@@ -51,6 +51,15 @@ export interface AppConfig {
   ops: OpsSettings;
   /** Private addresses feeds may be fetched from: true for all, or CIDRs. Blocked by default. */
   fetchAllowPrivateNetworks: boolean | string[];
+  push: {
+    /**
+     * Hosts whose push endpoints may be on private networks, without opening feeds to them (a
+     * self-hosted UnifiedPush distributor on the LAN).
+     */
+    trustedHosts: string[];
+    /** A UnifiedPush distributor readers may use, which the apps suggest; null for none. */
+    distributorUrl: string | null;
+  };
   /** Root of the keys that encrypt stored secrets and sign tokens; changing it voids them. */
   appSecret: string;
   /** Creates this admin on startup when the database has no users. */

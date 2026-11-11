@@ -206,19 +206,21 @@ describe('server info', () => {
     });
   });
 
-  it('names the instance and its source when the operator set them', async () => {
+  it('names the instance, its source, and its push distributor when the operator set them', async () => {
     const named = buildApp({
       logger: pino({ level: 'silent' }),
       healthChecks: {},
       services,
       instanceName: 'Home',
       sourceUrl: 'https://git.example/fork',
+      pushDistributorUrl: 'https://ntfy.example',
     });
     const res = await named.inject({ url: '/api/v1/server' });
     expect(res.json()).toMatchObject({
       product: 'newses',
       name: 'Home',
       source: 'https://git.example/fork',
+      push: { distributor: 'https://ntfy.example' },
     });
     await named.close();
   });

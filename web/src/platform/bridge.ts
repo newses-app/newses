@@ -91,6 +91,8 @@ export const webBridge: PlatformBridge = {
   // Installed browsers sync from the service worker instead (`offline/registration.ts`).
   setBackgroundSync: () => Promise.resolve(),
   takeBackgroundSync: () => Promise.resolve([]),
+  pushStatus: () => Promise.resolve({ state: 'unsupported' }),
+  choosePushService: () => Promise.resolve({ state: 'unsupported' }),
   getDesktopOptions: () => Promise.resolve(null),
   setDesktopOptions: () => Promise.resolve(),
   onShare: () => undefined,

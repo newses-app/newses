@@ -5,11 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
-import androidx.work.Constraints;
-import androidx.work.ExistingPeriodicWorkPolicy;
-import androidx.work.NetworkType;
-import androidx.work.PeriodicWorkRequest;
-import androidx.work.WorkManager;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -21,16 +16,16 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
  * The background job, for the web app: `configure` starts, changes, or stops it for the active
- * profile, and `take` hands over what it fetched for that profile while the app was closed. It
- * also asks for the notification permission, and passes on the stream a tapped notification
- * opens as a "navigate" event, kept until the web app listens.
+ * profile, with its UnifiedPush registration, and `take` hands over what it fetched for that
+ * profile while the app was closed. It also asks for the notification permission, says how pushes
+ * arrive (and has the reader choose a distributor), and passes on the stream a tapped
+ * notification opens as a "navigate" event, kept until the web app listens.
  */
 @CapacitorPlugin(
     name = "BackgroundSync",
@@ -38,9 +33,6 @@ import org.json.JSONObject;
 )
 public class BackgroundSyncPlugin extends Plugin {
 
-    private static final String WORK = "newses-background-sync";
-    /** As often as the server's feeds are fetched by default, and battery friendly. */
-    private static final long INTERVAL_MINUTES = 30;
     /** The streams a notification opens (`NewEntries.Summary.target`). */
     private static final Pattern TARGET = Pattern.compile("/(all|[fc]\\d+)");
 
@@ -97,7 +89,8 @@ public class BackgroundSyncPlugin extends Plugin {
         String token = call.getString("token");
         String profileId = call.getString("profileId");
         if (!enabled || serverUrl == null || token == null || profileId == null) {
-            WorkManager.getInstance(context).cancelUniqueWork(WORK);
+            BackgroundSyncWorker.cancel(context);
+            PushRegistration.stop(context, prefs);
             BackgroundSyncWorker.forgetNew(context, prefs);
             prefs.edit().clear().apply();
             BackgroundSyncWorker.staged(context, null).clear();
@@ -105,15 +98,15 @@ public class BackgroundSyncPlugin extends Plugin {
             return;
         }
         String syncToken = call.getString("syncToken");
+        boolean otherProfile = !profileId.equals(prefs.getString("profileId", null));
         // Pages from an older token cannot follow the store's newer state, nor another profile's
         // pages its store; the app refetches them.
-        if (
-            !profileId.equals(prefs.getString("profileId", null)) ||
-            (syncToken != null && !syncToken.equals(prefs.getString("syncToken", null)))
-        ) {
+        if (otherProfile || (syncToken != null && !syncToken.equals(prefs.getString("syncToken", null)))) {
             BackgroundSyncWorker.staged(context, null).clear();
             BackgroundSyncWorker.forgetNew(context, prefs);
         }
+        // The profile left stops getting pushes; the endpoint goes to the new one's session.
+        if (otherProfile) PushRegistration.leave(prefs, prefs.getString("serverUrl", null), TokenVault.read(prefs));
         try {
             TokenVault.write(prefs, token);
         } catch (GeneralSecurityException e) {
@@ -130,23 +123,30 @@ public class BackgroundSyncPlugin extends Plugin {
         prefs
             .edit()
             .putBoolean("enabled", true)
+            .putBoolean("wifiOnly", wifiOnly)
             .putString("profileId", profileId)
             .putString("serverUrl", serverUrl)
             .putString("syncToken", syncToken)
             .apply();
-        Constraints constraints = new Constraints.Builder()
-            .setRequiredNetworkType(wifiOnly ? NetworkType.UNMETERED : NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build();
-        PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
-            BackgroundSyncWorker.class,
-            INTERVAL_MINUTES,
-            TimeUnit.MINUTES
-        )
-            .setConstraints(constraints)
-            .build();
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK, ExistingPeriodicWorkPolicy.UPDATE, request);
+        PushRegistration.update(context, prefs, call.getString("pushKey"), profileId);
+        BackgroundSyncWorker.schedule(context, prefs);
         call.resolve();
+    }
+
+    @PluginMethod
+    public void pushStatus(PluginCall call) {
+        call.resolve(PushRegistration.status(getContext(), BackgroundSyncWorker.prefs(getContext())));
+    }
+
+    @PluginMethod
+    public void choosePushService(PluginCall call) {
+        Context context = getContext();
+        SharedPreferences prefs = BackgroundSyncWorker.prefs(context);
+        if (getActivity() == null || prefs.getString("pushKey", null) == null) {
+            call.resolve(PushRegistration.status(context, prefs));
+            return;
+        }
+        PushRegistration.choose(getActivity(), prefs, () -> call.resolve(PushRegistration.status(context, prefs)));
     }
 
     /** Notifications on with what the job needs to count and word them (`NewEntriesHandover`), or off. */

@@ -1,4 +1,4 @@
-import type { CreateThemeRequest } from '@newses/shared';
+import type { CreateThemeRequest, PushServiceStatus } from '@newses/shared';
 import { ApiError, type ApiFailure } from '@newses/shared/client';
 import { reactive, ref, toRaw } from 'vue';
 import { requestOutcome } from '../lib/connectivity.ts';
@@ -27,6 +27,9 @@ export const syncStatus = reactive({
 
 /** Whether this browser syncs with no tab open, for settings; set at each sync. */
 export const backgroundState = ref<BackgroundState | null>(null);
+
+/** How the server's pushes reach the Android job, for settings; set at each sync. */
+export const pushStatus = ref<PushServiceStatus | null>(null);
 
 /** How many changes wait to be sent, for the status, settings, and sign-out. */
 export const outboxPending = ref(0);
