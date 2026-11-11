@@ -75,6 +75,12 @@ export class AppStack extends Stack {
     super(scope, id, props);
     const { stage, params, blobs, archive } = props;
     const { dbPassword, adminPassword, originHeader, appSecret } = params;
+    // Created by the operator when the stage sets pushTokens: CloudFormation cannot create SecureStrings.
+    const pushTokens = stage.pushTokens
+      ? ssm.StringParameter.fromSecureStringParameterAttributes(this, 'PushTokens', {
+          parameterName: `/${PROJECT}/${stage.name}/push-tokens`,
+        })
+      : undefined;
 
     const fetchDlq = new sqs.Queue(this, 'FeedFetchDlq', {
       queueName: resourceName(stage, 'feed-fetch-dlq'),
@@ -143,6 +149,8 @@ export class AppStack extends Stack {
           NEWSES_VERSION: BUILD_VERSION,
           ...(stage.instanceName && { INSTANCE_NAME: stage.instanceName }),
           ...(stage.sourceUrl && { SOURCE_URL: stage.sourceUrl }),
+          ...(stage.pushDistributorUrl && { PUSH_DISTRIBUTOR_URL: stage.pushDistributorUrl }),
+          ...(pushTokens && { PUSH_TOKENS_PARAMETER: pushTokens.parameterName }),
           BLOB_BUCKET: blobs.bucketName,
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
@@ -181,6 +189,7 @@ export class AppStack extends Stack {
       });
       dbPassword.grantRead(handler);
       appSecret.grantRead(handler);
+      if (pushTokens) pushTokens.grantRead(handler);
       blobs.grantReadWrite(handler);
       fetchQueue.grantSendMessages(handler);
       faviconQueue.grantSendMessages(handler);

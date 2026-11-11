@@ -77,11 +77,18 @@ async function resolveAppSecret(): Promise<void> {
   process.env.APP_SECRET = await readParameter('APP_SECRET_PARAMETER');
 }
 
+/** Sets PUSH_TOKENS from the parameter named by PUSH_TOKENS_PARAMETER, when that is set. */
+async function resolvePushTokens(): Promise<void> {
+  if (!process.env.PUSH_TOKENS_PARAMETER || process.env.PUSH_TOKENS) return;
+  process.env.PUSH_TOKENS = await readParameter('PUSH_TOKENS_PARAMETER');
+}
+
 /** Config, logger, pool, and the AWS feed adapters, created once per Lambda cold start. */
 export async function createLambdaRuntime(role: string) {
   await resolveDatabaseUrl();
   await resolveAdminPassword();
   await resolveAppSecret();
+  await resolvePushTokens();
   const config = loadConfig();
   const logger = createLogger(config, role);
   const pool = createPool(config, logger, {

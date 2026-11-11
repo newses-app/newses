@@ -17,6 +17,8 @@ export interface WebPushSenderOptions {
   allowPrivateNetworks?: boolean | string[];
   /** Hosts (lower case) whose endpoints may be at any address: the operator's own distributor. */
   trustedHosts?: string[];
+  /** Access tokens by host (lower case), for a ntfy that publishes only for an account. */
+  tokens?: Map<string, string>;
   logger: Logger;
   timeoutMs?: number;
 }
@@ -35,6 +37,7 @@ export class WebPushSender implements PushSender {
   readonly #trusted: Set<string>;
   /** For trusted hosts, without the address guard. */
   readonly #trustedAgent: Agent;
+  readonly #tokens: Map<string, string>;
   readonly #logger: Logger;
   readonly #timeoutMs: number;
 
@@ -46,6 +49,7 @@ export class WebPushSender implements PushSender {
     this.#agent = new Agent({ connect: { lookup: guardedLookup(this.#isAllowed) } });
     this.#trusted = new Set(options.trustedHosts);
     this.#trustedAgent = new Agent();
+    this.#tokens = options.tokens ?? new Map<string, string>();
     this.#logger = options.logger;
     this.#timeoutMs = options.timeoutMs ?? 10_000;
   }
@@ -103,6 +107,9 @@ export class WebPushSender implements PushSender {
     const literal = url.hostname.replace(/^\[|\]$/g, '');
     if (!trusted && isIP(literal) && !this.#isAllowed(literal))
       throw new FetchError('blocked_address', `${literal} is a private address`);
+    // ntfy takes credentials as a parameter too, where the header carries VAPID.
+    const token = this.#tokens.get(url.hostname.toLowerCase());
+    if (token) url.searchParams.set('auth', Buffer.from(`Bearer ${token}`).toString('base64url'));
     const response = await fetch(url, {
       method: 'POST',
       headers: {

@@ -54,6 +54,7 @@ describe.skipIf(!available)('docker/compose.yaml', () => {
     expect(services.server?.environment).toMatchObject({
       PUSH_DISTRIBUTOR_URL: '',
       PUSH_TRUSTED_HOSTS: '',
+      PUSH_TOKENS: '',
     });
   });
 
@@ -73,6 +74,21 @@ describe.skipIf(!available)('docker/compose.yaml', () => {
       PUSH_DISTRIBUTOR_URL: 'https://ntfy.example.com',
       PUSH_TRUSTED_HOSTS: 'ntfy.example.com',
     });
+  });
+
+  it('lets only users publish when NTFY_AUTH_ACCESS denies anyone, the server with its token', () => {
+    const { services } = config(['compose.yaml'], {
+      COMPOSE_PROFILES: 'ntfy',
+      NTFY_HOST: 'ntfy.example.com',
+      NTFY_AUTH_ACCESS: '*:up*:deny',
+      PUSH_TOKENS: 'ntfy.example.com=tk_abc',
+    });
+    expect(services.ntfy?.environment).toMatchObject({
+      NTFY_AUTH_DEFAULT_ACCESS: 'deny-all',
+      NTFY_AUTH_ACCESS: '*:up*:deny',
+    });
+    for (const app of [services.server, services.worker])
+      expect(app?.environment).toMatchObject({ PUSH_TOKENS: 'ntfy.example.com=tk_abc' });
   });
 
   it('routes NTFY_HOST through nginx-proxy, unpublished', () => {

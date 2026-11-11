@@ -69,6 +69,30 @@ describe('WebPushSender', () => {
     expect(request?.bytes).toBe(86 + 7 + 1 + 16);
   });
 
+  it("publishes with the host's token as ntfy's auth parameter, keeping VAPID", async () => {
+    const withToken = (host: string) =>
+      new WebPushSender({
+        seed: Buffer.alloc(32, 3),
+        subject: 'https://reader.example',
+        allowPrivateNetworks: ['127.0.0.0/8'],
+        tokens: new Map([[host, 'tk_operator']]),
+        logger: silentLogger,
+      });
+    const push = withToken('127.0.0.1');
+    expect(await push.send(target('/upAbc?up=1'), '{}', options)).toBe('sent');
+    await push.close();
+    const request = seen.at(-1);
+    const query = new URL(request?.path ?? '', base).searchParams;
+    expect(query.get('up')).toBe('1');
+    expect(Buffer.from(query.get('auth') ?? '', 'base64url').toString()).toBe('Bearer tk_operator');
+    expect(request?.headers.authorization).toMatch(/^vapid /);
+
+    const other = withToken('ntfy.example.com');
+    expect(await other.send(target('/upAbc?up=1'), '{}', options)).toBe('sent');
+    await other.close();
+    expect(seen.at(-1)?.path).toBe('/upAbc?up=1');
+  });
+
   it('tells subscriptions that are gone from other refusals', async () => {
     const push = sender();
     expect(await push.send(target('/404'), '{}', options)).toBe('gone');

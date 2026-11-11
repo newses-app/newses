@@ -16,6 +16,7 @@
       "releaseTags": { "tagsIncludes": ["v*-*"] },
       "domainName": "reader-dev.example.com",
       "instanceName": "newses-dev",
+      "pushDistributorUrl": "https://ntfy.example.com",
       "downloadsCorsOrigins": ["https://dev.example.com"],
       "imageRepository": "public.ecr.aws/your-alias/newses",
       "retainData": false,

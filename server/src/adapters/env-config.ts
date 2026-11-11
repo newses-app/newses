@@ -49,6 +49,14 @@ const schema = z
       .url({ protocol: /^https$/ })
       .transform((v) => v.replace(/\/+$/, ''))
       .optional(),
+    PUSH_TOKENS: z
+      .string()
+      .default('')
+      .refine(
+        (v) => pushTokenPairs(v).every(([host, token]) => host && PUSH_TOKEN.test(token)),
+        'comma-separated host=token pairs',
+      )
+      .transform((v) => new Map(pushTokenPairs(v))),
     COMPAT_TRACE: z.enum(['true', 'false']).default('false'),
     ARCHIVE_ENABLED: z.enum(['true', 'false']).default('true'),
     ARCHIVE_ATHENA_WORKGROUP: z.string().min(1).optional(),
@@ -83,6 +91,20 @@ const schema = z
       path: ['ARCHIVE_ATHENA_DATABASE'],
     },
   );
+
+const PUSH_TOKEN = /^[^\s,=]+$/;
+
+/** `host=token` pairs, comma-separated; a pair that is not exactly that gets no token. */
+function pushTokenPairs(value: string): [string, string][] {
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const [host = '', token = '', ...rest] = pair.split('=');
+      return [host.trim().toLowerCase(), rest.length > 0 ? '' : token.trim()];
+    });
+}
 
 export class ConfigError extends Error {
   override name = 'ConfigError';
@@ -139,6 +161,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     push: {
       trustedHosts: e.PUSH_TRUSTED_HOSTS,
       distributorUrl: e.PUSH_DISTRIBUTOR_URL ?? null,
+      tokens: e.PUSH_TOKENS,
     },
     appSecret: e.APP_SECRET,
     bootstrapAdmin:

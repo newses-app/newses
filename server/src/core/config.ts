@@ -59,6 +59,8 @@ export interface AppConfig {
     trustedHosts: string[];
     /** A UnifiedPush distributor readers may use, which the apps suggest; null for none. */
     distributorUrl: string | null;
+    /** ntfy access tokens the server publishes with, by host (lower case), where that needs an account. */
+    tokens: Map<string, string>;
   };
   /** Root of the keys that encrypt stored secrets and sign tokens; changing it voids them. */
   appSecret: string;

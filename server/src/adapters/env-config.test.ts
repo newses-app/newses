@@ -22,7 +22,7 @@ describe('loadConfig', () => {
       feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
       ops: { retentionDays: 90, auditRetentionDays: 365, hostHourlyBudget: 200, alertEmail: null },
       fetchAllowPrivateNetworks: false,
-      push: { trustedHosts: [], distributorUrl: null },
+      push: { trustedHosts: [], distributorUrl: null, tokens: new Map() },
       appSecret: APP_SECRET,
       bootstrapAdmin: null,
     });
@@ -121,7 +121,11 @@ describe('loadConfig', () => {
 
   it('parses the push distributor and the hosts trusted to be on private networks', () => {
     const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
-    expect(loadConfig(base).push).toEqual({ trustedHosts: [], distributorUrl: null });
+    expect(loadConfig(base).push).toEqual({
+      trustedHosts: [],
+      distributorUrl: null,
+      tokens: new Map(),
+    });
     expect(
       loadConfig({
         ...base,
@@ -131,10 +135,28 @@ describe('loadConfig', () => {
     ).toEqual({
       trustedHosts: ['ntfy.example.com', 'push.lan'],
       distributorUrl: 'https://ntfy.example.com',
+      tokens: new Map(),
     });
     expect(() => loadConfig({ ...base, PUSH_DISTRIBUTOR_URL: 'http://ntfy.example.com' })).toThrow(
       /PUSH_DISTRIBUTOR_URL/,
     );
+  });
+
+  it('parses the tokens the server publishes to push hosts with', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(
+      loadConfig({ ...base, PUSH_TOKENS: 'Ntfy.sh=tk_abc, ntfy.example.com = tk_def,' }).push
+        .tokens,
+    ).toEqual(
+      new Map([
+        ['ntfy.sh', 'tk_abc'],
+        ['ntfy.example.com', 'tk_def'],
+      ]),
+    );
+    for (const PUSH_TOKENS of ['tk_abc', 'ntfy.sh=', '=tk_abc', 'ntfy.sh=tk=abc', 'ntfy.sh=tk abc'])
+      expect(() => loadConfig({ ...base, PUSH_TOKENS })).toThrow(/PUSH_TOKENS/);
+    // The message names the variable, not its value.
+    expect(() => loadConfig({ ...base, PUSH_TOKENS: 'ntfy.sh=tk=secret' })).not.toThrow(/secret/);
   });
 
   it('reports every invalid variable', () => {

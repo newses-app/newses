@@ -76,6 +76,7 @@ export function createPushSender(config: AppConfig, keys: Keys, logger: Logger):
     subject: config.publicUrl?.startsWith('https:') ? config.publicUrl : 'https://newses.app',
     allowPrivateNetworks: config.fetchAllowPrivateNetworks,
     trustedHosts: config.push.trustedHosts,
+    tokens: config.push.tokens,
     logger,
   });
 }

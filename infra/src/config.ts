@@ -26,6 +26,13 @@ export interface StageConfig {
   instanceName?: string | undefined;
   /** Where the apps link this stage's source (`SOURCE_URL`); omitted for the repository at the commit. */
   sourceUrl?: string | undefined;
+  /** The UnifiedPush distributor the Android app suggests to readers (`PUSH_DISTRIBUTOR_URL`). */
+  pushDistributorUrl?: string | undefined;
+  /**
+   * Whether the functions read ntfy access tokens (`PUSH_TOKENS`) from the SecureString
+   * `/<prefix>/<stage>/push-tokens`, which the operator creates.
+   */
+  pushTokens?: boolean | undefined;
   /** Origins whose pages may fetch the downloads (the project site's `latest.json` reads). */
   downloadsCorsOrigins?: string[] | undefined;
   /**

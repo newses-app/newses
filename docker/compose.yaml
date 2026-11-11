@@ -20,6 +20,8 @@ x-app: &app
     # The ntfy profile's distributor: the Android app suggests it, and it may be on the LAN.
     PUSH_DISTRIBUTOR_URL: ${NTFY_HOST:+https://${NTFY_HOST:-}}
     PUSH_TRUSTED_HOSTS: ${NTFY_HOST:-}
+    # ntfy access tokens to publish with, host=token pairs, where publishing needs an account.
+    PUSH_TOKENS: ${PUSH_TOKENS:-}
     FEED_UPDATE_INTERVAL_MINUTES: ${FEED_UPDATE_INTERVAL_MINUTES:-30}
     FEED_PURGE_DAYS: ${FEED_PURGE_DAYS:-180}
     ARCHIVE_ENABLED: ${ARCHIVE_ENABLED:-true}
@@ -123,8 +125,10 @@ services:
         condition: service_healthy
 
   # A UnifiedPush distributor for the Android app, at its own hostname (NTFY_HOST, behind your
-  # proxy). Anyone may publish to UnifiedPush topics (`up*`), as servers push there; reading needs
-  # a user given access to them. Enable with COMPOSE_PROFILES=ntfy in .env.
+  # proxy). Anyone may publish to UnifiedPush topics (`up*`), as servers push there, unless
+  # NTFY_AUTH_ACCESS=*:up*:deny, when only users given access may, such as this server with its
+  # token in PUSH_TOKENS; reading needs a user given access to them. Enable with
+  # COMPOSE_PROFILES=ntfy in .env.
   ntfy:
     image: binwiederhier/ntfy:v2.33.1@sha256:29bc952294d58957f6ca6638eca9a653a33555989224edbdf4bb9433ee606497
     profiles: [ntfy]
@@ -136,7 +140,7 @@ services:
       NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
       NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
       NTFY_AUTH_DEFAULT_ACCESS: deny-all
-      NTFY_AUTH_ACCESS: '*:up*:wo'
+      NTFY_AUTH_ACCESS: '${NTFY_AUTH_ACCESS:-*:up*:wo}'
       NTFY_WEB_ROOT: disable
     ports:
       - '${NTFY_PORT:-8081}:80'

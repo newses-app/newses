@@ -279,7 +279,7 @@ describe('App', () => {
     }
   });
 
-  it('names the instance and links the source only when the stage sets them', () => {
+  it('names the instance, links the source, and suggests a distributor only when set', () => {
     const variables = (template: Template) =>
       Object.values(
         template.findResources('AWS::Lambda::Function', {
@@ -294,17 +294,56 @@ describe('App', () => {
           (fn as { Properties: { Environment: { Variables: Record<string, unknown> } } }).Properties
             .Environment.Variables,
       );
-    const stage = (instanceName?: string, sourceUrl?: string) =>
+    const stage = (instanceName?: string, sourceUrl?: string, pushDistributorUrl?: string) =>
       Template.fromStack(
-        new NewsesStage(newApp(), 'Test', { stage: { ...dev, instanceName, sourceUrl }, webDir })
-          .app,
+        new NewsesStage(newApp(), 'Test', {
+          stage: { ...dev, instanceName, sourceUrl, pushDistributorUrl },
+          webDir,
+        }).app,
       );
     for (const env of variables(stage())) {
       expect(env).not.toHaveProperty('INSTANCE_NAME');
       expect(env).not.toHaveProperty('SOURCE_URL');
+      expect(env).not.toHaveProperty('PUSH_DISTRIBUTOR_URL');
     }
-    for (const env of variables(stage('Home', 'https://git.example/fork')))
-      expect(env).toMatchObject({ INSTANCE_NAME: 'Home', SOURCE_URL: 'https://git.example/fork' });
+    for (const env of variables(
+      stage('Home', 'https://git.example/fork', 'https://ntfy.example.com'),
+    ))
+      expect(env).toMatchObject({
+        INSTANCE_NAME: 'Home',
+        SOURCE_URL: 'https://git.example/fork',
+        PUSH_DISTRIBUTOR_URL: 'https://ntfy.example.com',
+      });
+  });
+
+  it('reads push tokens from their parameter only when the stage sets pushTokens', () => {
+    const reads = (template: Template) =>
+      Object.values(template.findResources('AWS::IAM::Policy'))
+        .flatMap(
+          (policy) =>
+            (policy as { Properties: { PolicyDocument: { Statement: unknown[] } } }).Properties
+              .PolicyDocument.Statement,
+        )
+        .filter((statement) => JSON.stringify(statement).includes('push-tokens'));
+    expect(reads(app)).toEqual([]);
+    expect(JSON.stringify(app.toJSON())).not.toContain('PUSH_TOKENS_PARAMETER');
+
+    const withTokens = Template.fromStack(
+      new NewsesStage(newApp(), 'Test', { stage: { ...dev, pushTokens: true }, webDir }).app,
+    );
+    const functions = Object.values(
+      withTokens.findResources('AWS::Lambda::Function', {
+        Properties: {
+          Environment: { Variables: Match.objectLike({ DB_PASSWORD_PARAMETER: Match.anyValue() }) },
+        },
+      }),
+    );
+    expect(functions.length).toBeGreaterThan(0);
+    for (const fn of functions)
+      expect(JSON.stringify(fn)).toContain('"PUSH_TOKENS_PARAMETER":"/newses/dev/push-tokens"');
+    expect(reads(withTokens).length).toBe(functions.length);
+    for (const statement of reads(withTokens))
+      expect(JSON.stringify(statement)).toContain('ssm:GetParameter');
   });
 
   it('publishes operations alerts from tick to the stage topic', () => {
