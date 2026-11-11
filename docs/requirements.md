@@ -129,6 +129,7 @@
 | TTRSS-compatible API | P3 | TTRSS Android app and Newsboat can log in, browse, read, star, publish, label, and subscribe; TTRSS clients can share pages to the published feed |
 | Google Reader API | P3 | ReadYou and Newsboat can log in, sync, and mark read/starred |
 | Push to devices | Push and notifications | The server pushes a user's new entries to the devices they turned notifications on for, over Web Push (browsers' push services, UnifiedPush distributors), at most once every 30 minutes; signing out stops it |
+| Browser notifications | Push and notifications | Turned on per browser: one notification with the running total of new entries, also while the app is closed, opening the feed, category, or All; in current Chrome, Edge, Firefox, and Safari (on iPhone and iPad, the app added to the Home Screen) |
 | App connection details | P3 | Settings show the server URL for TTRSS, Google Reader, and FreshRSS-type apps, the user name, and the suggested sync interval |
 | Desktop app | P4 | Electron app for Windows (installer, zip, portable exe) and Linux (AppImage, deb) with configurable server URL, secure token storage, native notifications for new entries, optional tray and launch at login, and automatic updates |
 | Mobile app | P4 | Capacitor Android app with configurable server URL, secure token storage, share intent, a prompt to install newer versions, and optional notifications of new entries found while it is closed |

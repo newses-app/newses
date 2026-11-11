@@ -1,15 +1,76 @@
 <script setup lang="ts">
 import type { NotificationAccess } from '@newses/shared';
+import { useQuery } from '@tanstack/vue-query';
 import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { api } from '../../api.ts';
+import { useSession } from '../../composables/useSession.ts';
+import { appNotificationStrings } from '../../lib/new-entries.ts';
+import {
+  disableWebPush,
+  enableWebPush,
+  type WebPushState,
+  webPushState,
+  webPushSupport,
+} from '../../offline/push.ts';
 import { offlineSettings, saveSettings } from '../../offline/settings.ts';
 import { syncRequests } from '../../offline/status.ts';
 import { offlineEnabled } from '../../offline/store.ts';
 import { bridge, desktop } from '../../platform/index.ts';
+import { useUiStore } from '../../stores/ui.ts';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const ui = useUiStore();
+const { session } = useSession();
 const android = bridge.platform === 'android';
 const desktopOptions = computed(() => desktop.options.value);
+
+/** In a browser, the server pushes new entries (API 1.11), where the browser takes them. */
+const support = bridge.platform === 'web' ? webPushSupport() : 'unsupported';
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+  enabled: support !== 'unsupported',
+});
+const pushKey = computed(() => serverInfo.data.value?.push?.key ?? null);
+const browser = computed(() => support !== 'unsupported' && pushKey.value !== null);
+const browserState = ref<WebPushState>('off');
+const browserBusy = ref(false);
+onMounted(async () => {
+  const userId = session.value?.user.id;
+  if (support === 'supported' && userId !== undefined)
+    browserState.value = await webPushState(userId).catch(() => 'off' as const);
+});
+const browserHint = computed(() => {
+  if (support === 'needsInstall') return t('notifications.browserInstall');
+  if (browserState.value === 'denied') return t('notifications.browserDenied');
+  return t('notifications.browserHint');
+});
+
+async function setBrowser(on: boolean) {
+  const userId = session.value?.user.id;
+  const key = pushKey.value;
+  if (userId === undefined || !key) return;
+  browserBusy.value = true;
+  try {
+    if (on)
+      browserState.value = await enableWebPush(
+        userId,
+        key,
+        appNotificationStrings(t, locale.value),
+      );
+    else {
+      await disableWebPush();
+      browserState.value = 'off';
+    }
+  } catch {
+    ui.notify(t('notifications.browserFailed'), true);
+    browserState.value = await webPushState(userId).catch(() => 'off' as const);
+  } finally {
+    browserBusy.value = false;
+  }
+}
 
 /** Android's notifications come from the background job, so they need it. */
 const background = ref(offlineEnabled() && offlineSettings.background);
@@ -39,7 +100,7 @@ async function setAndroid(on: boolean) {
 </script>
 
 <template>
-  <template v-if="desktopOptions || android">
+  <template v-if="desktopOptions || android || browser">
     <h2 class="text-title-large mb-2">{{ t('notifications.heading') }}</h2>
     <div class="mb-6">
       <v-switch
@@ -61,6 +122,18 @@ async function setAndroid(on: boolean) {
         color="primary"
         density="compact"
         @update:model-value="setAndroid($event === true)"
+      />
+      <v-switch
+        v-if="browser"
+        :model-value="browserState === 'on'"
+        :disabled="support !== 'supported' || browserState === 'denied'"
+        :loading="browserBusy"
+        :label="t('notifications.browser')"
+        :hint="browserHint"
+        persistent-hint
+        color="primary"
+        density="compact"
+        @update:model-value="setBrowser($event === true)"
       />
     </div>
   </template>

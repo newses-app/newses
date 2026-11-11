@@ -13,6 +13,7 @@ import {
   storeSignedIn,
   storeSignedOut,
 } from '../offline/store.ts';
+import { webPushSignedOut } from '../offline/push.ts';
 import { outboxPending } from '../offline/status.ts';
 import { connection, NATIVE } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -195,6 +196,7 @@ export function useSession() {
     } finally {
       await connection.signedOut();
       await storeSignedOut();
+      if (!NATIVE) await webPushSignedOut().catch(() => undefined);
       queryClient.clear();
       await router.push({ name: 'login' });
     }

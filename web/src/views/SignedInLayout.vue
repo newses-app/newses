@@ -24,6 +24,7 @@ import { useAppearance } from '../composables/useAppearance.ts';
 import { useLanguage } from '../composables/useLanguage.ts';
 import { useLiveCounters } from '../composables/useCounters.ts';
 import { useEntryNotifications } from '../composables/useEntryNotifications.ts';
+import { useWebPush } from '../composables/useWebPush.ts';
 import { useOfflineSync } from '../composables/useOfflineSync.ts';
 import { usePrefs } from '../composables/usePrefs.ts';
 import { useShortcutListener } from '../composables/useShortcuts.ts';
@@ -42,6 +43,7 @@ useLanguage();
 
 useLiveCounters();
 useEntryNotifications();
+useWebPush();
 useOfflineSync();
 
 // A page shared to the app, now or before signing in, is offered to subscribe to or publish;

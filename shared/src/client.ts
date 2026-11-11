@@ -55,6 +55,7 @@ import type {
 } from './feeds.ts';
 import type { CreateLabelRequest, EntryLabelsChange, Label, UpdateLabelRequest } from './labels.ts';
 import type { Prefs, UpdatePrefsRequest } from './prefs.ts';
+import type { PushSubscriptionRequest } from './push.ts';
 import type { CreateThemeRequest, Theme, UpdateThemeRequest } from './themes.ts';
 import type {
   AuditPage,
@@ -457,6 +458,13 @@ export function createApiClient(options: ApiClientOptions = {}) {
     prefs: {
       get: () => request<Prefs>('GET', '/prefs'),
       update: (body: UpdatePrefsRequest) => request<Prefs>('PATCH', '/prefs', { body }),
+    },
+
+    /** Where this session's device receives push messages (API 1.11); it ends with the session. */
+    push: {
+      subscribe: (body: PushSubscriptionRequest) =>
+        request<undefined>('PUT', '/push/subscription', { body }),
+      unsubscribe: () => request<undefined>('DELETE', '/push/subscription'),
     },
 
     /** The user's appearance themes and those others share. */

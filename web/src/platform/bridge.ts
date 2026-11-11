@@ -6,6 +6,7 @@ import type {
   StagedPage,
 } from '@newses/shared';
 import { createProfiles, memoryProfileStorage } from '@newses/shared/client';
+import { NAVIGATE_MESSAGE } from '../offline/worker-config.ts';
 
 export type { NetworkStatus, PlatformBridge, SaveFile, StagedPage };
 
@@ -44,6 +45,15 @@ function onBrowserNetworkChange(listener: (status: NetworkStatus) => void): () =
 
 const noProfiles = () => Promise.reject(new Error('The browser uses its own server'));
 
+/** A clicked notification of new entries, which the service worker passes on (`NAVIGATE_MESSAGE`). */
+function onWorkerNavigate(handler: (target: string) => void): void {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
+    const data = event.data as { type?: unknown; target?: unknown } | null;
+    if (data?.type === NAVIGATE_MESSAGE && typeof data.target === 'string') handler(data.target);
+  });
+}
+
 /** The Notifications API's permission; without the API (some browsers, insecure pages), denied. */
 async function browserNotificationAccess(ask: boolean): Promise<NotificationAccess> {
   if (typeof Notification === 'undefined') return 'denied';
@@ -74,7 +84,7 @@ export const webBridge: PlatformBridge = {
   saveFile: download,
   notify: () => Promise.resolve(),
   notificationAccess: browserNotificationAccess,
-  onNavigate: () => undefined,
+  onNavigate: onWorkerNavigate,
   onRefresh: () => () => undefined,
   getNetwork: () => Promise.resolve(browserNetwork()),
   onNetworkChange: onBrowserNetworkChange,

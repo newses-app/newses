@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
-// The browser's service worker: the app shell offline, theme fonts and feed icons once used, and
-// syncing with no tab open where the browser allows it (installed Chrome and Edge apps).
+// The browser's service worker: the app shell offline, theme fonts and feed icons once used,
+// syncing with no tab open where the browser allows it (installed Chrome and Edge apps), and
+// notifications of new entries the server pushes.
 import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
@@ -11,6 +12,7 @@ import {
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
 import { runInBackground } from '../offline/background.ts';
+import { openPushTarget, showPushMessage } from '../offline/push-worker.ts';
 import { OUTBOX_TAG, SYNC_TAG } from '../offline/worker-config.ts';
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -63,4 +65,24 @@ self.addEventListener('sync', (event) => {
   const sync = event as SyncEvent;
   // Rejecting has the browser try again later, with its own back-off.
   if (sync.tag === OUTBOX_TAG) sync.waitUntil(runInBackground('outbox'));
+});
+
+self.addEventListener('push', (event) => {
+  const data: unknown = (() => {
+    try {
+      return event.data?.json() as unknown;
+    } catch {
+      return null;
+    }
+  })();
+  // With offline reading on, the new entries are fetched too, ready when the reader opens them.
+  event.waitUntil(
+    showPushMessage(self.registration, self.clients, data).then(() =>
+      runInBackground('sync').catch(() => undefined),
+    ),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.waitUntil(openPushTarget(event.notification, self.clients));
 });

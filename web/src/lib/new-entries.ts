@@ -3,8 +3,10 @@ import type {
   Counters,
   NewEntriesHandover,
   NotificationStrings,
+  PushMessage,
   Subscription,
 } from '@newses/shared';
+import { LOCALES } from '@newses/shared/locales';
 import { formatList } from './format.ts';
 import { withoutIsolates } from './message-params.ts';
 import { categoryKey, streamPath, type StreamKey, subscriptionKey } from './streams.ts';
@@ -123,7 +125,8 @@ type Translate = (key: string, params: Record<string, string>, plural?: number) 
 const SAMPLES = Array.from({ length: 201 }, (_, n) => n);
 
 /**
- * The notification's messages for the Android job, which words it while the app is closed: the
+ * The notification's messages for the Android job and the service worker, which word it while the
+ * app is closed: the
  * title for each plural form the language's messages have (`plurals`), lists of one to `PLACES`
  * places, and the "and N more" form, with placeholders for what it fills in.
  */
@@ -149,6 +152,14 @@ export function notificationStrings(
   };
 }
 
+/** `notificationStrings` for one of the app's languages, with the plural forms its messages have. */
+export const appNotificationStrings = (t: Translate, locale: string): NotificationStrings =>
+  notificationStrings(
+    t,
+    locale,
+    LOCALES.find((l) => l.code === locale)?.plurals ?? ['one', 'other'],
+  );
+
 /** What the Android job needs to count new entries against the store and say where they are. */
 export function newEntriesHandover(
   strings: NotificationStrings,
@@ -162,5 +173,75 @@ export function newEntriesHandover(
     subscriptionMark: Math.max(0, ...subscriptions.map((s) => s.id)),
     subscriptions: subscriptions.map((s) => [s.id, s.categoryId, s.title]),
     categories: categories.map((c) => [c.id, c.title]),
+  };
+}
+
+/** Fills `{name}` placeholders in one pass, so placeholders inside the values are never read. */
+export function fillTemplate(template: string, values: Readonly<Record<string, string>>): string {
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) => values[name] ?? whole);
+}
+
+/** A push message's notification, worded with the messages the app handed over. */
+export function pushNotificationText(
+  strings: NotificationStrings,
+  message: PushMessage,
+): { title: string; body: string } {
+  const numbers = new Intl.NumberFormat(strings.locale);
+  const form = new Intl.PluralRules(strings.locale).select(message.count);
+  const title = fillTemplate(strings.title[form] ?? strings.title.other ?? '{n}', {
+    n: numbers.format(message.count),
+  });
+  const names = message.places.slice(0, PLACES).map((place) => place.title);
+  const list =
+    names.length > 0
+      ? fillTemplate(
+          strings.lists[names.length - 1] ?? names.join(', '),
+          Object.fromEntries(names.map((name, i) => [String(i), name])),
+        )
+      : '';
+  const more = message.places.length - names.length + message.morePlaces;
+  return {
+    title,
+    body: more > 0 ? fillTemplate(strings.more, { places: list, n: numbers.format(more) }) : list,
+  };
+}
+
+/** Streams a push message may open. */
+const PUSH_TARGET = /^\/(all|[fc]\d+)$/;
+
+/** `data` when it is a push message of new entries, else null. */
+export function asPushMessage(data: unknown): PushMessage | null {
+  const message = data as Partial<PushMessage> | null;
+  if (
+    message?.type !== 'new-entries' ||
+    typeof message.count !== 'number' ||
+    !Array.isArray(message.places) ||
+    typeof message.morePlaces !== 'number' ||
+    typeof message.target !== 'string' ||
+    !PUSH_TARGET.test(message.target)
+  )
+    return null;
+  const places = message.places.filter(
+    (place) => typeof place.title === 'string' && typeof place.count === 'number',
+  );
+  return { ...(message as PushMessage), places };
+}
+
+/**
+ * The running total of a notification still showing and a new message: places added up, the
+ * stream both opened, else everything.
+ */
+export function mergePushMessages(shown: PushMessage, next: PushMessage): PushMessage {
+  const counts = new Map(shown.places.map((place) => [place.title, place.count]));
+  for (const place of next.places)
+    counts.set(place.title, (counts.get(place.title) ?? 0) + place.count);
+  return {
+    type: 'new-entries',
+    count: shown.count + next.count,
+    places: [...counts]
+      .map(([title, count]) => ({ title, count }))
+      .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
+    morePlaces: Math.max(shown.morePlaces, next.morePlaces),
+    target: shown.target === next.target ? next.target : '/all',
   };
 }

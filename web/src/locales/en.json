@@ -194,7 +194,12 @@
     "android": "Notify me about new entries while the app is closed",
     "androidHint": "Found by the sync while the app is closed; one notification with the running total.",
     "needsBackground": "Needs “Sync while the app is closed” in the Offline settings.",
-    "denied": "Newses isn't allowed to notify; allow it in Android's settings for the app."
+    "denied": "Newses isn't allowed to notify; allow it in Android's settings for the app.",
+    "browser": "Notify me about new entries on this device",
+    "browserHint": "At most every 30 minutes, also while Newses is closed; one notification with the running total.",
+    "browserInstall": "On iPhone and iPad, add Newses to the Home Screen first, then turn this on there.",
+    "browserDenied": "This browser blocks notifications from Newses; allow them in its settings for this site.",
+    "browserFailed": "Notifications couldn't be turned on in this browser."
   },
   "updates": {
     "title": "Update available",

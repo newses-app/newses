@@ -5,7 +5,11 @@ import {
   type NewEntries,
   newEntries,
   newEntriesHandover,
+  asPushMessage,
+  fillTemplate,
+  mergePushMessages,
   notificationStrings,
+  pushNotificationText,
 } from './new-entries.ts';
 
 const counters = (unread: Record<number, number>): Counters => ({
@@ -168,5 +172,94 @@ describe('newEntriesHandover', () => {
         [],
       ).subscriptionMark,
     ).toBe(0);
+  });
+});
+
+describe('push messages', () => {
+  const strings = {
+    locale: 'en',
+    title: { one: '{n} new entry', other: '{n} new entries' },
+    lists: ['{0}', '{0}, {1}', '{0}, {1}, {2}'],
+    more: '{places} and {n} more',
+    channel: 'New entries',
+  };
+  const message = (count: number, places: [string, number][], target = '/all', morePlaces = 0) =>
+    ({
+      type: 'new-entries',
+      count,
+      places: places.map(([title, n]) => ({ title, count: n })),
+      morePlaces,
+      target,
+    }) as const;
+
+  it('words the count and up to three places, as the desktop does', () => {
+    expect(pushNotificationText(strings, message(1, [['Tech', 1]]))).toEqual({
+      title: '1 new entry',
+      body: 'Tech',
+    });
+    expect(
+      pushNotificationText(
+        strings,
+        message(
+          1234,
+          [
+            ['Tech', 900],
+            ['News', 300],
+            ['Sport', 30],
+            ['Art', 4],
+          ],
+          '/all',
+          3,
+        ),
+      ),
+    ).toEqual({ title: '1,234 new entries', body: 'Tech, News, Sport and 4 more' });
+    // A language's form the messages lack falls back to `other`, in its own numbers.
+    expect(
+      pushNotificationText(
+        { ...strings, locale: 'de', title: { other: '{n} neue' } },
+        message(1500, []),
+      ),
+    ).toEqual({ title: '1.500 neue', body: '' });
+  });
+
+  it('never reads placeholders in titles', () => {
+    expect(fillTemplate('{0} and {n}', { 0: '{n}' })).toBe('{n} and {n}');
+    expect(fillTemplate('a {open', {})).toBe('a {open');
+  });
+
+  it('takes only messages of new entries with a stream to open', () => {
+    expect(asPushMessage(message(2, [['Tech', 2]], '/f12'))).toEqual(
+      message(2, [['Tech', 2]], '/f12'),
+    );
+    expect(asPushMessage({ ...message(1, []), target: 'https://elsewhere.example' })).toBeNull();
+    expect(asPushMessage({ type: 'other' })).toBeNull();
+    expect(asPushMessage(null)).toBeNull();
+  });
+
+  it('adds a message to the notification still showing', () => {
+    expect(
+      mergePushMessages(
+        message(
+          3,
+          [
+            ['Tech', 2],
+            ['News', 1],
+          ],
+          '/c1',
+        ),
+        message(4, [['News', 4]], '/c1', 2),
+      ),
+    ).toEqual(
+      message(
+        7,
+        [
+          ['News', 5],
+          ['Tech', 2],
+        ],
+        '/c1',
+        2,
+      ),
+    );
+    expect(mergePushMessages(message(1, [], '/f1'), message(1, [], '/f2')).target).toBe('/all');
   });
 });

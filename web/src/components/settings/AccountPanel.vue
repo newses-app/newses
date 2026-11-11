@@ -216,8 +216,6 @@ async function revoke(id: number) {
         </v-card>
       </v-dialog>
 
-      <NotificationsSection />
-
       <!-- The app's version and updates are in the About tab. -->
       <h2 v-if="desktopOptions" class="text-title-large mb-2">{{ t('connect.app') }}</h2>
       <div v-if="desktopOptions" class="mb-6">
@@ -233,6 +231,9 @@ async function revoke(id: number) {
         />
       </div>
     </template>
+
+    <!-- In the apps and in browsers. -->
+    <NotificationsSection />
 
     <h2 class="text-title-large mb-4">{{ t('account.changePassword') }}</h2>
     <PasswordForm @changed="passwordChanged" />

@@ -1,12 +1,11 @@
 import type { Category, Entry, Subscription, SyncResponse } from '@newses/shared';
-import { LOCALES } from '@newses/shared/locales';
 import { type QueryClient, useQueryClient } from '@tanstack/vue-query';
 import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../api.ts';
 import { replaceEntries } from '../lib/entry-cache.ts';
 import { failureText } from '../lib/error-text.ts';
-import { newEntriesHandover, notificationStrings } from '../lib/new-entries.ts';
+import { appNotificationStrings, newEntriesHandover } from '../lib/new-entries.ts';
 import { upsertById } from '../lib/offline-keep.ts';
 import { lastAccount, markFilled, wasEvicted } from '../offline/account.ts';
 import { reportOf, takeWorkerReport, type WorkerReport } from '../offline/background.ts';
@@ -206,11 +205,9 @@ export function useOfflineSync(): void {
 
   /** What the Android job needs to notify of new entries, in the app's language. */
   async function handover(db: OfflineDb) {
-    const locale = i18n.locale.value;
-    const plurals = LOCALES.find((l) => l.code === locale)?.plurals ?? ['one', 'other'];
     const entryMark = Number((await db.entries.orderBy('id').lastKey()) ?? 0);
     return newEntriesHandover(
-      notificationStrings(t, locale, plurals),
+      appNotificationStrings(t, i18n.locale.value),
       entryMark,
       queryClient.getQueryData<Subscription[]>(SUBSCRIPTIONS_KEY) ?? [],
       queryClient.getQueryData<Category[]>(CATEGORIES_KEY) ?? [],
