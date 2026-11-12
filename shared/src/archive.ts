@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { enclosureSchema } from './entries.ts';
+import { enclosureSchema, searchTimeZoneSchema } from './entries.ts';
 
 /**
  * Past articles of the user's feeds: those they no longer hold (purged, or older than they
@@ -8,8 +8,13 @@ import { enclosureSchema } from './entries.ts';
 export const archiveEntriesQuerySchema = z.object({
   /** One of the user's subscriptions; all of them when omitted. */
   subscriptionId: z.coerce.number().int().optional(),
-  /** Words that must all appear in the title or text. */
+  /**
+   * Search, as for entries: words that must all appear in the title or text, and operators;
+   * archived articles have no state, so `star:true` and the like match none. Operators since
+   * API 1.13.
+   */
   q: z.string().trim().min(1).max(500).optional(),
+  timeZone: searchTimeZoneSchema,
   cursor: z.string().max(4000).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });

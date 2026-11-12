@@ -331,6 +331,102 @@ describe('EntryService.list', () => {
     ]);
   });
 
+  it.each([
+    ['selective', 20_000],
+    ['common', 0],
+  ])('filters by search operators, alone or with words (%s terms)', async (_, threshold) => {
+    const search = new EntryService(db, realtime, { selectiveMatches: threshold });
+    const find = async (q: string, options: Partial<Parameters<EntryService['list']>[1]> = {}) =>
+      titles(
+        (
+          await search.list(alice, {
+            stream: {},
+            view: 'all',
+            limit: 50,
+            content: false,
+            q,
+            ...options,
+          })
+        ).entries,
+      );
+    await db.update(entries).set({ author: 'Jane Doe' }).where(eq(entries.guid, 'banana'));
+    await services.entries.setState(alice, [ids.apple ?? 0], { unread: false, starred: true });
+    await services.entries.setState(alice, [ids.cherry ?? 0], { published: true });
+    await services.entries.setNote(alice, ids.date ?? 0, 'Try with walnuts');
+    await services.tags.setEntryTags(alice, ids.banana ?? 0, ['Baking']);
+    const later = await services.labels.create(alice, {
+      caption: 'Read Later',
+      fgColor: '#000000',
+      bgColor: '#ffffff',
+    });
+    await services.labels.setEntryLabels(alice, ids.cherry ?? 0, [later.id]);
+
+    // Operators alone list newest first.
+    expect(await find('title:PIE')).toEqual(['Apple pie recipe']);
+    expect(await find('-title:pie')).toEqual(['Cherry tart', 'Banana bread', 'Date squares']);
+    expect(await find('author:"jane doe"')).toEqual(['Banana bread']);
+    expect(await find('star:true')).toEqual(['Apple pie recipe']);
+    expect(await find('unread:false')).toEqual(['Apple pie recipe']);
+    expect(await find('-unread:false star:false')).toEqual([
+      'Cherry tart',
+      'Banana bread',
+      'Date squares',
+    ]);
+    expect(await find('pub:true')).toEqual(['Cherry tart']);
+    expect(await find('note:true')).toEqual(['Date squares']);
+    expect(await find('note:walnut')).toEqual(['Date squares']);
+    expect(await find('note:false').then((t) => t.length)).toBe(3);
+    expect(await find('tag:baking')).toEqual(['Banana bread']);
+    expect(await find('-tag:baking').then((t) => t.includes('Banana bread'))).toBe(false);
+    expect(await find('label:"read later"')).toEqual(['Cherry tart']);
+    expect(await find('label:Nope')).toEqual([]);
+    // With words, ranked; and within the stream.
+    expect(await find('apple -star:true')).toEqual(['Cherry tart']);
+    expect(await find('apple unread:true', { stream: { categoryId: cats.tech } })).toEqual([
+      'Cherry tart',
+    ]);
+    expect(await find('apple', { stream: { subscriptionId: subs.one }, view: 'unread' })).toEqual(
+      [],
+    );
+    expect(await find('apple', { order: 'relevance' })).toEqual([
+      'Apple pie recipe',
+      'Cherry tart',
+    ]);
+    expect(await find('star:true', { order: 'relevance' })).toEqual(['Apple pie recipe']);
+    // Unknown operators are words.
+    expect(await find('unread:maybe')).toEqual([]);
+  });
+
+  it('filters by the day an entry is sorted on, in the given time zone', async () => {
+    const at = (iso: string) => new Date(iso);
+    await db
+      .update(userEntries)
+      .set({ sortAt: at('2024-05-01T23:30:00Z') })
+      .where(eq(userEntries.id, ids.apple ?? 0));
+    await db
+      .update(userEntries)
+      .set({ sortAt: at('2024-05-02T08:00:00Z') })
+      .where(eq(userEntries.id, ids.banana ?? 0));
+    const find = async (q: string, timeZone?: string) =>
+      titles(
+        (
+          await services.entries.list(alice, {
+            stream: {},
+            view: 'all',
+            limit: 50,
+            content: false,
+            q,
+            timeZone,
+          })
+        ).entries,
+      );
+    expect(await find('@2024-05-01')).toEqual(['Apple pie recipe']);
+    expect(await find('@2024-05-02', 'Asia/Tokyo')).toEqual(['Banana bread', 'Apple pie recipe']);
+    expect(await find('@2024-05-01', 'Asia/Tokyo')).toEqual([]);
+    expect(await find('@today')).toEqual(['Cherry tart']);
+    expect(await find('-@today -@2024-05-01 -@2024-05-02')).toEqual(['Date squares']);
+  });
+
   it('hides entries scored below the user’s threshold, except where the user picked them out', async () => {
     await services.entries.setState(alice, [ids.apple ?? 0], { score: -501, starred: true });
     await services.entries.setState(alice, [ids.banana ?? 0], { score: -500 });

@@ -1,4 +1,5 @@
-import type { Entry } from '@newses/shared';
+import type { Entry, SearchFilter } from '@newses/shared';
+import { searchDayRange } from '@newses/shared/client';
 
 /** Scripts written without spaces between words: indexed as overlapping character pairs. */
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
@@ -112,4 +113,46 @@ export function searchTerms(q: string): { words: string[]; prefix: string | null
   const lastIsPair = Array.from(last).length === 2 && CJK.test(last);
   if (lastIsPair) return { words: [...new Set(tokens)], prefix: null };
   return { words: [...new Set(tokens.slice(0, -1))], prefix: last };
+}
+
+export interface FilterContext {
+  /** Label captions by id. */
+  labels: ReadonlyMap<number, string>;
+  timeZone: string;
+  now: Date;
+}
+
+const holds = (text: string | null, value: string) =>
+  (text ?? '').toLowerCase().includes(value.toLowerCase());
+
+/** Whether a stored entry passes a search's filters, as the server applies them. */
+export function matchesFilters(
+  entry: Entry,
+  filters: readonly SearchFilter[],
+  context: FilterContext,
+): boolean {
+  return filters.every((filter) => {
+    switch (filter.kind) {
+      case 'flag':
+        return entry[filter.flag] === filter.value;
+      case 'hasNote':
+        return ((entry.note ?? '') !== '') === filter.value;
+      case 'date': {
+        const { from, to } = searchDayRange(filter.date, context.timeZone, context.now);
+        const at = Date.parse(entry.sortAt);
+        return (at >= from.getTime() && at < to.getTime()) !== filter.negated;
+      }
+      case 'field': {
+        const { value } = filter;
+        let match: boolean;
+        if (filter.field === 'tag') match = entry.tags.includes(value);
+        else if (filter.field === 'label')
+          match = entry.labels.some(
+            (id) => context.labels.get(id)?.toLowerCase() === value.toLowerCase(),
+          );
+        else match = holds(entry[filter.field], value);
+        return match !== filter.negated;
+      }
+    }
+  });
 }

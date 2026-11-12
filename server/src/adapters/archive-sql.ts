@@ -33,7 +33,8 @@ const PLAIN = ['id', 'feed_url', 'feed_title', 'guid', 'link', 'title', 'author'
 
 /**
  * Rows matching `where`, one per feed URL and GUID (the one archived last), in the archive's
- * order: newest `sort_at` first, then feed URL and GUID, descending.
+ * order: newest `sort_at` first, then feed URL and GUID, descending. With `match`, only articles
+ * whose last copy matches it.
  */
 function select(
   d: ArchiveDialect,
@@ -41,6 +42,7 @@ function select(
   after: Statement | null,
   limit: number,
   full: boolean,
+  match: Statement | null = null,
 ): Statement {
   const columns = [
     ...PLAIN,
@@ -49,17 +51,18 @@ function select(
     ...(full ? ['content', `${d.json('enclosures')} AS enclosures`] : []),
   ];
   const names = columns.map((c) => c.split(' AS ').at(-1) ?? c);
+  const filters = [...(match ? ['hit'] : []), ...(after ? [after.sql] : [])];
   return {
     sql: `SELECT ${names.join(', ')} FROM (
-  SELECT ${columns.join(', ')},
+  SELECT ${columns.join(', ')},${match ? ` (${match.sql}) AS hit,` : ''}
     row_number() OVER (PARTITION BY feed_url, guid ORDER BY archived_at DESC) AS rn
   FROM ${d.table}
   WHERE ${where.sql}
 ) x
-WHERE rn = 1${after ? ` AND ${after.sql}` : ''}
+WHERE rn = 1${filters.map((f) => ` AND ${f}`).join('')}
 ORDER BY sort_ms DESC, feed_url DESC, guid DESC
 LIMIT ${String(Math.max(1, Math.trunc(limit)))}`,
-    params: [...where.params, ...(after?.params ?? [])],
+    params: [...(match?.params ?? []), ...where.params, ...(after?.params ?? [])],
   };
 }
 
@@ -70,9 +73,25 @@ export function listStatement(d: ArchiveDialect, query: ArchiveListQuery): State
     conditions.push('month <= ?');
     params.push(archiveMonth(query.after));
   }
+  const matches: string[] = [];
+  const matchParams: Param[] = [];
+  const words = `lower(coalesce(title, '') || ' ' || coalesce(text, ''))`;
   for (const term of query.terms) {
-    conditions.push(`strpos(lower(coalesce(title, '') || ' ' || coalesce(text, '')), ?) > 0`);
-    params.push(term);
+    matches.push(`strpos(${words}, ?) > 0`);
+    matchParams.push(term);
+  }
+  for (const term of query.excluded ?? []) {
+    matches.push(`strpos(${words}, ?) = 0`);
+    matchParams.push(term);
+  }
+  for (const { field, value, negated } of query.fields ?? []) {
+    matches.push(`strpos(lower(coalesce(${field}, '')), ?) ${negated ? '=' : '>'} 0`);
+    matchParams.push(value);
+  }
+  for (const { from, to, negated } of query.days ?? []) {
+    const ms = d.ms('sort_at');
+    matches.push(`${negated ? 'NOT ' : ''}(${ms} >= ? AND ${ms} < ?)`);
+    matchParams.push(from.getTime(), to.getTime());
   }
   const { after } = query;
   const ms = after?.sortAt.getTime() ?? 0;
@@ -85,6 +104,7 @@ export function listStatement(d: ArchiveDialect, query: ArchiveListQuery): State
     },
     query.limit,
     false,
+    matches.length > 0 ? { sql: matches.join(' AND '), params: matchParams } : null,
   );
 }
 

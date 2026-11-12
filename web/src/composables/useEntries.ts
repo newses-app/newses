@@ -5,7 +5,7 @@ import type {
   EntryState,
   MarkReadRequest,
 } from '@newses/shared';
-import { normaliseTags } from '@newses/shared/client';
+import { localTimeZone, normaliseTags } from '@newses/shared/client';
 import { type InfiniteData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
@@ -57,7 +57,7 @@ export function useEntryList(options: MaybeRefOrGetter<EntryListOptions>) {
         const page = await api.entries.list({
           ...parseStream(o.stream),
           view: o.view,
-          ...(o.q ? { q: o.q } : { order: o.order }),
+          ...(o.q ? { q: o.q, timeZone: localTimeZone() } : { order: o.order }),
           ...(pageParam && { cursor: pageParam }),
           content: o.content,
           limit: PAGE_SIZE,

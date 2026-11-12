@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ArchiveReader, ArchiveRow, ArchiveWriter } from '../core/ports.ts';
+import type { ArchiveListQuery, ArchiveReader, ArchiveRow, ArchiveWriter } from '../core/ports.ts';
 
 const A = 'https://a.example/feed';
 const B = 'https://b.example/feed';
@@ -115,6 +115,25 @@ export function describeArchiveReader(
       expect(await search(['apple'])).toEqual(['b1', 'a2', 'a1']);
       expect(await search(['apple', 'banana'])).toEqual(['b1']);
       expect(await search(['o'])).toContain('a3');
+      // Only an article's last copy counts.
+      expect(await search(['old title'])).toEqual([]);
+    });
+
+    it('excludes terms, and matches title and author text and sort-time spans', async () => {
+      const { reader, writer } = setup();
+      await fill(writer);
+      const guids = async (q: Partial<ArchiveListQuery>) =>
+        (await reader.list({ ...query, ...q })).map((r) => r.guid);
+      expect(await guids({ terms: ['apple'], excluded: ['banana'] })).toEqual(['a2', 'a1']);
+      expect(await guids({ fields: [{ field: 'title', value: 'new', negated: false }] })).toEqual([
+        'a3',
+      ]);
+      expect(
+        await guids({ fields: [{ field: 'title', value: 'new', negated: true }], limit: 2 }),
+      ).toEqual(['b1', 'a2']);
+      const june3 = { from: at('2024-06-03T00:00:00Z'), to: at('2024-06-04T00:00:00Z') };
+      expect(await guids({ days: [{ ...june3, negated: false }] })).toEqual(['a3']);
+      expect(await guids({ days: [{ ...june3, negated: true }] })).not.toContain('a3');
     });
 
     it('gets one article with its content and enclosures, in its month', async () => {

@@ -343,6 +343,11 @@ describe('TTRSS headlines and articles', () => {
     expect(
       titles(await headlines({ feed_id: subs.two, search: 'banana', search_mode: 'all_feeds' })),
     ).toEqual(['banana']);
+    // TTRSS's search operators.
+    expect(titles(await headlines({ feed_id: -4, search: 'star:true' }))).toEqual(['banana']);
+    expect(titles(await headlines({ feed_id: -4, search: 'author:ann title:cherry' }))).toEqual([
+      'cherry',
+    ]);
   });
 
   it('returns headline fields, content, attachments, labels, and the header on request', async () => {

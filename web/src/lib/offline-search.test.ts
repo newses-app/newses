@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { htmlText, searchTerms, searchWords, tokenise } from './offline-search.ts';
+import { parseSearchQuery } from '@newses/shared/client';
+import type { Entry } from '@newses/shared';
+import { htmlText, matchesFilters, searchTerms, searchWords, tokenise } from './offline-search.ts';
 
 describe('tokenise', () => {
   it('folds case and accents, and splits on everything but letters and digits', () => {
@@ -38,5 +40,23 @@ describe('searchTerms', () => {
   it('matches CJK pairs whole, and a lone character as a prefix', () => {
     expect(searchTerms('東京都')).toEqual({ words: ['東京', '京都'], prefix: null });
     expect(searchTerms('東')).toEqual({ words: [], prefix: '東' });
+  });
+});
+
+describe('matchesFilters', () => {
+  const entry = { sortAt: '2026-10-01T23:30:00.000Z' } as Entry;
+  const matches = (q: string, timeZone: string) =>
+    matchesFilters(entry, parseSearchQuery(q).filters, {
+      labels: new Map(),
+      timeZone,
+      now: new Date('2026-10-02T12:00:00.000Z'),
+    });
+
+  it('reads dates in the time zone given', () => {
+    expect(matches('@2026-10-01', 'UTC')).toBe(true);
+    expect(matches('@2026-10-02', 'Europe/Berlin')).toBe(true);
+    expect(matches('@yesterday', 'UTC')).toBe(true);
+    expect(matches('@today', 'Europe/Berlin')).toBe(true);
+    expect(matches('-@2026-10-01', 'UTC')).toBe(false);
   });
 });

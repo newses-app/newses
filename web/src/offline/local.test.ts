@@ -99,6 +99,51 @@ describe('searchStore', () => {
   });
 });
 
+describe('search operators on the device', () => {
+  it('drops entries with a negated word or phrase', async () => {
+    await fill();
+    expect([...((await searchStore(db, 'rust -digest')) ?? [])].sort()).toEqual([1, 2]);
+    expect([...((await searchStore(db, '-rust')) ?? [])].sort()).toEqual([2, 4]);
+    expect([...((await searchStore(db, 'rust -"compiler release"')) ?? [])].sort()).toEqual([1, 2]);
+  });
+
+  it('filters stored entries as the server does', async () => {
+    await db.entries.bulkPut(
+      [
+        entry(1, 'Rust compilers explained', { starred: true, unread: false, tags: ['lang'] }),
+        entry(2, 'Gardening notes', { author: 'Rusty Nail', note: 'Plant in May', labels: [7] }),
+        entry(3, 'Weekly digest', { published: true }),
+        entry(4, 'Café culture', { sortAt: '2026-10-01T23:30:00.000Z' }),
+      ].map(toStoredEntry),
+    );
+    await db.meta.put({
+      key: 'query:labels',
+      value: { data: [{ id: 7, caption: 'Read Later' }], at: NOW },
+    });
+    const ids = async (q: string) =>
+      (
+        await localList(db, {
+          stream: {},
+          view: 'all',
+          order: 'newest',
+          limit: 50,
+          content: false,
+          q,
+        })
+      ).entries.map((e) => e.id);
+    expect(await ids('star:true')).toEqual([1]);
+    expect(await ids('unread:true -pub:true')).toEqual([2, 4]);
+    expect(await ids('title:NOTES')).toEqual([2]);
+    expect(await ids('author:rusty')).toEqual([2]);
+    expect(await ids('note:true')).toEqual([2]);
+    expect(await ids('note:may')).toEqual([2]);
+    expect(await ids('tag:LANG')).toEqual([1]);
+    expect(await ids('label:"read later"')).toEqual([2]);
+    expect(await ids('-label:"read later" -tag:lang')).toEqual([3, 4]);
+    expect(await ids('rust star:false')).toEqual([2]);
+  });
+});
+
 describe('the search index', () => {
   it('indexes headlines on upgrade, and content stored before search afterwards', async () => {
     db.close();

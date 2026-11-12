@@ -193,6 +193,34 @@ describe('ArchiveService', () => {
     expect((await services.archive.list(bob, { q: 'other', limit: 10 })).entries).toHaveLength(1);
   });
 
+  it('reads search operators in both, where articles have no state', async () => {
+    const find = async (q: string, timeZone?: string) =>
+      titles((await services.archive.list(alice, { q, timeZone, limit: 10 })).entries);
+    expect(await find('title:purged')).toEqual(['Purged apple']);
+    expect(await find('title:SHARED')).toEqual(['Shared apple']);
+    expect(await find('-title:apple')).toEqual(['Imported']);
+    expect(await find('apple -cake')).toEqual(['Purged apple']);
+    expect(await find('apple -"apple cake"')).toEqual(['Purged apple']);
+    expect(await find('@2024-05-02')).toEqual(['Purged apple']);
+    expect(await find('@2024-06-15')).toEqual(['Shared apple']);
+    expect(await find('@2024-06-14', 'America/New_York')).toEqual(['Shared apple']);
+    expect(await find('-@2024-06-15 -@2024-05-02')).toEqual(['Imported']);
+    for (const q of [
+      'star:true',
+      'unread:true',
+      'pub:true',
+      'note:true',
+      'note:x',
+      'tag:x',
+      'label:x',
+    ])
+      expect(await find(q)).toEqual([]);
+    expect(await find('apple star:false -tag:x -label:x note:false')).toEqual([
+      'Shared apple',
+      'Purged apple',
+    ]);
+  });
+
   it('gets one article with content and enclosures, from either store', async () => {
     const page = await services.archive.list(alice, { limit: 10 });
     const [shared, purged] = page.entries;

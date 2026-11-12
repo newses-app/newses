@@ -1,4 +1,5 @@
 import type { ArchivedEntry, Entry, EntryState } from '@newses/shared';
+import { localTimeZone } from '@newses/shared/client';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { api } from '../api.ts';
@@ -25,7 +26,7 @@ export function useArchiveList(options: MaybeRefOrGetter<ArchiveListOptions>) {
       const o = toValue(options);
       return api.archive.list({
         ...(o.subscriptionId !== null && { subscriptionId: o.subscriptionId }),
-        ...(o.q && { q: o.q }),
+        ...(o.q && { q: o.q, timeZone: localTimeZone() }),
         ...(pageParam && { cursor: pageParam }),
         limit: PAGE_SIZE,
       });

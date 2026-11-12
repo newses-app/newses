@@ -12,6 +12,7 @@ import {
   MAX_TAGS_PER_ENTRY,
 } from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
+import { isTimeZone } from './search-query.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
 
@@ -35,13 +36,25 @@ const ONE_STREAM = {
   message: 'Give at most one of subscriptionId, categoryId, labelId, tag, special',
 };
 
+/** IANA time zone a search's dates are read in; UTC when omitted. Since API 1.13. */
+export const searchTimeZoneSchema = z
+  .string()
+  .max(64)
+  .refine(isTimeZone, { message: 'Unknown time zone' })
+  .optional();
+
 export const entryListQuerySchema = streamSchema
   .extend({
     view: viewModeSchema.default('all'),
     /** `relevance` requires `q`; it is the default when `q` is given. */
     order: z.enum([...headlineOrderSchema.options, 'relevance']).optional(),
-    /** Full-text search over title and content. */
+    /**
+     * Search: full-text over title, content, and the user's note, with operators (`title:`,
+     * `author:`, `note:`, `tag:`, `label:`, `unread:`, `star:`, `pub:`, `@date`, `-` to negate)
+     * filtering the stream; see `parseSearchQuery`. Operators since API 1.13.
+     */
     q: z.string().trim().min(1).max(500).optional(),
+    timeZone: searchTimeZoneSchema,
     cursor: z.string().max(1000).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     /** Include content and enclosures (combined layout). */

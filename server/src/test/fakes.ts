@@ -128,7 +128,17 @@ export class MemoryArchive implements ArchiveWriter, ArchiveReader {
       .filter((r) => query.feedUrls.includes(r.feedUrl))
       .filter((r) => {
         const text = `${r.title ?? ''} ${r.text ?? ''}`.toLowerCase();
-        return query.terms.every((term) => text.includes(term));
+        const sortAt = r.sortAt.getTime();
+        return (
+          query.terms.every((term) => text.includes(term)) &&
+          !(query.excluded ?? []).some((term) => text.includes(term)) &&
+          (query.fields ?? []).every(
+            (f) => (r[f.field] ?? '').toLowerCase().includes(f.value) !== f.negated,
+          ) &&
+          (query.days ?? []).every(
+            (d) => (sortAt >= d.from.getTime() && sortAt < d.to.getTime()) !== d.negated,
+          )
+        );
       })
       .filter((r) => !after || archiveOrder(r, after) > 0)
       .sort(archiveOrder)

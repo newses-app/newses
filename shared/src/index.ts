@@ -19,4 +19,5 @@ export * from './error-reasons.ts';
 export * from './server.ts';
 export * from './ops.ts';
 export * from './push.ts';
+export * from './search-query.ts';
 export type * from './platform-bridge.ts';

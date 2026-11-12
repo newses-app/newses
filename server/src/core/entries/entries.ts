@@ -15,6 +15,7 @@ import { assertMaxLength, DomainError } from '../errors.ts';
 import { PAGES_SOURCE_URL } from '../feeds/pages.ts';
 import type { Realtime } from '../ports.ts';
 import { shownCondition, streamCondition } from './streams.ts';
+import { entrySearch } from './search.ts';
 import { excerpt } from './text.ts';
 
 /** Search ranks the most recent matches only, so common terms stay fast on large instances. */
@@ -37,7 +38,10 @@ export interface ListOptions {
   stream: Stream;
   view: 'all' | 'unread' | 'adaptive';
   order?: ListOrder | undefined;
+  /** A search (see `parseSearchQuery`): free text, and operators filtering the stream. */
   q?: string | undefined;
+  /** IANA time zone the search's dates are read in; UTC when not given. */
+  timeZone?: string | undefined;
   cursor?: string | undefined;
   limit: number;
   content: boolean;
@@ -237,8 +241,8 @@ export class EntryService {
   }
 
   /**
-   * One page of headlines in `stream`, keyset-paginated; full-text search of entry text and the
-   * user's notes when `q` is given.
+   * One page of headlines in `stream`, keyset-paginated; with `q`, only those matching its
+   * operators and the full-text search of its free text in entry text and the user's notes.
    *
    * Search plans by selectivity, because the planner's estimates for text queries are unreliable:
    * a query matching few entries instance-wide is resolved from the GIN indexes into a materialised
@@ -247,15 +251,18 @@ export class EntryService {
    */
   async list(userId: number, options: ListOptions): Promise<ListResult> {
     const cursor = options.cursor ? decodeCursor(options.cursor) : null;
-    const order = options.order ?? (options.q ? 'relevance' : 'newest');
-    if (order === 'relevance' && !options.q)
+    if (options.order === 'relevance' && !options.q)
       throw new DomainError('invalid_input', 'Relevance order requires a search query');
+    const search = options.q ? entrySearch(options.q, { timeZone: options.timeZone }) : null;
+    const query = search?.text ?? null;
+    // A search of operators alone has nothing to rank by, so it lists newest first.
+    const requested = options.order ?? (query ? 'relevance' : 'newest');
+    const order = requested === 'relevance' && !query ? 'newest' : requested;
     const stream = shownCondition(userId, options.stream);
     const view = cursor?.v ?? (await this.#resolveView(stream, options.view));
     const where = sql`${stream}${view === 'unread' ? sql` AND ue.unread` : sql``}${
       options.sinceId === undefined ? sql`` : sql` AND ue.id > ${options.sinceId}`
-    }${filters(options)}`;
-    const query = options.q ? sql`websearch_to_tsquery('simple', ${options.q})` : null;
+    }${filters(options)}${search?.where ?? sql``}`;
     const selective = query !== null && (await this.#isSelective(query));
     const spec = orderSpec(order === 'relevance' ? 'newest' : order, options.stream);
     // The user's matches (by entry text or note), for selective searches. Materialised, so no

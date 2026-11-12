@@ -116,10 +116,28 @@ export interface ArchivePosition {
   guid: string;
 }
 
+export interface ArchiveFieldMatch {
+  field: 'title' | 'author';
+  value: string;
+  negated: boolean;
+}
+
+export interface ArchiveDaySpan {
+  from: Date;
+  to: Date;
+  negated: boolean;
+}
+
 export interface ArchiveListQuery {
   feedUrls: string[];
-  /** Lower-case words that must all appear in the title or text. */
+  /** Lower-case words or phrases that must all appear in the title or text. */
   terms: string[];
+  /** Lower-case words or phrases that must not appear in the title or text. */
+  excluded?: string[] | undefined;
+  /** Lower-case text the title or author must hold, or with `negated` must not. */
+  fields?: ArchiveFieldMatch[] | undefined;
+  /** Spans of sort time, `from` inclusive, that each row's must be within, or with `negated` outside. */
+  days?: ArchiveDaySpan[] | undefined;
   /** Only rows after this one in the archive's order. */
   after: ArchivePosition | null;
   limit: number;

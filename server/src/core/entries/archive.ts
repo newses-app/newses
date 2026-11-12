@@ -1,10 +1,23 @@
-import type { ArchivedEntry, Enclosure, Entry, EntryState } from '@newses/shared';
+import {
+  type ArchivedEntry,
+  type Enclosure,
+  type Entry,
+  type EntryState,
+  parseSearchQuery,
+  searchDayRange,
+} from '@newses/shared';
 import { type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../../db/client.ts';
 import { DomainError } from '../errors.ts';
 import { sha256 } from '../feeds/ingest.ts';
-import type { ArchivePosition, ArchiveReader, ArchiveRow } from '../ports.ts';
+import type {
+  ArchiveDaySpan,
+  ArchiveFieldMatch,
+  ArchivePosition,
+  ArchiveReader,
+  ArchiveRow,
+} from '../ports.ts';
 import { type EntryService, iso } from './entries.ts';
 import { excerpt } from './text.ts';
 
@@ -27,6 +40,7 @@ interface Item extends ArchivePosition {
 export interface ArchiveListOptions {
   subscriptionId?: number | undefined;
   q?: string | undefined;
+  timeZone?: string | undefined;
   cursor?: string | undefined;
   limit: number;
 }
@@ -73,8 +87,63 @@ function compare(a: ArchivePosition, b: ArchivePosition): number {
   );
 }
 
-const terms = (q: string | undefined) =>
-  [...new Set((q ?? '').toLowerCase().split(/\s+/).filter(Boolean))].slice(0, MAX_TERMS);
+/** A search over past articles; text matching is in lower case. */
+interface ArchiveSearch {
+  /** The free text, for the database's full-text search; empty when none. */
+  text: string;
+  terms: string[];
+  excluded: string[];
+  fields: ArchiveFieldMatch[];
+  days: ArchiveDaySpan[];
+}
+
+/**
+ * Reads `q` for past articles, which have no state: no note, tags, or labels, and are neither
+ * unread, starred, nor published. Null when it asks for state, so nothing matches.
+ */
+function archiveSearch(
+  q: string | undefined,
+  timeZone: string | undefined,
+  now: Date,
+): ArchiveSearch | null {
+  const query = parseSearchQuery(q ?? '');
+  const words = (negated: boolean) =>
+    [
+      ...new Set(
+        query.terms.filter((t) => t.negated === negated).map((t) => t.value.toLowerCase()),
+      ),
+    ].slice(0, MAX_TERMS);
+  const search: ArchiveSearch = {
+    text: query.text,
+    terms: words(false),
+    excluded: words(true),
+    fields: [],
+    days: [],
+  };
+  for (const filter of query.filters) {
+    switch (filter.kind) {
+      case 'flag':
+      case 'hasNote':
+        if (filter.value) return null;
+        break;
+      case 'date':
+        search.days.push({
+          ...searchDayRange(filter.date, timeZone ?? 'UTC', now),
+          negated: filter.negated,
+        });
+        break;
+      case 'field':
+        if (filter.field === 'title' || filter.field === 'author')
+          search.fields.push({
+            field: filter.field,
+            value: filter.value.toLowerCase(),
+            negated: filter.negated,
+          });
+        else if (!filter.negated) return null;
+    }
+  }
+  return search;
+}
 
 interface HotRow extends Record<string, unknown> {
   id: string;
@@ -122,11 +191,12 @@ export class ArchiveService {
     );
     if (subscriptionId !== undefined && feeds.length === 0)
       throw new DomainError('not_found', 'Subscription not found');
-    if (feeds.length === 0) return { entries: [], cursor: null };
+    const search = archiveSearch(options.q, options.timeZone, new Date());
+    if (feeds.length === 0 || !search) return { entries: [], cursor: null };
     const after = options.cursor ? decodeCursor(options.cursor) : null;
     const want = options.limit + 1;
-    const hot = await this.#hot(userId, feeds, options.q, after, want);
-    const cold = await this.#cold(feeds, terms(options.q), after, want);
+    const hot = await this.#hot(userId, feeds, search, after, want);
+    const cold = await this.#cold(feeds, search, after, want);
     let merged = [...hot, ...cold.items].sort(compare);
     // Archive rows past the last one read were not compared, so nothing after it can be listed.
     const until = cold.more ? cold.position : null;
@@ -234,10 +304,23 @@ export class ArchiveService {
   async #hot(
     userId: number,
     feeds: Feed[],
-    q: string | undefined,
+    search: ArchiveSearch,
     after: ArchivePosition | null,
     limit: number,
   ): Promise<Item[]> {
+    const contains = (column: SQL, value: string) =>
+      sql`strpos(lower(coalesce(${column}, '')), ${value}) > 0`;
+    const conditions = [
+      ...(search.text ? [sql`e.search @@ websearch_to_tsquery('simple', ${search.text})`] : []),
+      ...search.fields.map((f) => {
+        const match = contains(f.field === 'title' ? sql`e.title` : sql`e.author`, f.value);
+        return f.negated ? sql`NOT ${match}` : match;
+      }),
+      ...search.days.map((d) => {
+        const within = sql`(${SORT_MS} >= ${d.from.getTime()} AND ${SORT_MS} < ${d.to.getTime()})`;
+        return d.negated ? sql`NOT ${within}` : within;
+      }),
+    ];
     const rows = await this.#hotRows(sql`
       SELECT * FROM (
         SELECT e.id, s.id AS subscription_id, fs.url AS feed_url,
@@ -250,7 +333,7 @@ export class ArchiveService {
         WHERE s.id = ANY(${sql.param(feeds.map((f) => f.subscriptionId))}::int[])
           AND NOT EXISTS (
             SELECT 1 FROM user_entries ue WHERE ue.user_id = ${userId} AND ue.entry_id = e.id)
-          ${q ? sql`AND e.search @@ plainto_tsquery('simple', ${q})` : sql``}
+          ${sql.join(conditions.map((c) => sql`AND ${c} `))}
       ) x
       ${
         after
@@ -269,7 +352,7 @@ export class ArchiveService {
    */
   async #cold(
     feeds: Feed[],
-    words: string[],
+    search: ArchiveSearch,
     after: ArchivePosition | null,
     want: number,
   ): Promise<{ items: Item[]; more: boolean; position: ArchivePosition | null }> {
@@ -280,7 +363,10 @@ export class ArchiveService {
     for (let round = 0; round < COLD_ROUNDS; round++) {
       const rows = await this.#reader.list({
         feedUrls: [...byUrl.keys()],
-        terms: words,
+        terms: search.terms,
+        excluded: search.excluded,
+        fields: search.fields,
+        days: search.days,
         after: position,
         limit: want,
       });

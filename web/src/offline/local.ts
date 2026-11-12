@@ -2,14 +2,15 @@ import type {
   Category,
   Entry,
   EntryListResponse,
+  Label,
   MarkReadRequest,
   Prefs,
   Subscription,
 } from '@newses/shared';
-import { DEFAULT_PREFS } from '@newses/shared/client';
+import { DEFAULT_PREFS, localTimeZone, parseSearchQuery } from '@newses/shared/client';
 import Dexie from 'dexie';
 import { proxiedHtml } from '../lib/offline-content.ts';
-import { searchTerms } from '../lib/offline-search.ts';
+import { matchesFilters, searchTerms, tokenise } from '../lib/offline-search.ts';
 import {
   type LocalListQuery,
   localPage,
@@ -123,12 +124,15 @@ async function matching(db: OfflineDb, word: string, prefix: boolean): Promise<S
   return new Set([...headlines, ...contents]);
 }
 
-/**
- * Stored entries matching a search: every word, in the headline or the content, and the last one
- * as a prefix. Null when the search has no words.
- */
-export async function searchStore(db: OfflineDb, q: string): Promise<Set<number> | null> {
-  const { words, prefix } = searchTerms(q);
+/** Ids of stored entries with every word of `text`, the last one as a prefix; null without words. */
+async function withWords(
+  db: OfflineDb,
+  text: string,
+  prefixed: boolean,
+): Promise<Set<number> | null> {
+  const { words, prefix } = prefixed
+    ? searchTerms(text)
+    : { words: [...new Set(tokenise(text))], prefix: null };
   const sets = await Promise.all([
     ...words.map((word) => matching(db, word, false)),
     ...(prefix === null ? [] : [matching(db, prefix, true)]),
@@ -140,21 +144,50 @@ export async function searchStore(db: OfflineDb, q: string): Promise<Set<number>
 }
 
 /**
+ * Stored entries matching a search's free text: every word, in the headline or the content, and
+ * the last one as a prefix; none with a negated word or phrase. Null when it has no words.
+ */
+export async function searchStore(db: OfflineDb, q: string): Promise<Set<number> | null> {
+  const { terms } = parseSearchQuery(q);
+  const wanted = terms.filter((t) => !t.negated).map((t) => t.value);
+  const unwanted = terms.filter((t) => t.negated);
+  let found = await withWords(db, wanted.join(' '), true);
+  if (unwanted.length === 0) return found;
+  found ??= new Set<number>(await db.entries.toCollection().primaryKeys());
+  for (const term of unwanted) {
+    const excluded = await withWords(db, term.value, false);
+    for (const id of excluded ?? []) found.delete(id);
+  }
+  return found;
+}
+
+/**
  * One page of a stream from the store, with content when asked for; with `q`, only the entries
- * matching it, newest first.
+ * matching its free text and filters, newest first.
  */
 export async function localList(
   db: OfflineDb,
   query: LocalListQuery & { content: boolean; q?: string | null },
 ): Promise<EntryListResponse> {
   const found = query.q ? await searchStore(db, query.q) : null;
-  const [{ context, prefs }, stored] = await Promise.all([
+  const [{ context, prefs }, stored, labels] = await Promise.all([
     storedStreamContext(db),
     found
       ? db.entries.bulkGet([...found]).then((rows) => rows.filter((r) => r !== undefined))
       : db.entries.toArray(),
+    readQuery<Label[]>(db, 'labels'),
   ]);
-  const page = localPage(stored.map(fromStoredEntry), query, context);
+  const filters = query.q ? parseSearchQuery(query.q).filters : [];
+  const filterContext = {
+    labels: new Map((labels ?? []).map((l) => [l.id, l.caption])),
+    timeZone: localTimeZone(),
+    now: new Date(),
+  };
+  const page = localPage(
+    stored.map(fromStoredEntry).filter((e) => matchesFilters(e, filters, filterContext)),
+    query,
+    context,
+  );
   if (!query.content) return page;
   const contents = await db.contents.bulkGet(page.entries.map((e) => e.id));
   return {
