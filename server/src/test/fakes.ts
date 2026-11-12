@@ -2,6 +2,7 @@ import type { Db } from '../db/client.ts';
 import type { OpsSettings } from '../core/config.ts';
 import { deriveKey, deriveKeys } from '../core/crypto.ts';
 import { FeedCredentialSealer } from '../core/feeds/credentials.ts';
+import { foldText } from '../core/entries/text.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import type { Jobs } from '../core/jobs.ts';
@@ -127,13 +128,13 @@ export class MemoryArchive implements ArchiveWriter, ArchiveReader {
     const rows = this.#latest()
       .filter((r) => query.feedUrls.includes(r.feedUrl))
       .filter((r) => {
-        const text = `${r.title ?? ''} ${r.text ?? ''}`.toLowerCase();
+        const text = foldText(`${r.title ?? ''} ${r.text ?? ''}`);
         const sortAt = r.sortAt.getTime();
         return (
           query.terms.every((term) => text.includes(term)) &&
           !(query.excluded ?? []).some((term) => text.includes(term)) &&
           (query.fields ?? []).every(
-            (f) => (r[f.field] ?? '').toLowerCase().includes(f.value) !== f.negated,
+            (f) => foldText(r[f.field] ?? '').includes(f.value) !== f.negated,
           ) &&
           (query.days ?? []).every(
             (d) => (sortAt >= d.from.getTime() && sortAt < d.to.getTime()) !== d.negated,

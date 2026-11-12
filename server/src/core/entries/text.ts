@@ -74,3 +74,7 @@ export function textOfHtml(html: string): string | null {
     .trim();
   return text || null;
 }
+
+/** Lower case without accents or other combining marks, as search compares text. */
+export const foldText = (text: string) =>
+  text.normalize('NFKD').replace(/\p{M}/gu, '').normalize('NFC').toLowerCase();

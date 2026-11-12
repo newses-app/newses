@@ -397,6 +397,45 @@ describe('EntryService.list', () => {
     expect(await find('unread:maybe')).toEqual([]);
   });
 
+  it('finds words whatever their accents, and their forms in the languages of the feeds', async () => {
+    const find = async (q: string, userId = alice) =>
+      titles(
+        (
+          await services.entries.list(userId, {
+            stream: {},
+            view: 'all',
+            limit: 50,
+            content: false,
+            q,
+            order: 'newest',
+          })
+        ).entries,
+      );
+    // No feed gives a language yet: words match as written, folded, unless the app has one.
+    expect(await find('APPLE', bob)).toEqual(['Apple pie recipe']);
+    expect(await find('pies', bob)).toEqual([]);
+    await db.insert(userPrefs).values({ userId: bob, key: 'language', value: 'en' });
+    expect(await find('pies', bob)).toEqual(['Apple pie recipe']);
+    expect(await find('pies')).toEqual([]);
+
+    await db.update(entries).set({ lang: 'en-GB' }).where(eq(entries.guid, 'apple'));
+    await db
+      .update(entries)
+      .set({ lang: 'es', title: 'Los artículos de la canción' })
+      .where(eq(entries.guid, 'date'));
+    await services.entries.setNote(alice, ids.banana ?? 0, 'Café crème');
+    const spanish = 'Los artículos de la canción';
+    expect(await find('cancion')).toEqual([spanish]);
+    expect(await find('ARTICULO')).toEqual([spanish]);
+    expect(await find('"articulos de la"')).toEqual([spanish]);
+    expect(await find('pies')).toEqual(['Apple pie recipe']);
+    expect(await find('recipes OR canciones')).toEqual(['Apple pie recipe', spanish]);
+    expect(await find('apple -pies')).toEqual(['Cherry tart']);
+    expect(await find('cafe')).toEqual(['Banana bread']);
+    expect(await find('title:articulos')).toEqual([spanish]);
+    expect(await find('note:creme')).toEqual(['Banana bread']);
+  });
+
   it('filters by the day an entry is sorted on, in the given time zone', async () => {
     const at = (iso: string) => new Date(iso);
     await db

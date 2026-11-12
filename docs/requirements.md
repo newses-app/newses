@@ -84,6 +84,7 @@
 |---|---|---|
 | Full-text search | P1 | Searches title and content within current feed, category, or all; ranked results |
 | Query syntax | Migration and search | `title:`, `author:`, `note:`, `tag:`, `label:`, `unread:true/false`, `star:true/false`, `pub:true/false`, `@YYYY-MM-DD` and relative dates; negation with `-` |
+| Language-aware search | Migration and search | Words match whatever their accents, and in their other forms in the languages of the reader's feeds and app (Snowball stemmers), online and offline |
 
 ### Sharing
 

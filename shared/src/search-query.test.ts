@@ -3,16 +3,17 @@ import { isTimeZone, parseSearchQuery, searchDayRange } from './search-query.ts'
 
 describe('parseSearchQuery', () => {
   it('keeps free text as written, quotes, OR, and negation included', () => {
+    const rust = { value: 'rust', negated: false, phrase: false };
+    const io = { value: 'async io', negated: false, phrase: true };
+    const tokio = { value: 'tokio', negated: false, phrase: false };
+    const nightly = { value: 'nightly', negated: true, phrase: false };
     expect(parseSearchQuery('rust "async io" OR tokio -nightly')).toEqual({
       text: 'rust "async io" OR tokio -nightly',
-      terms: [
-        { value: 'rust', negated: false },
-        { value: 'async io', negated: false },
-        { value: 'tokio', negated: false },
-        { value: 'nightly', negated: true },
-      ],
+      terms: [rust, io, tokio, nightly],
+      groups: [[rust], [io, tokio], [nightly]],
       filters: [],
     });
+    expect(parseSearchQuery('OR rust OR star:true OR').groups).toEqual([[rust]]);
   });
 
   it('reads field operators, quoted values, and negation', () => {
@@ -64,9 +65,11 @@ describe('parseSearchQuery', () => {
   });
 
   it('keeps a quoted operator as a phrase', () => {
+    const term = { value: 'title:rust', negated: false, phrase: true };
     expect(parseSearchQuery('"title:rust"')).toEqual({
       text: '"title:rust"',
-      terms: [{ value: 'title:rust', negated: false }],
+      terms: [term],
+      groups: [[term]],
       filters: [],
     });
   });

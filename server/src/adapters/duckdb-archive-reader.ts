@@ -38,6 +38,7 @@ export class DuckDbArchiveReader implements ArchiveReader {
       table: `read_parquet(${literal(this.#pattern)}, hive_partitioning = true,
         hive_types = {'${ARCHIVE_PARTITION}': VARCHAR}, union_by_name = true)`,
       ms: (column) => `epoch_ms(${column})`,
+      fold: (expression) => `strip_accents(lower(${expression}))`,
       json: (column) => `CAST(to_json(${column}) AS VARCHAR)`,
     };
   }

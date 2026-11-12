@@ -41,9 +41,11 @@ class DuckDbAthena implements AthenaRunner {
       await connection.run(`
         CREATE MACRO to_unixtime(t) AS epoch_ms(t) / 1000.0;
         CREATE MACRO json_format(j) AS CAST(j AS VARCHAR);
+        CREATE MACRO normalize(s) AS strip_accents(s);
         CREATE VIEW archive_entries AS SELECT * FROM read_parquet(${literal(pattern)},
           hive_partitioning = true, hive_types = {'month': VARCHAR}, union_by_name = true);`);
-      const parts = sql.split('?');
+      // Trino's normalization form is a keyword, which DuckDB would read as a column.
+      const parts = sql.replaceAll(', NFKD)', ')').split('?');
       const text = parts.reduce((all, part, i) => all + renderParam(params[i - 1] ?? '') + part);
       const rows = (await connection.runAndReadAll(text)).getRowObjectsJson();
       // Athena returns every value as text.

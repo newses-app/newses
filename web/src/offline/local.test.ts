@@ -100,11 +100,31 @@ describe('searchStore', () => {
 });
 
 describe('search operators on the device', () => {
-  it('drops entries with a negated word or phrase', async () => {
+  it('drops entries with a negated word or phrase, and reads OR', async () => {
     await fill();
-    expect([...((await searchStore(db, 'rust -digest')) ?? [])].sort()).toEqual([1, 2]);
-    expect([...((await searchStore(db, '-rust')) ?? [])].sort()).toEqual([2, 4]);
-    expect([...((await searchStore(db, 'rust -"compiler release"')) ?? [])].sort()).toEqual([1, 2]);
+    const ids = async (q: string) => [...((await searchStore(db, q)) ?? [])].sort();
+    // The last word typed is the one read as a prefix, here a negated one.
+    expect(await ids('rust -digest')).toEqual([1]);
+    expect(await ids('-rust')).toEqual([2, 4]);
+    expect(await ids('rust -"compiler release"')).toEqual([1]);
+    expect(await ids('-digest rust')).toEqual([1, 2]);
+    expect(await ids('cafe OR gardening')).toEqual([2, 4]);
+    expect(await ids('cafe OR gardening daily')).toEqual([2, 4]);
+    expect(await ids('cafe OR gardening rust')).toEqual([2]);
+  });
+
+  it('finds other forms of words in the languages of stored entries', async () => {
+    await db.entries.bulkPut(
+      [
+        entry(1, 'Las canciones del verano', { lang: 'es' }),
+        entry(2, 'Running shoes reviewed', { lang: 'en-US' }),
+        entry(3, 'Nichts zu sehen'),
+      ].map(toStoredEntry),
+    );
+    const ids = async (q: string) => [...((await searchStore(db, q)) ?? [])].sort();
+    expect(await ids('cancion veranos')).toEqual([1]);
+    expect(await ids('runs shoe')).toEqual([2]);
+    expect(await ids('-shoe')).toEqual([1, 3]);
   });
 
   it('filters stored entries as the server does', async () => {

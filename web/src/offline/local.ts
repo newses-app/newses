@@ -4,13 +4,15 @@ import type {
   EntryListResponse,
   Label,
   MarkReadRequest,
+  SearchTerm,
   Prefs,
   Subscription,
 } from '@newses/shared';
 import { DEFAULT_PREFS, localTimeZone, parseSearchQuery } from '@newses/shared/client';
 import Dexie from 'dexie';
 import { proxiedHtml } from '../lib/offline-content.ts';
-import { matchesFilters, searchTerms, tokenise } from '../lib/offline-search.ts';
+import { isCjk, matchesFilters, searchTerms, tokenise } from '../lib/offline-search.ts';
+import { type Stem, stemmersFor } from '../lib/stemmers.ts';
 import {
   type LocalListQuery,
   localPage,
@@ -113,29 +115,68 @@ export async function storedStreamContext(db: OfflineDb, now = Date.now()) {
   return { context, prefs };
 }
 
-/** Ids of stored entries whose headline or content has a word, or (as `prefix`) one starting so. */
-async function matching(db: OfflineDb, word: string, prefix: boolean): Promise<Set<number>> {
-  const find = (table: typeof db.entries | typeof db.contents) =>
-    (prefix
-      ? table.where('words').startsWith(word)
-      : table.where('words').equals(word)
-    ).primaryKeys();
-  const [headlines, contents] = await Promise.all([find(db.entries), find(db.contents)]);
-  return new Set([...headlines, ...contents]);
+/**
+ * Ids of stored entries whose headline or content has a word, or (as `prefix`) one starting so.
+ * A whole word also matches the stored words with its stem in one of `stems`' languages.
+ */
+async function matching(
+  db: OfflineDb,
+  word: string,
+  prefix: boolean,
+  stems: readonly Stem[] = [],
+): Promise<Set<number>> {
+  const tables = [db.entries, db.contents] as const;
+  if (prefix) {
+    const found = await Promise.all(
+      tables.map((table) => table.where('words').startsWith(word).primaryKeys()),
+    );
+    return new Set(found.flat());
+  }
+  const forms = new Set([word]);
+  if (!isCjk(word))
+    for (const stem of stems) {
+      const root = stem(word);
+      // Stems are mostly a prefix of their words; one character less covers most that are not.
+      const chars = Array.from(root);
+      const start = chars.length > 3 ? chars.slice(0, -1).join('') : root;
+      for (const table of tables)
+        for (const key of await table.where('words').startsWith(start).uniqueKeys())
+          if (typeof key === 'string' && stem(key) === root) forms.add(key);
+    }
+  const found = await Promise.all(
+    tables.map((table) =>
+      table
+        .where('words')
+        .anyOf([...forms])
+        .primaryKeys(),
+    ),
+  );
+  return new Set(found.flat());
 }
 
-/** Ids of stored entries with every word of `text`, the last one as a prefix; null without words. */
+/**
+ * Ids of stored entries with every word of `text`, with `prefixed` the last one as a prefix;
+ * null without words.
+ */
 async function withWords(
   db: OfflineDb,
   text: string,
   prefixed: boolean,
+  stems: readonly Stem[],
 ): Promise<Set<number> | null> {
   const { words, prefix } = prefixed
     ? searchTerms(text)
     : { words: [...new Set(tokenise(text))], prefix: null };
   const sets = await Promise.all([
-    ...words.map((word) => matching(db, word, false)),
-    ...(prefix === null ? [] : [matching(db, prefix, true)]),
+    ...words.map((word) => matching(db, word, false, stems)),
+    // The word being typed: a prefix, or a word of its own.
+    ...(prefix === null
+      ? []
+      : [
+          Promise.all([matching(db, prefix, true), matching(db, prefix, false, stems)]).then(
+            ([started, whole]) => new Set([...started, ...whole]),
+          ),
+        ]),
   ]);
   if (sets.length === 0) return null;
   // Smallest first, so the intersection stays small.
@@ -143,22 +184,54 @@ async function withWords(
   return new Set([...(first ?? [])].filter((id) => rest.every((set) => set.has(id))));
 }
 
+const LANGUAGES_TTL = 5 * 60_000;
+const storedLanguageTags = new WeakMap<OfflineDb, { at: number; tags: Promise<string[]> }>();
+
+/** Languages to stem a search in: the stored entries' (looked up every few minutes) and the app's. */
+async function searchLanguageTags(db: OfflineDb): Promise<string[]> {
+  let cached = storedLanguageTags.get(db);
+  if (!cached || Date.now() - cached.at > LANGUAGES_TTL) {
+    const tags = new Set<string>();
+    cached = {
+      at: Date.now(),
+      tags: db.entries
+        .each((entry) => {
+          if (entry.lang) tags.add(entry.lang);
+        })
+        .then(() => [...tags]),
+    };
+    storedLanguageTags.set(db, cached);
+  }
+  return [...(await cached.tags), document.documentElement.lang, ...navigator.languages];
+}
+
 /**
- * Stored entries matching a search's free text: every word, in the headline or the content, and
- * the last one as a prefix; none with a negated word or phrase. Null when it has no words.
+ * Stored entries matching a search's free text, as the server matches it: every group of
+ * alternatives (terms joined by `OR`), a term when the headline or content has all its words,
+ * as written or in another form of their language, the last word typed as a prefix; a negated
+ * term when it has not. Null when the search has no words.
  */
 export async function searchStore(db: OfflineDb, q: string): Promise<Set<number> | null> {
-  const { terms } = parseSearchQuery(q);
-  const wanted = terms.filter((t) => !t.negated).map((t) => t.value);
-  const unwanted = terms.filter((t) => t.negated);
-  let found = await withWords(db, wanted.join(' '), true);
-  if (unwanted.length === 0) return found;
-  found ??= new Set<number>(await db.entries.toCollection().primaryKeys());
-  for (const term of unwanted) {
-    const excluded = await withWords(db, term.value, false);
-    for (const id of excluded ?? []) found.delete(id);
-  }
-  return found;
+  const { groups } = parseSearchQuery(q);
+  if (groups.length === 0) return null;
+  const stems = await stemmersFor(await searchLanguageTags(db));
+  const typing = groups.at(-1)?.at(-1);
+  let all: Set<number> | undefined;
+  const termIds = async (term: SearchTerm): Promise<Set<number>> => {
+    const ids =
+      (await withWords(db, term.value, term === typing && !term.negated, stems)) ?? new Set();
+    if (!term.negated) return ids;
+    all ??= new Set<number>(await db.entries.toCollection().primaryKeys());
+    return new Set([...all].filter((id) => !ids.has(id)));
+  };
+  const sets = await Promise.all(
+    groups.map(
+      async (group) => new Set((await Promise.all(group.map(termIds))).flatMap((ids) => [...ids])),
+    ),
+  );
+  // Smallest first, so the intersection stays small.
+  const [first, ...rest] = sets.sort((a, b) => a.size - b.size);
+  return new Set([...(first ?? [])].filter((id) => rest.every((set) => set.has(id))));
 }
 
 /**

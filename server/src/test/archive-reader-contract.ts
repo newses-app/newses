@@ -40,7 +40,7 @@ async function fill(writer: ArchiveWriter) {
     archiveRow({
       feedUrl: B,
       guid: 'b1',
-      title: 'Banana apple',
+      title: 'Banana Àpple',
       sortAt: at('2024-05-02T00:00:00Z'),
     }),
   ]);
@@ -112,6 +112,7 @@ export function describeArchiveReader(
       await fill(writer);
       const search = async (terms: string[]) =>
         (await reader.list({ ...query, terms })).map((r) => r.guid);
+      // Terms come folded (`foldText`), and titles and text are folded to match: b1 has "Àpple".
       expect(await search(['apple'])).toEqual(['b1', 'a2', 'a1']);
       expect(await search(['apple', 'banana'])).toEqual(['b1']);
       expect(await search(['o'])).toContain('a3');

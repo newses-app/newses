@@ -16,6 +16,9 @@ const MAX_WORDS = 2000;
 const fold = (text: string) =>
   text.normalize('NFKD').replace(/\p{M}/gu, '').normalize('NFC').toLowerCase();
 
+/** Whether a token is written in a script without spaces, which search does not stem. */
+export const isCjk = (token: string) => CJK.test(token);
+
 /** One run of letters and digits as tokens: itself, or for CJK its character pairs. */
 function runTokens(run: string): string[] {
   const chars = Array.from(run);
@@ -122,8 +125,8 @@ export interface FilterContext {
   now: Date;
 }
 
-const holds = (text: string | null, value: string) =>
-  (text ?? '').toLowerCase().includes(value.toLowerCase());
+/** `text` holds `value`, ignoring case and accents. */
+const holds = (text: string | null, value: string) => fold(text ?? '').includes(fold(value));
 
 /** Whether a stored entry passes a search's filters, as the server applies them. */
 export function matchesFilters(

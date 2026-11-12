@@ -41,6 +41,7 @@ Newses is built on the work of others. Each app lists every package it bundles, 
 | Work | By | Licence |
 |---|---|---|
 | [SecLists](https://github.com/danielmiessler/SecLists) | Daniel Miessler | MIT |
+| [Orama stemmers](https://github.com/oramasearch/orama/tree/main/packages/stemmers) | OramaSearch Inc. | Apache-2.0 |
 
 ## Translations
 

@@ -5,6 +5,7 @@ import {
   type EntryState,
   parseSearchQuery,
   searchDayRange,
+  type SearchTerm,
 } from '@newses/shared';
 import { type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -19,7 +20,8 @@ import type {
   ArchiveRow,
 } from '../ports.ts';
 import { type EntryService, iso } from './entries.ts';
-import { excerpt } from './text.ts';
+import { contains, searchLanguages, textQuery } from './search.ts';
+import { excerpt, foldText } from './text.ts';
 
 /** Search uses at most this many words. */
 const MAX_TERMS = 10;
@@ -87,10 +89,10 @@ function compare(a: ArchivePosition, b: ArchivePosition): number {
   );
 }
 
-/** A search over past articles; text matching is in lower case. */
+/** A search over past articles; text to match is folded (`foldText`). */
 interface ArchiveSearch {
-  /** The free text, for the database's full-text search; empty when none. */
-  text: string;
+  /** The free text, for the database's full-text search. */
+  groups: SearchTerm[][];
   terms: string[];
   excluded: string[];
   fields: ArchiveFieldMatch[];
@@ -109,12 +111,10 @@ function archiveSearch(
   const query = parseSearchQuery(q ?? '');
   const words = (negated: boolean) =>
     [
-      ...new Set(
-        query.terms.filter((t) => t.negated === negated).map((t) => t.value.toLowerCase()),
-      ),
+      ...new Set(query.terms.filter((t) => t.negated === negated).map((t) => foldText(t.value))),
     ].slice(0, MAX_TERMS);
   const search: ArchiveSearch = {
-    text: query.text,
+    groups: query.groups,
     terms: words(false),
     excluded: words(true),
     fields: [],
@@ -136,7 +136,7 @@ function archiveSearch(
         if (filter.field === 'title' || filter.field === 'author')
           search.fields.push({
             field: filter.field,
-            value: filter.value.toLowerCase(),
+            value: foldText(filter.value),
             negated: filter.negated,
           });
         else if (!filter.negated) return null;
@@ -308,10 +308,12 @@ export class ArchiveService {
     after: ArchivePosition | null,
     limit: number,
   ): Promise<Item[]> {
-    const contains = (column: SQL, value: string) =>
-      sql`strpos(lower(coalesce(${column}, '')), ${value}) > 0`;
+    const text =
+      search.groups.length > 0
+        ? textQuery(search.groups, await searchLanguages(this.#db, userId))
+        : null;
     const conditions = [
-      ...(search.text ? [sql`e.search @@ websearch_to_tsquery('simple', ${search.text})`] : []),
+      ...(text ? [sql`e.search @@ ${text}`] : []),
       ...search.fields.map((f) => {
         const match = contains(f.field === 'title' ? sql`e.title` : sql`e.author`, f.value);
         return f.negated ? sql`NOT ${match}` : match;

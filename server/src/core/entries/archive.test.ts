@@ -197,6 +197,8 @@ describe('ArchiveService', () => {
     const find = async (q: string, timeZone?: string) =>
       titles((await services.archive.list(alice, { q, timeZone, limit: 10 })).entries);
     expect(await find('title:purged')).toEqual(['Purged apple']);
+    expect(await find('ÁPPLE')).toEqual(['Shared apple', 'Purged apple']);
+    expect(await find('title:pürged')).toEqual(['Purged apple']);
     expect(await find('title:SHARED')).toEqual(['Shared apple']);
     expect(await find('-title:apple')).toEqual(['Imported']);
     expect(await find('apple -cake')).toEqual(['Purged apple']);

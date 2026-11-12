@@ -1,4 +1,4 @@
-import type { ErrorParams } from '@newses/shared';
+import { type ErrorParams, SEARCH_LANGUAGES } from '@newses/shared';
 import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
@@ -318,6 +318,17 @@ export const subscriptions = pgTable(
   ],
 );
 
+/** The search configuration of an entry's `lang`: its stemmer's, or null when it has none. */
+const SEARCH_CONFIG = `CASE lower(substring(lang FROM '^[A-Za-z]+')) ${Object.entries(
+  SEARCH_LANGUAGES,
+)
+  .map(([tag, name]) => `WHEN '${tag}' THEN 'newses_${name}'::regconfig`)
+  .join(' ')} END`;
+
+/** Search words of `text`: folded, then stemmed too where the entry's language has a stemmer. */
+const searchVector = (text: string, weight: 'A' | 'B') =>
+  `setweight(to_tsvector('newses_simple', ${text}) || coalesce(to_tsvector(${SEARCH_CONFIG}, ${text}), ''), '${weight}')`;
+
 export const entries = pgTable(
   'entries',
   {
@@ -350,8 +361,11 @@ export const entries = pgTable(
     lastSeenAt: tstz('last_seen_at').notNull().defaultNow(),
     updatedAt: tstz('updated_at').notNull().defaultNow(),
     // Tags and entities stripped; content capped so the tsvector stays under Postgres's 1 MB limit.
+    // Words folded, and again stemmed in the entry's language when search has a stemmer for it.
     search: tsvector('search').generatedAlwaysAs(
-      sql`setweight(to_tsvector('simple', coalesce(title, '')), 'A') || setweight(to_tsvector('simple', regexp_replace(left(coalesce(content, ''), 200000), '<[^>]*>|&[#a-zA-Z0-9]+;', ' ', 'g')), 'B')`,
+      sql.raw(
+        `${searchVector(`coalesce(title, '')`, 'A')} || ${searchVector(`regexp_replace(left(coalesce(content, ''), 200000), '<[^>]*>|&[#a-zA-Z0-9]+;', ' ', 'g')`, 'B')}`,
+      ),
     ),
   },
   (t) => [
@@ -459,7 +473,7 @@ export const userEntries = pgTable(
       ),
     // Expression index over the few rows with notes, so search pays nothing for the rest.
     index('user_entries_note_search_idx')
-      .using('gin', sql`to_tsvector('simple', ${t.note})`)
+      .using('gin', sql`to_tsvector('newses_simple', ${t.note})`)
       .where(sql`${t.note} IS NOT NULL`),
   ],
 );

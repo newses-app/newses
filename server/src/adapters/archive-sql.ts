@@ -16,6 +16,8 @@ export interface ArchiveDialect {
   ms(column: string): string;
   /** A list column as JSON text. */
   json(column: string): string;
+  /** Text in lower case without accents, as `foldText` folds search terms. */
+  fold(expression: string): string;
 }
 
 export type Param = string | number;
@@ -75,7 +77,7 @@ export function listStatement(d: ArchiveDialect, query: ArchiveListQuery): State
   }
   const matches: string[] = [];
   const matchParams: Param[] = [];
-  const words = `lower(coalesce(title, '') || ' ' || coalesce(text, ''))`;
+  const words = d.fold(`coalesce(title, '') || ' ' || coalesce(text, '')`);
   for (const term of query.terms) {
     matches.push(`strpos(${words}, ?) > 0`);
     matchParams.push(term);
@@ -85,7 +87,7 @@ export function listStatement(d: ArchiveDialect, query: ArchiveListQuery): State
     matchParams.push(term);
   }
   for (const { field, value, negated } of query.fields ?? []) {
-    matches.push(`strpos(lower(coalesce(${field}, '')), ?) ${negated ? '=' : '>'} 0`);
+    matches.push(`strpos(${d.fold(`coalesce(${field}, '')`)}, ?) ${negated ? '=' : '>'} 0`);
     matchParams.push(value);
   }
   for (const { from, to, negated } of query.days ?? []) {

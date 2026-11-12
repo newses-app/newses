@@ -295,6 +295,27 @@
       "when": 1794427050688,
       "tag": "0041_http_auth_feeds",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794453256354,
+      "tag": "0042_search_configurations",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794453284208,
+      "tag": "0043_language_aware_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794453297420,
+      "tag": "0044_search_index",
+      "breakpoints": true
     }
   ]
 }

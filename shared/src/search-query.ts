@@ -22,6 +22,8 @@ export type SearchFilter =
 export interface SearchTerm {
   value: string;
   negated: boolean;
+  /** Written in quotes. */
+  phrase: boolean;
 }
 
 export interface SearchQuery {
@@ -29,6 +31,8 @@ export interface SearchQuery {
   text: string;
   /** The free text's words and phrases, without `OR`. */
   terms: SearchTerm[];
+  /** The free text as alternatives (terms joined by `OR`) that must all match. */
+  groups: SearchTerm[][];
   filters: SearchFilter[];
 }
 
@@ -121,7 +125,9 @@ function parseFilter(body: string, negated: boolean): SearchFilter | null {
 export function parseSearchQuery(q: string): SearchQuery {
   const free: string[] = [];
   const terms: SearchTerm[] = [];
+  const groups: SearchTerm[][] = [];
   const filters: SearchFilter[] = [];
+  let or = false;
   for (const token of tokens(q)) {
     const negated = token.length > 1 && token.startsWith('-');
     const body = negated ? token.slice(1) : token;
@@ -131,11 +137,20 @@ export function parseSearchQuery(q: string): SearchQuery {
       continue;
     }
     free.push(token);
-    if (token === 'OR') continue;
+    if (token === 'OR') {
+      or = groups.length > 0;
+      continue;
+    }
     const value = unquote(body);
-    if (/[\p{L}\p{N}]/u.test(value)) terms.push({ value, negated });
+    if (!/[\p{L}\p{N}]/u.test(value)) continue;
+    const term = { value, negated, phrase: body.includes('"') };
+    terms.push(term);
+    const last = groups.at(-1);
+    if (or && last) last.push(term);
+    else groups.push([term]);
+    or = false;
   }
-  return { text: free.join(' '), terms, filters };
+  return { text: free.join(' '), terms, groups, filters };
 }
 
 /** This device's IANA time zone. */

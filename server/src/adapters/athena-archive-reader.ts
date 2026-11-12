@@ -128,6 +128,7 @@ export class AthenaArchiveReader implements ArchiveReader {
     this.#dialect = {
       table: options.table,
       ms: (column) => `CAST(round(to_unixtime(${column}) * 1000) AS BIGINT)`,
+      fold: (expression) => `regexp_replace(normalize(lower(${expression}), NFKD), '\\p{M}', '')`,
       json: (column) => `json_format(CAST(${column} AS JSON))`,
     };
   }

@@ -149,6 +149,14 @@ export const CREDITS = {
     kind: 'data',
     copyright: 'Copyright (c) 2018 Daniel Miessler',
   },
+  oramaStemmers: {
+    name: 'Orama stemmers',
+    author: 'OramaSearch Inc.',
+    url: 'https://github.com/oramasearch/orama/tree/main/packages/stemmers',
+    license: 'Apache-2.0',
+    kind: 'data',
+    package: '@orama/stemmers',
+  },
   vuetifyLocales: {
     name: 'Vuetify translations',
     author: 'Vuetify contributors',

@@ -15,7 +15,7 @@ import { assertMaxLength, DomainError } from '../errors.ts';
 import { PAGES_SOURCE_URL } from '../feeds/pages.ts';
 import type { Realtime } from '../ports.ts';
 import { shownCondition, streamCondition } from './streams.ts';
-import { entrySearch } from './search.ts';
+import { entrySearch, searchLanguages } from './search.ts';
 import { excerpt } from './text.ts';
 
 /** Search ranks the most recent matches only, so common terms stay fast on large instances. */
@@ -187,7 +187,7 @@ export function toEntry(row: HeadlineRow): Entry {
 
 /** The user's note on `ue` matches `query`; served by the partial index on notes. */
 const noteMatches = (query: SQL) =>
-  sql`(ue.note IS NOT NULL AND to_tsvector('simple', ue.note) @@ ${query})`;
+  sql`(ue.note IS NOT NULL AND to_tsvector('newses_simple', ue.note) @@ ${query})`;
 
 /** Entry text or the user's note matches `query`. */
 const matches = (query: SQL) => sql`(e.search @@ ${query} OR ${noteMatches(query)})`;
@@ -253,7 +253,12 @@ export class EntryService {
     const cursor = options.cursor ? decodeCursor(options.cursor) : null;
     if (options.order === 'relevance' && !options.q)
       throw new DomainError('invalid_input', 'Relevance order requires a search query');
-    const search = options.q ? entrySearch(options.q, { timeZone: options.timeZone }) : null;
+    const search = options.q
+      ? await entrySearch(options.q, {
+          timeZone: options.timeZone,
+          languages: () => searchLanguages(this.#db, userId),
+        })
+      : null;
     const query = search?.text ?? null;
     // A search of operators alone has nothing to rank by, so it lists newest first.
     const requested = options.order ?? (query ? 'relevance' : 'newest');
@@ -295,7 +300,7 @@ export class EntryService {
         SELECT ${headlineColumns(options.content)}
         FROM candidates c JOIN ${HEADLINE_FROM} ON ue.id = c.id
         ORDER BY ts_rank(e.search, ${query})
-          + ts_rank(to_tsvector('simple', coalesce(ue.note, '')), ${query}) DESC, ue.id DESC
+          + ts_rank(to_tsvector('newses_simple', coalesce(ue.note, '')), ${query}) DESC, ue.id DESC
         OFFSET ${offset} LIMIT ${options.limit + 1}`);
       rows = result.rows;
     } else {
