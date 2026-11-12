@@ -4,7 +4,7 @@ import { entries, feedSources, userEntries, users } from '../../db/schema.ts';
 import { FakeFetcher, htmlPage, rss } from '../../test/fake-fetcher.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { CategoryService } from '../categories.ts';
-import { testFeedDeps } from '../../test/fakes.ts';
+import { testFeedCredentials, testFeedDeps } from '../../test/fakes.ts';
 import { FetchError } from './http.ts';
 import { createFeedServices } from './index.ts';
 import { pagesSourceId } from './pages.ts';
@@ -25,7 +25,7 @@ beforeEach(async () => {
   await db.delete(users);
   await db.delete(feedSources);
   fetcher = new FakeFetcher();
-  service = new SubscriptionService({ db, fetcher });
+  service = new SubscriptionService({ db, fetcher, sealer: testFeedCredentials() });
   const [user] = await db.insert(users).values({ login: 'alice', passwordHash: 'x' }).returning();
   userId = user?.id ?? 0;
 });

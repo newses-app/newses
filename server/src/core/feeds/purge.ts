@@ -4,6 +4,7 @@ import type { FeedSettings } from '../config.ts';
 import { iso } from '../entries/entries.ts';
 import { plainText } from '../entries/text.ts';
 import type { ArchivedEnclosure, ArchiveRow, ArchiveWriter, BlobStore } from '../ports.ts';
+import { SHARED_SOURCE } from './credentials.ts';
 import { deleteUnusedIcons } from './favicons.ts';
 import { purgeDaysSql, userPurgeDaysSql } from './ingest.ts';
 import { PAGES_SOURCE_URL } from './pages.ts';
@@ -35,8 +36,12 @@ const UNREFERENCED = sql`NOT EXISTS (SELECT 1 FROM user_entries ue WHERE ue.entr
 /** Entries (`e`) nobody references that have been absent from their feed for the grace period. */
 const ORPHAN = sql`e.last_seen_at < now() - make_interval(days => ${ORPHAN_GRACE_DAYS}) AND ${UNREFERENCED}`;
 
-/** Entries (`e`) of the pages source: one user's own, so never archived. */
-const PAGE = sql`e.feed_source_id IN (SELECT id FROM feed_sources WHERE url = ${PAGES_SOURCE_URL})`;
+/**
+ * Entries (`e`) only their user could read, so never archived: of the pages source, and of
+ * sources with credentials (a subscription's own).
+ */
+const PRIVATE = sql`e.feed_source_id IN (SELECT fs.id FROM feed_sources fs
+  WHERE fs.url = ${PAGES_SOURCE_URL} OR NOT ${SHARED_SOURCE})`;
 
 /** Feed sources (`fs`) with no subscribers and no entries anyone holds; never the pages source. */
 const ABANDONED_SOURCE = sql`fs.url <> ${PAGES_SOURCE_URL}
@@ -108,7 +113,7 @@ export class Purger {
    * when they stopped being kept; never kept ones. Then
    * entries nobody references that have left their feed, then feed sources with no subscribers
    * and no kept entries. With an archive, entries are written to it before they are deleted,
-   * except pages, which only their user could read. Also forgets expired host cooldowns.
+   * except those only their user could read (`PRIVATE`). Also forgets expired host cooldowns.
    */
   async purge(): Promise<PurgeResult> {
     const userEntries = await this.#db.execute(sql`
@@ -126,21 +131,24 @@ export class Purger {
         AND purge.days > 0
         AND ue.updated_at < now() - make_interval(days => purge.days)`);
 
-    const pages = await this.#db.execute(sql`DELETE FROM entries e WHERE ${ORPHAN} AND ${PAGE}`);
+    const unarchived = await this.#db.execute(
+      sql`DELETE FROM entries e WHERE ${ORPHAN} AND ${PRIVATE}`,
+    );
     const deadline = this.#now() + this.#archiveBudgetMs;
-    const orphans = await this.#deleteEntries(sql`${ORPHAN} AND NOT ${PAGE}`, deadline);
-    // Deleting a source deletes its entries, so with an archive they go first, and a source
-    // goes only once none are left.
+    const orphans = await this.#deleteEntries(sql`${ORPHAN} AND NOT ${PRIVATE}`, deadline);
+    // Deleting a source deletes its entries, so with an archive a shared source's go first, and
+    // the source goes only once none are left.
     let sourceEntries = { deleted: 0, archived: 0 };
     if (this.#archive)
       sourceEntries = await this.#deleteEntries(
-        sql`${UNREFERENCED} AND e.feed_source_id IN (SELECT fs.id FROM feed_sources fs WHERE ${ABANDONED_SOURCE})`,
+        sql`${UNREFERENCED} AND e.feed_source_id IN (
+          SELECT fs.id FROM feed_sources fs WHERE ${ABANDONED_SOURCE} AND ${SHARED_SOURCE})`,
         deadline,
       );
     const sources = await this.#db.execute<{ id: number; favicon_key: string | null }>(sql`
       DELETE FROM feed_sources fs
       WHERE ${ABANDONED_SOURCE}
-        ${this.#archive ? sql`AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.feed_source_id = fs.id)` : sql``}
+        ${this.#archive ? sql`AND (NOT ${SHARED_SOURCE} OR NOT EXISTS (SELECT 1 FROM entries e WHERE e.feed_source_id = fs.id))` : sql``}
       RETURNING fs.id, fs.favicon_key`);
     // Other sources of the same site may still show their icons.
     await deleteUnusedIcons(
@@ -154,7 +162,7 @@ export class Purger {
 
     return {
       userEntries: (userEntries.rowCount ?? 0) + (unsubscribed.rowCount ?? 0),
-      entries: (pages.rowCount ?? 0) + orphans.deleted + sourceEntries.deleted,
+      entries: (unarchived.rowCount ?? 0) + orphans.deleted + sourceEntries.deleted,
       feedSources: sources.rows.length,
       archived: orphans.archived + sourceEntries.archived,
     };

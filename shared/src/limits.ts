@@ -12,6 +12,10 @@ export const MAX_FILTER_TITLE_LENGTH = 200;
 export const MAX_FEED_URL_LENGTH = 2048;
 export const MAX_FEED_TITLE_LENGTH = 1000;
 
+/** HTTP Basic credentials of a feed. */
+export const MAX_FEED_LOGIN_LENGTH = 255;
+export const MAX_FEED_PASSWORD_LENGTH = 1000;
+
 /** Scores and score thresholds lie within ±this. */
 export const MAX_SCORE = 1_000_000;
 

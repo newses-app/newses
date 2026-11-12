@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { generateOpml, parseOpml, type Opml } from 'feedsmith';
 import type { Db } from '../../db/client.ts';
 import { categories, feedSources, subscriptions } from '../../db/schema.ts';
@@ -186,11 +186,20 @@ export class OpmlService {
         for (const folder of level)
           folderIds.set(folder, categoryIds.get(key(idOf(folder.parent), folder.title)) ?? null);
       }
-      if (feeds.length === 0) return;
+      // Feeds the user reads with credentials count as subscribed already.
+      const own = await tx
+        .select({ url: feedSources.url })
+        .from(subscriptions)
+        .innerJoin(feedSources, eq(feedSources.id, subscriptions.feedSourceId))
+        .where(and(eq(subscriptions.userId, userId), isNotNull(feedSources.authLogin)));
+      const ownUrls = new Set(own.map((row) => row.url));
+      const wanted = feeds.filter((feed) => !ownUrls.has(feed.url));
+      result.alreadySubscribed = feeds.length - wanted.length;
+      if (wanted.length === 0) return;
 
       // One row per URL, as an upsert may not touch a row twice; the first outline names it.
       const sources = new Map<string, Feed>();
-      for (const feed of feeds) if (!sources.has(feed.url)) sources.set(feed.url, feed);
+      for (const feed of wanted) if (!sources.has(feed.url)) sources.set(feed.url, feed);
       const rows = await tx
         .insert(feedSources)
         .values(
@@ -200,13 +209,17 @@ export class OpmlService {
             siteUrl: feed.siteUrl,
           })),
         )
-        .onConflictDoUpdate({ target: feedSources.url, set: { url: sql`excluded.url` } })
+        .onConflictDoUpdate({
+          target: feedSources.url,
+          targetWhere: isNull(feedSources.authLogin),
+          set: { url: sql`excluded.url` },
+        })
         .returning({ id: feedSources.id, url: feedSources.url });
       const sourceIds = new Map(rows.map((row) => [row.url, row.id]));
       const inserted = await tx
         .insert(subscriptions)
         .values(
-          feeds.map((feed) => ({
+          wanted.map((feed) => ({
             userId,
             feedSourceId: sourceIds.get(feed.url) ?? 0,
             categoryId: idOf(feed.parent),

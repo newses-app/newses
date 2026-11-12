@@ -1,6 +1,7 @@
 import type { Db } from '../db/client.ts';
 import type { OpsSettings } from '../core/config.ts';
-import { deriveKeys } from '../core/crypto.ts';
+import { deriveKey, deriveKeys } from '../core/crypto.ts';
+import { FeedCredentialSealer } from '../core/feeds/credentials.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import type { Jobs } from '../core/jobs.ts';
@@ -25,6 +26,10 @@ import type {
 
 /** APP_SECRET for tests. */
 export const TEST_APP_SECRET = 'test app secret of at least thirty-two characters';
+
+/** Seals feed passwords as services over TEST_APP_SECRET do. */
+export const testFeedCredentials = () =>
+  new FeedCredentialSealer(deriveKey(TEST_APP_SECRET, 'feed-credentials'));
 
 /** Ops settings with the defaults, and no alert email. */
 export const TEST_OPS_SETTINGS: OpsSettings = {

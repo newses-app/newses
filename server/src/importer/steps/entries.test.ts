@@ -12,7 +12,7 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { MemoryArchive, RecordingRealtime } from '../../test/fakes.ts';
+import { MemoryArchive, RecordingRealtime, testFeedCredentials } from '../../test/fakes.ts';
 import { createTtrssSource } from '../../test/ttrss-source.ts';
 import { type ImportOptions, importTtrss } from '../importer.ts';
 import { TtrssSource } from '../source.ts';
@@ -49,7 +49,8 @@ const SOURCE_ROWS = `
     (8, 'Read', 'g8', 'https://one.example/read', ${ago('10 days')}, '', 'h', ${ago('10 days')}, ${ago('10 days')}, ''),
     (9, 'Future', 'g9', 'https://one.example/future', (now() AT TIME ZONE 'UTC') + interval '3 days', '', 'h', ${ago('1 hour')}, ${ago('1 hour')}, ''),
     (10, 'Old noted', 'g10', 'https://one.example/old-noted', ${ago('100 days')}, '', 'h', ${ago('100 days')}, ${ago('100 days')}, ''),
-    (11, 'Shared', 'SHA1:g11', 'https://shared.example/post/1', ${ago('300 days')}, '', 'h', ${ago('300 days')}, ${ago('300 days')}, '');
+    (11, 'Shared', 'SHA1:g11', 'https://shared.example/post/1', ${ago('300 days')}, '', 'h', ${ago('300 days')}, ${ago('300 days')}, ''),
+    (14, 'Old private', 'g14', 'https://private.example/old', ${ago('100 days')}, '', 'h', ${ago('100 days')}, ${ago('100 days')}, '');
   INSERT INTO ttrss_enclosures (content_url, content_type, title, duration, width, height, post_id) VALUES
     ('https://one.example/a.mp3', 'audio/mpeg', '', '1:02', 0, 0, 1);
   INSERT INTO ttrss_user_entries (int_id, ref_id, uuid, feed_id, orig_feed_id, owner_uid, marked,
@@ -64,14 +65,22 @@ const SOURCE_ROWS = `
     (8, 8, '', 1, NULL, 2, false, true, '', '', ${ago('9 days')}, false, NULL),
     (9, 9, '', 1, NULL, 2, false, false, '', '', NULL, true, NULL),
     (10, 10, '', 1, NULL, 2, false, false, '', '', NULL, true, 'remember this'),
-    (11, 11, '', NULL, NULL, 2, false, true, '', '', NULL, false, NULL);
+    (11, 11, '', NULL, NULL, 2, false, true, '', '', NULL, false, NULL),
+    (14, 14, '', 3, NULL, 2, false, false, '', '', NULL, true, NULL);
   INSERT INTO ttrss_tags (tag_name, owner_uid, post_int_id) VALUES ('news', 2, 1);`;
 
 async function run(changes: Partial<ImportOptions> = {}, archive: MemoryArchive | null = null) {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
-      { db, source, steps: IMPORT_STEPS, purgeDays: 60, archive },
+      {
+        db,
+        source,
+        steps: IMPORT_STEPS,
+        purgeDays: 60,
+        feedCredentials: testFeedCredentials(),
+        archive,
+      },
       { dryRun: false, force: false, ...changes },
     );
   } finally {
@@ -121,6 +130,7 @@ describe('TTRSS entries import', () => {
       'Future',
       'Old noted',
       'Old starred',
+      'Private',
       'Read',
       'Shared',
     ]);
@@ -137,7 +147,7 @@ describe('TTRSS entries import', () => {
     expect(sam.get('A')?.entry.id).toBe(a?.entry.id);
     expect(sam.get('A')?.ue).toMatchObject({ unread: false, starred: true });
     expect(sam.get('A')?.ue.readAt?.getTime()).toBeGreaterThan(Date.now() - 6 * 60_000);
-    expect(await db.select().from(entries)).toHaveLength(7);
+    expect(await db.select().from(entries)).toHaveLength(8);
     expect(await db.select().from(enclosures)).toEqual([
       expect.objectContaining({
         entryId: a?.entry.id,
@@ -168,8 +178,13 @@ describe('TTRSS entries import', () => {
       .where(eq(feedSources.id, shared?.entry.feedSourceId ?? 0));
     expect(pages?.url).toBe(PAGES_SOURCE_URL);
     expect(pages?.disabledAt).not.toBeNull();
+    const [own] = await db
+      .select()
+      .from(feedSources)
+      .where(eq(feedSources.id, pat.get('Private')?.entry.feedSourceId ?? 0));
+    expect(own).toMatchObject({ url: 'https://private.example/rss', authLogin: 'me' });
 
-    expect(report.tally('pat', 'entries')).toEqual({ source: 10, imported: 7 });
+    expect(report.tally('pat', 'entries')).toEqual({ source: 11, imported: 8 });
     expect(
       report
         .skipped('pat')
@@ -184,8 +199,8 @@ describe('TTRSS entries import', () => {
           1,
         ],
         ['entries', 'it belongs to no feed', 1],
-        ['entries', 'its feed was not imported', 1],
         ['entries', 'older than its purge age', 1],
+        ['entries', 'older than its purge age, and feeds with a login are not archived', 1],
       ].sort(),
     );
     expect(report.notes('pat')).toContainEqual(
@@ -223,7 +238,7 @@ describe('TTRSS entries import', () => {
       const archive = new MemoryArchive();
       const report = await run({}, archive);
       expect(report.reconciled).toBe(true);
-      expect(report.tally('pat', 'entries')).toEqual({ source: 10, imported: 7, archived: 1 });
+      expect(report.tally('pat', 'entries')).toEqual({ source: 11, imported: 8, archived: 1 });
       expect(report.tally('sam', 'entries')).toEqual({ source: 2, imported: 1, archived: 1 });
       expect(report.skipped('pat').map((s) => s.reason)).not.toContain('older than its purge age');
       expect(
@@ -327,7 +342,7 @@ describe('TTRSS entries import', () => {
     expect(pat.has('Old starred')).toBe(true);
     expect(pat.has('Old noted')).toBe(true);
     expect(report.skipped('pat')).toContainEqual(
-      expect.objectContaining({ reason: 'older than --since', count: 1 }),
+      expect.objectContaining({ reason: 'older than --since', count: 2 }),
     );
   });
 

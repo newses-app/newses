@@ -21,6 +21,16 @@ export function describeFetchFailure(
         detail: { reason: 'fetch_blocked_address', params: { url } },
       };
     case 'http_status': {
+      if (err.status === 401)
+        return err.credentialsSent
+          ? {
+              message: `${url} refused the login`,
+              detail: { reason: 'fetch_login_refused', params: { url } },
+            }
+          : {
+              message: `${url} needs a login`,
+              detail: { reason: 'fetch_login_required', params: { url } },
+            };
       const status = String(err.status);
       return {
         message: `${url} returned HTTP ${status}`,

@@ -115,6 +115,7 @@ export function toSubscription(view: SubscriptionView, userIntervalSeconds: numb
     paused: subscription.paused,
     hideFromAll: subscription.hideFromAll,
     ...scheduleOf(view, userIntervalSeconds),
+    authLogin: source.authLogin,
   };
 }
 

@@ -4,10 +4,12 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { feedSources, fetchHosts, subscriptions } from '../../db/schema.ts';
 import type { FeedSettings } from '../config.ts';
+import { CryptoError } from '../crypto.ts';
 import { DomainError, ThrottledError } from '../errors.ts';
 import type { Jobs } from '../jobs.ts';
 import type { JobQueue, Logger } from '../ports.ts';
 import { userPrefInt } from '../prefs.ts';
+import { credentialOrigin, type FeedCredentialSealer, SHARED_SOURCE } from './credentials.ts';
 import { decodeBody } from './decode.ts';
 import { describeFetchFailure } from './fetch-failure.ts';
 import type { FullTextService } from './fulltext.ts';
@@ -60,14 +62,17 @@ export function hintSeconds(hints: (number | null)[]): number | null {
   return given.length === 0 ? null : Math.min(MAX_HINT_SECONDS, Math.max(...given));
 }
 
+type FeedFailure = FetchError | FeedParseError | CryptoError;
+
 /** Why a feed failed, as its last error. */
-function describeFailure(
-  url: string,
-  err: FetchError | FeedParseError,
-): { message: string; detail: ErrorDetail } {
-  return err instanceof FetchError
-    ? describeFetchFailure(url, err)
-    : { message: `Not a valid feed: ${err.message}`, detail: { reason: 'feed_unreadable' } };
+function describeFailure(url: string, err: FeedFailure): { message: string; detail: ErrorDetail } {
+  if (err instanceof FetchError) return describeFetchFailure(url, err);
+  if (err instanceof CryptoError)
+    return {
+      message: "The feed's saved password cannot be read",
+      detail: { reason: 'feed_login_unreadable' },
+    };
+  return { message: `Not a valid feed: ${err.message}`, detail: { reason: 'feed_unreadable' } };
 }
 
 export class FeedUpdater {
@@ -78,12 +83,15 @@ export class FeedUpdater {
   readonly #settings: FeedSettings;
   readonly #logger: Logger;
   readonly #fullText: FullTextService | undefined;
+  readonly #sealer: FeedCredentialSealer;
 
   constructor(deps: {
     /** Queues full text for opted-in feeds' new entries. */
     fullText?: FullTextService;
     db: Db;
     fetcher: Fetcher;
+    /** Opens the passwords of feeds with credentials. */
+    sealer: FeedCredentialSealer;
     ingester: Ingester;
     queue: JobQueue<Jobs>;
     settings: FeedSettings;
@@ -96,6 +104,7 @@ export class FeedUpdater {
     this.#settings = deps.settings;
     this.#logger = deps.logger;
     this.#fullText = deps.fullText;
+    this.#sealer = deps.sealer;
   }
 
   /**
@@ -261,6 +270,7 @@ export class FeedUpdater {
         purpose: 'feed',
         etag: source.etag,
         lastModified: source.lastModified,
+        credentials: this.#sealer.open(source),
       });
       feed = response.notModified
         ? null
@@ -452,7 +462,10 @@ export class FeedUpdater {
     );
   }
 
-  /** Moves the source to the URL its feed permanently redirected to, unless another source has it. */
+  /**
+   * Moves the source to the URL its feed permanently redirected to, unless another shared source
+   * has it. A source with credentials moves only within its origin, where they may be sent.
+   */
   async #adoptPermanentUrl(source: FeedSourceRow, permanentUrl: string): Promise<void> {
     let url: string;
     try {
@@ -461,9 +474,12 @@ export class FeedUpdater {
       return;
     }
     if (url === source.url) return;
+    const own = source.authLogin !== null;
+    if (own && credentialOrigin(url) !== credentialOrigin(source.url)) return;
     const moved = await this.#db.execute(sql`
       UPDATE feed_sources SET url = ${url}
-      WHERE id = ${source.id} AND NOT EXISTS (SELECT 1 FROM feed_sources WHERE url = ${url})`);
+      WHERE id = ${source.id} AND (${own} OR NOT EXISTS (
+        SELECT 1 FROM feed_sources fs WHERE fs.url = ${url} AND ${SHARED_SOURCE}))`);
     if (moved.rowCount) {
       // Feed URLs reach the logs only at debug.
       this.#logger.info(
@@ -488,7 +504,8 @@ export class FeedUpdater {
    * the host already.
    */
   async #recordFailure(source: FeedSourceRow, err: unknown): Promise<void> {
-    if (!(err instanceof FetchError || err instanceof FeedParseError)) throw err;
+    if (!(err instanceof FetchError || err instanceof FeedParseError || err instanceof CryptoError))
+      throw err;
     const failures = source.errorCount + 1;
     const gone = err instanceof FetchError && err.status === 410;
     const disable = gone || failures >= this.#settings.disableAfterFailures;

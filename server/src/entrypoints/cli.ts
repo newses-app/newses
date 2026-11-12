@@ -1,7 +1,9 @@
 import { LocalBlobStore } from '../adapters/local-blob-store.ts';
 import { createAuthServices } from '../core/auth/index.ts';
 import { copyBlobs } from '../core/blob-copy.ts';
+import { deriveKey } from '../core/crypto.ts';
 import { DomainError } from '../core/errors.ts';
+import { FeedCredentialSealer } from '../core/feeds/credentials.ts';
 import { createDb } from '../db/client.ts';
 import { importTtrss } from '../importer/importer.ts';
 import { TtrssSource } from '../importer/source.ts';
@@ -18,10 +20,12 @@ async function readStdinLine(): Promise<string> {
 
 const { config, pool } = createRuntime('cli');
 const db = createDb(pool);
+const feedCredentials = new FeedCredentialSealer(deriveKey(config.appSecret, 'feed-credentials'));
 let code: number;
 try {
   const services = {
     ...createAuthServices(db, config.appSecret),
+    resealFeedPasswords: (previousKey: Buffer) => feedCredentials.reseal(db, previousKey),
     async importTtrss(url: string, options: Parameters<typeof importTtrss>[1]) {
       const source = await TtrssSource.open(url);
       try {
@@ -32,6 +36,7 @@ try {
             steps: IMPORT_STEPS,
             purgeDays: config.feeds.purgeDays,
             archive: createArchiveWriter(config, createBlobStore(config)),
+            feedCredentials,
           },
           options,
         );

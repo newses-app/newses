@@ -20,6 +20,7 @@
 | Multiple Server Profiles | Native apps | Family members keep several servers and accounts in the desktop and Android apps and switch between them without signing in again, keeping each one's offline articles and waiting changes; on Docker and AWS |
 | Credits | Licensing | Anyone sees the AGPL notices, a link to the source the server runs, the third-party work Newses builds on, and every package each app and the server ship with its licence, in the web, desktop, and Android apps; builds fail on a licence incompatible with the AGPL; on Docker and AWS |
 | Push and notifications | Timely updates | Family members are notified of new entries in browsers, installed web apps, and the Android app while they are closed, soon after the fetch that finds them and at most every 30 minutes; open apps on AWS no longer poll the API; with no vendor account or key to set up; on Docker and AWS |
+| Migration and search | TTRSS parity | Family members read feeds behind HTTP Basic authentication, those the TTRSS import brings included, in the web, desktop, and Android apps and TTRSS clients; search finds words whatever their accents and forms, online as offline, with TTRSS's query syntax; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -36,7 +37,7 @@
 | Feed errors | P1 | Last error and time shown per feed; "feeds with errors" view; feed auto-disables after a configurable number of consecutive failures |
 | Favicons | P1 | Fetched per site, cached, shown in tree, headlines, and article headers; fallback icon |
 | Purge policy | P1 | Global and per-feed max age; never purges starred, published, noted, labelled, or shared entries; entries outside any feed (published pages, kept entries of unsubscribed feeds) are purged by age once no longer kept |
-| HTTP-auth feeds | Later | Basic auth credentials per subscription, encrypted at rest |
+| HTTP-auth feeds | Migration and search | Basic auth credentials per subscription, encrypted at rest, sent only to the feed's own site; a feed that needs or refuses a login says so; the TTRSS import keeps them |
 | Per-feed options | Per-feed Options | Pause updates: the feed is no longer checked for the user, who still gets what others' checks bring. Hide from All articles: left out of All articles and Fresh, their counts, catch-up, and search, also through the TTRSS and Google Reader APIs. The feed's settings show how often it is checked, why, and when next; a changed interval applies at once |
 | Rate-limit slowdown | Per-feed Options | A feed answering HTTP 429 is checked less often, and back to normal after a run of successful checks; admins set a minimum interval per site on the Operations page |
 | Feed debugger | Missing requirements | Dry-run fetch shows raw response, parsed entries, and filter matches |
@@ -82,7 +83,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Full-text search | P1 | Searches title and content within current feed, category, or all; ranked results |
-| Query syntax | Later | `title:`, `author:`, `note:`, `tag:`, `label:`, `unread:true/false`, `star:true/false`, `pub:true/false`, `@YYYY-MM-DD` and relative dates; negation with `-` |
+| Query syntax | Migration and search | `title:`, `author:`, `note:`, `tag:`, `label:`, `unread:true/false`, `star:true/false`, `pub:true/false`, `@YYYY-MM-DD` and relative dates; negation with `-` |
 
 ### Sharing
 

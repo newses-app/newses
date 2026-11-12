@@ -224,7 +224,8 @@ export const feedSources = pgTable(
   'feed_sources',
   {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-    url: text('url').notNull().unique(),
+    // Unique among shared sources; a source with credentials is one subscription's own.
+    url: text('url').notNull(),
     siteUrl: text('site_url'),
     title: text('title'),
     etag: text('etag'),
@@ -252,10 +253,17 @@ export const feedSources = pgTable(
     slowdownOkCount: integer('slowdown_ok_count').notNull().default(0),
     faviconKey: text('favicon_key'),
     faviconCheckedAt: tstz('favicon_checked_at'),
+    // HTTP Basic credentials, sent to the feed's origin only; the password is sealed with the
+    // `feed-credentials` key, the source's id as context (`feedCredentialContext`).
+    authLogin: text('auth_login'),
+    authPassword: text('auth_password'),
     ...timestamps(),
     syncXid: syncXid(),
   },
   (t) => [
+    uniqueIndex('feed_sources_url_key')
+      .on(t.url)
+      .where(sql`${t.authLogin} IS NULL`),
     index('feed_sources_due_idx')
       .on(t.nextFetchAt)
       .where(sql`${t.disabledAt} IS NULL`),

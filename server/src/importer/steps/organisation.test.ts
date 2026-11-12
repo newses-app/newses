@@ -19,6 +19,7 @@ import { TtrssSource } from '../source.ts';
 import { IMPORT_STEPS } from '../steps.ts';
 import { hexColour } from './labels.ts';
 import { stableUuid } from './sharing.ts';
+import { testFeedCredentials } from '../../test/fakes.ts';
 
 let target: TestDatabase;
 let sourceDb: TestDatabase;
@@ -60,7 +61,7 @@ async function run() {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
-      { db, source, steps: IMPORT_STEPS, purgeDays: 60 },
+      { db, source, steps: IMPORT_STEPS, purgeDays: 60, feedCredentials: testFeedCredentials() },
       { dryRun: false, force: false },
     );
   } finally {

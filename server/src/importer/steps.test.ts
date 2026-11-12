@@ -15,6 +15,7 @@ import { createTtrssSource } from '../test/ttrss-source.ts';
 import { type ImportOptions, importTtrss } from './importer.ts';
 import { TtrssSource } from './source.ts';
 import { IMPORT_STEPS } from './steps.ts';
+import { testFeedCredentials } from '../test/fakes.ts';
 
 let target: TestDatabase;
 let sourceDb: TestDatabase;
@@ -28,13 +29,17 @@ const SOURCE_ROWS = `
   INSERT INTO ttrss_feed_categories (id, owner_uid, title, parent_cat, order_id) VALUES
     (20, 2, 'News', NULL, 1), (10, 2, 'World', 20, 2), (30, 2, 'Tech', NULL, 3);
   INSERT INTO ttrss_feeds (id, owner_uid, title, feed_url, site_url, cat_id, update_interval,
-      purge_interval, order_id, hide_images, include_in_digest, auth_login) VALUES
-    (1, 2, 'One', 'https://one.example/rss', 'https://one.example/', 10, 60, -1, 5, true, true, ''),
-    (2, 2, 'One again', 'HTTPS://One.Example/rss', '', NULL, 0, 0, 0, false, true, ''),
-    (3, 2, 'Private', 'https://private.example/rss', '', NULL, 0, 0, 0, false, true, 'me'),
-    (4, 2, 'Broken', 'not a url', '', NULL, 0, 0, 0, false, true, ''),
-    (5, 2, 'Two', 'https://two.example/rss', '', NULL, -1, 7, 1, false, false, ''),
-    (6, 1, 'Mine', 'https://one.example/rss', '', NULL, 5, 0, 0, false, true, '');
+      purge_interval, order_id, hide_images, include_in_digest, auth_login, auth_pass,
+      auth_pass_encrypted) VALUES
+    (1, 2, 'One', 'https://one.example/rss', 'https://one.example/', 10, 60, -1, 5, true, true, '', '', false),
+    (2, 2, 'One again', 'HTTPS://One.Example/rss', '', NULL, 0, 0, 0, false, true, '', '', false),
+    (3, 2, 'Private', 'https://private.example/rss', '', NULL, 0, 0, 0, false, true, 'me', 'pä:ss', false),
+    (4, 2, 'Broken', 'not a url', '', NULL, 0, 0, 0, false, true, '', '', false),
+    (5, 2, 'Two', 'https://two.example/rss', '', NULL, -1, 7, 1, false, false, '', '', false),
+    (6, 1, 'Mine', 'https://one.example/rss', '', NULL, 5, 0, 0, false, true, '', '', false),
+    (7, 2, 'Sealed', 'https://sealed.example/rss', '', NULL, 0, 0, 0, false, true, 'me', 'x', true),
+    -- The admin reads the same private feed with credentials of their own.
+    (8, 1, 'Theirs', 'https://private.example/rss', '', NULL, 0, 0, 0, false, true, 'boss', 'b', false);
   INSERT INTO ttrss_user_prefs2 (owner_uid, pref_name, profile, value) VALUES
     (2, 'FRESH_ARTICLE_MAX_AGE', NULL, '48'),
     (2, 'COMBINED_DISPLAY_MODE', NULL, 'true'),
@@ -48,7 +53,7 @@ async function run(changes: Partial<ImportOptions> = {}) {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
-      { db, source, steps: IMPORT_STEPS, purgeDays: 60 },
+      { db, source, steps: IMPORT_STEPS, purgeDays: 60, feedCredentials: testFeedCredentials() },
       { dryRun: false, force: false, ...changes },
     );
   } finally {
@@ -115,11 +120,20 @@ describe('TTRSS import steps', () => {
     expect(byTitle.get('World')?.parentId).toBe(byTitle.get('News')?.id);
     expect(byTitle.get('Tech')).toMatchObject({ parentId: null, sortOrder: 3 });
 
-    const sources = await db.select().from(feedSources);
+    const all = await db.select().from(feedSources);
+    const sources = all.filter((s) => s.authLogin === null);
     expect(sources.map((s) => s.url).sort()).toEqual([
       'https://one.example/rss',
       'https://two.example/rss',
     ]);
+    // Each user's private feed gets a source of its own, the password sealed.
+    const own = all.filter((s) => s.authLogin !== null);
+    expect(own.map((s) => [s.url, s.authLogin]).sort()).toEqual([
+      ['https://private.example/rss', 'boss'],
+      ['https://private.example/rss', 'me'],
+    ]);
+    for (const s of own) expect(s.authPassword).toMatch(/^v1\./);
+    expect(own.map((s) => testFeedCredentials().open(s)?.password).sort()).toEqual(['b', 'pä:ss']);
     const spread = Date.now() + 31 * 60_000;
     for (const s of sources) expect(s.nextFetchAt.getTime()).toBeLessThan(spread);
     const one = sources.find((s) => s.url === 'https://one.example/rss');
@@ -128,7 +142,7 @@ describe('TTRSS import steps', () => {
 
     const subs = await db.select().from(subscriptions);
     const patSubs = subs.filter((s) => s.userId === pat);
-    expect(patSubs).toHaveLength(2);
+    expect(patSubs).toHaveLength(3);
     expect(patSubs.find((s) => s.feedSourceId === one?.id)).toMatchObject({
       title: 'One',
       categoryId: byTitle.get('World')?.id,
@@ -138,19 +152,20 @@ describe('TTRSS import steps', () => {
       paused: false,
     });
     // TTRSS "updates disabled" (-1) is paused here.
-    expect(patSubs.find((s) => s.feedSourceId !== one?.id)).toMatchObject({
+    const two = sources.find((s) => s.url === 'https://two.example/rss');
+    expect(patSubs.find((s) => s.feedSourceId === two?.id)).toMatchObject({
       updateIntervalSeconds: null,
       purgeDays: 7,
       paused: true,
     });
     // The admin's subscription shares the source, with its own title and a raised interval.
-    expect(subs.find((s) => s.userId !== pat)).toMatchObject({
+    expect(subs.find((s) => s.userId !== pat && s.feedSourceId === one?.id)).toMatchObject({
       feedSourceId: one?.id,
       title: 'Mine',
       updateIntervalSeconds: 15 * 60,
     });
 
-    expect(report.tally('pat', 'feeds')).toEqual({ source: 5, imported: 2 });
+    expect(report.tally('pat', 'feeds')).toEqual({ source: 6, imported: 3 });
     expect(
       report
         .skipped('pat')
@@ -158,8 +173,8 @@ describe('TTRSS import steps', () => {
         .map((s) => [s.item, s.sourceId, s.reason]),
     ).toEqual([
       ['feeds', 2, 'same feed as 1'],
-      ['feeds', 3, 'HTTP authentication is not supported yet'],
       ['feeds', 4, expect.stringContaining('not a url') as string],
+      ['feeds', 7, expect.stringContaining('FEED_CRYPT_KEY') as string],
     ]);
     const notes = report.notes('pat').filter((n) => n.item === 'feeds');
     expect(notes).toEqual([

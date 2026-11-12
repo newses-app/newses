@@ -17,9 +17,10 @@ import { feedErrorText } from '../../lib/error-text.ts';
 import { formatDateTime } from '../../lib/format.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { scheduleMessage } from '../../lib/schedule.ts';
-import { supportsFeedDebugger } from '../../lib/server-url.ts';
+import { supportsFeedDebugger, supportsFeedLogins } from '../../lib/server-url.ts';
 import { subscriptionKey } from '../../lib/streams.ts';
 import { useUiStore } from '../../stores/ui.ts';
+import FeedLoginFields from '../feeds/FeedLoginFields.vue';
 
 const ui = useUiStore();
 const route = useRoute();
@@ -50,6 +51,9 @@ const purgeDays = ref<number | null>(null);
 const fullText = ref(false);
 const paused = ref(false);
 const hideFromAll = ref(false);
+const needsLogin = ref(false);
+const login = ref('');
+const password = ref('');
 const busy = ref(false);
 /** The feed this one follows in its category, or null for first: the non-drag way to reorder. */
 const after = ref<number | null>(null);
@@ -73,6 +77,9 @@ watch(subscription, (s) => {
   fullText.value = s.fullText;
   paused.value = s.paused;
   hideFromAll.value = s.hideFromAll;
+  needsLogin.value = Boolean(s.authLogin);
+  login.value = s.authLogin ?? '';
+  password.value = '';
   after.value = precedingId(inCategory(s.categoryId), s.id);
 });
 
@@ -93,6 +100,21 @@ const serverInfo = useQuery({
 const debuggable = computed(() =>
   serverInfo.data.value ? supportsFeedDebugger(serverInfo.data.value) : false,
 );
+/** Servers before API 1.12 fetch no feeds with a login. */
+const loginsSupported = computed(() =>
+  serverInfo.data.value ? supportsFeedLogins(serverInfo.data.value) : false,
+);
+
+/** The change to the feed's login, if any: removed, or new (without a password, the saved one). */
+const credentialChange = computed(() => {
+  const s = subscription.value;
+  if (!s || !loginsSupported.value) return undefined;
+  const had = Boolean(s.authLogin);
+  if (!needsLogin.value) return had ? null : undefined;
+  const given = login.value.trim();
+  if (had && given === s.authLogin && password.value === '') return undefined;
+  return { login: given, ...((!had || password.value !== '') && { password: password.value }) };
+});
 
 /** Servers before API 1.4 have no per-feed options. */
 const hasOptions = computed(() => subscription.value?.paused !== undefined);
@@ -132,6 +154,12 @@ async function run(work: () => Promise<unknown>, done?: string) {
 function save() {
   const s = subscription.value;
   if (!s) return;
+  const credentials = credentialChange.value;
+  // A password is never kept on the device to be sent later.
+  if (credentials !== undefined && !online.value) {
+    ui.notify(t('offline.needsConnection'));
+    return;
+  }
   const moved =
     categoryId.value !== s.categoryId ||
     after.value !== precedingId(inCategory(s.categoryId), s.id);
@@ -145,9 +173,11 @@ function save() {
   // Hiding a feed from All changes what All and Fresh list, not only their counts.
   const relist = hasOptions.value && hideFromAll.value !== s.hideFromAll;
   void run(async () => {
-    await edit({ kind: 'subscription.update', id: s.id, changes }, () =>
-      api.subscriptions.update(s.id, changes),
-    );
+    if (credentials === undefined)
+      await edit({ kind: 'subscription.update', id: s.id, changes }, () =>
+        api.subscriptions.update(s.id, changes),
+      );
+    else await api.subscriptions.update(s.id, { ...changes, credentials });
     if (moved)
       await editing.moveFeed(s.id, categoryId.value, beforeIdAfter(siblings.value, after.value));
     if (relist) await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
@@ -221,6 +251,21 @@ async function unsubscribe() {
               :label="t('feeds.hideFromAll')"
               :hint="t('feeds.hideFromAllHint')"
               persistent-hint
+            />
+          </template>
+          <template v-if="loginsSupported">
+            <v-checkbox
+              v-model="needsLogin"
+              :label="t('feedLogin.needsLogin')"
+              :hint="t('feedLogin.editHint')"
+              persistent-hint
+            />
+            <FeedLoginFields
+              v-if="needsLogin"
+              v-model:login="login"
+              v-model:password="password"
+              :saved="Boolean(subscription.authLogin)"
+              class="mt-2"
             />
           </template>
           <p v-if="schedule" class="text-body-small text-medium-emphasis mt-4">{{ schedule }}</p>

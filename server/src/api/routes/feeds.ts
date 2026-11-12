@@ -104,6 +104,7 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
         userId,
         request.body.url,
         request.body.categoryId,
+        request.body.credentials ?? null,
       );
       if (result.status === 'choose') return reply.code(200).send(result);
       return reply.code(201).send({
@@ -134,6 +135,7 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
         purgeDays,
         paused,
         hideFromAll,
+        credentials,
       } = request.body;
       const userId = requireAuth(request).user.id;
       const before = await subscriptions.get(userId, request.params.id);
@@ -148,6 +150,7 @@ export const feedRoutes: FastifyPluginAsyncZod<FeedServices> = (
         ...(request.body.fullText !== undefined && { fullText: request.body.fullText }),
         ...(paused !== undefined && { paused }),
         ...(hideFromAll !== undefined && { hideFromAll }),
+        ...(credentials !== undefined && { credentials }),
       });
       // Turning full text on extracts the feed's newest entries too.
       if (view.subscription.fullText && !before.subscription.fullText)

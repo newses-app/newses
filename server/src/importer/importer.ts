@@ -1,4 +1,5 @@
 import { type SQL, sql } from 'drizzle-orm';
+import type { FeedCredentialSealer } from '../core/feeds/credentials.ts';
 import type { ArchiveWriter } from '../core/ports.ts';
 import type { Db } from '../db/client.ts';
 import { schemaMatches } from '../db/migrate.ts';
@@ -39,6 +40,8 @@ export interface ImportContext {
   purgeDays: number;
   /** Where entries older than their purge age go; null skips them. */
   archive: ArchiveWriter | null;
+  /** Seals the passwords of feeds with HTTP authentication. */
+  feedCredentials: FeedCredentialSealer;
   /** Runs one batch of writes in its own transaction (a savepoint within a dry run). */
   write: <T>(work: (tx: Writer) => Promise<T>) => Promise<T>;
 }
@@ -57,6 +60,7 @@ export interface ImportDeps {
   purgeDays: number;
   /** The cold-storage archive (`ARCHIVE_ENABLED`); null or omitted skips old entries instead. */
   archive?: ArchiveWriter | null;
+  feedCredentials: FeedCredentialSealer;
   /** Defaults to `VERIFIED_SCHEMA_VERSIONS`. */
   schemaVersions?: readonly number[];
 }
@@ -110,6 +114,7 @@ export async function importTtrss(deps: ImportDeps, options: ImportOptions): Pro
       db: base,
       purgeDays: deps.purgeDays,
       archive: deps.archive ?? null,
+      feedCredentials: deps.feedCredentials,
       write: (work) => base.transaction((tx) => work(tx)),
     };
     for (const step of steps) await step.run(context);

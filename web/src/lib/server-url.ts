@@ -51,6 +51,9 @@ const FEED_DEBUG_API_MINOR = 6;
 export const supportsFeedDebugger = ({ apiVersion }: ServerInfo) =>
   apiVersion.major === API_VERSION.major && apiVersion.minor >= FEED_DEBUG_API_MINOR;
 
+/** Servers from API 1.12 fetch feeds behind HTTP Basic authentication. */
+export const supportsFeedLogins = (info: ServerInfo) => supportsApiMinor(info, 12);
+
 /** Whether the server has what API minor `minor` added, such as a built-in theme. */
 export const supportsApiMinor = ({ apiVersion }: ServerInfo, minor: number) =>
   apiVersion.major === API_VERSION.major && apiVersion.minor >= minor;

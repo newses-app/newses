@@ -15,14 +15,16 @@ export const USAGE = `Usage:
                                        Import TTRSS users' data; see https://newses.app/guide/migration-ttrss
   cli blobs pull|push <dir> [--archive-only]
                                        Copy the blob store to (pull) or from (push) a local directory
-  cli reseal-secrets                   Re-seal two-factor secrets sealed under the previous instance's
-                                       APP_SECRET, read from stdin, with this one`;
+  cli reseal-secrets                   Re-seal feed passwords and two-factor secrets sealed under the
+                                       previous instance's APP_SECRET, read from stdin, with this one`;
 
 const COMMANDS = new Set(['create', 'reset-password', 'reset-2fa']);
 
 export type CliDeps = Pick<AuthServices, 'users' | 'auth' | 'twoFactor'> & {
   /** Imports from the TTRSS database at `source`. */
   importTtrss?: (source: string, options: ImportOptions) => Promise<ImportReport>;
+  /** Re-seals feed passwords sealed under `previousKey` with this instance's key; how many. */
+  resealFeedPasswords?: (previousKey: Buffer) => Promise<number>;
   /** Copies the blobs under `prefix` between the blob store and the directory `dir`. */
   copyBlobs?: (
     direction: 'pull' | 'push',
@@ -41,7 +43,7 @@ export interface CliIo {
 /** Runs one CLI command. Returns the process exit code. */
 export async function runCli(
   args: string[],
-  { users, auth, twoFactor, importTtrss, copyBlobs }: CliDeps,
+  { users, auth, twoFactor, importTtrss, resealFeedPasswords, copyBlobs }: CliDeps,
   io: CliIo,
 ): Promise<number> {
   if (args[0] === 'import-ttrss' && importTtrss) return runImport(args.slice(1), importTtrss, io);
@@ -51,6 +53,11 @@ export async function runCli(
     if (previous.length < 32) {
       io.print("The previous instance's APP_SECRET (at least 32 characters) is read from stdin");
       return 2;
+    }
+    // Feed passwords first: their re-seal can be repeated, should the second step fail.
+    if (resealFeedPasswords) {
+      const feeds = await resealFeedPasswords(deriveKey(previous, 'feed-credentials'));
+      io.print(`Re-sealed ${String(feeds)} feed passwords`);
     }
     const count = await twoFactor.reseal(deriveKey(previous, 'totp'));
     io.print(`Re-sealed ${String(count)} two-factor secrets`);

@@ -288,6 +288,13 @@
       "when": 1794360955566,
       "tag": "0040_push",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794427050688,
+      "tag": "0041_http_auth_feeds",
+      "breakpoints": true
     }
   ]
 }

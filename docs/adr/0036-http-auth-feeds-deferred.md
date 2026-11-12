@@ -1,6 +1,6 @@
 # 0036. HTTP-auth feeds moved to Later
 
-- Status: Accepted
+- Status: Superseded by 0087
 - Date: 2026-10-06
 
 ## Context

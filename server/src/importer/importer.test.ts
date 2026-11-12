@@ -15,6 +15,7 @@ import { ImportError } from './errors.ts';
 import { type ImportOptions, type ImportStep, importTtrss } from './importer.ts';
 import { USERS } from './import-map.ts';
 import { TtrssSource } from './source.ts';
+import { testFeedCredentials } from '../test/fakes.ts';
 
 /** The verified schema version, as the fixture dump has it. */
 const VERSION = 151;
@@ -53,7 +54,10 @@ const options = (changes: Partial<ImportOptions> = {}): ImportOptions => ({
   ...changes,
 });
 const run = (changes: Partial<ImportOptions> = {}, steps: ImportStep[] = [usersStep]) =>
-  importTtrss({ db, source, steps, purgeDays: 60 }, options(changes));
+  importTtrss(
+    { db, source, steps, purgeDays: 60, feedCredentials: testFeedCredentials() },
+    options(changes),
+  );
 const imported = async () => (await db.select().from(usersTable)).map((u) => u.login).sort();
 
 beforeAll(async () => {
@@ -95,11 +99,24 @@ describe('TTRSS importer', () => {
   it('refuses databases that are not TTRSS or not a verified schema version', async () => {
     const notTtrss = await TtrssSource.open(otherDb.url);
     await expect(
-      importTtrss({ db, source: notTtrss, steps: [], purgeDays: 60 }, options()),
+      importTtrss(
+        { db, source: notTtrss, steps: [], purgeDays: 60, feedCredentials: testFeedCredentials() },
+        options(),
+      ),
     ).rejects.toThrow('not a TTRSS database');
     await notTtrss.close();
     await expect(
-      importTtrss({ db, source, steps: [], purgeDays: 60, schemaVersions: [150] }, options()),
+      importTtrss(
+        {
+          db,
+          source,
+          steps: [],
+          purgeDays: 60,
+          feedCredentials: testFeedCredentials(),
+          schemaVersions: [150],
+        },
+        options(),
+      ),
     ).rejects.toThrow(new ImportError('TTRSS schema version 151 is not supported (verified: 150)'));
   });
 

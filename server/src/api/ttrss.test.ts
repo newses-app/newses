@@ -513,6 +513,20 @@ describe('TTRSS subscriptions', () => {
       (v) => v.subscription.id === added.status.feed_id,
     );
     expect(view?.subscription.categoryId).toBe(cats.web);
+
+    fetcher.set('https://secret.example/rss', { body: rss('Secret') });
+    const withLogin = (login: string) =>
+      call<{ status: Record<string, unknown> }>('subscribeToFeed', {
+        feed_url: 'https://secret.example/rss',
+        login,
+        password: 'pw',
+      });
+    expect((await withLogin('a:b')).status).toMatchObject({ code: 2 });
+    const secret = await withLogin('me');
+    expect(secret.status).toMatchObject({ code: 1 });
+    expect(fetcher.requests.at(-1)?.credentials).toEqual({ login: 'me', password: 'pw' });
+    const own = await services.feeds.subscriptions.get(pat, Number(secret.status.feed_id));
+    expect(own.source.authLogin).toBe('me');
   });
 
   it('unsubscribes and requests updates', async () => {

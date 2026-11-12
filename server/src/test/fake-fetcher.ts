@@ -24,6 +24,8 @@ type Route =
 export class FakeFetcher implements Fetcher {
   readonly routes = new Map<string, Route>();
   readonly requested: string[] = [];
+  /** Each request's options, in the order of `requested`. */
+  readonly requests: FetchRequest[] = [];
 
   set(url: string, route: Route): this {
     this.routes.set(url, route);
@@ -32,6 +34,7 @@ export class FakeFetcher implements Fetcher {
 
   fetch(url: string, request: FetchRequest = {}): Promise<FetchResult> {
     this.requested.push(url);
+    this.requests.push(request);
     const route = this.routes.get(url);
     if (!route) return Promise.reject(new FetchError('http_status', 'HTTP 404', { status: 404 }));
     if (route instanceof FetchError) return Promise.reject(route);

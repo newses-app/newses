@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   MAX_CATEGORY_TITLE_LENGTH,
+  MAX_FEED_LOGIN_LENGTH,
+  MAX_FEED_PASSWORD_LENGTH,
   MAX_FEED_URL_LENGTH,
   MAX_SUBSCRIPTION_TITLE_LENGTH,
 } from './limits.ts';
@@ -44,6 +46,19 @@ export const intervalReasonSchema = z.enum([
   'paused',
 ]);
 
+/** A login HTTP Basic can carry: no colon, no control characters. */
+const feedLoginSchema = z
+  .string()
+  .min(1)
+  .max(MAX_FEED_LOGIN_LENGTH)
+  .regex(/^[^:\p{Cc}]+$/u);
+
+/** HTTP Basic credentials, sent only to the feed's own site (API 1.12). */
+export const feedCredentialsSchema = z.object({
+  login: feedLoginSchema,
+  password: z.string().max(MAX_FEED_PASSWORD_LENGTH),
+});
+
 export const subscriptionSchema = z.object({
   id: z.number().int(),
   feedSourceId: z.number().int(),
@@ -80,11 +95,15 @@ export const subscriptionSchema = z.object({
   intervalReason: intervalReasonSchema.nullable(),
   /** When the next check is due; null while paused, disabled, before its first check, or unknown. */
   nextFetchAt: z.iso.datetime().nullable(),
+  /** The login sent to the feed, whose password stays on the server; absent before API 1.12. */
+  authLogin: z.string().nullable().optional(),
 });
 
 export const subscribeRequestSchema = z.object({
   url: z.string().trim().min(1).max(MAX_FEED_URL_LENGTH),
   categoryId: z.number().int().nullable().default(null),
+  /** For a feed behind HTTP Basic authentication: the subscription gets a feed of its own. */
+  credentials: feedCredentialsSchema.optional(),
 });
 
 export const feedCandidateSchema = z.object({
@@ -111,6 +130,15 @@ export const updateSubscriptionRequestSchema = z.object({
   fullText: z.boolean().optional(),
   paused: z.boolean().optional(),
   hideFromAll: z.boolean().optional(),
+  /**
+   * HTTP Basic credentials; without `password`, the one stored is kept. Adding or removing them
+   * moves the subscription between a feed of its own and the one shared by its URL, whose
+   * entries arrive as new; kept entries stay.
+   */
+  credentials: feedCredentialsSchema
+    .extend({ password: feedCredentialsSchema.shape.password.optional() })
+    .nullable()
+    .optional(),
 });
 
 export const opmlImportResultSchema = z.object({
@@ -179,6 +207,7 @@ export type Category = z.infer<typeof categorySchema>;
 export type Subscription = z.infer<typeof subscriptionSchema>;
 export type IntervalReason = z.infer<typeof intervalReasonSchema>;
 export type FeedCandidate = z.infer<typeof feedCandidateSchema>;
+export type FeedCredentials = z.infer<typeof feedCredentialsSchema>;
 export type UpdateSubscriptionRequest = z.infer<typeof updateSubscriptionRequestSchema>;
 export type CreateCategoryRequest = z.input<typeof createCategoryRequestSchema>;
 export type UpdateCategoryRequest = z.infer<typeof updateCategoryRequestSchema>;

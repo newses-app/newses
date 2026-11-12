@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
+import { SHARED_URL_CONFLICT } from './credentials.ts';
 
 /**
  * Feed source of pages from outside any feed (published pages, imported kept articles that
@@ -24,7 +25,7 @@ export async function pagesSourceId(executor: Pick<Db, 'execute'>): Promise<numb
       WITH created AS (
         INSERT INTO feed_sources (url, title, disabled_at)
         VALUES (${PAGES_SOURCE_URL}, ${PAGES_SOURCE_TITLE}, now())
-        ON CONFLICT (url) DO NOTHING
+        ON CONFLICT ${SHARED_URL_CONFLICT} DO NOTHING
         RETURNING id)
       SELECT id FROM created
       UNION ALL SELECT id FROM feed_sources WHERE url = ${PAGES_SOURCE_URL}

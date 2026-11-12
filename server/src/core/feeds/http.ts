@@ -1,6 +1,7 @@
 import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import { Agent, fetch, type Response } from 'undici';
+import type { FeedCredentials } from './credentials.ts';
 
 /** Identifies feed requests to remote hosts, with where their operators can learn about us. */
 export const userAgentFor = (version?: string) =>
@@ -25,6 +26,8 @@ export class FetchError extends Error {
   readonly retryAfterSeconds: number | null;
   /** The URL that answered with `status`, after redirects; null when no response came. */
   readonly url: string | null;
+  /** Whether the request that got `status` carried the request's credentials. */
+  readonly credentialsSent: boolean;
 
   constructor(
     code: FetchErrorCode,
@@ -33,6 +36,7 @@ export class FetchError extends Error {
       status?: number;
       retryAfterSeconds?: number | null;
       url?: string;
+      credentialsSent?: boolean;
       cause?: unknown;
     } = {},
   ) {
@@ -41,6 +45,7 @@ export class FetchError extends Error {
     this.status = details.status ?? null;
     this.retryAfterSeconds = details.retryAfterSeconds ?? null;
     this.url = details.url ?? null;
+    this.credentialsSent = details.credentialsSent ?? false;
   }
 }
 
@@ -61,6 +66,11 @@ export interface FetchRequest {
    * (HTTP 429, or 503 with Retry-After), so callers can show what the host answered.
    */
   anyStatus?: boolean;
+  /**
+   * HTTP Basic credentials, sent to the origin of the URL fetched and never across a redirect to
+   * another origin.
+   */
+  credentials?: FeedCredentials | null;
 }
 
 export interface FetchResult {
@@ -212,10 +222,15 @@ export class HttpFetcher implements Fetcher {
   async fetch(url: string, request: FetchRequest = {}): Promise<FetchResult> {
     const signal = AbortSignal.timeout(this.#timeoutMs);
     let current = this.#checkUrl(url);
+    const origin = new URL(current).origin;
     let permanentUrl: string | null = null;
     let permanentChain = true;
     for (let redirects = 0; ; redirects++) {
-      const response = await this.#request(current, request, signal);
+      const authorization =
+        request.credentials && new URL(current).origin === origin
+          ? basicAuthorization(request.credentials)
+          : null;
+      const response = await this.#request(current, request, authorization, signal);
       const location = response.headers.get('location');
       if (REDIRECT_STATUSES.has(response.status) && location) {
         await response.body?.cancel();
@@ -230,7 +245,7 @@ export class HttpFetcher implements Fetcher {
         if (permanentChain) permanentUrl = current;
         continue;
       }
-      return this.#result(current, permanentUrl, response, request, signal);
+      return this.#result(current, permanentUrl, response, request, authorization !== null, signal);
     }
   }
 
@@ -257,12 +272,18 @@ export class HttpFetcher implements Fetcher {
     return parsed.href;
   }
 
-  async #request(url: string, request: FetchRequest, signal: AbortSignal): Promise<Response> {
+  async #request(
+    url: string,
+    request: FetchRequest,
+    authorization: string | null,
+    signal: AbortSignal,
+  ): Promise<Response> {
     const headers: Record<string, string> = {
       'user-agent': this.#userAgent,
       accept: request.accept ?? FEED_ACCEPT,
       'accept-encoding': 'gzip, deflate, br',
     };
+    if (authorization) headers.authorization = authorization;
     if (request.etag) headers['if-none-match'] = request.etag;
     if (request.lastModified) headers['if-modified-since'] = request.lastModified;
     try {
@@ -277,6 +298,7 @@ export class HttpFetcher implements Fetcher {
     permanentUrl: string | null,
     response: Response,
     request: FetchRequest,
+    credentialsSent: boolean,
     signal: AbortSignal,
   ): Promise<FetchResult> {
     const maxBytes = request.maxBytes ?? this.#maxBytes;
@@ -304,6 +326,7 @@ export class HttpFetcher implements Fetcher {
           status: response.status,
           retryAfterSeconds,
           url,
+          credentialsSent,
         });
       }
     }
@@ -342,6 +365,11 @@ export class HttpFetcher implements Fetcher {
       cause instanceof Error ? cause.message : err instanceof Error ? err.message : 'Network error';
     return new FetchError('network', message, { cause: err });
   }
+}
+
+/** RFC 7617 Basic credentials, UTF-8 encoded. */
+function basicAuthorization({ login, password }: FeedCredentials): string {
+  return `Basic ${Buffer.from(`${login}:${password}`, 'utf8').toString('base64')}`;
 }
 
 function parseRetryAfter(value: string | null): number | null {

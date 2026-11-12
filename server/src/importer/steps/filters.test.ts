@@ -4,7 +4,7 @@ import { createEntryServices } from '../../core/entries/index.ts';
 import { createDb, type Db } from '../../db/client.ts';
 import { feedSources, importMap, subscriptions, userEntries, users } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { RecordingRealtime } from '../../test/fakes.ts';
+import { RecordingRealtime, testFeedCredentials } from '../../test/fakes.ts';
 import { createTtrssSource } from '../../test/ttrss-source.ts';
 import { importTtrss } from '../importer.ts';
 import { TtrssSource } from '../source.ts';
@@ -58,7 +58,7 @@ async function run() {
   const source = await TtrssSource.open(sourceDb.url);
   try {
     return await importTtrss(
-      { db, source, steps: IMPORT_STEPS, purgeDays: 60 },
+      { db, source, steps: IMPORT_STEPS, purgeDays: 60, feedCredentials: testFeedCredentials() },
       { dryRun: false, force: false },
     );
   } finally {

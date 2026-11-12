@@ -1,5 +1,6 @@
 import {
   type Entry,
+  feedCredentialsSchema,
   MAX_PAGE_TEXT_LENGTH,
   MAX_PAGE_TITLE_LENGTH,
   normaliseTag,
@@ -676,11 +677,18 @@ export function ttrssOps({ entries: entryServices, feeds, prefs }: TtrssDeps): T
         const url = stringParam(params, 'feed_url')?.trim();
         if (!url) return { status: { code: 2 } };
         const categoryId = intParam(params, 'category_id') ?? 0;
+        const login = stringParam(params, 'login');
+        const credentials = login
+          ? { login, password: stringParam(params, 'password') ?? '' }
+          : null;
         try {
+          if (credentials && !feedCredentialsSchema.safeParse(credentials).success)
+            throw new DomainError('invalid_input', 'Not a login HTTP Basic can send');
           const result = await feeds.subscriptions.subscribe(
             userOf(context),
             url,
             categoryId > 0 ? categoryId : null,
+            credentials,
           );
           if (result.status === 'choose')
             return {

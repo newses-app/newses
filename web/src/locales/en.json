@@ -113,11 +113,15 @@
       "category_into_itself": "A category can't be moved into itself.",
       "category_name_taken": "A category named \"{name}\" already exists there.",
       "feed_host_paused": "The feed's host asked not to be fetched again yet.",
+      "feed_login_elsewhere": "The feed at {url} is on another site than the login is for.",
+      "feed_login_unreadable": "The feed's saved password can't be read on this server. Enter it again.",
       "feed_unreadable": "This isn't a valid feed.",
       "fetch_blocked_address": "{url} is on a private network.",
       "fetch_host_blocked": "The site asked to wait before more requests.",
       "fetch_http_status": "{url} returned HTTP {status}.",
       "fetch_invalid_url": "{url} isn't a valid address.",
+      "fetch_login_refused": "{url} refused the login.",
+      "fetch_login_required": "{url} needs a login.",
       "fetch_network": "Couldn't connect to {url}.",
       "fetch_timeout": "{url} didn't answer in time.",
       "fetch_too_large": "{url} is too large.",
@@ -586,6 +590,15 @@
     "hours": "one hour | {n} hours",
     "days": "one day | {n} days",
     "weeks": "one week | {n} weeks"
+  },
+  "feedLogin": {
+    "needsLogin": "This feed needs a login",
+    "subscribeHint": "Sent only to the feed's own site. The feed is checked for you alone.",
+    "editHint": "Sent only to the feed's own site. Adding or removing the login checks the feed for you alone, or with everyone who follows it, and its articles arrive again as new. Starred and published ones are kept.",
+    "login": "Login",
+    "loginInvalid": "Enter a login without a colon.",
+    "password": "Password",
+    "passwordSaved": "Leave empty to keep the saved password."
   },
   "subscribe": {
     "title": "Subscribe to a feed",

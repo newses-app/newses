@@ -39,6 +39,13 @@ export const ERROR_REASONS = {
   tag_empty: [],
   invalid_pattern: ['pattern', 'detail'],
   feed_unreadable: [],
+  // An HTTP 401: without credentials, and with them (API 1.12).
+  fetch_login_required: ['url'],
+  fetch_login_refused: ['url'],
+  /** The feed's password was sealed under another APP_SECRET. */
+  feed_login_unreadable: [],
+  /** A discovered feed is on another site than the one the credentials were given for. */
+  feed_login_elsewhere: ['url'],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

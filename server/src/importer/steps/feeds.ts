@@ -1,7 +1,12 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, type SQL, sql } from 'drizzle-orm';
 import { DomainError } from '../../core/errors.ts';
+import {
+  type FeedCredentials,
+  type FeedCredentialSealer,
+  SHARED_URL_CONFLICT,
+} from '../../core/feeds/credentials.ts';
 import { normalizeFeedUrl } from '../../core/feeds/url.ts';
-import { subscriptions } from '../../db/schema.ts';
+import { feedSources, subscriptions } from '../../db/schema.ts';
 import type { ImportStep } from '../importer.ts';
 import type { Writer } from '../import-map.ts';
 import { CATEGORIES } from './categories.ts';
@@ -25,6 +30,9 @@ interface SourceFeedRow {
   purge_interval: number;
   order_id: number;
   auth_login: string;
+  auth_pass: string;
+  /** Sealed with TTRSS's FEED_CRYPT_KEY, which older versions had. */
+  auth_pass_encrypted?: boolean;
   [option: string]: unknown;
 }
 
@@ -49,7 +57,7 @@ async function sourceFor(tx: Writer, url: string, title: string, siteUrl: string
     INSERT INTO feed_sources (url, title, site_url, next_fetch_at)
     VALUES (${url}, ${title}, ${siteUrl},
       now() + make_interval(secs => random() * ${FIRST_FETCH_SPREAD_MINUTES * 60}))
-    ON CONFLICT (url) DO UPDATE SET
+    ON CONFLICT ${SHARED_URL_CONFLICT} DO UPDATE SET
       title = coalesce(feed_sources.title, excluded.title),
       site_url = coalesce(feed_sources.site_url, excluded.site_url)
     RETURNING id`);
@@ -58,10 +66,57 @@ async function sourceFor(tx: Writer, url: string, title: string, siteUrl: string
   return row;
 }
 
+/** A feed source of the subscription's own for a feed with credentials, first fetched as above. */
+async function ownSourceFor(
+  tx: Writer,
+  sealer: FeedCredentialSealer,
+  url: string,
+  title: string,
+  siteUrl: string | null,
+  credentials: FeedCredentials,
+) {
+  const result = await tx.execute<{ id: number }>(sql`
+    INSERT INTO feed_sources (url, title, site_url, next_fetch_at, auth_login)
+    VALUES (${url}, ${title}, ${siteUrl},
+      now() + make_interval(secs => random() * ${FIRST_FETCH_SPREAD_MINUTES * 60}),
+      ${credentials.login})
+    RETURNING id`);
+  const row = result.rows[0];
+  if (!row) throw new Error('Feed source insert returned no row');
+  await setCredentials(tx, sealer, row.id, credentials);
+  return row;
+}
+
+async function setCredentials(
+  tx: Writer,
+  sealer: FeedCredentialSealer,
+  feedSourceId: number,
+  credentials: FeedCredentials,
+) {
+  await tx
+    .update(feedSources)
+    .set({
+      authLogin: credentials.login,
+      authPassword: sealer.seal(feedSourceId, credentials.password),
+    })
+    .where(eq(feedSources.id, feedSourceId));
+}
+
+/** The feed's HTTP Basic credentials, null without them, or why they cannot be imported. */
+function credentialsOf(row: SourceFeedRow): FeedCredentials | null | string {
+  if (!row.auth_login) return null;
+  if (row.auth_pass_encrypted === true)
+    return "its password is encrypted with TTRSS's FEED_CRYPT_KEY; subscribe with its login again";
+  if (/[:\p{Cc}]/u.test(row.auth_login))
+    return 'its login has a colon or control character, which HTTP Basic cannot send';
+  return { login: row.auth_login, password: row.auth_pass };
+}
+
 /**
  * Feeds: one shared feed source per normalised URL and a subscription per user with the feed's
- * title, category, order, interval and purge overrides, and whether updates were disabled. Feeds with HTTP authentication are
- * skipped; per-feed options with no equivalent are noted.
+ * title, category, order, interval and purge overrides, and whether updates were disabled. A feed
+ * with HTTP authentication gets a source of its subscription's own, with the password sealed;
+ * per-feed options with no equivalent are noted.
  */
 export const feedsStep: ImportStep = {
   name: 'feeds',
@@ -89,8 +144,9 @@ export const feedsStep: ImportStep = {
         ]);
         await write(async (tx) => {
           for (const row of rows) {
-            if (row.auth_login) {
-              report.skip(login, 'feeds', row.id, 'HTTP authentication is not supported yet');
+            const credentials = credentialsOf(row);
+            if (typeof credentials === 'string') {
+              report.skip(login, 'feeds', row.id, credentials);
               continue;
             }
             let url: string;
@@ -104,24 +160,52 @@ export const feedsStep: ImportStep = {
             // A subscription imported before keeps its source, whose URL may have moved since
             // (a permanent redirect); otherwise the source is the feed's URL.
             const mappedId = mapped.get(row.id);
-            let [existing] =
-              mappedId === undefined
-                ? []
-                : await tx
-                    .select({ id: subscriptions.id })
-                    .from(subscriptions)
-                    .where(and(eq(subscriptions.id, mappedId), eq(subscriptions.userId, userId)));
-            let feedSourceId: number | undefined;
-            if (!existing) {
-              feedSourceId = (await sourceFor(tx, url, row.title, row.site_url || null)).id;
-              [existing] = await tx
-                .select({ id: subscriptions.id })
+            const subscription = {
+              id: subscriptions.id,
+              feedSourceId: subscriptions.feedSourceId,
+              authLogin: feedSources.authLogin,
+            };
+            const subscriptionWhere = (condition: SQL) =>
+              tx
+                .select(subscription)
                 .from(subscriptions)
-                .where(
-                  and(
-                    eq(subscriptions.userId, userId),
-                    eq(subscriptions.feedSourceId, feedSourceId),
-                  ),
+                .innerJoin(feedSources, eq(feedSources.id, subscriptions.feedSourceId))
+                .where(and(eq(subscriptions.userId, userId), condition));
+            let [existing] =
+              mappedId === undefined ? [] : await subscriptionWhere(eq(subscriptions.id, mappedId));
+            let feedSourceId: number | undefined;
+            if (!existing && credentials) {
+              // The user's subscription to the URL, with credentials or without, else a new one.
+              [existing] = await subscriptionWhere(eq(feedSources.url, url));
+              if (!existing)
+                feedSourceId = (
+                  await ownSourceFor(
+                    tx,
+                    context.feedCredentials,
+                    url,
+                    row.title,
+                    row.site_url || null,
+                    credentials,
+                  )
+                ).id;
+            } else if (!existing) {
+              feedSourceId = (await sourceFor(tx, url, row.title, row.site_url || null)).id;
+              [existing] = await subscriptionWhere(eq(subscriptions.feedSourceId, feedSourceId));
+            }
+            if (existing && credentials) {
+              if (existing.authLogin !== null)
+                await setCredentials(
+                  tx,
+                  context.feedCredentials,
+                  existing.feedSourceId,
+                  credentials,
+                );
+              else
+                report.note(
+                  login,
+                  'feeds',
+                  row.id,
+                  "subscribed here without its login; add it in the feed's settings",
                 );
             }
             const duplicateOf = [...taken].find(([, id]) => id === existing?.id)?.[0];

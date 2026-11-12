@@ -28,13 +28,20 @@ function first<T>(rows: T[]): T {
   return row;
 }
 
-/** Runs the migration again, in one transaction as the migrator does. */
+/**
+ * Runs the migration again, in one transaction as the migrator does, with the unique URL
+ * constraint it ran against (later replaced by a partial index).
+ */
 async function migrate() {
   const text = await readFile(join(migrationsFolder, '0032_pages_source.sql'), 'utf8');
   const client = await database.pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query(
+      'ALTER TABLE feed_sources ADD CONSTRAINT feed_sources_url_unique UNIQUE (url)',
+    );
     for (const statement of text.split('--> statement-breakpoint')) await client.query(statement);
+    await client.query('ALTER TABLE feed_sources DROP CONSTRAINT feed_sources_url_unique');
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

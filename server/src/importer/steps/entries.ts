@@ -2,6 +2,7 @@ import { MAX_SCORE } from '@newses/shared';
 import { inArray, sql } from 'drizzle-orm';
 import { plainText } from '../../core/entries/text.ts';
 import { DomainError } from '../../core/errors.ts';
+import { SHARED_SOURCE, SHARED_URL_CONFLICT } from '../../core/feeds/credentials.ts';
 import { IMPORTED_GUID_PREFIX, purgeDaysSql, sha256 } from '../../core/feeds/ingest.ts';
 import { pageGuid, pagesSourceId } from '../../core/feeds/pages.ts';
 import { sanitizeContent, sanitizeTitle, stripControlChars } from '../../core/feeds/sanitize.ts';
@@ -98,8 +99,11 @@ async function subscriptionsOf(context: ImportContext, userId: number) {
     url: string;
     title: string | null;
     days: number;
+    /** A source of the subscription's own (with credentials), never archived. */
+    own: boolean;
   }>(sql`
-    SELECT s.id, s.feed_source_id, fs.url, fs.title, ${purgeDaysSql(context.purgeDays)} AS days
+    SELECT s.id, s.feed_source_id, fs.url, fs.title, ${purgeDaysSql(context.purgeDays)} AS days,
+      NOT ${SHARED_SOURCE} AS own
     FROM subscriptions s JOIN feed_sources fs ON fs.id = s.feed_source_id
     WHERE s.user_id = ${userId}`);
   return new Map(result.rows.map((row) => [row.id, row]));
@@ -136,7 +140,7 @@ async function archivedSources(context: ImportContext, user: ImportedUser) {
     const id = await write(async (tx) => {
       const result = await tx.execute<{ id: number }>(sql`
         INSERT INTO feed_sources (url, title, site_url) VALUES (${url}, ${row.title}, ${row.site_url || null})
-        ON CONFLICT (url) DO UPDATE SET title = coalesce(feed_sources.title, excluded.title)
+        ON CONFLICT ${SHARED_URL_CONFLICT} DO UPDATE SET title = coalesce(feed_sources.title, excluded.title)
         RETURNING id`);
       return result.rows[0]?.id;
     });
@@ -480,6 +484,11 @@ export const entriesStep: ImportStep = {
           }
           const sub = subscriptionId === null ? undefined : subs.get(subscriptionId);
           if (!kept && sub && sub.days > 0 && sortAt.getTime() < now - sub.days * DAY_MS) {
+            // Only their reader could read them, so the archive never holds them.
+            if (sub.own) {
+              skips.add('older than its purge age, and feeds with a login are not archived');
+              continue;
+            }
             aged++;
             if (archiver)
               old.push({ row, sortAt, feed: { url: sub.url, title: sub.title, feedSourceId } });

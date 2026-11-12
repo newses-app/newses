@@ -1,8 +1,10 @@
 import type { FeedDebug } from '@newses/shared';
 import type { Db } from '../../db/client.ts';
+import { CryptoError } from '../crypto.ts';
 import { FilterSet } from '../filters/engine.ts';
 import { loadCategoryParents, loadDefinitions } from '../filters/run.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
+import type { FeedCredentialSealer } from './credentials.ts';
 import { decodeBody } from './decode.ts';
 import { discoverFeeds, looksLikeHtml } from './discover.ts';
 import { type Fetcher, FetchError, type FetchResult } from './http.ts';
@@ -47,6 +49,7 @@ export class FeedDebugger {
   readonly #fetcher: Fetcher;
   readonly #limits: UserRateLimiter;
   readonly #subscriptions: SubscriptionService;
+  readonly #sealer: FeedCredentialSealer;
 
   constructor(deps: {
     db: Db;
@@ -54,11 +57,14 @@ export class FeedDebugger {
     fetcher: Fetcher;
     limits: UserRateLimiter;
     subscriptions: SubscriptionService;
+    /** Opens the passwords of feeds with credentials, which the debugger fetches with. */
+    sealer: FeedCredentialSealer;
   }) {
     this.#db = deps.db;
     this.#fetcher = deps.fetcher;
     this.#limits = deps.limits;
     this.#subscriptions = deps.subscriptions;
+    this.#sealer = deps.sealer;
   }
 
   async debug(userId: number, subscriptionId: number): Promise<FeedDebug> {
@@ -75,8 +81,22 @@ export class FeedDebugger {
     };
     let response: FetchResult;
     try {
-      response = await this.#fetcher.fetch(source.url, { purpose: 'feed', anyStatus: true });
+      response = await this.#fetcher.fetch(source.url, {
+        purpose: 'feed',
+        anyStatus: true,
+        credentials: this.#sealer.open(source),
+      });
     } catch (err) {
+      if (err instanceof CryptoError)
+        return {
+          ...result,
+          error: {
+            code: 'login_unreadable',
+            message: "The feed's saved password cannot be read",
+            status: null,
+            retryAfterSeconds: null,
+          },
+        };
       if (!(err instanceof FetchError)) throw err;
       return { ...result, error: describe(err) };
     }

@@ -7,6 +7,7 @@ import type { Jobs } from '../jobs.ts';
 import { PrefsService } from '../prefs.ts';
 import type { ArchiveWriter, BlobStore, JobQueue, Logger, PushSender, Realtime } from '../ports.ts';
 import { PushService } from '../push/push-service.ts';
+import { FeedCredentialSealer } from './credentials.ts';
 import { FeedDebugger } from './debugger.ts';
 import { FaviconService, IconTokens } from './favicons.ts';
 import { FullTextService } from './fulltext.ts';
@@ -53,21 +54,30 @@ export function createFeedServices(deps: FeedDeps) {
   const push = new PushService({ db, sender: deps.push, logger });
   const ingester = new Ingester(db, deps.realtime, settings, push);
   const fullText = new FullTextService({ db, fetcher, queue: deps.queue, logger, limits });
+  const sealer = new FeedCredentialSealer(deps.keys['feed-credentials']);
   const updater = new FeedUpdater({
     fullText,
     db,
     fetcher,
+    sealer,
     ingester,
     queue: deps.queue,
     settings,
     logger,
   });
   const categories = new CategoryService(db);
-  const subscriptions = new SubscriptionService({ db, fetcher, ingester, updater, limits });
+  const subscriptions = new SubscriptionService({
+    db,
+    fetcher,
+    sealer,
+    ingester,
+    updater,
+    limits,
+  });
   return {
     categories,
     subscriptions,
-    feedDebugger: new FeedDebugger({ db, fetcher, limits, subscriptions }),
+    feedDebugger: new FeedDebugger({ db, fetcher, limits, subscriptions, sealer }),
     opml: new OpmlService(db, categories, subscriptions, new PrefsService(db), limits),
     ingester,
     updater,

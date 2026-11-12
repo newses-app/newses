@@ -11,6 +11,7 @@ let app: ReturnType<typeof buildApp>;
 let headers: Record<string, string>;
 const fetcher = new FakeFetcher()
   .set('https://news.example/rss', { body: rss('News') })
+  .set('https://private.example/rss', { body: rss('Private') })
   .set('https://multi.example/', {
     body: htmlPage({ href: '/a.xml' }, { href: '/b.xml' }),
     contentType: 'text/html',
@@ -40,6 +41,43 @@ afterAll(async () => {
 });
 
 describe('feeds API', () => {
+  it('subscribes with credentials, and never shows the password', async () => {
+    const subscribed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/subscriptions',
+      headers,
+      payload: { url: 'private.example/rss', credentials: { login: 'me', password: 'pw' } },
+    });
+    expect(subscribed.statusCode).toBe(201);
+    expect(fetcher.requests.at(-1)?.credentials).toEqual({ login: 'me', password: 'pw' });
+    const { subscription } = subscribed.json<{ subscription: { id: number } }>();
+    expect(subscription).toMatchObject({ url: 'https://private.example/rss', authLogin: 'me' });
+    const list = await app.inject({ method: 'GET', url: '/api/v1/subscriptions', headers });
+    expect(list.body).not.toContain('auth_password');
+    expect(list.body).not.toContain('"pw"');
+    expect(list.body).not.toContain('authPassword');
+
+    const badLogin = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/subscriptions/${String(subscription.id)}`,
+      headers,
+      payload: { credentials: { login: 'a:b', password: 'pw' } },
+    });
+    expect(badLogin.statusCode).toBe(400);
+    const removed = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/subscriptions/${String(subscription.id)}`,
+      headers,
+      payload: { credentials: null },
+    });
+    expect(removed.json()).toMatchObject({ authLogin: null });
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/subscriptions/${String(subscription.id)}`,
+      headers,
+    });
+  });
+
   it('requires authentication', async () => {
     expect((await app.inject({ method: 'GET', url: '/api/v1/subscriptions' })).statusCode).toBe(
       401,
