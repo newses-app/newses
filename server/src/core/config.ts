@@ -47,6 +47,8 @@ export interface AppConfig {
   archiveAthena: { workgroup: string; database: string } | null;
   /** Built web app to serve, or null when it is hosted elsewhere. */
   webDir: string | null;
+  /** The apps' downloads to serve at `/downloads/` (the Docker apps build's); null for none. */
+  downloadsDir: string | null;
   feeds: FeedSettings;
   ops: OpsSettings;
   /** Private addresses feeds may be fetched from: true for all, or CIDRs. Blocked by default. */

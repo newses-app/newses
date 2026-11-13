@@ -70,17 +70,57 @@ export interface ServerRelease {
   publicKey: ReleaseFile;
 }
 
+/** The platforms a release can ship apps for. */
+export const PLATFORMS = ['windows', 'linux', 'android'] as const;
+export type Platform = (typeof PLATFORMS)[number];
+
 /**
  * `/downloads/latest.json`: the latest release on a stage, for the download page and the Android
- * update prompt; `server` only on stages that publish the server image.
+ * update prompt. Each platform only when the release built it (AWS builds all three; Docker the
+ * ones it is asked for), and `server` only on stages that publish the server image.
  */
 export interface ReleaseManifest {
   version: string;
   prerelease: boolean;
   /** ISO 8601 time of publishing. */
   published: string;
-  windows: { installer: ReleaseFile; zip: ReleaseFile; portable: ReleaseFile };
-  linux: { appImage: ReleaseFile; deb: ReleaseFile };
-  android: ReleaseFile & { versionCode: number };
+  windows?: { installer: ReleaseFile; zip: ReleaseFile; portable: ReleaseFile };
+  linux?: { appImage: ReleaseFile; deb: ReleaseFile };
+  android?: ReleaseFile & { versionCode: number };
   server?: ServerRelease;
 }
+
+/** `downloads/<version>/` files never change once published; the files at its root do. */
+export const DOWNLOADS_CACHE = {
+  versioned: 'public, max-age=31536000, immutable',
+  latest: 'no-cache',
+};
+
+const DOWNLOAD_TYPES: Record<string, string> = {
+  '.exe': 'application/vnd.microsoft.portable-executable',
+  '.zip': 'application/zip',
+  '.AppImage': 'application/vnd.appimage',
+  '.deb': 'application/vnd.debian.binary-package',
+  '.apk': 'application/vnd.android.package-archive',
+  '.blockmap': 'application/octet-stream',
+  '.yml': 'text/yaml',
+  '.yaml': 'text/yaml',
+  '.example': 'text/plain; charset=utf-8',
+  '.pub': 'text/plain; charset=utf-8',
+  '.json': 'application/json',
+  '.html': 'text/html',
+};
+
+/** The checksums of a version's files, for `sha256sum -c`. */
+export const CHECKSUMS = 'SHA256SUMS';
+
+/** A published download's content type, by its name; undefined for a name no release uses. */
+export function downloadType(name: string): string | undefined {
+  if (name.endsWith('.cdx.json')) return 'application/vnd.cyclonedx+json';
+  if (name.endsWith('-openapi.json')) return 'application/vnd.oai.openapi+json';
+  if (name === CHECKSUMS) return 'text/plain; charset=utf-8';
+  return DOWNLOAD_TYPES[name.slice(name.lastIndexOf('.'))];
+}
+
+/** Installers download rather than open; the block map, SBOMs, and checksums are read by tools. */
+export const downloadsAsAttachment = (name: string) => /\.(exe|zip|AppImage|deb|apk)$/.test(name);

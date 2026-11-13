@@ -57,7 +57,9 @@ COPY --from=web /app/web/dist ./web/dist
 # For the compose file's observability profile, which copies them to Grafana's volume.
 COPY docker/observability/dashboards ./observability/dashboards
 COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/newses
-RUN mkdir -p /data/blobs /data/dashboards && chown node:node /data/blobs /data/dashboards
+# compose.apps.yaml's downloads volume starts from /data/downloads, which its apps build writes as node.
+RUN mkdir -p /data/blobs /data/dashboards /data/downloads \
+    && chown node:node /data/blobs /data/dashboards /data/downloads
 USER node
 EXPOSE 8080
 ENTRYPOINT ["newses"]

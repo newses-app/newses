@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sourceAt, versionFromTag } from './release.ts';
+import { downloadsAsAttachment, downloadType, sourceAt, versionFromTag } from './release.ts';
 
 describe('versionFromTag', () => {
   it('derives the version name and code from a release tag', () => {
@@ -61,5 +61,25 @@ describe('sourceAt', () => {
   it('links the repository for other builds', () => {
     for (const version of ['dev', '0.0.0-dev', '1.2.3-try.1', 'v1.2.3-4-gabc1234'])
       expect(sourceAt(repository, version), version).toBe('https://github.com/example/newses');
+  });
+});
+
+describe('downloadType', () => {
+  it('types installers, SBOMs, the OpenAPI document, and the checksums by name', () => {
+    expect(downloadType('newses-1.2.3-linux-x86_64.AppImage')).toBe('application/vnd.appimage');
+    expect(downloadType('newses-1.2.3-android.apk')).toBe(
+      'application/vnd.android.package-archive',
+    );
+    expect(downloadType('newses-1.2.3-desktop.cdx.json')).toBe('application/vnd.cyclonedx+json');
+    expect(downloadType('newses-1.2.3-openapi.json')).toBe('application/vnd.oai.openapi+json');
+    expect(downloadType('latest.json')).toBe('application/json');
+    expect(downloadType('SHA256SUMS')).toBe('text/plain; charset=utf-8');
+    expect(downloadType('notes.txt')).toBeUndefined();
+  });
+
+  it('downloads only installers as attachments', () => {
+    expect(downloadsAsAttachment('newses-1.2.3-linux-amd64.deb')).toBe(true);
+    expect(downloadsAsAttachment('newses-1.2.3-windows-setup.exe.blockmap')).toBe(false);
+    expect(downloadsAsAttachment('index.html')).toBe(false);
   });
 });

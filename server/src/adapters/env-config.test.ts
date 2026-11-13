@@ -15,6 +15,7 @@ describe('loadConfig', () => {
       blobDir: '/data/blobs',
       blobBucket: null,
       webDir: null,
+      downloadsDir: null,
       publicUrl: null,
       compatTrace: false,
       archiveEnabled: true,

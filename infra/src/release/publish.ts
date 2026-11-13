@@ -3,23 +3,24 @@
 // adds the server's files from docker/ and the image's signing key (--public-key) with --image
 // (publish-image.ts join's reference, which the compose file pins), writes SHA256SUMS, the feeds, latest.json and index.html beside them,
 // and writes plan.tsv (file, key, content type, cache control, disposition) and urls.txt for the
-// upload and the checks that follow.
+// upload and the checks that follow. --platforms names the apps built (default all, as on AWS;
+// Docker builds Linux and Android).
 //   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads \
-//     [--image public.ecr.aws/<alias>/newses@sha256:… --public-key cosign.pub]
+//     [--platforms linux,android] [--image public.ecr.aws/<alias>/newses@sha256:… --public-key cosign.pub]
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { versionFromTag } from '@newses/shared/release';
+import { type Platform, PLATFORMS, versionFromTag } from '@newses/shared/release';
 import { DOWNLOADS_PREFIX } from '../config.ts';
 import {
   type BuiltFile,
   buildManifest,
   CHECKSUMS,
   checkBuiltFiles,
-  FEEDS,
+  feeds,
   imageDigestNames,
   openapiFile,
   renderChecksums,
@@ -43,19 +44,25 @@ const { values } = parseArgs({
     tag: { type: 'string' },
     url: { type: 'string' },
     prerelease: { type: 'boolean', default: false },
+    platforms: { type: 'string', default: PLATFORMS.join(',') },
     image: { type: 'string' },
     'public-key': { type: 'string' },
   },
 });
 if (!values.dir || !values.tag || !values.url) {
   throw new Error(
-    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--image REPOSITORY@DIGEST --public-key FILE]',
+    'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--platforms LIST] [--image REPOSITORY@DIGEST --public-key FILE]',
   );
 }
 if (Boolean(values.image) !== Boolean(values['public-key'])) {
   throw new Error('--image and --public-key go together');
 }
 const { dir, url } = values;
+const platforms = values.platforms.split(',').map((p) => p.trim()) as Platform[];
+const unknown = platforms.filter((p) => !PLATFORMS.includes(p));
+if (unknown.length > 0 || platforms.length === 0) {
+  throw new Error(`--platforms takes some of ${PLATFORMS.join(', ')}: ${values.platforms}`);
+}
 const baseUrl = url.replace(/\/$/, '');
 const version = versionFromTag(values.tag);
 const at = values.image?.lastIndexOf('@') ?? -1;
@@ -79,7 +86,7 @@ const sha256 = (path: string) =>
   });
 
 const names = await readdir(dir);
-checkBuiltFiles(version.name, names, image);
+checkBuiltFiles(version.name, names, image, platforms);
 const built = async (name: string): Promise<BuiltFile> => {
   const path = join(dir, name);
   return { name, size: (await stat(path)).size, sha256: await sha256(path) };
@@ -87,10 +94,10 @@ const built = async (name: string): Promise<BuiltFile> => {
 
 // The SBOMs name the installers' hashes, so they are hashed after that; publish-image.ts reads
 // the digests.
-const sboms = sbomNames(version.name, image);
+const sboms = sbomNames(version.name, image, platforms);
 const handover = [...sboms, ...imageDigestNames(image)];
 const installers = await Promise.all(names.filter((name) => !handover.includes(name)).map(built));
-for (const { name, describes } of sbomArtifacts(version.name, image)) {
+for (const { name, describes } of sbomArtifacts(version.name, image, platforms)) {
   const path = join(dir, name);
   const bom = JSON.parse(await readFile(path, 'utf8')) as Bom;
   const files = describes.map((described) => {
@@ -120,9 +127,9 @@ if (serverImage) {
   }
 }
 const files = [...installers, ...(await Promise.all(sboms.map(built))), ...server];
-await writeFile(join(dir, CHECKSUMS), renderChecksums(version.name, files, image));
+await writeFile(join(dir, CHECKSUMS), renderChecksums(version.name, files, image, platforms));
 
-for (const feed of FEEDS) {
+for (const feed of feeds(platforms)) {
   const path = join(dir, feed);
   await writeFile(path, rewriteFeed(await readFile(path, 'utf8'), version.name));
 }
@@ -134,6 +141,7 @@ const input = {
   baseUrl,
   files,
   image: serverImage,
+  platforms,
 };
 const manifest = buildManifest(input);
 await writeFile(join(dir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -142,7 +150,7 @@ await writeFile(
   renderIndex(manifest, sbomFiles(input), openapiFile(input)),
 );
 
-const plan = uploadPlan(version.name, DOWNLOADS_PREFIX, image);
+const plan = uploadPlan(version.name, DOWNLOADS_PREFIX, image, platforms);
 await writeFile(
   join(dir, 'plan.tsv'),
   plan

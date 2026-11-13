@@ -42,6 +42,9 @@ function config(files: string[], env: Record<string, string>) {
         environment?: Record<string, string>;
         ports?: { published: string }[];
         networks?: Record<string, unknown>;
+        volumes?: { source: string; target: string; read_only?: boolean }[];
+        secrets?: { source: string }[];
+        platform?: string;
       }
     >;
   };
@@ -110,5 +113,36 @@ describe.skipIf(!available)('docker/compose.yaml', () => {
       VIRTUAL_HOST: 'reader.example.com',
     });
     expect(without.services.ntfy).toBeUndefined();
+  });
+
+  it('serves the downloads volume read-only, which only the apps override builds into', () => {
+    const { services } = config(['compose.yaml'], {});
+    expect(services.server?.environment).toMatchObject({ DOWNLOADS_DIR: '/data/downloads' });
+    expect(services.server?.volumes).toContainEqual(
+      expect.objectContaining({ source: 'downloads', target: '/data/downloads', read_only: true }),
+    );
+    expect(services.worker?.environment?.DOWNLOADS_DIR).toBeUndefined();
+    expect(services.apps).toBeUndefined();
+
+    const apps = config(['compose.yaml', 'compose.apps.yaml'], {
+      COMPOSE_PROFILES: 'apps',
+      RELEASE_TAG: 'v1.2.3',
+      PUBLIC_URL: 'https://reader.example.com',
+      ANDROID_KEYSTORE_BASE64: '',
+      ANDROID_KEYSTORE_PASSWORD: '',
+      ANDROID_KEY_ALIAS: '',
+      ANDROID_KEY_PASSWORD: '',
+    }).services.apps;
+    expect(apps?.platform).toBe('linux/amd64');
+    expect(apps?.environment).toMatchObject({
+      RELEASE_TAG: 'v1.2.3',
+      PUBLIC_URL: 'https://reader.example.com',
+      APPS_PLATFORMS: 'linux,android',
+    });
+    expect(apps?.environment).not.toHaveProperty('ANDROID_KEYSTORE_PASSWORD');
+    expect(apps?.secrets?.map((secret) => secret.source)).toHaveLength(4);
+    expect(apps?.volumes).toContainEqual(
+      expect.objectContaining({ source: 'downloads', target: '/data/downloads' }),
+    );
   });
 });

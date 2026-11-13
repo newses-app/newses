@@ -21,6 +21,7 @@
 | Credits | Licensing | Anyone sees the AGPL notices, a link to the source the server runs, the third-party work Newses builds on, and every package each app and the server ship with its licence, in the web, desktop, and Android apps; builds fail on a licence incompatible with the AGPL; on Docker and AWS |
 | Push and notifications | Timely updates | Family members are notified of new entries in browsers, installed web apps, and the Android app while they are closed, soon after the fetch that finds them and at most every 30 minutes; open apps on AWS no longer poll the API; with no vendor account or key to set up; on Docker and AWS |
 | Migration and search | TTRSS parity | Family members read feeds behind HTTP Basic authentication, those the TTRSS import brings included, in the web, desktop, and Android apps and TTRSS clients; search finds words whatever their accents and forms, online as offline, with TTRSS's query syntax; on Docker and AWS |
+| Mobile refresh and Docker apps | Native apps | Family members reload a list by pulling it down on a touch screen; Docker operators build the Linux and Android apps of their release and serve them from their server, which the apps update from; the Docker image ships only what Docker runs |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -163,6 +164,7 @@
 | Feature | Phase | Acceptance criteria |
 |---|---|---|
 | Docker deployment | P1 | Single image; `compose.yaml` starts Postgres, server, worker; healthchecks; migrations run before the server accepts traffic |
+| Self-hosted app downloads | Mobile refresh and Docker apps | An override builds the Linux desktop app and the Android app from a checkout of the release, the APK signed with the operator's keystore (required unless only Linux is built), and the server serves them at `/downloads/`, from which they update; Windows and macOS apps are not built |
 | Backups | P1 | Documented `pg_dump` sidecar and restore procedure |
 | Health endpoint | P1 | `/healthz` reports DB and queue status |
 | Runtime portability | P1 | Queue, scheduler, blob storage, and realtime are swappable adapters; no local-disk state outside blob storage |

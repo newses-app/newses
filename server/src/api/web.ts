@@ -2,8 +2,9 @@ import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
 import { WEB_CSP } from '@newses/shared/web-csp';
 
-/** API, compatibility-API, public, and icon paths, which never fall back to the app; the service worker's navigation denylist in web/src/worker/sw.ts must match. */
-const NOT_SPA = /^\/(api|public|healthz|accounts|reader|feed-icons|favicons)(\/|$)|^\/public\.php$/;
+/** API, compatibility-API, public, icon, and download paths, which never fall back to the app; the service worker's navigation denylist in web/src/worker/sw.ts must match. */
+const NOT_SPA =
+  /^\/(api|public|healthz|accounts|reader|feed-icons|favicons|downloads)(\/|$)|^\/public\.php$/;
 
 /** Text types of the build that send leaves without a charset: the manifest, SVG, and XML. */
 const UTF8_TEXT = /^(image\/svg\+xml|application\/(manifest\+json|xml))\b/i;

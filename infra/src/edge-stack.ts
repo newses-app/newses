@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { WEB_CSP } from '@newses/shared/web-csp';
+import { DOWNLOADS_CSP, WEB_CSP } from '@newses/shared/web-csp';
 import { Annotations, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import type * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -50,16 +50,6 @@ const DOWNLOADS_INDEX = `function handler(event) {
   if (request.uri.endsWith('/')) request.uri += 'index.html';
   return request;
 }`;
-
-/** The downloads page is static HTML with inline styles and no scripts. */
-const DOWNLOADS_CSP = [
-  "default-src 'none'",
-  "style-src 'unsafe-inline'",
-  "img-src 'self'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join('; ');
 
 /** Superseded prereleases are tagged by the release pipeline and expire. */
 export const SUPERSEDED_TAG = { key: 'superseded', value: 'true' };

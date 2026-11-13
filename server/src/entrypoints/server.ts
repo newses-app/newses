@@ -53,6 +53,7 @@ const app = buildApp({
   logger,
   trustProxy: config.http.trustProxy,
   webDir: config.webDir,
+  downloadsDir: config.downloadsDir,
   version: config.version,
   instanceName: config.instanceName,
   sourceUrl: config.sourceUrl,

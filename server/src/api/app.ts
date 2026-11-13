@@ -54,6 +54,7 @@ import {
   type RequestDiagnosticsOptions,
 } from './request-diagnostics.ts';
 import { RequestLogController, requestLogger } from './request-log.ts';
+import { registerDownloads } from './downloads.ts';
 import { registerWeb } from './web.ts';
 
 export type HealthCheck = () => Promise<void>;
@@ -102,6 +103,8 @@ export interface AppDeps {
   compatTrace?: boolean;
   /** Directory of the built web app to serve at `/`; omitted when the SPA is hosted elsewhere. */
   webDir?: string | null;
+  /** Directory of the apps' downloads to serve at `/downloads/`; omitted for none. */
+  downloadsDir?: string | null;
   /** Logging of slow and abandoned requests; defaults to 2 s without a state snapshot. */
   diagnostics?: Partial<RequestDiagnosticsOptions>;
   /** Trace requests; defaults to on when OpenTelemetry export is configured. */
@@ -286,6 +289,7 @@ export function buildApp(deps: AppDeps) {
     void app.register(greaderRoutes, { ...greader, prefix: '/api/greader.php' });
   }
 
+  if (deps.downloadsDir) registerDownloads(app, deps.downloadsDir);
   if (deps.webDir) registerWeb(app, deps.webDir);
 
   return app;

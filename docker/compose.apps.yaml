@@ -1,0 +1,44 @@
+# Override that builds the desktop app for Linux and the Android app from this checkout into the
+# downloads volume, which the server serves at PUBLIC_URL/downloads/, where the apps update from.
+# Check out the installed version's tag, set RELEASE_TAG to it, then from the checkout's root:
+#   docker compose -f docker/compose.yaml -f docker/compose.apps.yaml --profile apps run --rm apps
+# For an install from a release's files, add --env-file with its .env, so the build uses its
+# settings and fills its volume. Run it again after each upgrade. The build runs on linux/amd64
+# (emulated, and slow, on arm64 hosts). The APK is signed with your release keystore, from .env.
+services:
+  apps:
+    profiles: [apps]
+    platform: linux/amd64
+    image: newses-apps:${RELEASE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: docker/apps.Dockerfile
+    restart: 'no'
+    environment:
+      RELEASE_TAG: ${RELEASE_TAG:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      APPS_PLATFORMS: ${APPS_PLATFORMS:-linux,android}
+    secrets:
+      - android_keystore
+      - android_keystore_password
+      - android_key_alias
+      - android_key_password
+    volumes:
+      - downloads:/data/downloads
+      - apps-gradle:/home/node/.gradle
+      - apps-cache:/home/node/.cache
+
+# Empty values build no APK: then set APPS_PLATFORMS=linux.
+secrets:
+  android_keystore:
+    environment: ANDROID_KEYSTORE_BASE64
+  android_keystore_password:
+    environment: ANDROID_KEYSTORE_PASSWORD
+  android_key_alias:
+    environment: ANDROID_KEY_ALIAS
+  android_key_password:
+    environment: ANDROID_KEY_PASSWORD
+
+volumes:
+  apps-gradle:
+  apps-cache:

@@ -15,6 +15,7 @@ const schema = z
     BLOB_DIR: z.string().min(1).default('/data/blobs'),
     BLOB_BUCKET: z.string().min(1).optional(),
     WEB_DIR: z.string().min(1).optional(),
+    DOWNLOADS_DIR: z.string().min(1).optional(),
     PUBLIC_URL: z
       .url({ protocol: /^https?$/ })
       .transform((v) => v.replace(/\/+$/, ''))
@@ -133,6 +134,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     blobDir: e.BLOB_DIR,
     blobBucket: e.BLOB_BUCKET ?? null,
     webDir: e.WEB_DIR ?? null,
+    downloadsDir: e.DOWNLOADS_DIR ?? null,
     publicUrl: e.PUBLIC_URL ?? null,
     compatTrace: e.COMPAT_TRACE === 'true',
     archiveEnabled: e.ARCHIVE_ENABLED === 'true',

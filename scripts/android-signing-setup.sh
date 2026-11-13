@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # Sets up Android release signing: generates the release keystore (or reuses an existing one),
 # copies it to an offline backup folder and checks the copy, then writes the values to
-# mobile/android-signing.env (local signed builds) and, with --ssm, to SSM.
+# mobile/android-signing.env (local signed builds), with --docker to docker/.env (the Docker apps
+# build), and with --ssm to SSM.
 # Losing the keystore or its password means installed apps can never be updated.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 Usage: scripts/android-signing-setup.sh --backup DIR [--keystore FILE] [--alias NAME]
-                                        [--dname DN] [--ssm] [--dry-run]
+                                        [--dname DN] [--docker] [--ssm] [--dry-run]
 
   --backup DIR     Offline backup folder; the keystore is DIR/<prefix>-release.jks, generated
                    there if missing and reused if present
   --keystore FILE  Use this existing keystore instead (no backup copy is made)
   --alias NAME     Key alias (default: <prefix>)
   --dname DN       Certificate subject for a new keystore (default: CN=Newses)
+  --docker         Also write them to docker/.env, for docker/compose.apps.yaml's apps build
   --ssm            Also store the values as SecureString parameters under
                    /<prefix>/release/android-signing/ (AWS CLI credentials,
                    infra/deploy.config.json)
@@ -41,7 +43,8 @@ name=$prefix-release.jks
 # Standard-tier SSM parameters hold up to 4 KB.
 standard_max=4096
 
-backup='' keystore='' alias=$prefix dname='CN=Newses' ssm=false dry_run=false
+backup='' keystore='' alias=$prefix dname='CN=Newses' docker=false ssm=false dry_run=false
+docker_env=$root/docker/.env
 while [ $# -gt 0 ]; do
   case "$1" in
     --backup | --keystore | --alias | --dname)
@@ -54,6 +57,7 @@ while [ $# -gt 0 ]; do
       esac
       shift 2
       ;;
+    --docker) docker=true; shift ;;
     --ssm) ssm=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     -h | --help) usage; exit 0 ;;
@@ -64,6 +68,9 @@ done
 
 command -v keytool >/dev/null || die 'needs keytool (JDK 21)'
 command -v openssl >/dev/null || die 'needs openssl'
+if $docker; then
+  [ -f "$docker_env" ] || die "--docker needs $docker_env: copy docker/.env.example to it first"
+fi
 if $ssm; then
   command -v aws >/dev/null || die '--ssm needs the AWS CLI (aws)'
   aws sts get-caller-identity >/dev/null 2>&1 || die '--ssm needs AWS credentials'
@@ -124,7 +131,7 @@ echo "Alias: $alias"
 echo "Certificate SHA-256: $fingerprint"
 
 if $dry_run; then
-  echo "Dry run: would write $env_file$($ssm && echo ' and the SSM parameters')."
+  echo "Dry run: would write $env_file$($docker && echo " and $docker_env")$($ssm && echo ' and the SSM parameters')."
   exit 0
 fi
 
@@ -138,6 +145,26 @@ step="writing $env_file"
     ANDROID_KEY_PASSWORD "$ANDROID_KEYSTORE_PASSWORD" >"$env_file"
 )
 echo "Wrote $env_file (gitignored)"
+
+if $docker; then
+  step="writing $docker_env"
+  case "$ANDROID_KEYSTORE_PASSWORD$alias" in
+    *"'"*) die "a password or alias with ' cannot go in $docker_env" ;;
+  esac
+  # Replaces the values' lines, set or commented out, and keeps the rest of the file.
+  (
+    umask 077
+    grep -vE '^#?ANDROID_(KEYSTORE_BASE64|KEYSTORE_PASSWORD|KEY_ALIAS|KEY_PASSWORD)=' \
+      "$docker_env" >"$work/docker.env" || true
+    printf "%s='%s'\n" \
+      ANDROID_KEYSTORE_BASE64 "$(base64 -w0 "$keystore")" \
+      ANDROID_KEYSTORE_PASSWORD "$ANDROID_KEYSTORE_PASSWORD" \
+      ANDROID_KEY_ALIAS "$alias" \
+      ANDROID_KEY_PASSWORD "$ANDROID_KEYSTORE_PASSWORD" >>"$work/docker.env"
+  )
+  cat "$work/docker.env" >"$docker_env"
+  echo "Wrote the keystore and its values to $docker_env"
+fi
 
 if $ssm; then
   step='storing the SSM parameters'

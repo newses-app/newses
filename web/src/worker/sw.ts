@@ -33,7 +33,7 @@ cleanupOutdatedCaches();
 
 // Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and feeds,
 // the native and compatibility APIs, and feed icons never get the app shell. Nor do the app
-// downloads, which CloudFront serves on AWS.
+// downloads, which CloudFront serves on AWS and the server on Docker.
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('index.html'), {
     denylist: [

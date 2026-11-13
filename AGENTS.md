@@ -15,6 +15,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
 | `pnpm --filter @newses/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @newses/server db:migrate` | Apply migrations |
+| `docker compose -f docker/compose.yaml -f docker/compose.apps.yaml --profile apps run --rm apps` | Builds the checkout's Linux and Android apps (linux/amd64) into the `downloads` volume, which the server serves at `/downloads/`; `RELEASE_TAG`, `PUBLIC_URL` (https), `APPS_PLATFORMS`, and the Android signing values from `docker/.env` |
 | `docker compose -f docker/compose.yaml --profile observability up -d` | Local stack with Grafana, Tempo, Loki, and Prometheus on `127.0.0.1:3000`; set `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` in `docker/.env` |
 | `pnpm --filter @newses/server feeds:auth` | Test feeds behind HTTP Basic auth on `0.0.0.0:8090` (`--port`, `--every` minutes per item), listing their URLs and logins; from the Docker stack via `host.docker.internal`, with `FETCH_ALLOW_PRIVATE_NETWORKS=true` |
 | `pnpm --filter @newses/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
@@ -25,7 +26,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `scripts/windows-signing-setup.sh` | Creates the release pipeline's Azure app registration and signer role on the existing Artifact Signing profile; writes `desktop/electron-builder.env`, and SSM parameters with `--ssm` (`--help`) |
 | `pnpm --filter @newses/mobile build:apk` / `install:apk` | Unsigned debug APK in `mobile/release` (needs JDK 21 and the Android SDK); `install:apk` also installs it with `adb` |
 | `pnpm --filter @newses/mobile build:apk:release` | Release APK in `mobile/release`, signed with the values in `mobile/android-signing.env` (unsigned without them) |
-| `scripts/android-signing-setup.sh --backup DIR` | Generates the Android release keystore in an offline backup folder (or reuses it there); writes `mobile/android-signing.env`, and SSM parameters with `--ssm` (`--help`) |
+| `scripts/android-signing-setup.sh --backup DIR` | Generates the Android release keystore in an offline backup folder (or reuses it there); writes `mobile/android-signing.env`, `docker/.env`'s signing values with `--docker`, and SSM parameters with `--ssm` (`--help`) |
 | `scripts/image-registry-setup.sh` | Creates the ECR Public repository the release pipelines publish the server image to, or updates its gallery listing, and the KMS key they sign it with; prints its URI for the stages' `imageRepository` in the deploy config, and the public key (`--help`) |
 | `E2E_BASE_URL=… pnpm --filter @newses/web test:e2e` | Playwright tests against a running deployment with subscriptions (`E2E_LOGIN`, `E2E_PASSWORD`); not part of `pnpm check` |
 | `pnpm --filter @newses/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first); deployments run through the pipelines |

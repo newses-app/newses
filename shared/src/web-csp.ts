@@ -30,3 +30,13 @@ export const WEB_CSP = [...directives("'self'"), "frame-ancestors 'none'"].join(
  * which a `<meta>` policy cannot carry.
  */
 export const NATIVE_CSP = directives("'self' https:").join('; ');
+
+/** The downloads page is static HTML with inline styles and no scripts. */
+export const DOWNLOADS_CSP = [
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src 'self'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');

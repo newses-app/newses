@@ -1,9 +1,19 @@
 // What the release pipeline's publish leg uploads for a version: the files the build legs
 // handed over, SHA256SUMS, the update feeds pointed at them, latest.json, and the downloads page.
-// `image` is set when the stage publishes the server image, whose legs hand over its SBOM too,
+// `platforms` are the apps it built: all three on AWS, those asked for on Docker. `image` is set when the stage publishes the server image, whose legs hand over its SBOM too,
 // and whose compose file, sample config, nginx-proxy override, and signing key the publish leg
 // adds.
-import type { ReleaseFile, ReleaseManifest, ServerRelease } from '@newses/shared/release';
+import {
+  CHECKSUMS,
+  DOWNLOADS_CACHE,
+  downloadsAsAttachment,
+  downloadType,
+  type Platform,
+  PLATFORMS,
+  type ReleaseFile,
+  type ReleaseManifest,
+  type ServerRelease,
+} from '@newses/shared/release';
 import { IMAGE_ARCHES, imageDigestName } from './image.ts';
 import { sbomName } from './sbom.ts';
 
@@ -35,8 +45,26 @@ export const installerNames = (version: string): Record<Installer, string> => ({
   android: `newses-${version}-android.apk`,
 });
 
-/** electron-updater's feeds: Windows (NSIS) and Linux (AppImage). */
-export const FEEDS = ['latest.yml', 'latest-linux.yml'];
+const PLATFORM_OF: Record<Installer, Platform> = {
+  windows: 'windows',
+  windowsZip: 'windows',
+  windowsPortable: 'windows',
+  appImage: 'linux',
+  deb: 'linux',
+  android: 'android',
+};
+
+/** The installers of `platforms`. */
+const installersOf = (platforms: readonly Platform[]) =>
+  (Object.keys(PLATFORM_OF) as Installer[]).filter((installer) =>
+    platforms.includes(PLATFORM_OF[installer]),
+  );
+
+/** electron-updater's feeds: Windows (NSIS) and Linux (AppImage), of the platforms built. */
+export const feeds = (platforms: readonly Platform[] = PLATFORMS) => [
+  ...(platforms.includes('windows') ? ['latest.yml'] : []),
+  ...(platforms.includes('linux') ? ['latest-linux.yml'] : []),
+];
 
 /** The NSIS installer's block map, for differential updates. */
 const blockmapName = (version: string) => `${installerNames(version).windows}.blockmap`;
@@ -54,14 +82,27 @@ const RELEASE_SBOMS: [ReleaseSbom, Installer[]][] = [
   ['mobile', ['android']],
   ['image', []],
 ];
-const releaseSboms = (image: boolean) =>
-  RELEASE_SBOMS.filter(([deliverable]) => image || deliverable !== 'image');
-export const sbomNames = (version: string, image = false) =>
-  releaseSboms(image).map(([deliverable]) => sbomName(version, deliverable));
+/** The SBOMs of the platforms built, each with the installers it describes of them. */
+const releaseSboms = (image: boolean, platforms: readonly Platform[]) =>
+  RELEASE_SBOMS.map(([deliverable, installers]): [ReleaseSbom, Installer[]] => [
+    deliverable,
+    installers.filter((installer) => installersOf(platforms).includes(installer)),
+  ]).filter(([deliverable, installers]) =>
+    deliverable === 'image' ? image : installers.length > 0,
+  );
+export const sbomNames = (
+  version: string,
+  image = false,
+  platforms: readonly Platform[] = PLATFORMS,
+) => releaseSboms(image, platforms).map(([deliverable]) => sbomName(version, deliverable));
 
 /** Each SBOM's file name and the installers it describes. */
-export const sbomArtifacts = (version: string, image = false) =>
-  releaseSboms(image).map(([deliverable, installers]) => ({
+export const sbomArtifacts = (
+  version: string,
+  image = false,
+  platforms: readonly Platform[] = PLATFORMS,
+) =>
+  releaseSboms(image, platforms).map(([deliverable, installers]) => ({
     name: sbomName(version, deliverable),
     describes: installers.map((installer) => installerNames(version)[installer]),
   }));
@@ -90,20 +131,19 @@ export const SERVER_FILES: Record<ServerFile, string> = {
   publicKey: 'cosign.pub',
 };
 
-/** The checksums of a version's files, for `sha256sum -c`. */
-export const CHECKSUMS = 'SHA256SUMS';
+export { CHECKSUMS };
 
 /** The files under `<version>/` that came from the build legs. */
-const handedOverNames = (version: string, image: boolean) => [
-  ...Object.values(installerNames(version)),
-  blockmapName(version),
-  ...sbomNames(version, image),
+const handedOverNames = (version: string, image: boolean, platforms: readonly Platform[]) => [
+  ...installersOf(platforms).map((installer) => installerNames(version)[installer]),
+  ...(platforms.includes('windows') ? [blockmapName(version)] : []),
+  ...sbomNames(version, image, platforms),
   openapiName(version),
 ];
 
 /** The files uploaded under `<version>/`, but SHA256SUMS. */
-const versionedNames = (version: string, image: boolean) => [
-  ...handedOverNames(version, image),
+const versionedNames = (version: string, image: boolean, platforms: readonly Platform[]) => [
+  ...handedOverNames(version, image, platforms),
   ...(image ? Object.values(serverNames(version)) : []),
 ];
 
@@ -111,29 +151,8 @@ const versionedNames = (version: string, image: boolean) => [
 export const imageDigestNames = (image: boolean) =>
   image ? IMAGE_ARCHES.map(imageDigestName) : [];
 
-const IMMUTABLE = 'public, max-age=31536000, immutable';
-const NO_CACHE = 'no-cache';
-
-const CONTENT_TYPES: Record<string, string> = {
-  '.exe': 'application/vnd.microsoft.portable-executable',
-  '.zip': 'application/zip',
-  '.AppImage': 'application/vnd.appimage',
-  '.deb': 'application/vnd.debian.binary-package',
-  '.apk': 'application/vnd.android.package-archive',
-  '.blockmap': 'application/octet-stream',
-  '.yml': 'text/yaml',
-  '.yaml': 'text/yaml',
-  '.example': 'text/plain; charset=utf-8',
-  '.pub': 'text/plain; charset=utf-8',
-  '.json': 'application/json',
-  '.html': 'text/html',
-};
-
 const contentType = (name: string) => {
-  if (name.endsWith('.cdx.json')) return 'application/vnd.cyclonedx+json';
-  if (name.endsWith('-openapi.json')) return 'application/vnd.oai.openapi+json';
-  if (name === CHECKSUMS) return 'text/plain; charset=utf-8';
-  const type = CONTENT_TYPES[name.slice(name.lastIndexOf('.'))];
+  const type = downloadType(name);
   if (!type) throw new Error(`No content type for ${name}`);
   return type;
 };
@@ -142,8 +161,17 @@ const contentType = (name: string) => {
  * Checks that the build legs handed over exactly this version's files: a missing one means a
  * leg failed, and an extra one means a stale or misnamed build.
  */
-export function checkBuiltFiles(version: string, names: string[], image = false) {
-  const expected = [...handedOverNames(version, image), ...FEEDS, ...imageDigestNames(image)];
+export function checkBuiltFiles(
+  version: string,
+  names: string[],
+  image = false,
+  platforms: readonly Platform[] = PLATFORMS,
+) {
+  const expected = [
+    ...handedOverNames(version, image, platforms),
+    ...feeds(platforms),
+    ...imageDigestNames(image),
+  ];
   const missing = expected.filter((name) => !names.includes(name));
   const unexpected = names.filter((name) => !expected.includes(name));
   if (missing.length > 0 || unexpected.length > 0) {
@@ -207,6 +235,8 @@ export interface ManifestInput {
   files: BuiltFile[];
   /** The server image, when the stage publishes it. */
   image?: ServerImage | undefined;
+  /** The apps built; all by default. */
+  platforms?: readonly Platform[] | undefined;
 }
 
 const releaseFile = (input: ManifestInput, name: string): ReleaseFile => {
@@ -223,17 +253,24 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
   const names = installerNames(input.version);
   const file = (name: string) => releaseFile(input, name);
   const server = serverNames(input.version);
+  const platforms = input.platforms ?? PLATFORMS;
   return {
     version: input.version,
     prerelease: input.prerelease,
     published: input.published.toISOString(),
-    windows: {
-      installer: file(names.windows),
-      zip: file(names.windowsZip),
-      portable: file(names.windowsPortable),
-    },
-    linux: { appImage: file(names.appImage), deb: file(names.deb) },
-    android: { ...file(names.android), versionCode: input.versionCode },
+    ...(platforms.includes('windows') && {
+      windows: {
+        installer: file(names.windows),
+        zip: file(names.windowsZip),
+        portable: file(names.windowsPortable),
+      },
+    }),
+    ...(platforms.includes('linux') && {
+      linux: { appImage: file(names.appImage), deb: file(names.deb) },
+    }),
+    ...(platforms.includes('android') && {
+      android: { ...file(names.android), versionCode: input.versionCode },
+    }),
     ...(input.image && {
       server: {
         image: {
@@ -250,15 +287,13 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
   };
 }
 
-/** A release's SBOMs; the image's only when the stage publishes the image. */
-export type SbomFiles = Record<Exclude<ReleaseSbom, 'image'>, ReleaseFile> & {
-  image?: ReleaseFile;
-};
+/** A release's SBOMs: the apps' it built, and the image's when the stage publishes the image. */
+export type SbomFiles = Partial<Record<ReleaseSbom, ReleaseFile>>;
 
 /** The SBOMs, for the downloads page; latest.json leaves them out, as the apps never read them. */
 export const sbomFiles = (input: ManifestInput) =>
   Object.fromEntries(
-    releaseSboms(Boolean(input.image)).map(([deliverable]) => [
+    releaseSboms(Boolean(input.image), input.platforms ?? PLATFORMS).map(([deliverable]) => [
       deliverable,
       releaseFile(input, sbomName(input.version, deliverable)),
     ]),
@@ -268,8 +303,13 @@ export const sbomFiles = (input: ManifestInput) =>
 export const openapiFile = (input: ManifestInput) => releaseFile(input, openapiName(input.version));
 
 /** SHA256SUMS: a `sha256sum -c` line for each file from the build legs, and only those. */
-export function renderChecksums(version: string, files: BuiltFile[], image = false) {
-  return versionedNames(version, image)
+export function renderChecksums(
+  version: string,
+  files: BuiltFile[],
+  image = false,
+  platforms: readonly Platform[] = PLATFORMS,
+) {
+  return versionedNames(version, image, platforms)
     .map((name) => {
       const file = files.find((f) => f.name === name);
       if (!file) throw new Error(`Missing ${name}`);
@@ -416,31 +456,35 @@ docker pull ${byDigest}</code></pre>
 
 /** The static downloads page for the latest release. */
 export function renderIndex(manifest: ReleaseManifest, sboms: SbomFiles, openapi: ReleaseFile) {
-  const installers: [string, string, Installer | 'file', ReleaseFile][] = [
+  type Entry = [string, string, Installer | 'file', ReleaseFile];
+  /** The entries of the files the release has. */
+  const present = (entries: [string, string, Installer | 'file', ReleaseFile | undefined][]) =>
+    entries.filter((entry): entry is Entry => entry[3] !== undefined);
+  const installers = present([
     [
       'Windows',
       'Installer for Windows 10 and 11 (x64), per user; updates itself',
       'windows',
-      manifest.windows.installer,
+      manifest.windows?.installer,
     ],
     [
       'Windows',
       'Zip of the app (x64), to run without installing; does not update itself',
       'windowsZip',
-      manifest.windows.zip,
+      manifest.windows?.zip,
     ],
     [
       'Windows',
       'Single exe of the app (x64), to run without installing, from a USB drive too; keeps its data in a Newses Data folder beside it, starts a few seconds slower, and does not update itself',
       'windowsPortable',
-      manifest.windows.portable,
+      manifest.windows?.portable,
     ],
-    ['Linux', 'Debian and Ubuntu package (x64)', 'deb', manifest.linux.deb],
+    ['Linux', 'Debian and Ubuntu package (x64)', 'deb', manifest.linux?.deb],
     [
       'Linux',
       'AppImage (x64); on Ubuntu 24.04 and later AppArmor stops its sandbox, so use the package',
       'appImage',
-      manifest.linux.appImage,
+      manifest.linux?.appImage,
     ],
     [
       'Android',
@@ -448,25 +492,21 @@ export function renderIndex(manifest: ReleaseManifest, sboms: SbomFiles, openapi
       'android',
       manifest.android,
     ],
-  ];
-  const documents: typeof installers = [
+  ]);
+  const documents = present([
     ['Desktop SBOM', 'CycloneDX bill of materials for the desktop apps', 'file', sboms.desktop],
     ['Android SBOM', 'CycloneDX bill of materials for the Android app', 'file', sboms.mobile],
-    ...(sboms.image
-      ? ([
-          [
-            'Server image SBOM',
-            'CycloneDX bill of materials for the server image, from its linux/amd64 build',
-            'file',
-            sboms.image,
-          ],
-        ] as typeof installers)
-      : []),
+    [
+      'Server image SBOM',
+      'CycloneDX bill of materials for the server image, from its linux/amd64 build',
+      'file',
+      sboms.image,
+    ],
     ['API description', 'OpenAPI document of the native API, /api/v1', 'file', openapi],
-  ];
+  ]);
   // Heading, description, file, commands, and what the commands do.
   type Row = [string, string, ReleaseFile, string[], string];
-  const row = ([heading, description, kind, file]: (typeof installers)[number]): Row => [
+  const row = ([heading, description, kind, file]: Entry): Row => [
     heading,
     description,
     file,
@@ -490,7 +530,7 @@ export function renderIndex(manifest: ReleaseManifest, sboms: SbomFiles, openapi
       })
       .join('\n');
   const checksums = escapeHtml(
-    `${manifest.android.url.slice(0, manifest.android.url.lastIndexOf('/') + 1)}${CHECKSUMS}`,
+    `${openapi.url.slice(0, openapi.url.lastIndexOf('/') + 1)}${CHECKSUMS}`,
   );
   const version = escapeHtml(manifest.version);
   const server = manifest.server && serverSection(manifest.server, list);
@@ -534,20 +574,24 @@ ${list(documents.map(row))}
 }
 
 /** Versioned files first, then the feeds, latest.json, and the page that point at them. */
-export function uploadPlan(version: string, prefix: string, image = false): Upload[] {
-  const versioned = [...versionedNames(version, image), CHECKSUMS].map((name) => ({
+export function uploadPlan(
+  version: string,
+  prefix: string,
+  image = false,
+  platforms: readonly Platform[] = PLATFORMS,
+): Upload[] {
+  const versioned = [...versionedNames(version, image, platforms), CHECKSUMS].map((name) => ({
     name,
     key: `${prefix}/${version}/${name}`,
     contentType: contentType(name),
-    cacheControl: IMMUTABLE,
-    // Installers download; the block map, SBOMs, API description, and checksums are read by tools.
-    attachment: /\.(exe|zip|AppImage|deb|apk)$/.test(name),
+    cacheControl: DOWNLOADS_CACHE.versioned,
+    attachment: downloadsAsAttachment(name),
   }));
-  const latest = [...FEEDS, 'latest.json', 'index.html'].map((name) => ({
+  const latest = [...feeds(platforms), 'latest.json', 'index.html'].map((name) => ({
     name,
     key: `${prefix}/${name}`,
     contentType: contentType(name),
-    cacheControl: NO_CACHE,
+    cacheControl: DOWNLOADS_CACHE.latest,
     attachment: false,
   }));
   return [...versioned, ...latest];

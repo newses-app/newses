@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildManifest,
   checkBuiltFiles,
-  FEEDS,
+  feeds,
   imageDigestNames,
   installCommands,
   installerNames,
@@ -25,7 +25,7 @@ const version = '1.2.3-rc.1';
 const names = installerNames(version);
 const sboms = sbomNames(version);
 const openapi = openapiName(version);
-const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, openapi, ...FEEDS];
+const built = [...Object.values(names), `${names.windows}.blockmap`, ...sboms, openapi, ...feeds()];
 const imageSbom = `newses-${version}-image.cdx.json`;
 const builtWithImage = [...built, imageSbom, 'image-amd64.digest', 'image-arm64.digest'];
 const server = serverNames(version);
@@ -330,9 +330,9 @@ describe('renderIndex', () => {
   const page = renderIndex(manifest, sbomFiles(input), openapiFile(input));
 
   it('links each installer, SBOM, and the OpenAPI document with its hash and commands', () => {
-    expect(page).toContain(`<a href="${manifest.windows.zip.url}">`);
-    expect(page).toContain(`<a href="${manifest.windows.portable.url}">`);
-    expect(page).toContain(`<a href="${manifest.android.url}">`);
+    expect(page).toContain(`<a href="${manifest.windows?.zip.url ?? ''}">`);
+    expect(page).toContain(`<a href="${manifest.windows?.portable.url ?? ''}">`);
+    expect(page).toContain(`<a href="${manifest.android?.url ?? ''}">`);
     expect(page).toContain(`<a href="${folder}${sboms[1] ?? ''}">`);
     expect(page).toContain(`<a href="${folder}${openapi}">`);
     expect(page).toContain('<code>SHA-256 hash9</code>');
@@ -432,5 +432,63 @@ describe('uploadPlan', () => {
         expect.objectContaining({ contentType: 'text/plain; charset=utf-8', attachment: false }),
       );
     }
+  });
+});
+
+describe('a release of some platforms (Docker: Linux and Android)', () => {
+  const platforms = ['linux', 'android'] as const;
+  const some = [
+    names.appImage,
+    names.deb,
+    names.android,
+    ...sbomNames(version, false, platforms),
+    openapi,
+    'latest-linux.yml',
+  ];
+  const someInput = {
+    ...input,
+    files: some.map((name, i) => ({ name, size: i, sha256: `hash${String(i)}` })),
+    platforms,
+  };
+
+  it('expects only their installers, SBOMs, and feeds, without the block map', () => {
+    expect(feeds(platforms)).toEqual(['latest-linux.yml']);
+    expect(() => {
+      checkBuiltFiles(version, some, false, platforms);
+    }).not.toThrow();
+    expect(() => {
+      checkBuiltFiles(version, built, false, platforms);
+    }).toThrow(/unexpected \[newses-1\.2\.3-rc\.1-windows-setup\.exe/);
+  });
+
+  it('has the desktop SBOM describe only the Linux packages, and drops it without Linux', () => {
+    expect(sbomArtifacts(version, false, platforms)[0]?.describes).toEqual([
+      names.appImage,
+      names.deb,
+    ]);
+    expect(sbomNames(version, false, ['android'])).toEqual([sboms[1]]);
+  });
+
+  it('leaves the other platforms out of latest.json, the page, and the upload', () => {
+    const manifest = buildManifest(someInput);
+    expect(manifest.windows).toBeUndefined();
+    expect(manifest.linux?.deb.url).toBe(`${folder}${names.deb}`);
+    expect(manifest.android).toEqual(expect.objectContaining({ versionCode: 10203 }));
+    expect(buildManifest({ ...someInput, platforms: ['linux'] }).android).toBeUndefined();
+
+    const page = renderIndex(manifest, sbomFiles(someInput), openapiFile(someInput));
+    expect(page).not.toContain('Windows');
+    expect(page).toContain(`<a href="${folder}${names.deb}">`);
+    expect(page).toContain(`<a href="${folder}SHA256SUMS">SHA256SUMS</a>`);
+
+    const keys = uploadPlan(version, 'downloads', false, platforms).map((u) => u.name);
+    expect(keys).toEqual([
+      ...some.filter((name) => name !== 'latest-linux.yml'),
+      'SHA256SUMS',
+      'latest-linux.yml',
+      'latest.json',
+      'index.html',
+    ]);
+    expect(renderChecksums(version, someInput.files, false, platforms)).not.toContain('windows');
   });
 });
