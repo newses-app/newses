@@ -41,6 +41,7 @@ export const ACTION_GROUPS: { group: string; actions: ShortcutAction[] }[] = [
   {
     group: 'feed',
     actions: [
+      'reloadList',
       'refreshFeed',
       'toggleHideRead',
       'subscribe',
@@ -66,7 +67,7 @@ export const ACTION_GROUPS: { group: string; actions: ShortcutAction[] }[] = [
   },
 ];
 
-/** TTRSS's default bindings. */
+/** TTRSS's default bindings, and `r` to reload the list from the server. */
 export const DEFAULT_BINDINGS: Bindings = {
   nextFeed: ['j'],
   prevFeed: ['k'],
@@ -86,6 +87,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   editNote: ['a n'],
   editLabels: ['a l'],
   editTags: ['T'],
+  reloadList: ['r'],
   refreshFeed: ['f r'],
   toggleHideRead: ['f a'],
   subscribe: ['f s'],
@@ -104,9 +106,19 @@ export const DEFAULT_BINDINGS: Bindings = {
   help: ['?'],
 };
 
-/** The defaults with the user's overrides applied. */
+/**
+ * The defaults with the user's overrides applied. A default that clashes with a sequence the user
+ * bound gives way, so a default added later never takes a key from the user.
+ */
 export function effectiveBindings(overrides: BindingOverrides = {}): Bindings {
-  return { ...DEFAULT_BINDINGS, ...overrides };
+  const chosen = Object.values(overrides).flat();
+  const defaults = Object.fromEntries(
+    SHORTCUT_ACTIONS.map((action) => [
+      action,
+      DEFAULT_BINDINGS[action].filter((s) => !chosen.some((c) => sequencesClash(c, s))),
+    ]),
+  ) as Bindings;
+  return { ...defaults, ...overrides };
 }
 
 /**

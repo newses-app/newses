@@ -27,6 +27,16 @@ describe('ShortcutMatcher', () => {
     expect(matcher.press('a', 300)).toBe('toggleHideRead');
   });
 
+  it('reloads the list on `r`, alone or after a chord that ends in it', () => {
+    const matcher = new ShortcutMatcher();
+    expect(matcher.press('r', 0)).toBe('reloadList');
+    expect(matcher.press('f', 100)).toBeNull();
+    expect(matcher.press('r', 200)).toBe('refreshFeed');
+    expect(matcher.press('g', 300)).toBeNull();
+    expect(matcher.press('r', 400)).toBe('gotoRecentlyRead');
+    expect(matcher.press('r', 500)).toBe('reloadList');
+  });
+
   it('drops a chord prefix after the timeout or an unbound second key', () => {
     const matcher = new ShortcutMatcher();
     matcher.press('g', 0);
@@ -62,10 +72,22 @@ describe('bindings', () => {
     // `s x` needs `s` as a chord prefix, which is bound alone.
     expect(clashingActions(DEFAULT_BINDINGS, 's x')).toEqual(['toggleStar']);
     expect(clashingActions(DEFAULT_BINDINGS, 'z')).toEqual([]);
-    expect(findConflicts(effectiveBindings({ help: ['s'] }))).toEqual([
+    expect(findConflicts(effectiveBindings({ help: ['s'], toggleStar: ['s'] }))).toEqual([
       { sequence: 's', actions: ['toggleStar', 'help'] },
       { sequence: 's', actions: ['help', 'toggleStar'] },
     ]);
+  });
+
+  it('gives way to the user’s sequences where a default clashes', () => {
+    // A user who bound `r`, or a chord starting with it, before it reloaded the list keeps it.
+    expect(effectiveBindings({ help: ['r'] }).reloadList).toEqual([]);
+    expect(effectiveBindings({ help: ['r x'] }).reloadList).toEqual([]);
+    expect(effectiveBindings({ help: ['s'] }).toggleStar).toEqual([]);
+    expect(findConflicts(effectiveBindings({ help: ['r'] }))).toEqual([]);
+    const matcher = new ShortcutMatcher(effectiveBindings({ help: ['r'] }));
+    expect(matcher.press('r', 0)).toBe('help');
+    // Overriding an action with its own default keeps it.
+    expect(effectiveBindings({ reloadList: ['r'] }).reloadList).toEqual(['r']);
   });
 
   it('keeps overrides minimal', () => {

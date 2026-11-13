@@ -259,6 +259,56 @@ test.describe('reader', () => {
     await expect(page.getByRole('list', { name: 'Articles' })).toBeVisible();
   });
 
+  test('reloads the list from the server, without checking feeds, on a pull @mobile', async ({
+    page,
+    isMobile,
+    browserName,
+  }) => {
+    test.skip(!isMobile || browserName !== 'chromium', 'touch input through the DevTools protocol');
+    const checks: string[] = [];
+    page.on('request', (request) => {
+      if (/\/subscriptions\/\d+\/refresh$/.test(request.url())) checks.push(request.url());
+    });
+    await page.goto('/all');
+    const list = page.getByRole('list', { name: 'Articles' });
+    await expect(list.getByRole('link').first()).toBeVisible();
+    const box = await list.boundingBox();
+    if (!box) throw new Error('No list on screen');
+    const x = box.x + box.width / 2;
+    const y = box.y + 20;
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', dy?: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: dy === undefined ? [] : [{ x, y: y + dy }],
+      });
+    const reload = page.waitForRequest((r) => /\/api\/v1\/entries\?/.test(r.url()));
+    await touch('touchStart', 0);
+    for (let dy = 40; dy <= 240; dy += 40) await touch('touchMove', dy);
+    await touch('touchEnd');
+    await reload;
+    expect(checks).toEqual([]);
+  });
+
+  test('reloads the list from the server, without checking feeds, on r', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'keyboard');
+    const checks: string[] = [];
+    page.on('request', (request) => {
+      if (/\/subscriptions\/\d+\/refresh$/.test(request.url())) checks.push(request.url());
+    });
+    await page.goto('/all');
+    await expect(
+      page.getByRole('list', { name: 'Articles' }).getByRole('link').first(),
+    ).toBeVisible();
+    const reload = page.waitForRequest((r) => /\/api\/v1\/entries\?/.test(r.url()));
+    await page.locator('body').press('r');
+    await reload;
+    expect(checks).toEqual([]);
+  });
+
   test('keeps combined articles with wide images and code within a phone screen @mobile', async ({
     page,
     isMobile,

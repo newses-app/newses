@@ -947,6 +947,7 @@
       "closeArticle": "Close article",
       "search": "Search",
       "help": "Show this help",
+      "reloadList": "Reload list",
       "refreshFeed": "Update feed",
       "toggleHideRead": "Show or hide read feeds",
       "subscribe": "Subscribe to a feed",

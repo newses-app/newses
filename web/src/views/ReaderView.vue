@@ -24,7 +24,7 @@ import JitterText from '../components/JitterText.vue';
 import ArticlePane from '../components/reader/ArticlePane.vue';
 import CombinedList from '../components/reader/CombinedList.vue';
 import HeadlineList from '../components/reader/HeadlineList.vue';
-import { useCounters } from '../composables/useCounters.ts';
+import { COUNTERS_KEY, useCounters } from '../composables/useCounters.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useErrorText } from '../composables/useErrorText.ts';
 import { useIconSrc } from '../composables/useIconSrc.ts';
@@ -47,6 +47,7 @@ import {
 } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
 import { connectivity } from '../offline/connectivity.ts';
+import { syncRequests } from '../offline/status.ts';
 import { currentStore } from '../offline/store.ts';
 import { bridge } from '../platform/index.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -335,6 +336,32 @@ async function refresh() {
   await queryClient.invalidateQueries({ queryKey: [ENTRIES_KEY] });
 }
 
+const reloading = ref(false);
+/**
+ * Reloads this list and the counts from the server, without the server fetching any feed; with
+ * the offline store, also sends what waits and syncs the store. Offline, the list comes from the
+ * store.
+ */
+async function reloadList() {
+  if (reloading.value) return;
+  const stored = Boolean(currentStore());
+  // Without a store, the list's query would wait for the server.
+  if (!stored && !online.value) {
+    ui.notify(t('offline.needsConnection'));
+    return;
+  }
+  reloading.value = true;
+  if (stored) syncRequests.value++;
+  try {
+    await Promise.allSettled([
+      list.refetch(),
+      queryClient.invalidateQueries({ queryKey: COUNTERS_KEY }),
+    ]);
+  } finally {
+    reloading.value = false;
+  }
+}
+
 function toggleCategory() {
   const categoryId = stream.value.categoryId ?? subscription.value?.categoryId;
   const category = categories.data.value?.find((c) => c.id === categoryId);
@@ -393,6 +420,9 @@ useShortcutHandler((action: ShortcutAction) => {
       return true;
     case 'refreshFeed':
       void refresh();
+      return true;
+    case 'reloadList':
+      void reloadList();
       return true;
     case 'editFeed':
       if (subscription.value) ui.editSubscriptionId = subscription.value.id;
@@ -642,7 +672,9 @@ const showArticle = computed(
           :mark-read-on-scroll="prefs.markReadOnScroll"
           :has-more="list.hasNextPage.value"
           :loading="loading"
+          :reloading="reloading"
           @load-more="list.fetchNextPage()"
+          @reload="reloadList"
           @select="(entry) => open(entry, entryId !== null)"
           @change="(entry, state) => change([entry], state)"
           @scrolled-past="readAutomatically"
@@ -657,7 +689,9 @@ const showArticle = computed(
           :loading="loading"
           :position="listPosition"
           :returned-from="returnedFrom"
+          :reloading="reloading"
           @load-more="list.fetchNextPage()"
+          @reload="reloadList"
           @save-position="(position) => (listPosition = position)"
           @open="openedFromList"
           @toggle-star="(entry) => change([entry], { starred: !entry.starred })"

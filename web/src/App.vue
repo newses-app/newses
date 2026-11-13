@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n';
 import { useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { isDark } from './lib/appearance.ts';
-import { slow } from './lib/slow-requests.ts';
+import { loading } from './lib/pending-requests.ts';
 import { connectivity } from './offline/connectivity.ts';
 import ProfileMenu from './components/profiles/ProfileMenu.vue';
 import UpdatePrompt from './components/UpdatePrompt.vue';
@@ -72,7 +72,7 @@ function changeServer() {
 <template>
   <v-app>
     <v-progress-linear
-      v-if="slow"
+      v-if="loading"
       indeterminate
       color="primary"
       :aria-label="t('common.loading')"

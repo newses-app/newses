@@ -58,8 +58,9 @@
 | Read state | P1 | Mark read on open; optional mark read on scroll in combined mode; toggle unread |
 | Catch-up | P1 | Mark feed/category/special feed read: all, or older than 1 day / 1 week / 2 weeks |
 | Live counters | P1 | Unread counts update without reload within 5 s of ingest (SSE), falling back to polling when the stream is unavailable |
+| Reload list | Mobile refresh and Docker apps | Pulling a list down at its top on a touch screen, or `r`, reloads it and its counts from the server without checking its feeds; with offline reading on, it also syncs |
 | Keyboard shortcuts | P1 | TTRSS default bindings (`j`/`k`, `n`/`p`, `s`, `u`, `o`, `/`, `f a`, `g a`, …); `?` shows a help overlay |
-| Remappable shortcuts | P2 | Per-user keys or two-key sequences per action; settings record them, flag clashes, and reset to defaults; the help overlay shows the user's bindings |
+| Remappable shortcuts | P2 | Per-user keys or two-key sequences per action; settings record them, flag clashes, and reset to defaults; a default never takes keys the user bound; the help overlay shows the user's bindings |
 | Themes | P1 | Light, dark, follow system |
 | Custom themes | Custom Themes | Built-in Original, Terminal, Sketch, Catppuccin, Solarized, Amber monitor, E-ink, Synthwave, Gruvbox, Noir, and Saul themes; per-user adjustments of colours, fonts, text scale, corners, density, borders, shadows, and effects; named themes saved, renamed, duplicated, deleted, imported, and exported as JSON; themes published to everyone on the server, which admins can unpublish; built-in palettes meet WCAG AA, and others warn below it |
 | Reading preferences | P2 | Font family, size, line width per user |

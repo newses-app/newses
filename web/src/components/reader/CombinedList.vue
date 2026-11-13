@@ -3,6 +3,7 @@ import type { Entry, EntryState } from '@newses/shared';
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { usePrefs } from '../../composables/usePrefs.ts';
+import { usePullToRefresh } from '../../composables/usePullToRefresh.ts';
 import { useSentinel } from '../../composables/useSentinel.ts';
 import { isHighScore } from '../../lib/score.ts';
 import EntryArticle from './EntryArticle.vue';
@@ -13,12 +14,16 @@ const props = defineProps<{
   markReadOnScroll: boolean;
   hasMore: boolean;
   loading: boolean;
+  /** Whether the list is reloading from the server. */
+  reloading: boolean;
 }>();
 const emit = defineEmits<{
   loadMore: [];
   select: [entry: Entry];
   change: [entry: Entry, state: EntryState];
   scrolledPast: [entries: Entry[]];
+  /** Pulled down at the top: reload the list from the server. */
+  reload: [];
 }>();
 const { t } = useI18n();
 const { prefs } = usePrefs();
@@ -28,6 +33,8 @@ const sentinel = ref<HTMLElement | null>(null);
 useSentinel(sentinel, () => {
   if (props.hasMore && !props.loading) emit('loadMore');
 });
+
+usePullToRefresh(scroller, () => emit('reload'), { busy: () => props.reloading });
 
 // Entries scrolled entirely above the top are marked read in batches, one request per second.
 const pending = new Set<number>();
@@ -109,6 +116,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* A pull at the top reloads the list, so it must not reload the page or bounce the app. */
+.article-scroll {
+  overscroll-behavior-y: contain;
+}
 .combined-card {
   max-width: var(--article-width, 50rem);
 }

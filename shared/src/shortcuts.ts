@@ -19,6 +19,7 @@ export const SHORTCUT_ACTIONS = [
   'search',
   'help',
   'refreshFeed',
+  'reloadList',
   'toggleHideRead',
   'subscribe',
   'editFeed',

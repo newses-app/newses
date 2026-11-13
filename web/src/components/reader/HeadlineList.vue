@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router';
 import { useLabels } from '../../composables/useLabels.ts';
 import { useListPosition } from '../../composables/useListPosition.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
+import { usePullToRefresh } from '../../composables/usePullToRefresh.ts';
 import { useSentinel } from '../../composables/useSentinel.ts';
 import { formatRelative } from '../../lib/format.ts';
 import type { ListPosition } from '../../lib/list-position.ts';
@@ -25,12 +26,16 @@ const props = defineProps<{
   position: ListPosition | null;
   /** The entry the reader came back from, shown and focused once the list is back. */
   returnedFrom: number | null;
+  /** Whether the list is reloading from the server. */
+  reloading: boolean;
 }>();
 const emit = defineEmits<{
   loadMore: [];
   open: [entry: Entry];
   toggleStar: [entry: Entry];
   savePosition: [position: ListPosition];
+  /** Pulled down at the top: reload the list from the server. */
+  reload: [];
 }>();
 const { t, locale } = useI18n();
 const route = useRoute();
@@ -53,6 +58,8 @@ watch(
     list.value?.querySelector(`[data-entry="${String(id)}"]`)?.scrollIntoView({ block: 'nearest' });
   },
 );
+usePullToRefresh(list, () => emit('reload'), { busy: () => props.reloading });
+
 useListPosition(list, {
   attr: 'entry',
   count: () => props.entries.length,
@@ -69,7 +76,7 @@ const link = (entry: Entry) => ({
 </script>
 
 <template>
-  <div ref="list" class="fill-height overflow-y-auto">
+  <div ref="list" class="headline-scroll fill-height overflow-y-auto">
     <v-list
       v-if="entries.length > 0"
       density="compact"
@@ -168,6 +175,10 @@ const link = (entry: Entry) => ({
 </template>
 
 <style scoped>
+/* A pull at the top reloads the list, so it must not reload the page or bounce the app. */
+.headline-scroll {
+  overscroll-behavior-y: contain;
+}
 .headline-row {
   position: relative;
   border-block-end: thin solid rgba(var(--v-border-color), var(--v-border-opacity));

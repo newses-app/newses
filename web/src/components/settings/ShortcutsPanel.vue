@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { MAX_BINDINGS_PER_ACTION } from '@newses/shared/client';
 import { mdiPlus, mdiRestore } from '@mdi/js';
+import { useQuery } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { api } from '../../api.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import {
@@ -18,11 +20,30 @@ import {
   withOverride,
 } from '../../lib/shortcuts.ts';
 import { formatList } from '../../lib/format.ts';
+import { supportsApiMinor } from '../../lib/server-url.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
 const ui = useUiStore();
 const { prefs, update } = usePrefs();
+
+/** The API minor that added each action newer than the first: older servers refuse its bindings. */
+const ACTION_API_MINOR: Partial<Record<ShortcutAction, number>> = { reloadList: 13 };
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+});
+/** Actions newer than the server are left out; until it answers, all show. */
+const accepted = (action: ShortcutAction) => {
+  const minor = ACTION_API_MINOR[action];
+  return (
+    minor === undefined || !serverInfo.data.value || supportsApiMinor(serverInfo.data.value, minor)
+  );
+};
+const groups = computed(() =>
+  ACTION_GROUPS.map((g) => ({ ...g, actions: g.actions.filter(accepted) })),
+);
 
 const overrides = computed(() => prefs.value.shortcutBindings);
 const bindings = computed(() => effectiveBindings(overrides.value));
@@ -62,9 +83,10 @@ async function resetAll() {
 const recording = ref<{ action: ShortcutAction; keys: string[] } | null>(null);
 const restoreFocus = useReturnFocus(() => recording.value !== null);
 const sequence = computed(() => recording.value?.keys.join(' ') ?? '');
+// An action the server refuses is left out: its default gives way to the new sequence by itself.
 const clashes = computed(() =>
   recording.value && sequence.value
-    ? clashingActions(bindings.value, sequence.value, recording.value.action)
+    ? clashingActions(bindings.value, sequence.value, recording.value.action).filter(accepted)
     : [],
 );
 /** Actions bound to exactly this sequence give it up on save; chord-prefix clashes block it. */
@@ -127,7 +149,7 @@ function saveRecording() {
       }}
     </v-alert>
     <p class="text-body-medium mb-4">{{ t('shortcuts.settingsHint') }}</p>
-    <div v-for="group in ACTION_GROUPS" :key="group.group" class="mb-6">
+    <div v-for="group in groups" :key="group.group" class="mb-6">
       <h2 class="text-title-large mb-2">{{ t(`shortcuts.groups.${group.group}`) }}</h2>
       <v-table density="compact">
         <thead>

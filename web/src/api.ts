@@ -1,14 +1,14 @@
 import { ApiError, createApiClient } from '@newses/shared/client';
-import { trackSlow } from './lib/slow-requests.ts';
+import { trackLoading } from './lib/pending-requests.ts';
 import { connectivity, trackConnectivity } from './offline/connectivity.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
 
-const fetch = trackSlow(trackConnectivity(globalThis.fetch.bind(globalThis)));
+const fetch = trackLoading(trackConnectivity(globalThis.fetch.bind(globalThis)));
 
 /**
  * In the browser, a same-origin client: the session cookie authenticates and the client keeps the
- * CSRF token. In the apps, the chosen server with the bearer token. Slow requests are tracked, so
- * the app can show it is waiting, and every request tells whether it is reachable.
+ * CSRF token. In the apps, the chosen server with the bearer token. Pending requests are tracked, so
+ * the app can show it is loading, and every request tells whether it is reachable.
  */
 /** Tells the server which app is calling, for its activity statistics. */
 const client = NATIVE ? (bridge.platform === 'android' ? 'mobile' : 'desktop') : 'web';
