@@ -1,20 +1,24 @@
+import { AthenaClient } from '@aws-sdk/client-athena';
+import { S3Client } from '@aws-sdk/client-s3';
 import { SQSClient } from '@aws-sdk/client-sqs';
 import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import type pg from 'pg';
+import { ARCHIVE_TABLE } from '../../adapters/archive-format.ts';
+import { AthenaArchiveReader, AthenaClientRunner } from '../../adapters/athena-archive-reader.ts';
 import { loadConfig } from '../../adapters/env-config.ts';
 import { MarkerRealtime } from '../../adapters/marker-realtime.ts';
 import { SnsNotifier } from '../../adapters/sns-notifier.ts';
 import { SqsJobQueue } from '../../adapters/sqs-job-queue.ts';
 import { deriveKeys } from '../../core/crypto.ts';
+import type { AppConfig } from '../../core/config.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createOpsServices, type OpsServices } from '../../core/ops/index.ts';
-import type { Logger } from '../../core/ports.ts';
+import type { ArchiveReader, Logger } from '../../core/ports.ts';
 import { createDb } from '../../db/client.ts';
 import { linkToProducer } from '../../telemetry/index.ts';
 import {
-  createArchiveReader,
   createArchiveWriter,
   createBlobStore,
   createFetcher,
@@ -136,8 +140,17 @@ export async function createLambdaRuntime(role: string) {
     db,
     feedDeps,
     ops,
-    archive: createArchiveReader(config, blobs),
+    archive: createArchiveReader(config),
   };
+}
+
+/** Reads the archive with Athena over its Glue table, when the stage configures it. */
+export function createArchiveReader(config: AppConfig): ArchiveReader | null {
+  if (!config.archiveEnabled || !config.blobBucket || !config.archiveAthena) return null;
+  return new AthenaArchiveReader(
+    new AthenaClientRunner(new AthenaClient({}), config.archiveAthena),
+    { s3: new S3Client({}), bucket: config.blobBucket, table: ARCHIVE_TABLE },
+  );
 }
 
 /**

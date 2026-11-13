@@ -543,7 +543,7 @@ The settings page shows apps' connection details from `/api/v1/auth/app-password
 | `lgtm` (`observability` profile) | `grafana/otel-lgtm` | OTLP collector, Tempo, Loki, Prometheus, and Grafana on `127.0.0.1:3000`, with the dashboards from the `dashboards` volume and their provisioning file from an inline Compose `configs` entry |
 
 - No service mounts host files, so a release's compose file runs from a folder holding only it and `.env`; the project directory (`docker/` in a checkout) holds `.env`. Inline `configs` need Docker Compose 2.23.1 or later.
-- App image (`docker/Dockerfile`): Node on Alpine, pinned by index digest, for `linux/amd64` and `linux/arm64`. OCI labels come from the build arguments `NEWSES_VERSION`, `NEWSES_REVISION` (commit), and `NEWSES_SOURCE` (repository URL); the web build runs on the builder's platform.
+- App image (`docker/Dockerfile`): Node on Alpine, pinned by index digest, for `linux/amd64` and `linux/arm64`. OCI labels come from the build arguments `NEWSES_VERSION`, `NEWSES_REVISION` (commit), and `NEWSES_SOURCE` (repository URL); the web build runs on the builder's platform. It installs only the server's `dependencies`: the packages only the Lambdas load (the Athena, SNS, SQS, and SSM clients, `@fastify/aws-lambda`) are devDependencies, imported only under `entrypoints/lambda` (lint-enforced).
 
 ### AWS
 
@@ -651,7 +651,7 @@ CycloneDX 1.6, one per deliverable, composed by `infra/src/release/build-sbom.ts
 
 | Deliverable | Contents | Source |
 |---|---|---|
-| `server` | Server `dependencies` (Lambdas and Docker) | `pnpm sbom --prod` |
+| `server` | Server `dependencies` (Lambdas and Docker), and the Lambda-only devDependencies with their dependencies | `pnpm sbom --prod`, and `pnpm sbom` selected |
 | `image` | Docker image: Alpine packages, Node, `node_modules` | syft on the built image (released: the `linux/amd64` one) |
 | `web` | Web app `dependencies` | `pnpm sbom --prod` |
 | `desktop` | Web app, Electron, `electron-updater` and its dependencies | `pnpm sbom`, selected (the main process is bundled, so all are devDependencies) |

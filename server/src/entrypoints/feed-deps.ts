@@ -1,9 +1,5 @@
-import { AthenaClient } from '@aws-sdk/client-athena';
-import { S3Client } from '@aws-sdk/client-s3';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import type { PgBoss } from 'pg-boss';
-import { ARCHIVE_TABLE } from '../adapters/archive-format.ts';
-import { AthenaArchiveReader, AthenaClientRunner } from '../adapters/athena-archive-reader.ts';
 import { DuckDbArchiveReader } from '../adapters/duckdb-archive-reader.ts';
 import { InstrumentedFetcher } from '../adapters/instrumented-fetcher.ts';
 import { LocalBlobStore } from '../adapters/local-blob-store.ts';
@@ -98,19 +94,11 @@ export function createArchiveWriter(config: AppConfig, blobs: BlobStore): Archiv
 }
 
 /**
- * Reads the archive with Athena when the blobs are in S3 and Athena is configured (AWS), with
- * DuckDB when they are on local disk (Docker); otherwise the archive is written but not read.
+ * Reads the archive with DuckDB when the blobs are on local disk; with `BLOB_BUCKET` it is written
+ * but not read (the Lambdas read it with Athena, in `lambda/runtime.ts`).
  */
 export function createArchiveReader(config: AppConfig, blobs: BlobStore): ArchiveReader | null {
-  if (!config.archiveEnabled) return null;
-  if (!config.blobBucket) return new DuckDbArchiveReader(config.blobDir, blobs);
-  if (!config.archiveAthena) return null;
-  return new AthenaArchiveReader(
-    new AthenaClientRunner(new AthenaClient({}), config.archiveAthena),
-    {
-      s3: new S3Client({}),
-      bucket: config.blobBucket,
-      table: ARCHIVE_TABLE,
-    },
-  );
+  return config.archiveEnabled && !config.blobBucket
+    ? new DuckDbArchiveReader(config.blobDir, blobs)
+    : null;
 }

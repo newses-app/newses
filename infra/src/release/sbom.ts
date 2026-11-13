@@ -55,7 +55,25 @@ export interface DeliverableSources {
 }
 
 export const SOURCES: Record<Deliverable, DeliverableSources> = {
-  server: { pnpm: [{ filter: '@newses/server', prod: true }] },
+  // The Lambdas' own packages are devDependencies, so the Docker image leaves them out.
+  server: {
+    pnpm: [
+      { filter: '@newses/server', prod: true },
+      {
+        filter: '@newses/server',
+        prod: false,
+        keep: {
+          closures: [
+            '@aws-sdk/client-athena',
+            '@aws-sdk/client-sns',
+            '@aws-sdk/client-sqs',
+            '@aws-sdk/client-ssm',
+            '@fastify/aws-lambda',
+          ],
+        },
+      },
+    ],
+  },
   image: { pnpm: [], input: true },
   web: { pnpm: [{ filter: '@newses/web', prod: true }] },
   // esbuild bundles the main process, so desktop has only devDependencies: of those, the app
