@@ -69,7 +69,7 @@ export default defineConfig(
     files: ['server/src/**/*.ts'],
     ignores: [
       'server/src/entrypoints/lambda/**',
-      'server/src/adapters/{athena-archive-reader,sns-notifier,sqs-job-queue}.ts',
+      'server/src/adapters/{athena-archive-reader,ses-mail-transport,sns-notifier,sqs-job-queue}.ts',
       'server/src/**/*.test.ts',
     ],
     rules: {
@@ -80,11 +80,13 @@ export default defineConfig(
             {
               group: [
                 '@aws-sdk/client-athena',
+                '@aws-sdk/client-sesv2',
                 '@aws-sdk/client-sns',
                 '@aws-sdk/client-sqs',
                 '@aws-sdk/client-ssm',
                 '@fastify/aws-lambda',
                 '**/athena-archive-reader.ts',
+                '**/ses-mail-transport.ts',
                 '**/sns-notifier.ts',
                 '**/sqs-job-queue.ts',
               ],

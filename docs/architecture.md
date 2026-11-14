@@ -14,6 +14,7 @@
 | Auth | `@node-rs/argon2`, `otpauth` |
 | Logging | Pino (JSON), with the active trace's ids |
 | Observability | OpenTelemetry API and Node SDK (OTLP); `@fastify/otel`, pg-boss's built-in tracing, pg and Node runtime instrumentation; nodemailer for alert email. AWS: ADOT Lambda layer to X-Ray, SNS, AWS Budgets |
+| Email | nodemailer: SMTP; on AWS its SES transport (SES v2 API) |
 | Web | Vue 3, Vite, Vuetify 4, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
 | Desktop | Electron, esbuild, electron-builder |
 | Mobile | Capacitor (Android) |
@@ -75,6 +76,7 @@ Rules:
 | `Config` | Settings and secrets | Environment | Environment and SSM Parameter Store |
 | `Logger` | Structured logs | Pino | Pino |
 | `Notifier` | Tell operators when alerts open or resolve | Email over SMTP, when configured | The stage's SNS alert topic |
+| `Mailer` | Email users | nodemailer over SMTP, when `SMTP_URL` is set | nodemailer's SES transport with the stage's configuration set (`MAIL_SES_CONFIGURATION_SET`) |
 | `PushSender` | Deliver encrypted Web Push messages to the push services devices subscribed with | Web Push over HTTPS | Web Push over HTTPS |
 
 ## Web app
@@ -299,6 +301,12 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 | `jobs.backlog` | Queue | Warning | 100 or more jobs ready and waiting (pg-boss) |
 | `ingest.stale` | `all` | Critical | Enabled feeds with an unpaused subscription overdue by more than 2 hours |
 | `api.errors` | `all` | Critical | More than 5% of ≥ 20 API requests answered 5xx in the current or previous hour |
+
+## User email
+
+- Every user mail comes from `MAIL_FROM` (default `Newses <newses@host>` on the `PUBLIC_URL` host, else `localhost`); a user's address only appears as `Reply-To`.
+- `SMTP_URL` (`smtp://` or `smtps://`) turns user mail on, independent of alert email; `ALERT_EMAIL_FROM` defaults to `MAIL_FROM`. `SMTP_URL` and `MAIL_SES_CONFIGURATION_SET` exclude each other; the Docker image refuses SES, whose SDK only the functions bundle.
+- Mail sent on a schedule carries `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058); SES receives raw MIME, so the headers are kept.
 
 ## Data model
 

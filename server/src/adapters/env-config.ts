@@ -72,8 +72,10 @@ const schema = z
     AUDIT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
     OPS_HOST_HOURLY_BUDGET: z.coerce.number().int().min(1).default(200),
     SMTP_URL: z.url({ protocol: /^smtps?$/ }).optional(),
+    MAIL_FROM: z.string().min(3).optional(),
+    MAIL_SES_CONFIGURATION_SET: z.string().min(1).optional(),
     ALERT_EMAIL_TO: z.string().min(3).optional(),
-    ALERT_EMAIL_FROM: z.string().min(3).default('Newses <newses@localhost>'),
+    ALERT_EMAIL_FROM: z.string().min(3).optional(),
     ADMIN_LOGIN: z.string().min(1).optional(),
     ADMIN_PASSWORD: passwordSchema.optional(),
   })
@@ -84,6 +86,10 @@ const schema = z
   .refine((e) => e.ALERT_EMAIL_TO === undefined || e.SMTP_URL !== undefined, {
     message: 'ALERT_EMAIL_TO needs SMTP_URL',
     path: ['SMTP_URL'],
+  })
+  .refine((e) => e.SMTP_URL === undefined || e.MAIL_SES_CONFIGURATION_SET === undefined, {
+    message: 'SMTP_URL and MAIL_SES_CONFIGURATION_SET cannot both be set',
+    path: ['MAIL_SES_CONFIGURATION_SET'],
   })
   .refine(
     (e) => (e.ARCHIVE_ATHENA_WORKGROUP === undefined) === (e.ARCHIVE_ATHENA_DATABASE === undefined),
@@ -107,6 +113,11 @@ function pushTokenPairs(value: string): [string, string][] {
     });
 }
 
+/** `Newses <newses@host>` on the public URL's host, so mail aligns with the instance's domain. */
+function defaultMailFrom(publicUrl: string | undefined): string {
+  return `Newses <newses@${publicUrl ? new URL(publicUrl).hostname : 'localhost'}>`;
+}
+
 export class ConfigError extends Error {
   override name = 'ConfigError';
 }
@@ -124,6 +135,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new ConfigError(`Invalid configuration:\n  ${problems.join('\n  ')}`);
   }
   const e = result.data;
+  const mailFrom = e.MAIL_FROM ?? defaultMailFrom(e.PUBLIC_URL);
   return {
     version: e.NEWSES_VERSION,
     instanceName: e.INSTANCE_NAME ?? null,
@@ -153,9 +165,17 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       hostHourlyBudget: e.OPS_HOST_HOURLY_BUDGET,
       alertEmail:
         e.SMTP_URL && e.ALERT_EMAIL_TO
-          ? { smtpUrl: e.SMTP_URL, to: e.ALERT_EMAIL_TO, from: e.ALERT_EMAIL_FROM }
+          ? { smtpUrl: e.SMTP_URL, to: e.ALERT_EMAIL_TO, from: e.ALERT_EMAIL_FROM ?? mailFrom }
           : null,
     },
+    mail: e.SMTP_URL
+      ? { from: mailFrom, transport: { kind: 'smtp', url: e.SMTP_URL } }
+      : e.MAIL_SES_CONFIGURATION_SET
+        ? {
+            from: mailFrom,
+            transport: { kind: 'ses', configurationSet: e.MAIL_SES_CONFIGURATION_SET },
+          }
+        : null,
     fetchAllowPrivateNetworks:
       e.FETCH_ALLOW_PRIVATE_NETWORKS === true || e.FETCH_ALLOW_PRIVATE_NETWORKS.length > 0
         ? e.FETCH_ALLOW_PRIVATE_NETWORKS

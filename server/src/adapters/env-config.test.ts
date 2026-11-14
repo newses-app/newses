@@ -22,6 +22,7 @@ describe('loadConfig', () => {
       archiveAthena: null,
       feeds: { updateIntervalSeconds: 1800, purgeDays: 180, disableAfterFailures: 20 },
       ops: { retentionDays: 90, auditRetentionDays: 365, hostHourlyBudget: 200, alertEmail: null },
+      mail: null,
       fetchAllowPrivateNetworks: false,
       push: { trustedHosts: [], distributorUrl: null, tokens: new Map() },
       appSecret: APP_SECRET,
@@ -84,6 +85,44 @@ describe('loadConfig', () => {
     expect(loadConfig({ ...base, SMTP_URL: 'smtp://mail:25' }).ops.alertEmail).toBeNull();
     expect(() => loadConfig({ ...base, ALERT_EMAIL_TO: 'ops@example.com' })).toThrow(ConfigError);
     expect(() => loadConfig({ ...base, SMTP_URL: 'http://mail' })).toThrow(ConfigError);
+  });
+
+  it('emails users over SMTP or SES, from the public host unless MAIL_FROM is set', () => {
+    const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET };
+    expect(loadConfig(base).mail).toBeNull();
+    expect(loadConfig({ ...base, SMTP_URL: 'smtp://mail:25' }).mail).toEqual({
+      from: 'Newses <newses@localhost>',
+      transport: { kind: 'smtp', url: 'smtp://mail:25' },
+    });
+    expect(
+      loadConfig({
+        ...base,
+        PUBLIC_URL: 'https://reader.example.com/',
+        MAIL_SES_CONFIGURATION_SET: 'newses-dev-mail',
+      }).mail,
+    ).toEqual({
+      from: 'Newses <newses@reader.example.com>',
+      transport: { kind: 'ses', configurationSet: 'newses-dev-mail' },
+    });
+    const custom = loadConfig({
+      ...base,
+      SMTP_URL: 'smtp://mail:25',
+      MAIL_FROM: 'Reader <reader@example.com>',
+      ALERT_EMAIL_TO: 'ops@example.com',
+    });
+    expect(custom.mail?.from).toBe('Reader <reader@example.com>');
+    expect(custom.ops.alertEmail?.from).toBe('Reader <reader@example.com>');
+    expect(
+      loadConfig({
+        ...base,
+        SMTP_URL: 'smtp://mail:25',
+        ALERT_EMAIL_TO: 'ops@example.com',
+        ALERT_EMAIL_FROM: 'Alerts <ops@example.com>',
+      }).ops.alertEmail?.from,
+    ).toBe('Alerts <ops@example.com>');
+    expect(() =>
+      loadConfig({ ...base, SMTP_URL: 'smtp://mail:25', MAIL_SES_CONFIGURATION_SET: 'set' }),
+    ).toThrow(ConfigError);
   });
 
   it('parses overrides', () => {

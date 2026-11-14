@@ -65,6 +65,7 @@ export const SOURCES: Record<Deliverable, DeliverableSources> = {
         keep: {
           closures: [
             '@aws-sdk/client-athena',
+            '@aws-sdk/client-sesv2',
             '@aws-sdk/client-sns',
             '@aws-sdk/client-sqs',
             '@aws-sdk/client-ssm',

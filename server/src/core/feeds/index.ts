@@ -5,7 +5,15 @@ import { UserRateLimiter } from '../rate-limit.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Jobs } from '../jobs.ts';
 import { PrefsService } from '../prefs.ts';
-import type { ArchiveWriter, BlobStore, JobQueue, Logger, PushSender, Realtime } from '../ports.ts';
+import type {
+  ArchiveWriter,
+  BlobStore,
+  JobQueue,
+  Logger,
+  Mailer,
+  PushSender,
+  Realtime,
+} from '../ports.ts';
 import { PushService } from '../push/push-service.ts';
 import { FeedCredentialSealer } from './credentials.ts';
 import { FeedDebugger } from './debugger.ts';
@@ -30,6 +38,8 @@ export interface FeedDeps {
   realtime: Realtime;
   /** Delivers push messages to users' devices. */
   push: PushSender;
+  /** Emails users; null when the server has no mail configured. */
+  mailer: Mailer | null;
   blobs: BlobStore;
   /** Where purge writes entries before deleting them; null when the archive is off. */
   archive: ArchiveWriter | null;

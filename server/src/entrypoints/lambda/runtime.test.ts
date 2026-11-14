@@ -5,7 +5,10 @@ import type { OpsServices } from '../../core/ops/index.ts';
 import type { Logger } from '../../core/ports.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { recordSpans } from '../../test/tracing.ts';
-import { sqsHandler, trackPoolUse } from './runtime.ts';
+import { loadConfig } from '../../adapters/env-config.ts';
+import { NodemailerMailer } from '../../adapters/mailer.ts';
+import { TEST_APP_SECRET } from '../../test/fakes.ts';
+import { createLambdaMailer, sqsHandler, trackPoolUse } from './runtime.ts';
 
 let database: TestDatabase;
 let tracing: ReturnType<typeof recordSpans>;
@@ -60,5 +63,16 @@ describe('sqsHandler', () => {
     expect(span?.kind).toBe(SpanKind.CONSUMER);
     expect(span?.spanContext().traceId).not.toBe(producer.traceId);
     expect(span?.links.map((link) => link.context)).toMatchObject([producer]);
+  });
+});
+
+describe('createLambdaMailer', () => {
+  const base = { DATABASE_URL: 'postgres://db/app', APP_SECRET: TEST_APP_SECRET };
+
+  it('mails through SES or SMTP, and not at all without either', () => {
+    expect(createLambdaMailer(loadConfig(base))).toBeNull();
+    for (const env of [{ MAIL_SES_CONFIGURATION_SET: 'set' }, { SMTP_URL: 'smtp://mail:25' }]) {
+      expect(createLambdaMailer(loadConfig({ ...base, ...env }))).toBeInstanceOf(NodemailerMailer);
+    }
   });
 });

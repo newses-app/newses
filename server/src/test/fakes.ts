@@ -213,6 +213,7 @@ export function testFeedDeps(
     queue: new RecordingQueue(),
     realtime: new RecordingRealtime(),
     push: new RecordingPushSender(),
+    mailer: null,
     blobs: new MemoryBlobStore(),
     archive: null,
     settings: { updateIntervalSeconds: 1800, purgeDays: 60, disableAfterFailures: 3 },

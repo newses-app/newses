@@ -3,6 +3,7 @@ import type { PgBoss } from 'pg-boss';
 import { DuckDbArchiveReader } from '../adapters/duckdb-archive-reader.ts';
 import { InstrumentedFetcher } from '../adapters/instrumented-fetcher.ts';
 import { LocalBlobStore } from '../adapters/local-blob-store.ts';
+import { NodemailerMailer, smtpTransport } from '../adapters/mailer.ts';
 import { ParquetArchiveWriter } from '../adapters/parquet-archive-writer.ts';
 import { S3BlobStore } from '../adapters/s3-blob-store.ts';
 import { SmtpNotifier } from '../adapters/smtp-notifier.ts';
@@ -15,7 +16,14 @@ import { HttpFetcher, userAgentFor } from '../core/feeds/http.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import { JOB_DEFINITIONS, type Jobs } from '../core/jobs.ts';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
-import type { ArchiveReader, ArchiveWriter, BlobStore, Logger, Notifier } from '../core/ports.ts';
+import type {
+  ArchiveReader,
+  ArchiveWriter,
+  BlobStore,
+  Logger,
+  Mailer,
+  Notifier,
+} from '../core/ports.ts';
 import type { Db } from '../db/client.ts';
 
 /** Self-hosted adapters for the feed services, shared by the server and worker. */
@@ -35,6 +43,7 @@ export function createFeedDeps(args: {
     queue: new PgBossJobQueue<Jobs>(args.boss, JOB_DEFINITIONS),
     realtime: args.realtime,
     push: createPushSender(args.config, keys, args.logger),
+    mailer: createMailer(args.config),
     blobs,
     archive: createArchiveWriter(args.config, blobs),
     settings: args.config.feeds,
@@ -81,6 +90,21 @@ export function createPushSender(config: AppConfig, keys: Keys, logger: Logger):
 export function createNotifier(config: AppConfig): Notifier | undefined {
   const email = config.ops.alertEmail;
   return email ? new SmtpNotifier({ ...email, publicUrl: config.publicUrl }) : undefined;
+}
+
+/** User mail over SMTP when `SMTP_URL` is set; SES sending is wired in `lambda/runtime.ts`. */
+export function createMailer(config: AppConfig): Mailer | null {
+  const mail = config.mail;
+  if (!mail) return null;
+  if (mail.transport.kind !== 'smtp') {
+    throw new Error(
+      'MAIL_SES_CONFIGURATION_SET sends through SES, which only the AWS functions do',
+    );
+  }
+  return new NodemailerMailer({
+    from: mail.from,
+    createTransport: smtpTransport(mail.transport.url),
+  });
 }
 
 export function createBlobStore(config: AppConfig): BlobStore {

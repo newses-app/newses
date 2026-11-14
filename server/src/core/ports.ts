@@ -186,6 +186,24 @@ export interface Notifier {
   notify(notices: AlertNotice[]): Promise<void>;
 }
 
+/** An email to users, from the instance's own address. */
+export interface MailMessage {
+  to: string[];
+  /** The sending user's confirmed address, where replies go; never the `From`. */
+  replyTo?: string;
+  subject: string;
+  html: string;
+  /** The plain-text alternative of `html`. */
+  text: string;
+  /** Turns off what the mail was sent for with one POST (RFC 8058), for mail sent on a schedule. */
+  unsubscribeUrl?: string;
+}
+
+/** Sends email to users (articles, digests, address confirmation). */
+export interface Mailer {
+  send(message: MailMessage): Promise<void>;
+}
+
 /** A device's Web Push subscription (RFC 8030): its push service address and keys (RFC 8291). */
 export interface PushTarget {
   endpoint: string;

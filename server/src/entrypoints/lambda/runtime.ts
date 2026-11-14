@@ -7,7 +7,9 @@ import type pg from 'pg';
 import { ARCHIVE_TABLE } from '../../adapters/archive-format.ts';
 import { AthenaArchiveReader, AthenaClientRunner } from '../../adapters/athena-archive-reader.ts';
 import { loadConfig } from '../../adapters/env-config.ts';
+import { NodemailerMailer, smtpTransport } from '../../adapters/mailer.ts';
 import { MarkerRealtime } from '../../adapters/marker-realtime.ts';
+import { sesOptions, sesTransport } from '../../adapters/ses-mail-transport.ts';
 import { SnsNotifier } from '../../adapters/sns-notifier.ts';
 import { SqsJobQueue } from '../../adapters/sqs-job-queue.ts';
 import { deriveKeys } from '../../core/crypto.ts';
@@ -15,7 +17,7 @@ import type { AppConfig } from '../../core/config.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createOpsServices, type OpsServices } from '../../core/ops/index.ts';
-import type { ArchiveReader, Logger } from '../../core/ports.ts';
+import type { ArchiveReader, Logger, Mailer } from '../../core/ports.ts';
 import { createDb } from '../../db/client.ts';
 import { linkToProducer } from '../../telemetry/index.ts';
 import {
@@ -127,6 +129,7 @@ export async function createLambdaRuntime(role: string) {
     // No function holds client streams open; clients poll each user's marker from the edge.
     realtime: new MarkerRealtime(blobs, keys.changes, logger),
     push: createPushSender(config, keys, logger),
+    mailer: createLambdaMailer(config),
     blobs,
     archive: createArchiveWriter(config, blobs),
     settings: config.feeds,
@@ -142,6 +145,19 @@ export async function createLambdaRuntime(role: string) {
     ops,
     archive: createArchiveReader(config),
   };
+}
+
+/** User mail through the stage's SES configuration set, or over SMTP when `SMTP_URL` is set. */
+export function createLambdaMailer(config: AppConfig): Mailer | null {
+  const mail = config.mail;
+  if (!mail) return null;
+  return mail.transport.kind === 'ses'
+    ? new NodemailerMailer({
+        from: mail.from,
+        createTransport: sesTransport(),
+        extra: sesOptions(mail.transport.configurationSet),
+      })
+    : new NodemailerMailer({ from: mail.from, createTransport: smtpTransport(mail.transport.url) });
 }
 
 /** Reads the archive with Athena over its Glue table, when the stage configures it. */

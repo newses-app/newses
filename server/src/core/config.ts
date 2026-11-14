@@ -20,6 +20,13 @@ export interface OpsSettings {
   alertEmail: { smtpUrl: string; to: string; from: string } | null;
 }
 
+export interface MailSettings {
+  /** The instance's address every user mail comes from (`MAIL_FROM`). */
+  from: string;
+  /** SMTP (`SMTP_URL`), or the SES API with the stage's configuration set (AWS only). */
+  transport: { kind: 'smtp'; url: string } | { kind: 'ses'; configurationSet: string };
+}
+
 export interface AppConfig {
   /** Server build shown to apps (`NEWSES_VERSION`, set at build), or `dev`. */
   version: string;
@@ -51,6 +58,8 @@ export interface AppConfig {
   downloadsDir: string | null;
   feeds: FeedSettings;
   ops: OpsSettings;
+  /** How the server emails users; null when it cannot. */
+  mail: MailSettings | null;
   /** Private addresses feeds may be fetched from: true for all, or CIDRs. Blocked by default. */
   fetchAllowPrivateNetworks: boolean | string[];
   push: {
