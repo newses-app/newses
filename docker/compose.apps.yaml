@@ -28,7 +28,8 @@ services:
       - apps-gradle:/home/node/.gradle
       - apps-cache:/home/node/.cache
 
-# Empty values build no APK: then set APPS_PLATFORMS=linux.
+# Compose refuses to run unless each variable is in .env, even empty; empty values build no APK,
+# so then set APPS_PLATFORMS=linux.
 secrets:
   android_keystore:
     environment: ANDROID_KEYSTORE_BASE64
