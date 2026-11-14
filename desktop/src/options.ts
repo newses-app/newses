@@ -7,6 +7,11 @@ export const DEFAULT_OPTIONS: DesktopOptions = {
   launchAtLogin: false,
 };
 
+/** The options in effect: the defaults with the reader's changes. */
+export const currentOptions = (settings: {
+  get(): { options?: Partial<DesktopOptions> | undefined };
+}): DesktopOptions => ({ ...DEFAULT_OPTIONS, ...settings.get().options });
+
 /** Launched at login: starts in the tray when `closeToTray` is on. */
 export const HIDDEN_ARG = '--hidden';
 

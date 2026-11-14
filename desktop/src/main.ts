@@ -1,45 +1,22 @@
-// The desktop app: the native web build in a hardened window, served from app://newses.
+// The desktop app: the native web build in a hardened window (window.ts), served from app://newses
+// (serve.ts), answering the bridge (ipc.ts).
 import { dirname, join } from 'node:path';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
-import { createProfiles, httpsOrigin, profileChanges, profileId } from '@newses/shared/profiles';
+import type { ProfileList } from '@newses/shared';
 import { NATIVE_CSP } from '@newses/shared/web-csp';
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  type IpcMainInvokeEvent,
-  ipcMain,
-  Menu,
-  nativeTheme,
-  net,
-  Notification,
-  powerMonitor,
-  protocol,
-  safeStorage,
-  screen,
-  session,
-  shell,
-} from 'electron';
+import { app, type BrowserWindow, Menu, powerMonitor, protocol, session, shell } from 'electron';
 import { appMenu } from './app-menu.ts';
 import { setLaunchAtLogin, setTray } from './background.ts';
 import { setLanguage } from './i18n.ts';
-import {
-  DEFAULT_OPTIONS,
-  HIDDEN_ARG,
-  notificationTarget,
-  parseOptions,
-  shownOptions,
-} from './options.ts';
+import { registerBridge } from './ipc.ts';
+import { closeShown } from './notifications.ts';
+import { currentOptions, HIDDEN_ARG } from './options.ts';
 import { portableDataDir } from './portable.ts';
-import { settingsProfileStorage } from './profiles.ts';
-import { openSettings, type Settings, type SettingsStore } from './settings.ts';
-import { createTokenStore } from './token.ts';
-import { APP_ORIGIN, APP_SCHEME, appFilePath, externalUrl, isAppUrl } from './urls.ts';
-import { themeBackground, themeSource, themeText } from './theme.ts';
+import { serveApp } from './serve.ts';
+import { openSettings, type SettingsStore } from './settings.ts';
+import { APP_SCHEME } from './urls.ts';
 import { startUpdater, type Updater } from './updater.ts';
-import { centered, onScreen, restoreBounds } from './window-state.ts';
+import { createWindow } from './window.ts';
 
 const APP_ID = 'app.newses';
 const WEB_DIR = join(__dirname, 'web');
@@ -54,8 +31,6 @@ const PERMISSIONS = new Set(['notifications', 'clipboard-sanitized-write']);
  * end, transparent over it and drawn in the theme's text colour.
  */
 const CONTROLS_OVERLAY = process.platform === 'win32' || process.platform === 'linux';
-/** Vuetify's compact app bar. */
-const TITLE_BAR_HEIGHT = 48;
 
 /** The Windows portable exe: its data folder beside it, or null for any other install. */
 const PORTABLE_DATA = portableDataDir(process.env, process.platform);
@@ -86,23 +61,6 @@ let window: BrowserWindow | null = null;
 let updater: Updater | null = null;
 /** Set once quitting starts, so closing to the tray does not stop it. */
 let quitting = false;
-/**
- * The notification shown last, kept until the next replaces it: one that is garbage collected
- * loses its click, and on Windows it stays in Action Center after its banner closes.
- */
-let shown: Notification | null = null;
-
-/** Takes the last notification off the screen and out of the notification centre. */
-function closeShown() {
-  shown?.close();
-  shown = null;
-}
-
-const options = (settings: SettingsStore) => ({ ...DEFAULT_OPTIONS, ...settings.get().options });
-
-const DEFAULT_SIZE = { width: 1200, height: 800 };
-const workAreas = () => screen.getAllDisplays().map((display) => display.workArea);
-const defaultBounds = () => centered(DEFAULT_SIZE, screen.getPrimaryDisplay().workArea);
 
 function showWindow() {
   if (!window) return;
@@ -124,149 +82,8 @@ const trayActions = {
   },
 };
 
-function applyBackground(settings: SettingsStore) {
-  setTray(options(settings).closeToTray, trayActions);
-}
-
-async function serveApp(request: Request): Promise<Response> {
-  if (DEV_SERVER) {
-    const { pathname, search } = new URL(request.url);
-    return net.fetch(`${DEV_SERVER}${pathname}${search}`);
-  }
-  const file = appFilePath(WEB_DIR, request.url);
-  if (!file) return new Response('Not found', { status: 404 });
-  try {
-    const response = await net.fetch(pathToFileURL(file).href);
-    const headers = new Headers(response.headers);
-    headers.set('content-security-policy', CSP);
-    headers.set('x-content-type-options', 'nosniff');
-    return new Response(response.body, { status: response.status, headers });
-  } catch {
-    return new Response('Not found', { status: 404 });
-  }
-}
-
-/** Bridge calls are answered only for the app's own pages. */
-function handle(channel: string, listener: (...args: unknown[]) => unknown) {
-  ipcMain.handle(`bridge:${channel}`, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-    if (!isAppUrl(event.senderFrame?.url ?? '')) throw new Error('Not allowed');
-    return listener(...args);
-  });
-}
-
-const text = (value: unknown, max: number) =>
-  typeof value === 'string' && value.length <= max ? value : null;
-
-function checked<T>(value: T | null, what: string): T {
-  if (value === null) throw new Error(`Invalid ${what}`);
-  return value;
-}
-
-/** Answers the app's bridge calls; returns a function that shows the profiles in the tray. */
-function registerBridge(settings: SettingsStore) {
-  const tokens = createTokenStore(settings, safeStorage, process.platform);
-  const profiles = createProfiles(settingsProfileStorage(settings, tokens));
-  const showProfiles = async () => {
-    setTray(options(settings).closeToTray, trayActions, await profiles.list());
-  };
-  /** A change to the profiles, or whether one is signed in, shows in the tray. */
-  const changing = async <T>(change: Promise<T>): Promise<T> => {
-    try {
-      return await change;
-    } finally {
-      void showProfiles();
-    }
-  };
-  handle('getProfiles', () => profiles.list());
-  handle('addProfile', (url) => changing(profiles.add(checked(httpsOrigin(url), 'server'))));
-  handle('updateProfile', (id, changes) =>
-    changing(
-      profiles.update(
-        checked(profileId(id), 'profile'),
-        checked(profileChanges(changes), 'changes'),
-      ),
-    ),
-  );
-  handle('setActiveProfile', (id) =>
-    changing(profiles.setActive(checked(profileId(id), 'profile'))),
-  );
-  handle('removeProfile', (id) => changing(profiles.remove(checked(profileId(id), 'profile'))));
-  handle('getToken', () => profiles.getToken());
-  handle('setToken', (token) => changing(profiles.setToken(checked(text(token, 1024), 'token'))));
-  handle('clearToken', () => changing(profiles.clearToken()));
-  handle('openExternal', async (url) => {
-    const target = externalUrl(text(url, 8192) ?? '');
-    if (target) await shell.openExternal(target);
-  });
-  handle('saveFile', async (file) => {
-    const { name, data } = (file ?? {}) as { name?: unknown; data?: unknown };
-    const fileName = text(name, 255);
-    const contents = text(data, 50 * 1024 * 1024);
-    if (!fileName || contents === null || !window) return false;
-    const result = await dialog.showSaveDialog(window, {
-      defaultPath: join(app.getPath('downloads'), fileName),
-    });
-    if (result.canceled || !result.filePath) return false;
-    await writeFile(result.filePath, contents);
-    return true;
-  });
-  handle('notify', (value) => {
-    const { title, body, target } = (value ?? {}) as Record<string, unknown>;
-    if (!Notification.isSupported()) return;
-    const path = notificationTarget(target);
-    // The target is a path in this profile's data; after a move to another it only opens the app.
-    const profile = settings.get().activeProfile;
-    const notification = new Notification({
-      title: text(title, 256) ?? '',
-      body: text(body, 1024) ?? '',
-    });
-    notification.on('click', () => {
-      showWindow();
-      if (path && settings.get().activeProfile === profile)
-        window?.webContents.send('bridge:navigate', path);
-    });
-    // Each is the running total so far: it replaces the last rather than stacking up.
-    closeShown();
-    shown = notification;
-    notification.show();
-  });
-  handle('getDesktopOptions', () => shownOptions(options(settings), PORTABLE));
-  handle('setDesktopOptions', async (value) => {
-    const changes = parseOptions(value, PORTABLE);
-    if (!changes) throw new Error('Invalid options');
-    await settings.update({ options: { ...settings.get().options, ...changes } });
-    applyBackground(settings);
-    if (changes.launchAtLogin !== undefined) await setLaunchAtLogin(changes.launchAtLogin);
-  });
-  // `system` lets Electron follow the OS again; pinning light or dark would stop that for good.
-  handle('setLanguage', async (code) => {
-    if (typeof code !== 'string') return;
-    const language = setLanguage([code]);
-    if (language === settings.get().language) return;
-    buildMenu();
-    void showProfiles();
-    await settings.update({ language });
-  });
-  handle('setTheme', async (theme) => {
-    nativeTheme.themeSource = themeSource(theme);
-    const saved = settings.get();
-    const changes: Settings = {};
-    const background = themeBackground(theme);
-    if (background) {
-      window?.setBackgroundColor(background);
-      if (background !== saved.background) changes.background = background;
-    }
-    const text = themeText(theme);
-    if (text) {
-      if (CONTROLS_OVERLAY) window?.setTitleBarOverlay({ symbolColor: text });
-      if (text !== saved.text) changes.text = text;
-    }
-    if (Object.keys(changes).length > 0) await settings.update(changes);
-  });
-  handle('getUpdateStatus', () => updater?.status() ?? { state: 'unsupported' });
-  handle('checkForUpdates', () => updater?.check());
-  handle('installUpdate', () => updater?.install());
-  return showProfiles;
+function applyTray(settings: SettingsStore, profiles?: ProfileList) {
+  setTray(currentOptions(settings).closeToTray, trayActions, profiles);
 }
 
 function buildMenu() {
@@ -286,81 +103,6 @@ function buildMenu() {
       }),
     ),
   );
-}
-
-function openExternally(url: string) {
-  const target = externalUrl(url);
-  if (target) void shell.openExternal(target);
-}
-
-function createWindow(settings: SettingsStore, hidden: boolean) {
-  const saved = settings.get().window;
-  const bounds = restoreBounds(saved, workAreas());
-  const win = new BrowserWindow({
-    ...(bounds ?? defaultBounds()),
-    minWidth: 360,
-    minHeight: 480,
-    show: false,
-    title: 'Newses',
-    autoHideMenuBar: true,
-    backgroundColor:
-      themeBackground(settings.get()) ?? (nativeTheme.shouldUseDarkColors ? '#121212' : '#ffffff'),
-    ...(CONTROLS_OVERLAY && {
-      titleBarStyle: 'hidden',
-      titleBarOverlay: {
-        color: '#00000000',
-        symbolColor:
-          themeText(settings.get()) ?? (nativeTheme.shouldUseDarkColors ? '#ffffff' : '#000000'),
-        height: TITLE_BAR_HEIGHT,
-      },
-    }),
-    icon: join(__dirname, 'icon.png'),
-    webPreferences: {
-      preload: join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      webviewTag: false,
-      additionalArguments: [`--newses-version=${app.getVersion()}`],
-    },
-  });
-  if (bounds && saved?.maximized) win.maximize();
-  win.once('ready-to-show', () => {
-    if (!hidden) win.show();
-  });
-  win.on('close', (event) => {
-    // A minimized window, or one parked off-screen (WSLg), keeps the last bounds on a screen.
-    const normal = win.getNormalBounds();
-    if (!win.isMinimized() && onScreen(normal, workAreas()))
-      void settings.update({ window: { ...normal, maximized: win.isMaximized() } });
-    // The app keeps running, and checking for new entries, in the tray.
-    if (!quitting && options(settings).closeToTray) {
-      event.preventDefault();
-      win.hide();
-    }
-  });
-  win.on('closed', () => {
-    window = null;
-  });
-  // Back at the window, the new entries are in front of the reader.
-  win.on('focus', closeShown);
-
-  // The app never navigates away from itself: links to other sites open in the system browser.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    openExternally(url);
-    return { action: 'deny' };
-  });
-  win.webContents.on('will-navigate', (event, url) => {
-    if (isAppUrl(url)) return;
-    event.preventDefault();
-    openExternally(url);
-  });
-  win.webContents.on('will-redirect', (event, url) => {
-    if (!isAppUrl(url)) event.preventDefault();
-  });
-
-  void win.loadURL(`${APP_ORIGIN}/`);
-  return win;
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -385,18 +127,39 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionCheckHandler((_contents, permission) =>
       PERMISSIONS.has(permission),
     );
-    protocol.handle(APP_SCHEME, serveApp);
-    const showProfiles = registerBridge(settings);
+    protocol.handle(APP_SCHEME, serveApp({ webDir: WEB_DIR, csp: CSP, devServer: DEV_SERVER }));
+    const showProfiles = registerBridge({
+      settings,
+      portable: PORTABLE,
+      controlsOverlay: CONTROLS_OVERLAY,
+      window: () => window,
+      updater: () => updater,
+      showWindow,
+      buildMenu,
+      applyTray: (profiles) => {
+        applyTray(settings, profiles);
+      },
+    });
     const { language } = settings.get();
     setLanguage([...(language ? [language] : []), ...app.getPreferredSystemLanguages()]);
     buildMenu();
     // Started at login: straight to the tray, when there is one.
-    const hidden = process.argv.includes(HIDDEN_ARG) && options(settings).closeToTray;
-    window = createWindow(settings, hidden);
-    applyBackground(settings);
+    window = createWindow({
+      settings,
+      hidden: process.argv.includes(HIDDEN_ARG) && currentOptions(settings).closeToTray,
+      controlsOverlay: CONTROLS_OVERLAY,
+      icon: join(__dirname, 'icon.png'),
+      preload: join(__dirname, 'preload.cjs'),
+      quitting: () => quitting,
+      onClosed: () => {
+        window = null;
+      },
+      onFocus: closeShown,
+    });
+    applyTray(settings);
     void showProfiles();
     // Re-registered, so a moved AppImage or a reinstall still starts at login.
-    if (!PORTABLE && options(settings).launchAtLogin) void setLaunchAtLogin(true);
+    if (!PORTABLE && currentOptions(settings).launchAtLogin) void setLaunchAtLogin(true);
     powerMonitor.on('resume', refresh);
     powerMonitor.on('unlock-screen', refresh);
     updater = startUpdater((status) => {
