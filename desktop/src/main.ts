@@ -1,7 +1,6 @@
 // The desktop app: the native web build in a hardened window (window.ts), served from app://newses
 // (serve.ts), answering the bridge (ipc.ts).
 import { dirname, join } from 'node:path';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import type { ProfileList } from '@newses/shared';
 import { NATIVE_CSP } from '@newses/shared/web-csp';
 import { app, type BrowserWindow, Menu, powerMonitor, protocol, session, shell } from 'electron';
@@ -11,7 +10,7 @@ import { setLanguage } from './i18n.ts';
 import { registerBridge } from './ipc.ts';
 import { closeShown } from './notifications.ts';
 import { currentOptions, HIDDEN_ARG } from './options.ts';
-import { portableDataDir } from './portable.ts';
+import { portableDataDir, usableDataDir } from './portable.ts';
 import { serveApp } from './serve.ts';
 import { openSettings, type SettingsStore } from './settings.ts';
 import { APP_SCHEME } from './urls.ts';
@@ -36,17 +35,8 @@ const CONTROLS_OVERLAY = process.platform === 'win32' || process.platform === 'l
 const PORTABLE_DATA = portableDataDir(process.env, process.platform);
 const PORTABLE = PORTABLE_DATA !== null;
 // Before the single-instance lock, which, like every path the app keeps data in, follows userData.
-if (PORTABLE_DATA) {
-  try {
-    mkdirSync(PORTABLE_DATA, { recursive: true });
-    const probe = join(PORTABLE_DATA, '.write-check');
-    writeFileSync(probe, '');
-    rmSync(probe);
-    app.setPath('userData', PORTABLE_DATA);
-  } catch {
-    // A read-only folder: the data stays in the user's profile, as for the zip.
-  }
-}
+// A read-only folder leaves the data in the user's profile, as for the zip.
+if (PORTABLE_DATA && usableDataDir(PORTABLE_DATA)) app.setPath('userData', PORTABLE_DATA);
 
 protocol.registerSchemesAsPrivileged([
   {

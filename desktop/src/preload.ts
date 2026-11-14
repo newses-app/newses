@@ -1,17 +1,6 @@
-// Exposes the platform bridge to the web app; everything runs in the main process over IPC.
-import type {
-  AppNotification,
-  AppTheme,
-  DesktopOptions,
-  NetworkStatus,
-  PlatformBridge,
-  Profile,
-  ProfileChanges,
-  ProfileList,
-  SaveFile,
-  UpdateStatus,
-} from '@newses/shared';
+// Exposes the platform bridge (renderer-bridge.ts) to the web app.
 import { contextBridge, ipcRenderer } from 'electron';
+import { createDesktopBridge } from './renderer-bridge.ts';
 
 // The preload runs in the window, but is typed with the main process's libraries, which have no DOM.
 declare const navigator: { readonly onLine: boolean };
@@ -20,91 +9,7 @@ declare const window: {
   removeEventListener(type: 'online' | 'offline', listener: () => void): void;
 };
 
-const invoke = <T>(method: string, ...args: unknown[]) =>
-  ipcRenderer.invoke(`bridge:${method}`, ...args) as Promise<T>;
-
-const VERSION_ARG = '--newses-version=';
-
-// Single handlers, replaced by later registrations.
-let navigate: (target: string) => void = () => undefined;
-let selectProfile: (id: string) => void = () => undefined;
-const refreshers = new Set<() => void>();
-ipcRenderer.on('bridge:navigate', (_event, target: string) => {
-  navigate(target);
-});
-ipcRenderer.on('bridge:selectProfile', (_event, id: string) => {
-  selectProfile(id);
-});
-ipcRenderer.on('bridge:refresh', () => {
-  for (const listener of refreshers) listener();
-});
-
-/** Chromium tells whether there is a network, not which kind. */
-const network = (): NetworkStatus => ({ connected: navigator.onLine, wifi: null });
-
-const bridge: PlatformBridge = {
-  platform: 'desktop',
-  appVersion:
-    process.argv.find((arg) => arg.startsWith(VERSION_ARG))?.slice(VERSION_ARG.length) ?? '',
-  getProfiles: () => invoke<ProfileList>('getProfiles'),
-  addProfile: (serverUrl: string) => invoke<Profile>('addProfile', serverUrl),
-  updateProfile: (id: string, changes: ProfileChanges) =>
-    invoke<undefined>('updateProfile', id, changes),
-  setActiveProfile: (id: string) => invoke<undefined>('setActiveProfile', id),
-  removeProfile: (id: string) => invoke<string | null>('removeProfile', id),
-  onProfileSelected: (handler) => {
-    selectProfile = handler;
-  },
-  getToken: () => invoke<string | null>('getToken'),
-  setToken: (token: string) => invoke<undefined>('setToken', token),
-  clearToken: () => invoke<undefined>('clearToken'),
-  openExternal: (url: string) => invoke<undefined>('openExternal', url),
-  saveFile: (file: SaveFile) => invoke<boolean>('saveFile', file),
-  notify: (notification: AppNotification) => invoke<undefined>('notify', notification),
-  // The window is granted the notification permission; the system's own settings may still mute them.
-  notificationAccess: () => Promise.resolve('granted'),
-  onNavigate: (handler) => {
-    navigate = handler;
-  },
-  onRefresh: (listener) => {
-    refreshers.add(listener);
-    return () => {
-      refreshers.delete(listener);
-    };
-  },
-  getNetwork: () => Promise.resolve(network()),
-  onNetworkChange: (listener) => {
-    const changed = () => {
-      listener(network());
-    };
-    window.addEventListener('online', changed);
-    window.addEventListener('offline', changed);
-    return () => {
-      window.removeEventListener('online', changed);
-      window.removeEventListener('offline', changed);
-    };
-  },
-  // The desktop app keeps running in the tray, where it syncs on its own schedule.
-  setBackgroundSync: () => Promise.resolve(),
-  takeBackgroundSync: () => Promise.resolve([]),
-  pushStatus: () => Promise.resolve({ state: 'unsupported' }),
-  choosePushService: () => Promise.resolve({ state: 'unsupported' }),
-  getDesktopOptions: () => invoke<DesktopOptions>('getDesktopOptions'),
-  setDesktopOptions: (options) => invoke<undefined>('setDesktopOptions', options),
-  // Sharing to the app is Android's.
-  onShare: () => undefined,
-  setTheme: (theme: AppTheme) => invoke<undefined>('setTheme', theme),
-  setLanguage: (code: string) => invoke<undefined>('setLanguage', code),
-  // Desktop has no system back button.
-  onBackButton: () => undefined,
-  onUpdateStatus: (listener) => {
-    ipcRenderer.on('bridge:updateStatus', (_event, status: UpdateStatus) => {
-      listener(status);
-    });
-    void invoke<UpdateStatus>('getUpdateStatus').then(listener);
-  },
-  checkForUpdates: () => invoke<undefined>('checkForUpdates'),
-  installUpdate: () => invoke<undefined>('installUpdate'),
-};
-
-contextBridge.exposeInMainWorld('rssReaderBridge', bridge);
+contextBridge.exposeInMainWorld(
+  'rssReaderBridge',
+  createDesktopBridge(ipcRenderer, { argv: process.argv, navigator, window }),
+);

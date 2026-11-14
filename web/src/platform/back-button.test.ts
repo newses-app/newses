@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { handleBack } from './back-button.ts';
+import { createMemoryHistory, createRouter, createWebHistory } from 'vue-router';
+import { appBackTargets, handleBack } from './back-button.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -37,5 +38,35 @@ describe('handleBack', () => {
 
   it('lets the app exit at the start of its history', () => {
     expect(handleBack(document, targets())).toBe(false);
+  });
+});
+
+describe('appBackTargets', () => {
+  it('closes the drawer only where it covers the page', () => {
+    const ui = { drawer: true };
+    const router = createRouter({ history: createMemoryHistory(), routes: [] });
+    const { closeDrawer } = appBackTargets(document, ui, router);
+    document.body.innerHTML = '<nav class="v-navigation-drawer v-navigation-drawer--active"></nav>';
+    expect(closeDrawer()).toBe(false);
+    expect(ui.drawer).toBe(true);
+    document.body.innerHTML =
+      '<nav class="v-navigation-drawer v-navigation-drawer--temporary v-navigation-drawer--active"></nav>';
+    expect(closeDrawer()).toBe(true);
+    expect(ui.drawer).toBe(false);
+  });
+
+  it("goes back in the app's history, until its start", async () => {
+    // Memory history keeps no `back` in its state; the browser's does.
+    const router = createRouter({
+      history: createWebHistory(),
+      routes: [{ path: '/:any(.*)', component: { render: () => null } }],
+    });
+    const back = vi.spyOn(router, 'back');
+    const { goBack } = appBackTargets(document, { drawer: false }, router);
+    await router.push('/all');
+    expect(goBack()).toBe(false);
+    await router.push('/f7');
+    expect(goBack()).toBe(true);
+    expect(back).toHaveBeenCalledOnce();
   });
 });

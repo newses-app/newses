@@ -16,7 +16,7 @@ import { requestPersistence } from './offline/db.ts';
 import { loadOfflineSettings } from './offline/settings.ts';
 import { currentStore } from './offline/store.ts';
 import { bridge, connection, NATIVE } from './platform/index.ts';
-import { handleBack } from './platform/back-button.ts';
+import { appBackTargets, handleBack } from './platform/back-button.ts';
 import { switchProfile } from './platform/profiles.ts';
 import { routeExternalLinks } from './platform/external-links.ts';
 import { trackWindowControls } from './platform/window-controls.ts';
@@ -59,23 +59,7 @@ createApp(App)
   .mount('#app');
 
 const ui = useUiStore(pinia);
-bridge.onBackButton(() =>
-  handleBack(document, {
-    // Only the narrow layout's drawer covers the page; the wide one stays open.
-    closeDrawer: () => {
-      if (!document.querySelector('.v-navigation-drawer--temporary.v-navigation-drawer--active')) {
-        return false;
-      }
-      ui.drawer = false;
-      return true;
-    },
-    goBack: () => {
-      if (!router.options.history.state.back) return false;
-      router.back();
-      return true;
-    },
-  }),
-);
+bridge.onBackButton(() => handleBack(document, appBackTargets(document, ui, router)));
 
 // A clicked notification opens its feed or category.
 bridge.onNavigate((target) => void router.push(target));

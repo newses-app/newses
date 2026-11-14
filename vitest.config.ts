@@ -1,6 +1,24 @@
 import { availableParallelism } from 'node:os';
 import { defineConfig } from 'vitest/config';
 
+/**
+ * Entrypoints and scripts that only wire tested modules together and run as they load, so no
+ * test imports them. Each is named, so a new file is covered until it is shown to be wiring
+ * only; move any logic out before adding a file here.
+ */
+const STARTUP_WIRING = [
+  'server/src/entrypoints/{server,cli,migrate,worker}.ts',
+  'server/src/entrypoints/lambda/{api,extract,favicon,fetch,migrate,tick}.ts',
+  'server/src/telemetry/{sdk,register}.ts',
+  'infra/src/main.ts',
+  'infra/src/release/{build-openapi,build-sbom,publish,publish-image,upload-sbom}.ts',
+  'shared/src/{coverage,locale}-status.ts',
+  'web/src/main.ts',
+  'web/src/worker/sw.ts',
+  'desktop/src/{main,preload}.ts',
+  'mobile/src/bridge.ts',
+];
+
 export default defineConfig({
   test: {
     projects: ['desktop', 'infra', 'mobile', 'server', 'shared', 'web'],
@@ -14,7 +32,7 @@ export default defineConfig({
       provider: 'v8',
       // Files no test imports count too, at 0%.
       include: ['{desktop,infra,mobile,server,shared,web}/src/**/*.{ts,vue}'],
-      exclude: ['**/*.test.ts', '**/*.d.ts', '*/src/test/**'],
+      exclude: ['**/*.test.ts', '**/*.d.ts', '*/src/test/**', ...STARTUP_WIRING],
       // LCOV for Sonar, HTML to browse, the JSON summary for `pnpm coverage:status`.
       reporter: ['text-summary', 'json-summary', 'lcov', 'html'],
       reportsDirectory: 'coverage',

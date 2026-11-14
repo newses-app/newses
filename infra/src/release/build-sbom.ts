@@ -9,20 +9,8 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { versionFromTag } from '@newses/shared/release';
 import { REPO_ROOT } from '../config.ts';
-import {
-  type Bom,
-  type Deliverable,
-  DELIVERABLES,
-  deliverableRoot,
-  isFirstParty,
-  mergeBoms,
-  type PnpmSource,
-  SOURCES,
-  SPEC_VERSION,
-  sbomName,
-  select,
-  splice,
-} from './sbom.ts';
+import { checkSbomOptions, deliverableBom } from './deliverable-bom.ts';
+import { type Bom, sbomName } from './sbom.ts';
 
 const { values } = parseArgs({
   options: {
@@ -32,18 +20,7 @@ const { values } = parseArgs({
     input: { type: 'string' },
   },
 });
-const deliverable = values.deliverable as Deliverable | undefined;
-if (!deliverable || !DELIVERABLES.includes(deliverable) || !values.out) {
-  throw new Error(
-    `Usage: build-sbom.ts --deliverable ${DELIVERABLES.join('|')} --out DIR [--tag TAG] [--input FILE]`,
-  );
-}
-const sources = SOURCES[deliverable];
-if (Boolean(sources.input) !== Boolean(values.input)) {
-  throw new Error(
-    sources.input ? `${deliverable} needs --input` : `${deliverable} takes no --input`,
-  );
-}
+const { deliverable, out } = checkSbomOptions(values);
 const version = versionFromTag(values.tag).name;
 
 function run(command: string, args: string[], options: SpawnSyncOptions = {}) {
@@ -59,41 +36,22 @@ function run(command: string, args: string[], options: SpawnSyncOptions = {}) {
   return String(result.stdout);
 }
 
-const fromPnpm = (source: PnpmSource) => {
-  const bom = JSON.parse(
-    run('pnpm', [
-      '--silent',
-      'sbom',
-      '--sbom-format',
-      'cyclonedx',
-      '--sbom-spec-version',
-      SPEC_VERSION,
-      '--filter',
-      source.filter,
-      ...(source.prod ? ['--prod'] : []),
-    ]),
-  ) as Bom;
-  return source.keep ? select(bom, source.keep) : bom;
-};
-
-const fromGradle = async () => {
-  const android = join(REPO_ROOT, 'mobile/android');
-  const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
-  run(gradlew, ['-q', ':app:cyclonedxDirectBom'], { cwd: android, stdio: 'inherit' });
-  const path = join(android, 'app/build/reports/cyclonedx-direct/bom.json');
-  return JSON.parse(await readFile(path, 'utf8')) as Bom;
-};
-
-const inputs = sources.pnpm.map(fromPnpm);
-if (sources.gradle) inputs.push(await fromGradle());
-if (values.input) inputs.push(JSON.parse(await readFile(values.input, 'utf8')) as Bom);
+const readJson = async (path: string) => JSON.parse(await readFile(path, 'utf8')) as Bom;
 
 const { repository } = JSON.parse(await readFile(join(REPO_ROOT, 'package.json'), 'utf8')) as {
   repository?: { url?: string };
 };
-const root = deliverableRoot(deliverable, version, repository?.url);
-const bom = splice(mergeBoms(inputs, root), isFirstParty);
-await mkdir(values.out, { recursive: true });
-const path = join(values.out, sbomName(version, deliverable));
+const bom = await deliverableBom(deliverable, version, repository?.url, {
+  pnpm: (args) => JSON.parse(run('pnpm', args)) as Bom,
+  gradle: () => {
+    const android = join(REPO_ROOT, 'mobile/android');
+    const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
+    run(gradlew, ['-q', ':app:cyclonedxDirectBom'], { cwd: android, stdio: 'inherit' });
+    return readJson(join(android, 'app/build/reports/cyclonedx-direct/bom.json'));
+  },
+  input: values.input === undefined ? undefined : await readJson(values.input),
+});
+await mkdir(out, { recursive: true });
+const path = join(out, sbomName(version, deliverable));
 await writeFile(path, `${JSON.stringify(bom, null, 2)}\n`);
 console.log(`Wrote ${path} (${String(bom.components?.length ?? 0)} components)`);
