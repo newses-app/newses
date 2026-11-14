@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import type {
-  Entry,
-  Filter,
-  FilterAction,
-  FilterActionType,
-  FilterField,
-  FilterRequest,
-} from '@newses/shared';
+import type { Entry, Filter } from '@newses/shared';
 import {
   FILTER_ACTIONS,
   FILTER_FIELDS,
@@ -25,6 +18,16 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
+import {
+  draftComplete,
+  draftOf,
+  filterRequest,
+  type FilterDraft,
+  movedOrder,
+  newAction,
+  newDraft,
+  newRule,
+} from '../../lib/filter-draft.ts';
 import { formatList } from '../../lib/format.ts';
 import { api } from '../../api.ts';
 import { useErrorText } from '../../composables/useErrorText.ts';
@@ -36,31 +39,6 @@ import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const FILTERS_KEY = ['filters'] as const;
-
-interface RuleDraft {
-  field: FilterField;
-  pattern: string;
-  inverse: boolean;
-  /** `s<id>` for subscriptions, `c<id>` for categories. */
-  scope: string[];
-}
-
-interface ActionDraft {
-  type: FilterActionType;
-  labelId: number | null;
-  tag: string;
-  score: number;
-}
-
-interface Draft {
-  filter: Filter | null;
-  title: string;
-  enabled: boolean;
-  matchAny: boolean;
-  inverse: boolean;
-  rules: RuleDraft[];
-  actions: ActionDraft[];
-}
 
 const { t, locale } = useI18n();
 
@@ -80,7 +58,7 @@ const subscriptions = useSubscriptions();
 const categories = useCategories();
 const labels = useLabels();
 
-const editing = ref<Draft | null>(null);
+const editing = ref<FilterDraft | null>(null);
 const restoreFocus = useReturnFocus(() => editing.value !== null);
 const busy = ref(false);
 const preview = ref<{ checked: number; matched: number; matches: Entry[] } | null>(null);
@@ -103,93 +81,17 @@ const labelItems = computed(() =>
   (labels.data.value ?? []).map((l) => ({ value: l.id, title: l.caption })),
 );
 
-const newRule = (): RuleDraft => ({ field: 'title', pattern: '', inverse: false, scope: [] });
-const newAction = (): ActionDraft => ({ type: 'markRead', labelId: null, tag: '', score: 0 });
-
 function newFilter() {
   preview.value = null;
-  editing.value = {
-    filter: null,
-    title: '',
-    enabled: true,
-    matchAny: false,
-    inverse: false,
-    rules: [newRule()],
-    actions: [newAction()],
-  };
+  editing.value = newDraft();
 }
 
 function editFilter(filter: Filter) {
   preview.value = null;
-  editing.value = {
-    filter,
-    title: filter.title,
-    enabled: filter.enabled,
-    matchAny: filter.matchAny,
-    inverse: filter.inverse,
-    rules: filter.rules.map((r) => ({
-      field: r.field,
-      pattern: r.pattern,
-      inverse: r.inverse,
-      scope: [
-        ...r.categoryIds.map((id) => `c${String(id)}`),
-        ...r.subscriptionIds.map((id) => `s${String(id)}`),
-      ],
-    })),
-    actions: filter.actions.map((a) => ({
-      type: a.type,
-      labelId: a.type === 'label' ? a.labelId : null,
-      tag: a.type === 'tag' ? a.tag : '',
-      score: a.type === 'score' ? a.score : 0,
-    })),
-  };
+  editing.value = draftOf(filter);
 }
 
-const ids = (scope: string[], prefix: string) =>
-  scope.filter((s) => s.startsWith(prefix)).map((s) => Number(s.slice(1)));
-
-function toAction(action: ActionDraft): FilterAction {
-  switch (action.type) {
-    case 'label':
-      return { type: 'label', labelId: action.labelId ?? 0 };
-    case 'tag':
-      return { type: 'tag', tag: action.tag.trim() };
-    case 'score':
-      return { type: 'score', score: Math.trunc(Number(action.score)) };
-    default:
-      return { type: action.type };
-  }
-}
-
-function toRequest(draft: Draft): FilterRequest {
-  return {
-    title: draft.title.trim(),
-    enabled: draft.enabled,
-    matchAny: draft.matchAny,
-    inverse: draft.inverse,
-    rules: draft.rules.map((r) => ({
-      field: r.field,
-      pattern: r.pattern,
-      inverse: r.inverse,
-      categoryIds: ids(r.scope, 'c'),
-      subscriptionIds: ids(r.scope, 's'),
-    })),
-    actions: draft.actions.map(toAction),
-  };
-}
-
-const complete = computed(() => {
-  const draft = editing.value;
-  return (
-    !!draft?.title.trim() &&
-    draft.rules.length > 0 &&
-    draft.rules.every((r) => r.pattern) &&
-    draft.actions.length > 0 &&
-    draft.actions.every(
-      (a) => (a.type !== 'label' || a.labelId !== null) && (a.type !== 'tag' || a.tag.trim()),
-    )
-  );
-});
+const complete = computed(() => draftComplete(editing.value));
 
 async function run<T>(work: () => Promise<T>): Promise<T | undefined> {
   busy.value = true;
@@ -208,7 +110,7 @@ const refresh = () => queryClient.invalidateQueries({ queryKey: FILTERS_KEY });
 async function save() {
   const draft = editing.value;
   if (!draft || !complete.value) return;
-  const body = toRequest(draft);
+  const body = filterRequest(draft);
   const saved = await run(() =>
     draft.filter ? api.filters.update(draft.filter.id, body) : api.filters.create(body),
   );
@@ -221,15 +123,16 @@ async function save() {
 async function test() {
   const draft = editing.value;
   if (!draft || !complete.value) return;
-  preview.value = (await run(() => api.filters.test(toRequest(draft)))) ?? null;
+  preview.value = (await run(() => api.filters.test(filterRequest(draft)))) ?? null;
 }
 
 async function move(filter: Filter, offset: number) {
-  const order = (filters.data.value ?? []).map((f) => f.id);
-  const index = order.indexOf(filter.id);
-  const target = index + offset;
-  if (target < 0 || target >= order.length) return;
-  [order[index], order[target]] = [order[target] ?? filter.id, filter.id];
+  const order = movedOrder(
+    (filters.data.value ?? []).map((f) => f.id),
+    filter.id,
+    offset,
+  );
+  if (!order) return;
   await run(() => api.filters.reorder(order));
   await refresh();
 }

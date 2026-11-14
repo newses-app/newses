@@ -8,6 +8,14 @@ import { api } from '../../api.ts';
 import { useErrorText } from '../../composables/useErrorText.ts';
 import { useDurations } from '../../composables/useDurations.ts';
 import { formatDateTime, formatList, formatRelative } from '../../lib/format.ts';
+import {
+  checksStale,
+  formatBytes,
+  formatCount,
+  formatMs,
+  formatShare,
+  splitAlerts,
+} from '../../lib/ops-format.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
@@ -96,40 +104,16 @@ const auditEvents = computed<AuditEvent[]>(
   () => audit.data.value?.pages.flatMap((page) => page.events) ?? [],
 );
 
-/** The ops check runs every few minutes (every 30 on AWS); an hour without one means it stopped. */
-const STALE_MS = 60 * 60 * 1000;
-const stale = computed(() => {
-  const checkedAt = summary.data.value?.checkedAt;
-  return (
-    summary.data.value !== undefined &&
-    (!checkedAt || Date.now() - Date.parse(checkedAt) > STALE_MS)
-  );
-});
+const stale = computed(() => checksStale(summary.data.value));
 
-const openAlerts = computed(() => alerts.data.value?.filter((a) => !a.resolvedAt) ?? []);
-const resolvedAlerts = computed(() => alerts.data.value?.filter((a) => a.resolvedAt) ?? []);
+const alertGroups = computed(() => splitAlerts(alerts.data.value));
+const openAlerts = computed(() => alertGroups.value.open);
+const resolvedAlerts = computed(() => alertGroups.value.resolved);
 
-const number = (value: number) => new Intl.NumberFormat(locale.value).format(value);
-const percent = (part: number, whole: number) =>
-  whole === 0
-    ? '–'
-    : new Intl.NumberFormat(locale.value, { style: 'percent', maximumFractionDigits: 0 }).format(
-        part / whole,
-      );
-const bytes = (value: number) =>
-  new Intl.NumberFormat(locale.value, {
-    notation: 'compact',
-    style: 'unit',
-    unit: value >= 1e6 ? 'megabyte' : 'kilobyte',
-    maximumFractionDigits: 1,
-  }).format(value >= 1e6 ? value / 1e6 : value / 1e3);
-const ms = (value: number) =>
-  new Intl.NumberFormat(locale.value, {
-    style: 'unit',
-    unit: value >= 1000 ? 'second' : 'millisecond',
-    minimumFractionDigits: value >= 1000 ? 1 : 0,
-    maximumFractionDigits: value >= 1000 ? 1 : 0,
-  }).format(value >= 1000 ? value / 1000 : value);
+const number = (value: number) => formatCount(value, locale.value);
+const percent = (part: number, whole: number) => formatShare(part, whole, locale.value);
+const bytes = (value: number) => formatBytes(value, locale.value);
+const ms = (value: number) => formatMs(value, locale.value);
 
 const hostTrend = computed(() => hosts.data.value?.hourly.map((h) => h.requests) ?? []);
 const hostFailures = computed(

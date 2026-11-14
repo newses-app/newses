@@ -39,12 +39,16 @@ import type { ShortcutAction } from '../lib/shortcuts.ts';
 import { safeUrl } from '../lib/format.ts';
 import type { ListPosition } from '../lib/list-position.ts';
 import {
-  labelKey,
-  parseStream,
-  SPECIAL_FEEDS,
-  type StreamKey,
-  subscriptionKey,
-} from '../lib/streams.ts';
+  adjacentStream,
+  archiveStream as archiveStreamOf,
+  readerPanes,
+  readerTitle,
+  stepIndex,
+  streamTitle,
+  streamUnread,
+  toggledState,
+} from '../lib/reader-view.ts';
+import { labelKey, parseStream, SPECIAL_FEEDS, type StreamKey } from '../lib/streams.ts';
 import { buildTree, flattenTree } from '../lib/tree.ts';
 import { connectivity } from '../offline/connectivity.ts';
 import { syncRequests } from '../offline/status.ts';
@@ -112,23 +116,19 @@ const subscription = computed(() =>
     ? undefined
     : subscriptions.data.value?.find((s) => s.id === stream.value.subscriptionId),
 );
-const title = computed(() => {
-  const { special, categoryId, labelId, tag } = stream.value;
-  if (special) return t(`special.${streamKey.value}`);
-  if (tag !== undefined) return t('tags.stream', { tag });
-  if (labelId !== undefined) return labels.data.value?.find((l) => l.id === labelId)?.caption ?? '';
-  if (subscription.value) return subscription.value.title;
-  if (categoryId === 0) return t('tree.uncategorised');
-  return categories.data.value?.find((c) => c.id === categoryId)?.title ?? '';
-});
-/** The archive this stream browses: the subscription's, or every feed's from All articles. */
-const archiveStream = computed(() =>
-  subscription.value
-    ? subscriptionKey(subscription.value.id)
-    : streamKey.value === 'all'
-      ? 'all'
-      : null,
+const title = computed(() =>
+  streamTitle(
+    streamKey.value,
+    stream.value,
+    {
+      subscription: subscription.value,
+      labels: labels.data.value,
+      categories: categories.data.value,
+    },
+    (key, params) => (params ? t(key, params) : t(key)),
+  ),
 );
+const archiveStream = computed(() => archiveStreamOf(streamKey.value, subscription.value));
 function browseArchive(withSearch = false) {
   void router.push({
     name: 'archive',
@@ -137,23 +137,10 @@ function browseArchive(withSearch = false) {
   });
 }
 
-const unread = computed(() => {
-  const data = counters.data.value;
-  const { special, subscriptionId, categoryId, labelId } = stream.value;
-  if (!data) return 0;
-  if (labelId !== undefined) return data.labels.find((l) => l.id === labelId)?.unread ?? 0;
-  if (special && special !== 'recentlyRead') return data.special[special];
-  if (subscriptionId !== undefined)
-    return data.subscriptions.find((s) => s.id === subscriptionId)?.unread ?? 0;
-  if (categoryId !== undefined)
-    return data.categories.find((c) => c.id === categoryId)?.unread ?? 0;
-  return 0;
-});
+const unread = computed(() => streamUnread(counters.data.value, stream.value));
 
 useDocumentTitle(() =>
-  entryId.value !== null && current.value?.title
-    ? `${current.value.title} – ${title.value}`
-    : title.value,
+  readerTitle(title.value, entryId.value !== null ? current.value?.title : null),
 );
 
 function notifyError(error: unknown) {
@@ -247,8 +234,11 @@ async function step(delta: 1 | -1) {
         resolve();
       });
     });
-  const index = entries.value.findIndex((e) => e.id === entryId.value);
-  const target = index === -1 ? (delta === 1 ? 0 : -1) : index + delta;
+  const target = stepIndex(
+    entries.value.map((e) => e.id),
+    entryId.value,
+    delta,
+  );
   if (target >= entries.value.length && list.hasNextPage.value) await list.fetchNextPage();
   open(entries.value[target], entryId.value !== null);
 }
@@ -267,7 +257,7 @@ function stepFeed(delta: 1 | -1) {
     ...SPECIAL_FEEDS.map((s) => s.key),
     ...(labels.data.value ?? []).map((l) => labelKey(l.id)),
   ]);
-  const next = keys[keys.indexOf(streamKey.value) + delta];
+  const next = adjacentStream(keys, streamKey.value, delta);
   if (next) void router.push(`/${next}`);
 }
 
@@ -390,14 +380,12 @@ useShortcutHandler((action: ShortcutAction) => {
       scrollArticle(-1);
       return true;
     case 'toggleStar':
-      if (entry) change([entry], { starred: !entry.starred });
-      return true;
     case 'togglePublished':
-      if (entry) change([entry], { published: !entry.published });
+    case 'toggleUnread': {
+      const state = entry && toggledState(action, entry);
+      if (entry && state) change([entry], state);
       return true;
-    case 'toggleUnread':
-      if (entry) change([entry], { unread: !entry.unread });
-      return true;
+    }
     case 'editNote':
       if (entry) ui.noteEntry = entry;
       return true;
@@ -453,10 +441,15 @@ useShortcutHandler((action: ShortcutAction) => {
   }
 });
 
-const showList = computed(() => !singlePane.value || entryId.value === null || combined.value);
-const showArticle = computed(
-  () => !combined.value && (!singlePane.value || entryId.value !== null),
+const panes = computed(() =>
+  readerPanes({
+    singlePane: singlePane.value,
+    combined: combined.value,
+    open: entryId.value !== null,
+  }),
 );
+const showList = computed(() => panes.value.list);
+const showArticle = computed(() => panes.value.article);
 </script>
 
 <template>

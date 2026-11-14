@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import type { PartialThemeTokens, Prefs, Theme, ThemePalette } from '@newses/shared';
 import {
-  BUILTIN_THEME_API_MINOR,
-  BUILTIN_THEME_KEYS,
-  BUILTIN_THEMES,
   FONT_API_MINOR,
   FONT_KEYS,
   MAX_FONT_SCALE,
@@ -29,17 +26,22 @@ import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { useThemeActions, useThemes } from '../../composables/useThemes.ts';
 import {
-  builtin,
   builtinKey,
   contrastIssues,
   type CustomTheme,
   mergeAdjustments,
-  mergeTokens,
   themeTokens,
 } from '../../lib/appearance.ts';
 import { ONE_DECIMAL } from '../../lib/format.ts';
 import { withoutIsolates } from '../../lib/message-params.ts';
 import { supportsApiMinor } from '../../lib/server-url.ts';
+import {
+  editedTheme,
+  hasLowContrast,
+  importAccepted,
+  paletteChange,
+  themeGroups,
+} from '../../lib/theme-editor.ts';
 import { readThemeFile, themeFile, themeFileName, uniqueName } from '../../lib/theme-files.ts';
 import { isTemporary } from '../../lib/offline-resources.ts';
 import { saveThemeDrafts, themeDrafts } from '../../offline/status.ts';
@@ -143,11 +145,9 @@ const current = computed(() => {
   return typeof reference === 'number' ? custom(reference) : undefined;
 });
 /** The theme in use as a base and overrides, which the adjustments apply to. */
-const source = computed<CustomTheme>(() => {
-  const reference = prefs.value.appearanceTheme;
-  if (typeof reference === 'string') return { base: builtinKey(reference), tokens: {} };
-  return current.value ?? { base: 'original', tokens: {} };
-});
+const source = computed<CustomTheme>(() =>
+  editedTheme(prefs.value.appearanceTheme, () => current.value),
+);
 const currentName = computed(() =>
   typeof prefs.value.appearanceTheme === 'string'
     ? t(`appearance.themes.${builtinKey(prefs.value.appearanceTheme)}`)
@@ -174,43 +174,23 @@ function lowContrast(color: keyof ThemePalette): string | undefined {
 }
 
 function setColor(color: keyof ThemePalette, value: string) {
-  if (/^#[0-9a-f]{6}$/i.test(value))
-    adjust({ palette: { [mode.value]: { [color]: value.toLowerCase() } } });
+  const change = paletteChange(mode.value, color, value);
+  if (change) adjust(change);
 }
 
-interface ThemeOption {
-  value: Prefs['appearanceTheme'];
-  name: string;
-  palette: ThemePalette;
-  /** A custom theme's; built-in themes have none. */
-  theme?: Theme;
-}
-
-const customOption = (theme: Theme): ThemeOption => ({
-  value: theme.id,
-  name: theme.name,
-  palette: mergeTokens(builtin(theme.base), theme.tokens).palette[mode.value],
-  theme,
-});
 const mine = computed(() => (themes.data.value ?? []).filter((theme) => theme.mine));
 const groups = computed(() =>
-  [
-    {
-      title: t('appearance.builtIn'),
-      options: BUILTIN_THEME_KEYS.filter((key) => accepted(BUILTIN_THEME_API_MINOR[key])).map(
-        (key): ThemeOption => ({
-          value: key,
-          name: t(`appearance.themes.${key}`),
-          palette: BUILTIN_THEMES[key].palette[mode.value],
-        }),
-      ),
+  themeGroups({
+    themes: themes.data.value ?? [],
+    mode: mode.value,
+    accepted,
+    labels: {
+      builtIn: t('appearance.builtIn'),
+      mine: t('appearance.mine'),
+      shared: t('appearance.shared'),
+      theme: (key) => t(`appearance.themes.${key}`),
     },
-    { title: t('appearance.mine'), options: mine.value.map(customOption) },
-    {
-      title: t('appearance.shared'),
-      options: (themes.data.value ?? []).filter((theme) => !theme.mine).map(customOption),
-    },
-  ].filter((group) => group.options.length > 0),
+  }),
 );
 const ownNames = () => mine.value.map((theme) => theme.name);
 
@@ -291,13 +271,8 @@ async function duplicate(theme: Theme) {
 
 /** Publishing shares the theme with everyone on the server; below WCAG AA it asks first. */
 async function publish(theme: Theme) {
-  const tokens = mergeTokens(builtin(theme.base), theme.tokens);
-  const lowContrast =
-    contrastIssues(tokens.palette.light, 'light').length +
-      contrastIssues(tokens.palette.dark, 'dark').length >
-    0;
   if (
-    lowContrast &&
+    hasLowContrast(theme) &&
     !(await ui.confirm(
       t('appearance.publishTitle'),
       t('appearance.publishLowContrast', { name: theme.name }),
@@ -375,14 +350,7 @@ async function importTheme(event: Event) {
     ui.notify(t('appearance.importInvalid'), true);
     return;
   }
-  const style = theme.tokens.style;
-  if (
-    !accepted(BUILTIN_THEME_API_MINOR[theme.base]) ||
-    (style !== undefined && !accepted(THEME_STYLE_API_MINOR[style] ?? 0)) ||
-    [theme.tokens.uiFont, theme.tokens.articleFont].some(
-      (font) => font !== undefined && !accepted(FONT_API_MINOR[font] ?? 0),
-    )
-  ) {
+  if (!importAccepted(theme, accepted)) {
     ui.notify(t('appearance.importNewer'), true);
     return;
   }

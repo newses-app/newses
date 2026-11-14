@@ -14,6 +14,7 @@ import { useResourceEdits } from '../../composables/useResourceEdits.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useTreeEditing } from '../../composables/useTreeEditing.ts';
 import { feedErrorText } from '../../lib/error-text.ts';
+import { loginChange } from '../../lib/feed-login.ts';
 import { formatDateTime } from '../../lib/format.ts';
 import { beforeIdAfter, byDisplayOrder, precedingId } from '../../lib/reorder.ts';
 import { scheduleMessage } from '../../lib/schedule.ts';
@@ -109,11 +110,11 @@ const loginsSupported = computed(() =>
 const credentialChange = computed(() => {
   const s = subscription.value;
   if (!s || !loginsSupported.value) return undefined;
-  const had = Boolean(s.authLogin);
-  if (!needsLogin.value) return had ? null : undefined;
-  const given = login.value.trim();
-  if (had && given === s.authLogin && password.value === '') return undefined;
-  return { login: given, ...((!had || password.value !== '') && { password: password.value }) };
+  return loginChange(s.authLogin, {
+    needsLogin: needsLogin.value,
+    login: login.value,
+    password: password.value,
+  });
 });
 
 /** Servers before API 1.4 have no per-feed options. */
