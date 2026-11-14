@@ -19,14 +19,14 @@ test.describe('about', () => {
     // Signed out, only the app's packages are listed.
     await expect(page.getByText('Server', { exact: true })).toHaveCount(0);
 
-    await page.getByText('Catppuccin').click();
+    await page.getByText('Catppuccin', { exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText('Copyright (c) 2021 Catppuccin')).toBeVisible();
     await dialog.getByRole('button', { name: 'Close' }).click();
 
-    await page.getByLabel('Filter by name or licence').fill('dexie');
+    await page.getByRole('textbox', { name: 'Filter by name or licence' }).fill('dexie');
     await page.getByText(/^dexie /).click();
-    await expect(dialog.getByText('Apache License')).toBeVisible();
+    await expect(dialog.getByText(/^Apache License/)).toBeVisible();
     await expect(dialog.getByText('David Fahlander').first()).toBeVisible();
     await expectNoViolations('about-licence');
     await dialog.getByRole('button', { name: 'Close' }).click();
@@ -43,7 +43,7 @@ test.describe('about', () => {
     await expect(page.getByRole('tab', { name: 'About' })).toHaveAttribute('aria-selected', 'true');
     await page.getByText('Server', { exact: true }).click();
     await expect(page.getByText(/^\d+ packages?$/)).toBeVisible();
-    await page.getByLabel('Filter by name or licence').fill('fastify');
+    await page.getByRole('textbox', { name: 'Filter by name or licence' }).fill('fastify');
     await expect(page.getByText(/^fastify \d/)).toBeVisible();
     await expectNoViolations('about');
   });

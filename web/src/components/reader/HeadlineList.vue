@@ -224,4 +224,10 @@ const link = (entry: Entry) => ({
 .headline.unread .headline-title {
   font-weight: 700;
 }
+/* The selected or hovered row's tint takes dimmed text below AA contrast in the softer themes
+   (Catppuccin, Solarized, Gruvbox, Synthwave, Noir, Saul), so there it is undimmed; the weight
+   still tells read from unread. */
+.headline:is(.selected, :hover) :is(.headline-title, .v-list-item-subtitle) {
+  opacity: 1;
+}
 </style>

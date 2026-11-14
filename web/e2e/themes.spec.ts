@@ -182,8 +182,15 @@ test.describe('custom themes', () => {
           .getPropertyValue('--v-theme-primary')
           .trim(),
       );
-    const actionsFor = (name: string) =>
-      page.getByRole('button', { name: `Actions for ${name}`, exact: true }).click();
+    // Opens the theme's menu, unless a click that should have closed it was lost to a stalled page
+    // (a click on its button would then close it), and picks the action.
+    const act = async (name: string, action: string) => {
+      const menu = page.getByRole('button', { name: `Actions for ${name}`, exact: true });
+      await expect(async () => {
+        if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+        await page.getByRole('menuitem', { name: action }).click({ timeout: 2_000 });
+      }).toPass();
+    };
     const prefsSaved = () =>
       page.waitForResponse(
         (r) => r.request().method() === 'PATCH' && r.url().endsWith('/api/v1/prefs'),
@@ -211,20 +218,16 @@ test.describe('custom themes', () => {
 
     // Publishing shares it with everyone on the server, until it is unpublished.
     const dusk = page.locator('.theme-option').filter({ hasText: 'E2E Dusk' }).first();
-    await actionsFor('E2E Dusk');
-    await page.getByRole('menuitem', { name: 'Publish' }).click();
+    await act('E2E Dusk', 'Publish');
     await expect(dusk.getByText('Published', { exact: true })).toBeVisible();
-    await actionsFor('E2E Dusk');
-    await page.getByRole('menuitem', { name: 'Unpublish' }).click();
+    await act('E2E Dusk', 'Unpublish');
     await expect(dusk.getByText('Published', { exact: true })).toHaveCount(0);
 
-    await actionsFor('E2E Dusk');
-    await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+    await act('E2E Dusk', 'Duplicate');
     await expect(page.getByRole('radio', { name: 'E2E Dusk copy', exact: true })).toBeVisible();
 
-    await actionsFor('E2E Dusk');
     const download = page.waitForEvent('download');
-    await page.getByRole('menuitem', { name: 'Export' }).click();
+    await act('E2E Dusk', 'Export');
     const file = await (await download).path();
     const { readFile } = await import('node:fs/promises');
     const exported = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
@@ -251,8 +254,7 @@ test.describe('custom themes', () => {
     await expect(page.getByText('That file is not a theme this server accepts.')).toBeVisible();
 
     // Deleting the theme in use returns to Original.
-    await actionsFor('E2E Dusk');
-    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await act('E2E Dusk', 'Delete');
     await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByRole('radio', { name: 'Original', exact: true })).toBeChecked();
     await expect(page.getByRole('radio', { name: 'E2E Dusk', exact: true })).toHaveCount(0);

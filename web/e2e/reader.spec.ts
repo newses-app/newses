@@ -226,7 +226,7 @@ test.describe('reader', () => {
 
     await page.goto('/settings');
     await page.locator('.v-select').filter({ hasText: 'Font' }).click();
-    await page.getByRole('option', { name: 'Default' }).click();
+    await page.getByRole('option', { name: "Theme's font" }).click();
     await page.locator('.v-select').filter({ hasText: 'Line width' }).click();
     await page.getByRole('option', { name: 'Medium' }).click();
     const reset = page.waitForResponse(
@@ -318,6 +318,8 @@ test.describe('reader', () => {
     // The menu offers the other layout only; the layout is a saved preference.
     const layout = async (name: string) => {
       await page.getByRole('button', { name: 'More actions' }).click();
+      // Counted once the menu shows; before, a missing item would only mean it had not rendered.
+      await expect(page.getByRole('menu')).toBeVisible();
       const item = page.getByRole('menuitem', { name });
       if ((await item.count()) > 0) await item.click();
       else await page.keyboard.press('Escape');

@@ -1,11 +1,18 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
  * End-to-end tests against a running deployment with at least one subscription, e.g. the Docker
- * stack: E2E_BASE_URL, E2E_LOGIN, and E2E_PASSWORD select it.
+ * stack: E2E_BASE_URL, E2E_LOGIN, and E2E_PASSWORD select it, from the environment or
+ * playwright.env at the repository root (gitignored), which fills in those the environment lacks.
  */
+const envFile = fileURLToPath(new URL('../playwright.env', import.meta.url));
+if (existsSync(envFile)) process.loadEnvFile(envFile);
+
 export default defineConfig({
   testDir: 'e2e',
+  globalSetup: './e2e/preconditions.ts',
   fullyParallel: false,
   workers: 1,
   use: {

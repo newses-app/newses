@@ -14,6 +14,8 @@ cdk.out/
 # The server image's and Lambda builds' dependency licences
 /server/src/third-party-licenses.json
 playwright-report/
+# The end-to-end tests' deployment and login (web/playwright.config.ts)
+/playwright.env
 test-results/
 # TTRSS import reports hold temporary passwords
 ttrss-import-*.txt

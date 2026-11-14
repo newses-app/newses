@@ -44,8 +44,14 @@ function request(subscription: PushSubscription): PushSubscriptionRequest {
   return { endpoint: endpoint ?? '', keys: { p256dh: keys?.p256dh ?? '', auth: keys?.auth ?? '' } };
 }
 
+/**
+ * This browser's subscription. There is none to find without the notification permission, which
+ * a subscription needs (revoking it ends the subscription), so the browser is not asked: Playwright's
+ * WebKit never answers then, freezing the page.
+ */
 async function current(): Promise<PushSubscription | null> {
-  if (!('serviceWorker' in navigator)) return null;
+  if (!('serviceWorker' in navigator) || typeof Notification === 'undefined') return null;
+  if (Notification.permission !== 'granted') return null;
   const registration = await navigator.serviceWorker.getRegistration();
   return (await registration?.pushManager.getSubscription()) ?? null;
 }

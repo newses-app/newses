@@ -180,3 +180,10 @@ html[data-window-controls]
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+/*
+ * A disabled control's hint says why it is off (notifications blocked, background sync needed),
+ * so it stays readable; Vuetify fades the whole input below the contrast the text needs.
+ */
+.v-input--disabled .v-input__details {
+  opacity: 1;
+}

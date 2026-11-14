@@ -45,6 +45,8 @@ const browser = {
   answer: 'granted' as NotificationPermission,
   subscribed: null as ReturnType<typeof subscription> | null,
   created: 0,
+  /** How often the page asked for its subscription. */
+  asked: 0,
 };
 
 beforeEach(() => {
@@ -52,9 +54,13 @@ beforeEach(() => {
   browser.answer = 'granted';
   browser.subscribed = null;
   browser.created = 0;
+  browser.asked = 0;
   const registration = {
     pushManager: {
-      getSubscription: () => Promise.resolve(browser.subscribed),
+      getSubscription: () => {
+        browser.asked++;
+        return Promise.resolve(browser.subscribed);
+      },
       subscribe: ({ applicationServerKey }: { applicationServerKey: Uint8Array }) => {
         const key = btoa(String.fromCharCode(...applicationServerKey)).replace(/=+$/, '');
         browser.subscribed = subscription(key, `https://push.example/${String(++browser.created)}`);
@@ -143,6 +149,13 @@ describe('web push', () => {
     await renewWebPush(7, null, strings);
     expect(browser.subscribed).toBeNull();
     expect(await readPushConfig()).toBeUndefined();
+  });
+
+  it('never asks for a subscription without the permission, which it needs', async () => {
+    await renewWebPush(7, KEY_A, strings);
+    await webPushSignedOut();
+    expect(await webPushState(7)).toBe('off');
+    expect(browser.asked).toBe(0);
   });
 
   it('stops on signing out', async () => {
