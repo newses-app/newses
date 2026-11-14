@@ -1,6 +1,6 @@
 # 0090. Self-hosted app downloads
 
-- Status: Accepted
+- Status: Superseded by 0091
 - Date: 2026-11-13
 
 ## Context

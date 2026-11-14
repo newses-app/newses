@@ -2,7 +2,8 @@
 # Sets up Windows code signing for the release pipeline with an existing Azure Artifact Signing
 # (formerly Trusted Signing) account and certificate profile: an app registration for the
 # pipeline, a client secret, and the Certificate Profile Signer role on the profile. Writes the
-# values to desktop/electron-builder.env (local signed builds) and, with --ssm, to SSM.
+# values to desktop/electron-builder.env (local signed builds), with --docker to docker/.env (the
+# Docker apps build), and with --ssm to SSM.
 # Identity validation, the account, and the certificate profile are set up in the Azure portal.
 set -euo pipefail
 
@@ -10,7 +11,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/windows-signing-setup.sh [--subscription ID] [--account NAME] [--profile NAME]
                                         [--app-name NAME] [--publisher NAME] [--years N]
-                                        [--ssm] [--dry-run]
+                                        [--docker] [--ssm] [--dry-run]
 
   --subscription ID  Azure subscription with the signing account (default: az's current one)
   --account NAME     Artifact Signing account (default: the only one in the subscription)
@@ -18,13 +19,15 @@ Usage: scripts/windows-signing-setup.sh [--subscription ID] [--account NAME] [--
   --app-name NAME    App registration for the release pipeline (default: <prefix>-release-signing)
   --publisher NAME   Publisher name (default: the CN of the profile's certificate)
   --years N          Client secret lifetime in years (default: 1)
+  --docker           Also write them to docker/.env, for docker/compose.apps.yaml's apps build
   --ssm              Also store the values as SecureString parameters under
                      /<prefix>/release/windows-signing/ (AWS CLI credentials,
                      infra/deploy.config.json)
   --dry-run          Find the account, profile, and publisher, then stop before any change
 
-Each run adds a new client secret, saves it, then removes the app registration's older ones.
-Every step can be rerun.
+Each run adds a new client secret, saves it, then removes the app registration's older ones:
+to sign for both the release pipeline and Docker, pass --ssm and --docker together, or give
+Docker its own --app-name. Every step can be rerun.
 EOF
 }
 
@@ -40,12 +43,13 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 prefix=$(name_prefix)
 env_file="$root/desktop/electron-builder.env"
 ssm_path=/$prefix/release/windows-signing
+docker_env=$root/docker/.env
 provider=Microsoft.CodeSigning
 # Renamed with the service; the role keeps its ID.
 roles=('Artifact Signing Certificate Profile Signer' 'Trusted Signing Certificate Profile Signer')
 
 subscription='' account='' profile='' app_name=$prefix-release-signing publisher='' years=1
-ssm=false dry_run=false
+docker=false ssm=false dry_run=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --subscription | --account | --profile | --app-name | --publisher | --years)
@@ -60,6 +64,7 @@ while [ $# -gt 0 ]; do
       esac
       shift 2
       ;;
+    --docker) docker=true; shift ;;
     --ssm) ssm=true; shift ;;
     --dry-run) dry_run=true; shift ;;
     -h | --help) usage; exit 0 ;;
@@ -75,6 +80,9 @@ az_version=$(az version --query '"azure-cli"' -o tsv)
 [ "$(printf '%s\n' "$min_az" "$az_version" | sort -V | head -1)" = "$min_az" ] ||
   die "needs Azure CLI $min_az or later for MFA on management changes (found $az_version): az upgrade"
 if $ssm; then command -v aws >/dev/null || die '--ssm needs the AWS CLI (aws)'; fi
+if $docker; then
+  [ -f "$docker_env" ] || die "--docker needs $docker_env: copy docker/.env.example to it first"
+fi
 az account show >/dev/null 2>&1 || die 'sign in first: az login'
 [ -z "$subscription" ] || az account set --subscription "$subscription"
 tenant=$(az account show --query tenantId -o tsv)
@@ -215,6 +223,27 @@ step="writing $env_file"
   done >"$env_file"
 )
 echo "Wrote $env_file (gitignored)"
+
+if $docker; then
+  step="writing $docker_env"
+  for entry in "${values[@]}"; do
+    case "$entry" in *"'"*) die "a value with ' cannot go in $docker_env" ;; esac
+  done
+  # Replaces the values' lines, set or commented out, and keeps the rest of the file.
+  docker_tmp=$(mktemp)
+  (
+    umask 077
+    grep -vE '^#?(AZURE_TENANT_ID|AZURE_CLIENT_ID|AZURE_CLIENT_SECRET|WIN_SIGNING_ENDPOINT|WIN_SIGNING_ACCOUNT_NAME|WIN_SIGNING_PROFILE_NAME|WIN_PUBLISHER_NAME)=' \
+      "$docker_env" >"$docker_tmp" || true
+    for entry in "${values[@]}"; do
+      read -r var _ value <<<"$entry"
+      printf "%s='%s'\n" "$var" "$value"
+    done >>"$docker_tmp"
+  )
+  cat "$docker_tmp" >"$docker_env"
+  rm -f "$docker_tmp"
+  echo "Wrote the values to $docker_env"
+fi
 
 if $ssm; then
   step='storing the SSM parameters'

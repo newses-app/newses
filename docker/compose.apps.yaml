@@ -1,15 +1,18 @@
-# Override that builds the desktop app for Linux and the Android app from this checkout into the
-# downloads volume, which the server serves at PUBLIC_URL/downloads/, where the apps update from.
-# Check out the installed version's tag, set RELEASE_TAG to it, then from the checkout's root:
+# Override that builds the desktop app for Linux and Windows and the Android app from this checkout
+# into the downloads volume, which the server serves at PUBLIC_URL/downloads/, where the apps update
+# from. Check out the installed version's tag, set RELEASE_TAG to it, then from the checkout's root:
 #   docker compose -f docker/compose.yaml -f docker/compose.apps.yaml --profile apps run --rm apps
 # For an install from a release's files, add --env-file with its .env, so the build uses its
 # settings and fills its volume. Run it again after each upgrade. The build runs on linux/amd64
-# (emulated, and slow, on arm64 hosts). The APK is signed with your release keystore, from .env.
+# (emulated, and slow, on arm64 hosts). The APK is signed with your release keystore, and the
+# Windows apps with your certificate or Artifact Signing, from .env.
 services:
   apps:
     profiles: [apps]
     platform: linux/amd64
     image: newses-apps:${RELEASE_TAG:-local}
+    # Built again from the checkout on every run (from cache when unchanged), never a stale image.
+    pull_policy: build
     build:
       context: ..
       dockerfile: docker/apps.Dockerfile
@@ -17,19 +20,29 @@ services:
     environment:
       RELEASE_TAG: ${RELEASE_TAG:-}
       PUBLIC_URL: ${PUBLIC_URL:-}
-      APPS_PLATFORMS: ${APPS_PLATFORMS:-linux,android}
+      APPS_PLATFORMS: ${APPS_PLATFORMS:-linux,windows,android}
+      # Artifact Signing's identifiers, with AZURE_CLIENT_SECRET, and the certificate's CN.
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      WIN_SIGNING_ENDPOINT: ${WIN_SIGNING_ENDPOINT:-}
+      WIN_SIGNING_ACCOUNT_NAME: ${WIN_SIGNING_ACCOUNT_NAME:-}
+      WIN_SIGNING_PROFILE_NAME: ${WIN_SIGNING_PROFILE_NAME:-}
+      WIN_PUBLISHER_NAME: ${WIN_PUBLISHER_NAME:-}
     secrets:
       - android_keystore
       - android_keystore_password
       - android_key_alias
       - android_key_password
+      - windows_certificate
+      - windows_certificate_password
+      - azure_client_secret
     volumes:
       - downloads:/data/downloads
       - apps-gradle:/home/node/.gradle
       - apps-cache:/home/node/.cache
 
-# Compose refuses to run unless each variable is in .env, even empty; empty values build no APK,
-# so then set APPS_PLATFORMS=linux.
+# Compose refuses to run unless each variable is in .env, even empty. Empty Android values build no
+# APK, so then leave android out of APPS_PLATFORMS; empty Windows values build unsigned Windows apps.
 secrets:
   android_keystore:
     environment: ANDROID_KEYSTORE_BASE64
@@ -39,6 +52,12 @@ secrets:
     environment: ANDROID_KEY_ALIAS
   android_key_password:
     environment: ANDROID_KEY_PASSWORD
+  windows_certificate:
+    environment: WIN_CERTIFICATE_BASE64
+  windows_certificate_password:
+    environment: WIN_CERTIFICATE_PASSWORD
+  azure_client_secret:
+    environment: AZURE_CLIENT_SECRET
 
 volumes:
   apps-gradle:

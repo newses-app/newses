@@ -1,18 +1,32 @@
 # syntax=docker/dockerfile:1
-# The apps build of a checkout, for compose.apps.yaml's apps service: the Linux AppImage and deb and
-# the Android APK, which docker/apps-build.sh builds and publishes to the downloads volume when the
-# service runs, so the keystore is never in a layer. linux/amd64 only: the Android build tools are
-# x86_64 only. Built from the repository root, with apps.Dockerfile.dockerignore.
+# The apps build of a checkout, for compose.apps.yaml's apps service: the Linux AppImage and deb,
+# the Windows installer, zip, and portable exe, and the Android APK, which docker/apps-build.sh
+# builds and publishes to the downloads volume when the service runs, so the signing keys are never
+# in a layer. linux/amd64 only: the Android build tools are x86_64 only. Built from the repository
+# root, with apps.Dockerfile.dockerignore.
 # The base is pinned to a multi-platform index digest, at the server image's Node version. Change
 # the tag and digest together: docker buildx imagetools inspect node:<tag>
 ARG NODE_IMAGE=node:24.22.2-trixie-slim@sha256:0820eaa85e07d0490446dd01d14707e17e6108a36988cf374899cd057eb3812d
 
 FROM ${NODE_IMAGE}
-# JDK 21 for Gradle; the rest for the Android SDK download and electron-builder's AppImage and deb.
-RUN apt-get update \
+# JDK 21 for Gradle and jsign; 32-bit Wine for the NSIS installer, which electron-builder runs to
+# write the uninstaller; the rest for the Android SDK download and the AppImage and deb.
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
-      binutils ca-certificates curl openjdk-21-jdk-headless unzip xz-utils \
+      binutils ca-certificates curl openjdk-21-jdk-headless unzip wine wine32:i386 xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# jsign signs the Windows apps off Windows, with a certificate file or Artifact Signing. The
+# checksum is the GitHub release asset's digest, of the same file as Maven Central's (its SHA-1).
+ARG JSIGN_VERSION=7.6
+ARG JSIGN_SHA256=6cf58aa080e7ff82656f320cff8d4a3bff30408df8766806dcba3740dd839fa5
+ENV JSIGN_JAR=/opt/jsign/jsign.jar
+RUN set -eu; \
+    mkdir -p /opt/jsign; \
+    curl -fsSL -o "$JSIGN_JAR" \
+      "https://repo1.maven.org/maven2/net/jsign/jsign/$JSIGN_VERSION/jsign-$JSIGN_VERSION.jar"; \
+    echo "$JSIGN_SHA256  $JSIGN_JAR" | sha256sum -c -
 
 # The Android SDK, as the release pipeline's Linux leg installs it (mobile/android/variables.gradle),
 # with the build tools a Capacitor plugin asks for; Gradle can add others, as the SDK is node's.

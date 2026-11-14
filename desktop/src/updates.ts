@@ -4,7 +4,7 @@
 export interface UpdateConfig {
   /** The stage's downloads URL, which serves the feeds and the downloads page. */
   url: string;
-  /** The Windows signing publisher updates must match; release builds on Windows have one. */
+  /** The Windows signing publisher updates must match; signed Windows release builds have one. */
   publisherName: string | null;
 }
 

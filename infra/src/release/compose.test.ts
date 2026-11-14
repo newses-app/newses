@@ -45,6 +45,7 @@ function config(files: string[], env: Record<string, string>) {
         volumes?: { source: string; target: string; read_only?: boolean }[];
         secrets?: { source: string }[];
         platform?: string;
+        pull_policy?: string;
       }
     >;
   };
@@ -132,15 +133,25 @@ describe.skipIf(!available)('docker/compose.yaml', () => {
       ANDROID_KEYSTORE_PASSWORD: '',
       ANDROID_KEY_ALIAS: '',
       ANDROID_KEY_PASSWORD: '',
+      WIN_CERTIFICATE_BASE64: '',
+      WIN_CERTIFICATE_PASSWORD: '',
+      AZURE_CLIENT_SECRET: '',
     }).services.apps;
     expect(apps?.platform).toBe('linux/amd64');
+    expect(apps?.pull_policy).toBe('build');
     expect(apps?.environment).toMatchObject({
       RELEASE_TAG: 'v1.2.3',
       PUBLIC_URL: 'https://reader.example.com',
-      APPS_PLATFORMS: 'linux,android',
+      APPS_PLATFORMS: 'linux,windows,android',
+      WIN_PUBLISHER_NAME: '',
     });
-    expect(apps?.environment).not.toHaveProperty('ANDROID_KEYSTORE_PASSWORD');
-    expect(apps?.secrets?.map((secret) => secret.source)).toHaveLength(4);
+    for (const secret of [
+      'ANDROID_KEYSTORE_PASSWORD',
+      'WIN_CERTIFICATE_PASSWORD',
+      'AZURE_CLIENT_SECRET',
+    ])
+      expect(apps?.environment).not.toHaveProperty(secret);
+    expect(apps?.secrets?.map((secret) => secret.source)).toHaveLength(7);
     expect(apps?.volumes).toContainEqual(
       expect.objectContaining({ source: 'downloads', target: '/data/downloads' }),
     );
