@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 // The browser's service worker: the app shell offline, theme fonts and feed icons once used,
 // syncing with no tab open where the browser allows it (installed Chrome and Edge apps), and
-// notifications of new entries the server pushes.
+// notifications of new entries the server pushes. What each route and event does is in
+// ../offline/worker-events.ts.
 import { clientsClaim } from 'workbox-core';
 import { ExpirationPlugin } from 'workbox-expiration';
 import {
@@ -11,18 +12,20 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
-import { runInBackground } from '../offline/background.ts';
-import { openPushTarget, showPushMessage } from '../offline/push-worker.ts';
-import { OUTBOX_TAG, SYNC_TAG } from '../offline/worker-config.ts';
+import {
+  isFeedIcon,
+  isFont,
+  NOT_APP_SHELL,
+  onNotificationClick,
+  onPeriodicSync,
+  onPush,
+  onSync,
+  type SyncEvent,
+} from '../offline/worker-events.ts';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: (string | { url: string; revision: string | null })[];
 };
-
-/** A Periodic Background Sync or Background Sync event, not in the TypeScript library yet. */
-interface SyncEvent extends ExtendableEvent {
-  readonly tag: string;
-}
 
 // A new version takes over at once (`registerType: 'autoUpdate'`).
 void self.skipWaiting();
@@ -31,58 +34,29 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-// Paths the server answers itself (`NOT_SPA` in server/src/api/web.ts): public pages and feeds,
-// the native and compatibility APIs, and feed icons never get the app shell. Nor do the app
-// downloads, which CloudFront serves on AWS and the server on Docker.
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('index.html'), {
-    denylist: [
-      /^\/(api|public|healthz|accounts|reader|feed-icons|favicons|downloads)(\/|$)/,
-      /^\/public\.php$/,
-    ],
-  }),
+  new NavigationRoute(createHandlerBoundToURL('index.html'), { denylist: NOT_APP_SHELL }),
 );
 
-// API responses are never cached. Theme fonts are, when first used (or loaded for offline
-// reading), so only the fonts in use download.
+// API responses are never cached; theme fonts and feed icons are, so they show offline.
 registerRoute(
-  ({ request }) => request.destination === 'font',
+  isFont,
   new CacheFirst({ cacheName: 'fonts', plugins: [new ExpirationPlugin({ maxEntries: 20 })] }),
 );
-
-// Feed icons are named by their content, so a cached one is never stale; kept, they show offline.
 registerRoute(
-  ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/favicons/'),
+  isFeedIcon,
   new CacheFirst({ cacheName: 'favicons', plugins: [new ExpirationPlugin({ maxEntries: 500 })] }),
 );
 
 self.addEventListener('periodicsync', (event) => {
-  const sync = event as SyncEvent;
-  if (sync.tag === SYNC_TAG) sync.waitUntil(runInBackground('sync').catch(() => undefined));
+  onPeriodicSync(event as ExtendableEvent & SyncEvent);
 });
-
 self.addEventListener('sync', (event) => {
-  const sync = event as SyncEvent;
-  // Rejecting has the browser try again later, with its own back-off.
-  if (sync.tag === OUTBOX_TAG) sync.waitUntil(runInBackground('outbox'));
+  onSync(event as ExtendableEvent & SyncEvent);
 });
-
 self.addEventListener('push', (event) => {
-  const data: unknown = (() => {
-    try {
-      return event.data?.json() as unknown;
-    } catch {
-      return null;
-    }
-  })();
-  // With offline reading on, the new entries are fetched too, ready when the reader opens them.
-  event.waitUntil(
-    showPushMessage(self.registration, self.clients, data).then(() =>
-      runInBackground('sync').catch(() => undefined),
-    ),
-  );
+  onPush(event, self.registration, self.clients);
 });
-
 self.addEventListener('notificationclick', (event) => {
-  event.waitUntil(openPushTarget(event.notification, self.clients));
+  onNotificationClick(event, self.clients);
 });
