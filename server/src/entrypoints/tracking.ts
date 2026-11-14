@@ -7,7 +7,7 @@ import { getInstruments, withSpan } from '../telemetry/index.ts';
  * and metrics. `links` point to the span that enqueued the job.
  */
 export function trackRun<T>(
-  ops: OpsRecorder,
+  ops: Pick<OpsRecorder, 'recordJob'>,
   name: string,
   run: () => Promise<T>,
   options: { kind?: 'job' | 'task'; links?: Link[] } = {},

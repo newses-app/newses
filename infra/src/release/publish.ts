@@ -1,42 +1,13 @@
-// Prepares a release for upload (infra/buildspec/release-publish.yml): checks the files the build
-// legs handed over (with --image, the server image's too), names the installers in their SBOMs,
-// adds the server's files from docker/ and the image's signing key (--public-key) with --image
-// (publish-image.ts join's reference, which the compose file pins), writes SHA256SUMS, the feeds, latest.json and index.html beside them,
-// and writes plan.tsv (file, key, content type, cache control, disposition) and urls.txt for the
-// upload and the checks that follow. --platforms names the apps built (default all, as on AWS;
-// Docker builds Linux and Android).
+// Prepares a release for upload (infra/buildspec/release-publish.yml; prepare-release.ts): checks
+// the build legs' files, adds the server's with --image (publish-image.ts join's reference) and
+// --public-key, and writes SHA256SUMS, the feeds, latest.json, index.html, plan.tsv, and urls.txt
+// beside them. --platforms names the apps built (default all, as on AWS; Docker builds Linux and
+// Android).
 //   node infra/src/release/publish.ts --dir artifacts --tag v1.2.3 --url https://host/downloads \
 //     [--platforms linux,android] [--image public.ecr.aws/<alias>/newses@sha256:… --public-key cosign.pub]
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { type Platform, PLATFORMS, versionFromTag } from '@newses/shared/release';
-import { DOWNLOADS_PREFIX } from '../config.ts';
-import {
-  type BuiltFile,
-  buildManifest,
-  CHECKSUMS,
-  checkBuiltFiles,
-  feeds,
-  imageDigestNames,
-  openapiFile,
-  renderChecksums,
-  renderCompose,
-  renderIndex,
-  rewriteFeed,
-  sbomArtifacts,
-  sbomFiles,
-  sbomNames,
-  SERVER_FILES,
-  type ServerImage,
-  serverNames,
-  uploadPlan,
-} from './manifest.ts';
-import { parseDigest } from './image.ts';
-import { addDistributions, type Bom } from './sbom.ts';
+import { PLATFORMS } from '@newses/shared/release';
+import { prepareRelease } from './prepare-release.ts';
 
 const { values } = parseArgs({
   options: {
@@ -54,121 +25,13 @@ if (!values.dir || !values.tag || !values.url) {
     'Usage: publish.ts --dir DIR --tag TAG --url DOWNLOADS_URL [--prerelease] [--platforms LIST] [--image REPOSITORY@DIGEST --public-key FILE]',
   );
 }
-if (Boolean(values.image) !== Boolean(values['public-key'])) {
-  throw new Error('--image and --public-key go together');
-}
-const { dir, url } = values;
-const platforms = values.platforms.split(',').map((p) => p.trim()) as Platform[];
-const unknown = platforms.filter((p) => !PLATFORMS.includes(p));
-if (unknown.length > 0 || platforms.length === 0) {
-  throw new Error(`--platforms takes some of ${PLATFORMS.join(', ')}: ${values.platforms}`);
-}
-const baseUrl = url.replace(/\/$/, '');
-const version = versionFromTag(values.tag);
-const at = values.image?.lastIndexOf('@') ?? -1;
-const serverImage: ServerImage | undefined = values.image
-  ? { repository: values.image.slice(0, at), digest: parseDigest(values.image.slice(at + 1)) }
-  : undefined;
-const image = Boolean(serverImage);
-if (values.prerelease !== version.name.includes('-')) {
-  throw new Error(`${values.tag} is the wrong kind of tag for this stage`);
-}
-
-const sha256 = (path: string) =>
-  new Promise<string>((resolve, reject) => {
-    const hash = createHash('sha256');
-    createReadStream(path)
-      .on('data', (chunk) => hash.update(chunk))
-      .on('end', () => {
-        resolve(hash.digest('hex'));
-      })
-      .on('error', reject);
-  });
-
-const names = await readdir(dir);
-checkBuiltFiles(version.name, names, image, platforms);
-const built = async (name: string): Promise<BuiltFile> => {
-  const path = join(dir, name);
-  return { name, size: (await stat(path)).size, sha256: await sha256(path) };
-};
-
-// The SBOMs name the installers' hashes, so they are hashed after that; publish-image.ts reads
-// the digests.
-const sboms = sbomNames(version.name, image, platforms);
-const handover = [...sboms, ...imageDigestNames(image)];
-const installers = await Promise.all(names.filter((name) => !handover.includes(name)).map(built));
-for (const { name, describes } of sbomArtifacts(version.name, image, platforms)) {
-  const path = join(dir, name);
-  const bom = JSON.parse(await readFile(path, 'utf8')) as Bom;
-  const files = describes.map((described) => {
-    const file = installers.find((f) => f.name === described);
-    if (!file) throw new Error(`Missing ${described}`);
-    return { url: `${baseUrl}/${version.name}/${described}`, sha256: file.sha256 };
-  });
-  await writeFile(path, `${JSON.stringify(addDistributions(bom, files), null, 2)}\n`);
-}
-
-// The server's files, the compose file pinned to the image, and the image's signing key.
-const server: BuiltFile[] = [];
-if (serverImage) {
-  const names = serverNames(version.name);
-  const pinned = `${serverImage.repository}:${version.name}@${serverImage.digest}`;
-  for (const [file, source] of Object.entries(SERVER_FILES) as [keyof typeof names, string][]) {
-    const path =
-      file === 'publicKey'
-        ? (values['public-key'] ?? '')
-        : fileURLToPath(new URL(`../../../docker/${source}`, import.meta.url));
-    const text = await readFile(path, 'utf8');
-    await writeFile(
-      join(dir, names[file]),
-      file === 'compose' ? renderCompose(text, pinned) : text,
-    );
-    server.push(await built(names[file]));
-  }
-}
-const files = [...installers, ...(await Promise.all(sboms.map(built))), ...server];
-await writeFile(join(dir, CHECKSUMS), renderChecksums(version.name, files, image, platforms));
-
-for (const feed of feeds(platforms)) {
-  const path = join(dir, feed);
-  await writeFile(path, rewriteFeed(await readFile(path, 'utf8'), version.name));
-}
-const input = {
-  version: version.name,
-  versionCode: version.code,
+const manifest = await prepareRelease({
+  dir: values.dir,
+  tag: values.tag,
+  url: values.url,
   prerelease: values.prerelease,
-  published: new Date(),
-  baseUrl,
-  files,
-  image: serverImage,
-  platforms,
-};
-const manifest = buildManifest(input);
-await writeFile(join(dir, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-await writeFile(
-  join(dir, 'index.html'),
-  renderIndex(manifest, sbomFiles(input), openapiFile(input)),
-);
-
-const plan = uploadPlan(version.name, DOWNLOADS_PREFIX, image, platforms);
-await writeFile(
-  join(dir, 'plan.tsv'),
-  plan
-    .map((upload) =>
-      [
-        join(dir, upload.name),
-        upload.key,
-        upload.contentType,
-        upload.cacheControl,
-        upload.attachment ? 'attachment' : 'inline',
-      ].join('\t'),
-    )
-    .join('\n') + '\n',
-);
-const host = new URL(url).origin;
-await writeFile(
-  join(dir, 'urls.txt'),
-  [...plan.map((upload) => `${host}/${upload.key}`), `${host}/${DOWNLOADS_PREFIX}/`].join('\n') +
-    '\n',
-);
+  platforms: values.platforms,
+  image: values.image,
+  publicKey: values['public-key'],
+});
 console.log(JSON.stringify(manifest, null, 2));
