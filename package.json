@@ -20,6 +20,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage && pnpm coverage:status",
+    "coverage:status": "node shared/src/coverage-status.ts",
     "locales:status": "node shared/src/locale-status.ts",
     "credits": "node shared/src/credits-md.ts"
   },
@@ -27,6 +29,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.19.1",
     "@typescript-eslint/utils": "^8.71.0",
+    "@vitest/coverage-v8": "5.0.3",
     "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",

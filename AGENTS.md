@@ -13,6 +13,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm locales:status` | The messages each language has yet to translate, by package |
 | `pnpm credits` | Rewrite `CREDITS.md` from `shared/src/credits.ts` |
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm format` | Individual steps |
+| `pnpm test:coverage` | The tests once with v8 coverage, then each package's and the overall coverage (`pnpm coverage:status`); `coverage/` holds `lcov.info`, the HTML report, and `summary.md`. Reports only, never fails on coverage; not part of `pnpm check` |
 | `pnpm --filter @newses/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @newses/server db:migrate` | Apply migrations |
 | `docker compose -f docker/compose.yaml -f docker/compose.apps.yaml --profile apps run --rm apps` | Builds the checkout's Linux, Windows, and Android apps (linux/amd64) into the `downloads` volume, which the server serves at `/downloads/`; `RELEASE_TAG`, `PUBLIC_URL` (https), `APPS_PLATFORMS`, and the Android and Windows signing values from `docker/.env` |

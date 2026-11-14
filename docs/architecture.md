@@ -17,7 +17,7 @@
 | Web | Vue 3, Vite, Vuetify 4, Pinia, Vue Router, TanStack Vue Query, vue-i18n |
 | Desktop | Electron, esbuild, electron-builder |
 | Mobile | Capacitor (Android) |
-| Tests | Vitest, Testcontainers (Postgres), Playwright, axe-core (WCAG 2.2 AA scans in the Playwright suite) |
+| Tests | Vitest (v8 coverage), Testcontainers (Postgres), Playwright, axe-core (WCAG 2.2 AA scans in the Playwright suite) |
 | Infrastructure | AWS CDK (TypeScript) |
 | CI/CD | CDK Pipelines (CodePipeline + CodeBuild) defined in `infra/`; no GitHub workflows |
 
