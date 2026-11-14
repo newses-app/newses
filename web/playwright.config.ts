@@ -13,6 +13,7 @@ if (existsSync(envFile)) process.loadEnvFile(envFile);
 export default defineConfig({
   testDir: 'e2e',
   globalSetup: './e2e/preconditions.ts',
+  globalTeardown: './e2e/teardown.ts',
   fullyParallel: false,
   workers: 1,
   use: {
