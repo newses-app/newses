@@ -916,7 +916,13 @@
     "needsAddress": "Füge in den Einstellungen unter Konto deine E-Mail-Adresse hinzu und bestätige sie, um Artikel aus Newses zu senden; Antworten gehen an sie.",
     "openAccount": "Kontoeinstellungen öffnen",
     "invalidAddress": "{address} ist keine E-Mail-Adresse.",
-    "tooManyRecipients": "Sende an höchstens {n} Adressen."
+    "tooManyRecipients": "Sende an höchstens {n} Adressen.",
+    "viaServer": "Von Newses senden",
+    "viaDevice": "Von diesem Gerät teilen",
+    "deviceHint": "Übergibt Titel und Webadresse des Artikels an das Teilen-Menü oder die Mail-App dieses Geräts, wo du die Empfänger wählst. Sein öffentlicher Link geht mit, falls er einen hat.",
+    "deviceNeedsLink": "Dieser Artikel hat keine Webadresse. Erstelle mit „Teilen“ einen öffentlichen Link und teile ihn dann von hier.",
+    "shareFromDevice": "Teilen",
+    "sharedCopy": "Auch hier zu lesen: {url}"
   },
   "users": {
     "invalid": "Benutzernamen bestehen nur aus Buchstaben, Ziffern und . _ {'@'} - und haben höchstens 64 Zeichen. Passwörter brauchen mindestens 8 Zeichen und dürfen kein gängiges Passwort sein.",

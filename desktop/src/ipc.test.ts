@@ -128,6 +128,27 @@ describe('registerBridge', () => {
     expect(shell.openExternal.mock.calls).toEqual([['https://example.com/post']]);
   });
 
+  it('opens a new mail with a shared link, and only that', async () => {
+    await setup();
+    const link = { title: 'Big story', text: 'Look', url: 'https://news.example/a' };
+    await expect(call('shareLink', link)).resolves.toBe(true);
+    expect(shell.openExternal.mock.calls).toEqual([
+      ['mailto:?subject=Big%20story&body=Look%0D%0A%0D%0Ahttps%3A%2F%2Fnews.example%2Fa'],
+    ]);
+    await expect(call('shareLink', { ...link, url: 'file:///etc/passwd' })).rejects.toThrow(
+      'Invalid link',
+    );
+    await expect(call('shareLink', { ...link, url: 'mailto:someone@example.com' })).rejects.toThrow(
+      'Invalid link',
+    );
+    await expect(call('shareLink', { ...link, title: 'x'.repeat(301) })).rejects.toThrow(
+      'Invalid title',
+    );
+    await expect(call('shareLink', { ...link, text: 42 })).rejects.toThrow('Invalid text');
+    await expect(call('shareLink', null)).rejects.toThrow('Invalid title');
+    expect(shell.openExternal).toHaveBeenCalledOnce();
+  });
+
   it('saves a file where the reader picks, starting in their downloads', async () => {
     await setup();
     const target = join(dir, 'export.opml');

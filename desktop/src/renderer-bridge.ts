@@ -10,6 +10,7 @@ import type {
   ProfileChanges,
   ProfileList,
   SaveFile,
+  ShareLink,
   UpdateStatus,
 } from '@newses/shared';
 
@@ -70,6 +71,7 @@ export function createDesktopBridge(ipc: RendererIpc, page: BridgePage): Platfor
     setToken: (token: string) => invoke<undefined>('setToken', token),
     clearToken: () => invoke<undefined>('clearToken'),
     openExternal: (url: string) => invoke<undefined>('openExternal', url),
+    shareLink: (link: ShareLink) => invoke<boolean>('shareLink', link),
     saveFile: (file: SaveFile) => invoke<boolean>('saveFile', file),
     notify: (notification: AppNotification) => invoke<undefined>('notify', notification),
     // The window is granted the notification permission; the system's own settings may still mute them.

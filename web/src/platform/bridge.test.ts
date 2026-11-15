@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { memoryBridge, type PlatformBridge, selectBridge, webBridge } from './bridge.ts';
 
 describe('selectBridge', () => {
@@ -53,5 +53,42 @@ describe('memoryBridge', () => {
   it('starts empty each time', async () => {
     await memoryBridge().addProfile('https://reader.example');
     expect(await memoryBridge().getProfiles()).toEqual({ profiles: [], active: null });
+  });
+});
+
+describe('webBridge shareLink', () => {
+  const link = { title: 'Big story', text: '', url: 'https://news.example/a' };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubShare(share: (data: ShareData) => Promise<void>) {
+    vi.stubGlobal('navigator', { share, canShare: () => true });
+  }
+
+  it("uses the browser's share sheet where there is one", async () => {
+    const share = vi.fn(() => Promise.resolve());
+    stubShare(share);
+    expect(await webBridge.shareLink(link)).toBe(true);
+    expect(share).toHaveBeenCalledWith(link);
+  });
+
+  it('reports a dismissed share sheet', async () => {
+    stubShare(() => Promise.reject(new DOMException('dismissed', 'AbortError')));
+    expect(await webBridge.shareLink(link)).toBe(false);
+  });
+
+  it('opens a mail in the mail app otherwise, or when the share sheet refuses', async () => {
+    const page = { href: 'https://reader.example/all' };
+    vi.stubGlobal('location', page);
+    vi.stubGlobal('navigator', {});
+    expect(await webBridge.shareLink(link)).toBe(true);
+    expect(page.href).toBe('mailto:?subject=Big%20story&body=https%3A%2F%2Fnews.example%2Fa');
+
+    page.href = '';
+    stubShare(() => Promise.reject(new DOMException('no target', 'NotAllowedError')));
+    expect(await webBridge.shareLink(link)).toBe(true);
+    expect(page.href.startsWith('mailto:')).toBe(true);
   });
 });

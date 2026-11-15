@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { ShareLink } from '@newses/shared';
 import {
   MAX_EMAIL_LENGTH,
   MAX_EMAIL_NOTE_LENGTH,
   MAX_EMAIL_RECIPIENTS,
+  MAX_SHARE_TITLE_LENGTH,
 } from '@newses/shared/client';
 import { useQuery } from '@tanstack/vue-query';
 import { computed, ref, watch } from 'vue';
@@ -12,6 +14,9 @@ import { useErrorText } from '../../composables/useErrorText.ts';
 import { useReturnFocus } from '../../composables/useReturnFocus.ts';
 import { useSession } from '../../composables/useSession.ts';
 import { safeUrl } from '../../lib/format.ts';
+import { withoutIsolates } from '../../lib/message-params.ts';
+import { shareUrl } from '../../lib/sharing.ts';
+import { bridge } from '../../platform/index.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
 const ui = useUiStore();
@@ -37,6 +42,49 @@ const mail = computed(() => serverInfo.data.value?.mail === true);
 const replyTo = computed(() => session.value?.user.email ?? null);
 const hasLink = computed(() => safeUrl(ui.emailEntry?.link) !== null);
 
+/** Mailed by the server, or handed to the device's share sheet or mail app. */
+type Via = 'server' | 'device';
+const VIA_KEY = 'newses.emailVia';
+
+/** The way last chosen on this device. */
+function storedVia(): Via | null {
+  try {
+    const value = localStorage.getItem(VIA_KEY);
+    return value === 'server' || value === 'device' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+const via = ref<Via>('device');
+/** Only the device where the server mails no one. */
+const shownVia = computed<Via>(() => (mail.value ? via.value : 'device'));
+
+function choose(value: unknown) {
+  if (value !== 'server' && value !== 'device') return;
+  via.value = value;
+  try {
+    localStorage.setItem(VIA_KEY, value);
+  } catch {
+    // Storage blocked: the choice lasts until the dialog opens again.
+  }
+}
+
+/** The original's address, with the public share link's when it has one; null without either. */
+const deviceLink = computed((): ShareLink | null => {
+  const entry = ui.emailEntry;
+  if (!entry) return null;
+  const original = safeUrl(entry.link);
+  const copy = entry.shareId ? shareUrl(entry.shareId) : null;
+  const url = original ?? copy;
+  if (!url) return null;
+  return {
+    title: (entry.title ?? t('entries.untitled')).slice(0, MAX_SHARE_TITLE_LENGTH),
+    text: original && copy ? withoutIsolates(t('email.sharedCopy', { url: copy })) : '',
+    url,
+  };
+});
+
 const recipients = ref<string[]>([]);
 const typed = ref('');
 const note = ref('');
@@ -51,6 +99,7 @@ watch(
     typed.value = '';
     note.value = '';
     include.value = 'content';
+    via.value = storedVia() ?? (replyTo.value ? 'server' : 'device');
   },
 );
 
@@ -75,6 +124,17 @@ const recipientError = computed(() => {
   if (tooMany.value) return t('email.tooManyRecipients', { n: MAX_EMAIL_RECIPIENTS });
   return null;
 });
+
+/** Called straight from the click, which the share sheet needs. */
+async function shareFromDevice() {
+  const link = deviceLink.value;
+  if (!link) return;
+  try {
+    if (await bridge.shareLink(link)) open.value = false;
+  } catch (error) {
+    ui.notify(errorText(error), true);
+  }
+}
 
 async function send() {
   const entry = ui.emailEntry;
@@ -104,22 +164,32 @@ async function send() {
       :title="t('email.articleTitle')"
       :subtitle="ui.emailEntry.title ?? t('entries.untitled')"
     >
-      <template v-if="!mail || !replyTo">
+      <v-tabs v-if="mail" :model-value="shownVia" grow class="mb-2" @update:model-value="choose">
+        <v-tab value="server">{{ t('email.viaServer') }}</v-tab>
+        <v-tab value="device">{{ t('email.viaDevice') }}</v-tab>
+      </v-tabs>
+      <template v-if="shownVia === 'device'">
         <v-card-text>
           <p class="text-body-medium">
-            {{ mail ? t('email.needsAddress') : t('errors.code.mail_unavailable') }}
+            {{ deviceLink ? t('email.deviceHint') : t('email.deviceNeedsLink') }}
           </p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
+          <v-btn @click="open = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" variant="flat" :disabled="!deviceLink" @click="shareFromDevice">
+            {{ t('email.shareFromDevice') }}
+          </v-btn>
+        </v-card-actions>
+      </template>
+      <template v-else-if="!replyTo">
+        <v-card-text>
+          <p class="text-body-medium">{{ t('email.needsAddress') }}</p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
           <v-btn @click="open = false">{{ t('common.close') }}</v-btn>
-          <v-btn
-            v-if="mail"
-            color="primary"
-            variant="flat"
-            to="/settings/account"
-            @click="open = false"
-          >
+          <v-btn color="primary" variant="flat" to="/settings/account" @click="open = false">
             {{ t('email.openAccount') }}
           </v-btn>
         </v-card-actions>

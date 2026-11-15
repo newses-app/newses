@@ -916,7 +916,13 @@
     "needsAddress": "Aggiungi e conferma il tuo indirizzo email nelle impostazioni, in Account, per inviare articoli da Newses; le risposte arrivano lì.",
     "openAccount": "Apri le impostazioni dell'account",
     "invalidAddress": "{address} non è un indirizzo email.",
-    "tooManyRecipients": "Invia al massimo a {n} indirizzi."
+    "tooManyRecipients": "Invia al massimo a {n} indirizzi.",
+    "viaServer": "Invia da Newses",
+    "viaDevice": "Condividi da questo dispositivo",
+    "deviceHint": "Passa il titolo e l'indirizzo web dell'articolo al menu di condivisione o all'app di posta di questo dispositivo, dove scegli chi lo riceve. Anche il suo link pubblico viene incluso, se ne ha uno.",
+    "deviceNeedsLink": "Questo articolo non ha un indirizzo web. Crea un link pubblico con Condividi, poi condividilo da qui.",
+    "shareFromDevice": "Condividi",
+    "sharedCopy": "Leggibile anche qui: {url}"
   },
   "users": {
     "invalid": "I nomi utente possono contenere solo lettere, cifre e . _ {'@'} -, fino a 64 caratteri. Le password devono avere almeno 8 caratteri e non possono essere comuni.",

@@ -13,6 +13,7 @@ import type { ConnectionStatus, Network } from '@capacitor/network';
 import type { Preferences } from '@capacitor/preferences';
 import type { Share } from '@capacitor/share';
 import { createProfiles } from '@newses/shared/profiles';
+import { shareBody } from '@newses/shared/share-link';
 import type {
   NetworkStatus,
   NewEntriesHandover,
@@ -20,6 +21,7 @@ import type {
   PlatformBridge,
   PushServiceStatus,
   SaveFile,
+  ShareLink,
   StagedPage,
   UpdateStatus,
 } from '@newses/shared';
@@ -166,6 +168,20 @@ export function createAndroidBridge(plugins: AndroidPlugins, build: AndroidBuild
     }
   }
 
+  /**
+   * The share sheet, the title as a mail's subject. The plugin would join text and link with a
+   * space; the body keeps the link on its own line.
+   */
+  async function shareLink(link: ShareLink): Promise<boolean> {
+    try {
+      await plugins.share.share({ title: link.title, text: shareBody(link) });
+      return true;
+    } catch {
+      // Dismissed.
+      return false;
+    }
+  }
+
   let updateStatus: UpdateStatus = { state: downloadsUrl ? 'idle' : 'unsupported' };
   let update: AndroidUpdate | null = null;
   const updateListeners: ((status: UpdateStatus) => void)[] = [];
@@ -231,6 +247,7 @@ export function createAndroidBridge(plugins: AndroidPlugins, build: AndroidBuild
     clearToken: () => profiles.clearToken(),
     // Custom Tabs: the system browser, over the app.
     openExternal: (url) => browser.open({ url }),
+    shareLink,
     saveFile,
     // The background job shows the only notification, of new entries while the app is closed.
     notify: () => Promise.resolve(),

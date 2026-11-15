@@ -7,6 +7,16 @@ export interface SaveFile {
   data: string;
 }
 
+/** An article handed to the device: the share sheet, or a new mail in the mail app. */
+export interface ShareLink {
+  /** The mail's subject. */
+  title: string;
+  /** Text before the link; may be empty. */
+  text: string;
+  /** An http(s) URL. */
+  url: string;
+}
+
 /** A system notification; clicking it opens `target` (an app path, e.g. a feed's stream). */
 export interface AppNotification {
   title: string;
@@ -187,6 +197,11 @@ export interface PlatformBridge {
   clearToken(): Promise<void>;
   /** Opens an http(s) URL in the system browser. */
   openExternal(url: string): Promise<void>;
+  /**
+   * Hands a link to the system share sheet (Android, browsers that have one) or else to a new mail
+   * in the mail app, with no recipients; false when the reader dismissed the share sheet.
+   */
+  shareLink(link: ShareLink): Promise<boolean>;
   /** Offers a file to save; false when the user cancels. */
   saveFile(file: SaveFile): Promise<boolean>;
   /** Shows a system notification. */

@@ -224,6 +224,22 @@ describe('createAndroidBridge', () => {
     expect(fake.browser.open).toHaveBeenCalledWith({ url: 'https://example.com/' });
   });
 
+  it('shares a link through the share sheet, the link on its own line', async () => {
+    const { bridge, fake } = setup('');
+    const link = { title: 'Big story', text: 'Shared copy', url: 'https://news.example/a' };
+    await expect(bridge.shareLink(link)).resolves.toBe(true);
+    expect(fake.share.share).toHaveBeenCalledWith({
+      title: 'Big story',
+      text: 'Shared copy\n\nhttps://news.example/a',
+    });
+    fake.share.share.mockRejectedValueOnce(new Error('Share canceled'));
+    await expect(bridge.shareLink({ ...link, text: '' })).resolves.toBe(false);
+    expect(fake.share.share).toHaveBeenLastCalledWith({
+      title: 'Big story',
+      text: 'https://news.example/a',
+    });
+  });
+
   it('draws light bar icons over a dark theme, and dark ones over a light one', async () => {
     const { bridge, fake } = setup('');
     await bridge.setTheme({ dark: true } as Parameters<typeof bridge.setTheme>[0]);

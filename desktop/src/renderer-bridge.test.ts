@@ -77,12 +77,15 @@ describe('createDesktopBridge', () => {
     const bridge = createDesktopBridge(ipc, page);
     ipc.answers.getToken = 'token';
     ipc.answers.saveFile = true;
+    ipc.answers.shareLink = true;
     expect(await bridge.getToken()).toBe('token');
     await bridge.setToken('new');
     await bridge.updateProfile('p1', { label: 'Work' });
     expect(await bridge.saveFile({ name: 'a.opml', type: 'text/x-opml', data: '<opml/>' })).toBe(
       true,
     );
+    const link = { title: 'Big story', text: '', url: 'https://news.example/a' };
+    expect(await bridge.shareLink(link)).toBe(true);
     await bridge.setTheme({
       preference: 'dark',
       dark: true,
@@ -95,6 +98,7 @@ describe('createDesktopBridge', () => {
       ['bridge:setToken', 'new'],
       ['bridge:updateProfile', 'p1', { label: 'Work' }],
       ['bridge:saveFile', { name: 'a.opml', type: 'text/x-opml', data: '<opml/>' }],
+      ['bridge:shareLink', link],
       [
         'bridge:setTheme',
         { preference: 'dark', dark: true, background: '#000000', text: '#ffffff' },
@@ -196,6 +200,7 @@ describe('the bridge and the main process', () => {
         bridge.clearToken(),
         bridge.openExternal('https://blog.example/'),
         bridge.saveFile({ name: 'a.opml', type: 'text/x-opml', data: '<opml/>' }),
+        bridge.shareLink({ title: 'A', text: '', url: 'https://news.example/a' }),
         bridge.notify({ title: 'Blog', body: '2 new', target: '/f7' }),
         bridge.getDesktopOptions(),
         bridge.setDesktopOptions({ closeToTray: true }),
@@ -206,7 +211,7 @@ describe('the bridge and the main process', () => {
       ]);
       bridge.onUpdateStatus(() => undefined);
       const channels = ipc.calls.map(([channel]) => channel);
-      expect(channels).toHaveLength(18);
+      expect(channels).toHaveLength(19);
       expect(channels.filter((channel) => !ipcMain.handlers.has(channel as string))).toEqual([]);
     } finally {
       await rm(dir, { recursive: true, force: true });

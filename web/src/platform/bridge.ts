@@ -3,9 +3,10 @@ import type {
   NotificationAccess,
   PlatformBridge,
   SaveFile,
+  ShareLink,
   StagedPage,
 } from '@newses/shared';
-import { createProfiles, memoryProfileStorage } from '@newses/shared/client';
+import { createProfiles, mailtoUrl, memoryProfileStorage } from '@newses/shared/client';
 import { NAVIGATE_MESSAGE } from '../offline/worker-config.ts';
 
 export type { NetworkStatus, PlatformBridge, SaveFile, StagedPage };
@@ -41,6 +42,27 @@ function onBrowserNetworkChange(listener: (status: NetworkStatus) => void): () =
     window.removeEventListener('online', changed);
     window.removeEventListener('offline', changed);
   };
+}
+
+/**
+ * The system share sheet where the browser has one; otherwise, or when it cannot share this, a new
+ * mail in the mail app the browser hands `mailto:` links to.
+ */
+async function shareLink(link: ShareLink): Promise<boolean> {
+  const data = { title: link.title, text: link.text, url: link.url };
+  // Older browsers have `share` without `canShare`.
+  const canShare = !('canShare' in navigator) || navigator.canShare(data);
+  if (typeof navigator.share === 'function' && canShare) {
+    try {
+      await navigator.share(data);
+      return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return false;
+      // Refused (no share target, or not allowed here): the mail app instead.
+    }
+  }
+  location.href = mailtoUrl(link);
+  return true;
 }
 
 const noProfiles = () => Promise.reject(new Error('The browser uses its own server'));
@@ -81,6 +103,7 @@ export const webBridge: PlatformBridge = {
     window.open(url, '_blank', 'noopener,noreferrer');
     return Promise.resolve();
   },
+  shareLink,
   saveFile: download,
   notify: () => Promise.resolve(),
   notificationAccess: browserNotificationAccess,

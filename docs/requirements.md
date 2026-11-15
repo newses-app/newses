@@ -98,7 +98,7 @@
 | Publish a page | Published pages | Any web page joins the user's published feed with an optional title and text; a missing title or text is taken from the page, and a page that cannot be read is still published; publishing the same address again updates it; works from Settings and TTRSS clients |
 | Bookmarklets | Published pages | "Subscribe in Newses" and "Publish in Newses" bookmarklets in Settings → Sharing open the app's Subscribe or Publish dialog filled in with the page (its title and selected text), through sign-in, without acting on their own |
 | Share to the app | Published pages | Pages shared from other apps to the Android app or an installed web app are offered to subscribe to or publish, with the page's title |
-| Email an article | Email | From an article, a user with a confirmed address sends it from the server to up to 5 addresses with an optional note, as the whole article or its link and excerpt; replies go to the sender; images follow the sender's image proxy preference; the mail's text is in the sender's language |
+| Email an article | Email | From an article, a user with a confirmed address sends it from the server to up to 5 addresses with an optional note, as the whole article or its link and excerpt; replies go to the sender; images follow the sender's image proxy preference; the mail's text is in the sender's language. Without server mail too, the same dialog hands the article's title, original link, and public share link (if any) to the device's share sheet or mail app; the dialog remembers the last choice per device |
 | Unread digest | Email | Scheduled digest of unread entries |
 
 ### Content processing

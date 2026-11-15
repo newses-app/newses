@@ -5,6 +5,8 @@ import { enableAutoUnmount, flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SESSION_KEY } from '../../composables/useSession.ts';
 import { withoutIsolates } from '../../lib/message-params.ts';
+import { shareUrl } from '../../lib/sharing.ts';
+import { bridge } from '../../platform/index.ts';
 import { i18n } from '../../plugins/i18n.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import { mountInApp, overlay, testRouter } from '../../test/mount.ts';
@@ -23,7 +25,8 @@ vi.mock('../../api.ts', async (importOriginal) => ({
 enableAutoUnmount(afterEach);
 const { t } = i18n.global;
 
-const ENTRY = { id: 7, title: 'Big story', link: 'https://news.example/a' } as Entry;
+const ENTRY = { id: 7, title: 'Big story', link: 'https://news.example/a', shareId: null } as Entry;
+const SHARE_ID = '5f0c2c1e-8d7a-4b7e-9c1a-2f3d4e5f6a7b';
 
 async function opened({
   mail = true,
@@ -52,13 +55,30 @@ async function fill(recipients: string, note = '') {
   await flushPromises();
 }
 
+async function chooseTab(label: string) {
+  const tab = overlay()
+    .findAll('.v-tab')
+    .find((candidate) => candidate.text() === label);
+  await tab?.trigger('click');
+  await flushPromises();
+}
+
+const shareButton = () =>
+  overlay()
+    .findAll('button')
+    .find((button) => button.text() === t('email.shareFromDevice'));
+
 async function submit() {
   await overlay().get('form').trigger('submit');
   await flushPromises();
 }
 
+const shareLink = vi.spyOn(bridge, 'shareLink');
+
 beforeEach(() => {
   api.entries.email.mockReset().mockResolvedValue();
+  shareLink.mockReset().mockResolvedValue(true);
+  localStorage.clear();
 });
 
 describe('EmailDialog', () => {
@@ -122,6 +142,7 @@ describe('EmailDialog', () => {
 
   it('points to Account settings without a confirmed address', async () => {
     await opened({ email: null });
+    await chooseTab(t('email.viaServer'));
     expect(dialogText()).toContain(t('email.needsAddress'));
     const link = overlay()
       .findAll('a')
@@ -129,9 +150,70 @@ describe('EmailDialog', () => {
     expect(link?.attributes('href')).toBe('/settings/account');
   });
 
-  it('says so where the server cannot send email', async () => {
-    await opened({ mail: false });
-    expect(dialogText()).toContain(t('errors.code.mail_unavailable'));
+  it('shares from the device only where the server cannot send email', async () => {
+    const ui = await opened({ mail: false });
+    expect(overlay().find('.v-tab').exists()).toBe(false);
     expect(overlay().find('form').exists()).toBe(false);
+    expect(dialogText()).toContain(t('email.deviceHint'));
+    await shareButton()?.trigger('click');
+    await flushPromises();
+    expect(shareLink).toHaveBeenCalledWith({
+      title: 'Big story',
+      text: '',
+      url: 'https://news.example/a',
+    });
+    expect(ui.emailEntry).toBeNull();
+  });
+
+  it('starts on the device without a confirmed address', async () => {
+    await opened({ email: null });
+    expect(dialogText()).toContain(t('email.deviceHint'));
+  });
+
+  it('remembers the choice on this device', async () => {
+    const ui = await opened();
+    expect(overlay().find('form').exists()).toBe(true);
+    await chooseTab(t('email.viaDevice'));
+    expect(overlay().find('form').exists()).toBe(false);
+    expect(localStorage.getItem('newses.emailVia')).toBe('device');
+    ui.emailEntry = null;
+    await flushPromises();
+    ui.emailEntry = ENTRY;
+    await flushPromises();
+    expect(dialogText()).toContain(t('email.deviceHint'));
+  });
+
+  it('adds the public link to the original, or shares that alone', async () => {
+    const ui = await opened({ mail: false, entry: { ...ENTRY, shareId: SHARE_ID } });
+    await shareButton()?.trigger('click');
+    expect(shareLink).toHaveBeenLastCalledWith({
+      title: 'Big story',
+      text: withoutIsolates(t('email.sharedCopy', { url: shareUrl(SHARE_ID) })),
+      url: 'https://news.example/a',
+    });
+    await flushPromises();
+    ui.emailEntry = { ...ENTRY, link: null, shareId: SHARE_ID };
+    await flushPromises();
+    await shareButton()?.trigger('click');
+    expect(shareLink).toHaveBeenLastCalledWith({
+      title: 'Big story',
+      text: '',
+      url: shareUrl(SHARE_ID),
+    });
+  });
+
+  it('has nothing to share from the device without a web address or public link', async () => {
+    await opened({ mail: false, entry: { ...ENTRY, link: null } });
+    expect(dialogText()).toContain(t('email.deviceNeedsLink'));
+    expect(shareButton()?.attributes('disabled')).toBeDefined();
+  });
+
+  it('stays open when the share sheet is dismissed', async () => {
+    shareLink.mockResolvedValue(false);
+    const ui = await opened({ mail: false });
+    await shareButton()?.trigger('click');
+    await flushPromises();
+    expect(shareLink).toHaveBeenCalledOnce();
+    expect(ui.emailEntry).not.toBeNull();
   });
 });

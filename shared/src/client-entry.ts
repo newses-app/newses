@@ -12,3 +12,4 @@ export * from './error-reasons.ts';
 export * from './profiles.ts';
 export * from './search-languages.ts';
 export * from './search-query.ts';
+export * from './share-link.ts';

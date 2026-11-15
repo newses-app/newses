@@ -21,4 +21,5 @@ export * from './ops.ts';
 export * from './push.ts';
 export * from './search-languages.ts';
 export * from './search-query.ts';
+export * from './share-link.ts';
 export type * from './platform-bridge.ts';

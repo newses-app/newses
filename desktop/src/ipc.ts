@@ -5,6 +5,11 @@ import { join } from 'node:path';
 import type { ProfileList, UpdateStatus } from '@newses/shared';
 import { createProfiles, httpsOrigin, profileChanges, profileId } from '@newses/shared/profiles';
 import {
+  MAX_SHARE_TEXT_LENGTH,
+  MAX_SHARE_TITLE_LENGTH,
+  mailtoUrl,
+} from '@newses/shared/share-link';
+import {
   app,
   type BrowserWindow,
   dialog,
@@ -90,6 +95,15 @@ export function registerBridge(host: BridgeHost): () => Promise<void> {
   handle('openExternal', async (url) => {
     const target = externalUrl(text(url, 8192) ?? '');
     if (target) await shell.openExternal(target);
+  });
+  // A new mail in the mail app, built here so the page never picks the scheme or the recipients.
+  handle('shareLink', async (link) => {
+    const { title, text: body, url } = (link ?? {}) as Record<string, unknown>;
+    const subject = checked(text(title, MAX_SHARE_TITLE_LENGTH), 'title');
+    const lead = checked(text(body, MAX_SHARE_TEXT_LENGTH), 'text');
+    const target = checked(externalUrl(text(url, 8192) ?? ''), 'link');
+    await shell.openExternal(mailtoUrl({ title: subject, text: lead, url: target }));
+    return true;
   });
   handle('saveFile', async (file) => {
     const { name, data } = (file ?? {}) as { name?: unknown; data?: unknown };
