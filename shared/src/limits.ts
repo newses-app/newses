@@ -38,6 +38,10 @@ export const MAX_THEME_NAME_LENGTH = 60;
 
 /** An email address, as RFC 5321 limits a path. */
 export const MAX_EMAIL_LENGTH = 254;
+
+/** An article mailed from the server: most recipients, and the longest note. */
+export const MAX_EMAIL_RECIPIENTS = 5;
+export const MAX_EMAIL_NOTE_LENGTH = 1000;
 export const MAX_THEMES_PER_USER = 50;
 
 /** A tag as stored: lower-case, single-spaced, without commas or control characters; null if empty. */

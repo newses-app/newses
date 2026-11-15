@@ -15,6 +15,7 @@ export const SHORTCUT_ACTIONS = [
   'editNote',
   'editLabels',
   'editTags',
+  'emailArticle',
   'closeArticle',
   'search',
   'help',

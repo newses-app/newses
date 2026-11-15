@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { api } from '../api.ts';
 import ConfirmDialog from '../components/dialogs/ConfirmDialog.vue';
 import EditFeedDialog from '../components/dialogs/EditFeedDialog.vue';
+import EmailDialog from '../components/dialogs/EmailDialog.vue';
 import EntryLabelsDialog from '../components/dialogs/EntryLabelsDialog.vue';
 import FeedDebugDialog from '../components/dialogs/FeedDebugDialog.vue';
 import NoteConflictDialog from '../components/dialogs/NoteConflictDialog.vue';
@@ -123,6 +124,7 @@ useShortcutListener((action) => {
   <TagsDialog />
   <TagPickerDialog />
   <ShareDialog />
+  <EmailDialog />
   <ShortcutHelp />
   <NoteConflictDialog />
   <ConfirmDialog />

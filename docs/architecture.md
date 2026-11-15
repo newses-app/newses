@@ -307,6 +307,7 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 - Every user mail comes from `MAIL_FROM` (default `Newses <newses@host>` on the `PUBLIC_URL` host, else `localhost`); a user's address only appears as `Reply-To`.
 - `SMTP_URL` (`smtp://` or `smtps://`) turns user mail on, independent of alert email; `ALERT_EMAIL_FROM` defaults to `MAIL_FROM`. `SMTP_URL` and `MAIL_SES_CONFIGURATION_SET` exclude each other; the Docker image refuses SES, whose SDK only the functions bundle.
 - A user's address receives mail once confirmed: `PUT /account/email` keeps it pending and mails `PUBLIC_URL/confirm-email#<token>` (else the request's origin), whose page posts the token to `POST /account/email/confirm` after a click, without a session; the token's hash is kept for 24 hours, and a new request replaces it. Requests are limited per user (`emailConfirm`).
+- `POST /entries/:id/email` mails the user's entry (whole content, else its excerpt, with its link) to at most 5 addresses with an optional note; `Reply-To` is the sender's confirmed address, without which it is refused (`email_unconfirmed`). With the sender's `proxyImages`, images are signed proxy URLs on `PUBLIC_URL`. Limited per user (`emailArticle`).
 - Mail sent on a schedule carries `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058); SES receives raw MIME, so the headers are kept.
 
 ## Data model

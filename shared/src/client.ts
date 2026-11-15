@@ -25,6 +25,7 @@ import type {
   BulkEntryStateRequest,
   BulkEntryStateResponse,
   Counters,
+  EmailEntryRequest,
   Entry,
   EntryContentsResponse,
   EntryListQuery,
@@ -387,6 +388,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<EntryContentsResponse>('POST', '/entries/contents', { body: { ids } }),
       share: (entryId: number) => request<ShareResponse>('PUT', `/entries/${id(entryId)}/share`),
       unshare: (entryId: number) => request<undefined>('DELETE', `/entries/${id(entryId)}/share`),
+      /** Mails the article from the server (API 1.14, where `ServerInfo.mail` is set). */
+      email: (entryId: number, body: EmailEntryRequest) =>
+        request<undefined>('POST', `/entries/${id(entryId)}/email`, { body }),
       /** Replaces the entry's tags; resolves to them normalised. */
       setTags: (entryId: number, tags: string[]) =>
         request<{ tags: string[] }>('PUT', `/entries/${id(entryId)}/tags`, { body: { tags } }),

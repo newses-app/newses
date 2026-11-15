@@ -48,6 +48,8 @@ export const ERROR_REASONS = {
   feed_login_elsewhere: ['url'],
   /** An email confirmation link that expired or was replaced by a newer one (API 1.14). */
   email_link_invalid: [],
+  /** Mail that replies come back to needs the sender's confirmed address (API 1.14). */
+  email_unconfirmed: [],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

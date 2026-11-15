@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { emailAddressSchema } from './auth.ts';
 import { categorySchema, subscriptionSchema } from './feeds.ts';
 import { labelSchema } from './labels.ts';
 import {
   MAX_CONTENTS_IDS,
+  MAX_EMAIL_NOTE_LENGTH,
+  MAX_EMAIL_RECIPIENTS,
   MAX_NOTE_LENGTH,
   MAX_PAGE_TEXT_LENGTH,
   MAX_PAGE_TITLE_LENGTH,
@@ -203,6 +206,18 @@ export const bulkEntryStateResponseSchema = z.object({
 });
 
 export const shareResponseSchema = z.object({ shareId: z.uuid() });
+
+/**
+ * `POST /entries/:id/email` (API 1.14): mails the article from the server, with the sender's
+ * confirmed address as `Reply-To`; `content` is the full article, `link` its excerpt and link.
+ */
+export const emailEntryRequestSchema = z.object({
+  to: z.array(emailAddressSchema).min(1).max(MAX_EMAIL_RECIPIENTS),
+  note: z.string().max(MAX_EMAIL_NOTE_LENGTH).optional(),
+  include: z.enum(['content', 'link']).default('content'),
+});
+
+export type EmailEntryRequest = z.input<typeof emailEntryRequestSchema>;
 
 /** The secret key in the user's published feed URL (`/public/feeds/<key>`). */
 export const publishedFeedResponseSchema = z.object({ key: z.string() });

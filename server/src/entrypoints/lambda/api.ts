@@ -1,9 +1,9 @@
 import awsLambdaFastify from '@fastify/aws-lambda';
 import { buildApp } from '../../api/app.ts';
-import { AccountEmailService } from '../../core/auth/account-email.ts';
 import { createAuthServices } from '../../core/auth/index.ts';
 import { createEntryServices } from '../../core/entries/index.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
+import { createMailServices } from '../../core/mail/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
 import { ThemeService } from '../../core/themes.ts';
 import { binaryResponse, createApiHandler } from './api-handler.ts';
@@ -12,6 +12,7 @@ import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
 const { config, logger, pool, db, feedDeps, ops, archive } = await createLambdaRuntime('api');
 const feeds = createFeedServices(feedDeps);
 const prefs = new PrefsService(db);
+const entries = createEntryServices(db, feedDeps.realtime, archive);
 
 const app = buildApp({
   logger,
@@ -26,16 +27,18 @@ const app = buildApp({
   events: false,
   services: {
     ...createAuthServices(db, config.appSecret),
-    email: new AccountEmailService({
+    feeds,
+    entries,
+    prefs,
+    mail: createMailServices({
       db,
       mailer: feedDeps.mailer,
       limits: feeds.rateLimits,
       prefs,
+      entries: entries.entries,
+      images: feeds.images,
       logger,
     }),
-    feeds,
-    entries: createEntryServices(db, feedDeps.realtime, archive),
-    prefs,
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,

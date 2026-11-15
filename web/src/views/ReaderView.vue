@@ -277,6 +277,9 @@ async function openSearch() {
 const { online, whenOnline } = useOnlineOnly();
 /** The archive is on the server only. */
 const browseArchiveOnline = whenOnline((search?: boolean) => browseArchive(search));
+const emailArticle = whenOnline((entry: Entry) => {
+  ui.emailEntry = entry;
+});
 
 /** Without a connection, the search covers the articles kept on this device. */
 function search() {
@@ -394,6 +397,9 @@ useShortcutHandler((action: ShortcutAction) => {
       return true;
     case 'editTags':
       if (entry) ui.tagsEntry = entry;
+      return true;
+    case 'emailArticle':
+      if (entry) emailArticle(entry);
       return true;
     case 'openOriginal': {
       const link = safeUrl(entry?.link);

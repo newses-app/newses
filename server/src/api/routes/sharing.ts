@@ -1,4 +1,5 @@
 import {
+  emailEntryRequestSchema,
   entrySchema,
   publishedFeedResponseSchema,
   publishPageRequestSchema,
@@ -9,6 +10,7 @@ import { z } from 'zod';
 import type { AccessKeyService } from '../../core/entries/access-keys.ts';
 import type { EntryService } from '../../core/entries/entries.ts';
 import type { PublishedPageService } from '../../core/feeds/published-pages.ts';
+import type { ArticleMailService } from '../../core/mail/index.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 
 const idParams = z.object({ id: z.coerce.number().int() });
@@ -18,7 +20,10 @@ export const sharingRoutes: FastifyPluginAsyncZod<{
   entries: EntryService;
   accessKeys: AccessKeyService;
   publishedPages: PublishedPageService;
-}> = (app, { entries, accessKeys, publishedPages }) => {
+  articleMail: ArticleMailService;
+  /** Origin of links and proxied images in mail; null uses each request's origin. */
+  publicUrl: string | null;
+}> = (app, { entries, accessKeys, publishedPages, articleMail, publicUrl }) => {
   app.addHook('preHandler', requireUser);
 
   app.put(
@@ -33,6 +38,18 @@ export const sharingRoutes: FastifyPluginAsyncZod<{
     await entries.unshare(requireAuth(request).user.id, request.params.id);
     return reply.code(204).send();
   });
+
+  app.post(
+    '/entries/:id/email',
+    { schema: { params: idParams, body: emailEntryRequestSchema } },
+    async (request, reply) => {
+      await articleMail.send(requireAuth(request).user, request.params.id, request.body, {
+        appUrl: (publicUrl ?? `${request.protocol}://${request.host}`).replace(/\/+$/, ''),
+        acceptLanguage: request.headers['accept-language'],
+      });
+      return reply.code(204).send();
+    },
+  );
 
   app.get('/shares', { schema: { response: { 200: z.array(entrySchema) } } }, async (request) =>
     entries.listShared(requireAuth(request).user.id),

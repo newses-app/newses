@@ -36,6 +36,7 @@ export const ACTION_GROUPS: { group: string; actions: ShortcutAction[] }[] = [
       'editNote',
       'editLabels',
       'editTags',
+      'emailArticle',
     ],
   },
   {
@@ -87,6 +88,7 @@ export const DEFAULT_BINDINGS: Bindings = {
   editNote: ['a n'],
   editLabels: ['a l'],
   editTags: ['T'],
+  emailArticle: ['a m'],
   reloadList: ['r'],
   refreshFeed: ['f r'],
   toggleHideRead: ['f a'],

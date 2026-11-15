@@ -10,7 +10,6 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
-import type { AccountEmailService } from '../core/auth/account-email.ts';
 import type { AppPasswordService } from '../core/auth/app-passwords.ts';
 import type { AuthService } from '../core/auth/auth-service.ts';
 import type { SessionService } from '../core/auth/sessions.ts';
@@ -18,6 +17,7 @@ import type { TwoFactorService } from '../core/auth/two-factor.ts';
 import type { UserService } from '../core/auth/users.ts';
 import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
+import type { MailServices } from '../core/mail/index.ts';
 import type { OpsServices } from '../core/ops/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
@@ -74,8 +74,8 @@ export interface ApiServices {
   users: UserService;
   twoFactor: TwoFactorService;
   appPasswords: AppPasswordService;
-  /** Users' email addresses, and the mail confirming them. */
-  email: AccountEmailService;
+  /** Users' email addresses, and the articles they mail. */
+  mail: MailServices;
   feeds: FeedServices;
   entries: EntryServices;
   prefs: PrefsService;
@@ -222,7 +222,7 @@ export function buildApp(deps: AppDeps) {
           source: deps.sourceUrl ?? null,
           pushKey: services.feeds.push.publicKey,
           pushDistributor: deps.pushDistributorUrl ?? null,
-          mail: services.email.enabled,
+          mail: services.mail.account.enabled,
         });
         await api.register(authRoutes, {
           ...services,
@@ -230,7 +230,7 @@ export function buildApp(deps: AppDeps) {
           publicUrl: deps.publicUrl ?? null,
         });
         await api.register(accountRoutes, {
-          email: services.email,
+          email: services.mail.account,
           publicUrl: deps.publicUrl ?? null,
         });
         await api.register(adminUserRoutes, services);
@@ -259,6 +259,8 @@ export function buildApp(deps: AppDeps) {
         await api.register(sharingRoutes, {
           ...services.entries,
           publishedPages: services.feeds.publishedPages,
+          articleMail: services.mail.articles,
+          publicUrl: deps.publicUrl ?? null,
         });
         await api.register(imageRoutes, { images: services.feeds.images });
         await api.register(prefsRoutes, { prefs: services.prefs, updater: services.feeds.updater });

@@ -83,7 +83,7 @@ beforeEach(async () => {
   mailer.sent.length = 0;
   mailer.failure = null;
   await db.delete(rateLimits);
-  await services.email.remove(pat);
+  await services.mail.account.remove(pat);
   await services.prefs.update(pat, { language: null });
 });
 

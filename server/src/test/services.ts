@@ -1,9 +1,9 @@
 import type { ApiServices } from '../api/app.ts';
-import { AccountEmailService } from '../core/auth/account-email.ts';
 import { createAuthServices } from '../core/auth/index.ts';
 import { createEntryServices } from '../core/entries/index.ts';
 import type { FeedDeps } from '../core/feeds/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
+import { createMailServices } from '../core/mail/index.ts';
 import { createOpsServices } from '../core/ops/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import { PrefsService } from '../core/prefs.ts';
@@ -20,18 +20,21 @@ export function createTestServices(
   const deps = testFeedDeps(db, fetcher, overrides);
   const feeds = createFeedServices(deps);
   const prefs = new PrefsService(db);
+  const entries = createEntryServices(db, deps.realtime);
   return {
     ...createAuthServices(db, TEST_APP_SECRET),
-    email: new AccountEmailService({
+    feeds,
+    entries,
+    prefs,
+    mail: createMailServices({
       db,
       mailer: deps.mailer,
       limits: feeds.rateLimits,
       prefs,
+      entries: entries.entries,
+      images: feeds.images,
       logger: deps.logger,
     }),
-    feeds,
-    entries: createEntryServices(db, deps.realtime),
-    prefs,
     themes: new ThemeService(db),
     realtime: deps.realtime,
     ops: createOpsServices({ db, logger: silentLogger, settings: TEST_OPS_SETTINGS }),

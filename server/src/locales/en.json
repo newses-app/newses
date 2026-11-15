@@ -12,5 +12,7 @@
   "confirmEmailIntro": "Confirm this address to receive email from Newses for the account {login}.",
   "confirmEmailAction": "Confirm address",
   "confirmEmailExpiry": "The link works for 24 hours.",
-  "confirmEmailIgnore": "If you didn't ask for this, ignore this email: nothing is sent to this address until it is confirmed."
+  "confirmEmailIgnore": "If you didn't ask for this, ignore this email: nothing is sent to this address until it is confirmed.",
+  "articleSentBy": "{login} sent you this article from Newses.",
+  "articleReply": "Reply to this email to answer {login}."
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Entry, EntryState } from '@newses/shared';
 import {
+  mdiEmailFastOutline,
   mdiEmailMarkAsUnread,
   mdiEmailOpenOutline,
   mdiLinkVariant,
@@ -106,6 +107,9 @@ const share = whenOnline(() => {
   ui.shareEntry = props.entry;
 });
 /** Full text stored with the article shows offline too; extracting it needs the server. */
+const email = whenOnline(() => {
+  ui.emailEntry = props.entry;
+});
 const extractFullText = whenOnline(() => toggleFullText());
 
 async function toggleFullText() {
@@ -214,6 +218,14 @@ async function toggleFullText() {
           @click="share"
         >
           {{ entry.shareId ? t('sharing.shared') : t('sharing.share') }}
+        </v-btn>
+        <v-btn
+          size="small"
+          :prepend-icon="mdiEmailFastOutline"
+          :aria-disabled="!online"
+          @click="email"
+        >
+          {{ t('email.emailArticle') }}
         </v-btn>
         <v-btn size="small" :prepend-icon="mdiScoreboardOutline" @click="ui.scoreEntry = entry">
           {{

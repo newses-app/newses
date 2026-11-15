@@ -12,5 +12,7 @@
   "confirmEmailIntro": "Conferma questo indirizzo per ricevere email da Newses per l'account {login}.",
   "confirmEmailAction": "Conferma indirizzo",
   "confirmEmailExpiry": "Il link funziona per 24 ore.",
-  "confirmEmailIgnore": "Se non l'hai chiesto tu, ignora questa email: a questo indirizzo non viene inviato nulla finché non è confermato."
+  "confirmEmailIgnore": "Se non l'hai chiesto tu, ignora questa email: a questo indirizzo non viene inviato nulla finché non è confermato.",
+  "articleSentBy": "{login} ti ha inviato questo articolo da Newses.",
+  "articleReply": "Rispondi a questa email per rispondere a {login}."
 }
