@@ -360,6 +360,59 @@ describe('App', () => {
     });
   });
 
+  it('emails users through SES from the stage domain when the stage sets mail', () => {
+    app.hasResourceProperties('AWS::SES::EmailIdentity', {
+      EmailIdentity: 'reader-dev.example.com',
+      MailFromAttributes: { MailFromDomain: 'bounce.reader-dev.example.com' },
+    });
+    app.hasResourceProperties('AWS::SES::ConfigurationSet', {
+      Name: 'newses-dev-mail',
+      SuppressionOptions: { SuppressedReasons: ['BOUNCE', 'COMPLAINT'] },
+    });
+    // Three Easy DKIM CNAMEs, and the MAIL FROM domain's MX and SPF records.
+    const records = Object.values(app.findResources('AWS::Route53::RecordSet')).map(
+      (r) => (r as { Properties: { Type: string } }).Properties.Type,
+    );
+    expect(records.sort()).toEqual(['CNAME', 'CNAME', 'CNAME', 'MX', 'TXT']);
+    app.hasResourceProperties('AWS::Route53::RecordSet', {
+      Type: 'MX',
+      ResourceRecords: [`10 feedback-smtp.${REGION}.amazonses.com`],
+    });
+
+    // The roles of the policies that may send through SES.
+    const sesSenders = (template: Template) =>
+      Object.values(template.findResources('AWS::IAM::Policy'))
+        .map((policy) => policy as { Properties: { PolicyDocument: unknown; Roles: unknown } })
+        .filter((policy) => JSON.stringify(policy.Properties.PolicyDocument).includes('ses:Send'))
+        .map((policy) => JSON.stringify(policy.Properties.Roles));
+    const senders = sesSenders(app);
+    expect(senders).toHaveLength(2);
+    expect(senders.join()).toMatch(/apiFunction/);
+    expect(senders.join()).toMatch(/tickFunction/);
+    for (const name of ['api', 'tick'])
+      app.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `newses-dev-${name}`,
+        Environment: {
+          Variables: Match.objectLike({ MAIL_SES_CONFIGURATION_SET: Match.anyValue() }),
+        },
+      });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'newses-dev-fetch',
+      Environment: {
+        Variables: Match.not(Match.objectLike({ MAIL_SES_CONFIGURATION_SET: Match.anyValue() })),
+      },
+    });
+
+    const withoutMail = Template.fromStack(
+      new NewsesStage(newApp(), 'Test', { stage: { ...dev, mail: false }, webDir }).app,
+    );
+    withoutMail.resourceCountIs('AWS::SES::EmailIdentity', 0);
+    withoutMail.resourceCountIs('AWS::SES::ConfigurationSet', 0);
+    withoutMail.resourceCountIs('AWS::Route53::RecordSet', 0);
+    expect(sesSenders(withoutMail)).toEqual([]);
+    expect(JSON.stringify(withoutMail.toJSON())).not.toContain('MAIL_SES_CONFIGURATION_SET');
+  });
+
   it('archives in the blob bucket, catalogued for Athena by month, on both stages', () => {
     data.hasResourceProperties('AWS::S3::Bucket', {
       LifecycleConfiguration: {

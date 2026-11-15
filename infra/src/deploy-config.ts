@@ -22,6 +22,7 @@ const stageSchema = z.object({
   sourceUrl: z.url({ protocol: /^https$/ }).optional(),
   pushDistributorUrl: z.url({ protocol: /^https$/ }).optional(),
   pushTokens: z.boolean().optional(),
+  mail: z.boolean().optional(),
   downloadsCorsOrigins: z.array(z.string().regex(/^https:\/\/[^/]+$/)).optional(),
   // No tag or digest: the release pipeline adds those.
   imageRepository: z

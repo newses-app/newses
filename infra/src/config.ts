@@ -33,6 +33,11 @@ export interface StageConfig {
    * `/<prefix>/<stage>/push-tokens`, which the operator creates.
    */
   pushTokens?: boolean | undefined;
+  /**
+   * Whether the stage emails users through SES, from `newses@<domainName>`: the stack creates the
+   * domain's identity, with DKIM and MAIL FROM records in the hosted zone. Omitted for no user mail.
+   */
+  mail?: boolean | undefined;
   /** Origins whose pages may fetch the downloads (the project site's `latest.json` reads). */
   downloadsCorsOrigins?: string[] | undefined;
   /**

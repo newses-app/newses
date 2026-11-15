@@ -8,8 +8,10 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as route53 from 'aws-cdk-lib/aws-route53';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
+import * as ses from 'aws-cdk-lib/aws-ses';
 import * as targets from 'aws-cdk-lib/aws-scheduler-targets';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -24,6 +26,7 @@ import {
   DB_MASTER_PASSWORD_PARAMETER,
   DB_MASTER_USER,
   dbName,
+  HOSTED_ZONE,
   PROJECT,
   resourceName,
 } from './deploy-config.ts';
@@ -53,6 +56,18 @@ export interface AppStackProps extends StackProps {
  * instrumented, so feed requests carry no trace headers; `http` would only duplicate the AWS SDK
  * spans. Application Signals stays off, as it bills per signal and creates metrics.
  */
+/** The stage's domain as an SES identity, with its DKIM and MAIL FROM records in `zone`. */
+class StageDomainIdentity extends ses.Identity {
+  readonly value: string;
+  readonly hostedZone: route53.IPublicHostedZone;
+
+  constructor(domainName: string, hostedZone: route53.IPublicHostedZone) {
+    super();
+    this.value = domainName;
+    this.hostedZone = hostedZone;
+  }
+}
+
 const tracingEnvironment = (stage: StageConfig, name: string) => ({
   AWS_LAMBDA_EXEC_WRAPPER: '/opt/otel-instrument',
   OTEL_TRACES_SAMPLER: 'traceidratio',
@@ -222,6 +237,8 @@ export class AppStack extends Stack {
     // Operations alerts are checked after each dispatch.
     tick.addEnvironment('ALERT_TOPIC_ARN', this.alerts.topicArn);
     this.alerts.grantPublish(tick);
+    // The api sends article and confirmation mail, tick the digests.
+    if (stage.mail) this.#userMail(stage, [api, tick]);
     const tickSchedule = (name: string, expression: string, task: string) =>
       new scheduler.Schedule(this, `${name}Schedule`, {
         scheduleName: resourceName(stage, task.replace('.', '-')),
@@ -318,5 +335,39 @@ export class AppStack extends Stack {
       executeOnHandlerChange: true,
       executeBefore: [api, tick, fetch, favicon],
     });
+  }
+
+  /**
+   * User mail through SES from the stage's domain: Easy DKIM, a `bounce.` MAIL FROM domain so SPF
+   * aligns, and a configuration set that stops sending to addresses that bounced or complained.
+   */
+  #userMail(stage: StageConfig, senders: nodejs.NodejsFunction[]): void {
+    const zone = route53.PublicHostedZone.fromPublicHostedZoneAttributes(this, 'Zone', HOSTED_ZONE);
+    const configurationSet = new ses.ConfigurationSet(this, 'Mail', {
+      configurationSetName: resourceName(stage, 'mail'),
+      suppressionReasons: ses.SuppressionReasons.BOUNCES_AND_COMPLAINTS,
+    });
+    const identity = new ses.EmailIdentity(this, 'MailIdentity', {
+      identity: new StageDomainIdentity(stage.domainName, zone),
+      configurationSet,
+      mailFromDomain: `bounce.${stage.domainName}`,
+    });
+    const send = new iam.PolicyStatement({
+      actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+      resources: [
+        identity.emailIdentityArn,
+        this.formatArn({
+          service: 'ses',
+          resource: 'configuration-set',
+          resourceName: configurationSet.configurationSetName,
+        }),
+        // In the SES sandbox the recipient's identity is checked too: addresses verified to test.
+        this.formatArn({ service: 'ses', resource: 'identity', resourceName: '*@*' }),
+      ],
+    });
+    for (const sender of senders) {
+      sender.addToRolePolicy(send);
+      sender.addEnvironment('MAIL_SES_CONFIGURATION_SET', configurationSet.configurationSetName);
+    }
   }
 }
