@@ -52,7 +52,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 - Tests live next to code as `*.test.ts` (Vitest). Database tests start a Postgres container via Testcontainers, so Docker must be running.
 - Migrations are generated, never edited after they are committed; change the schema and generate a new one.
 - `web` is bundled by Vite; browser code imports runtime values from `@newses/shared/client` (no Zod) and only types from `@newses/shared`.
-- UI strings live in each package's `src/locales/en.json` (`web`, `desktop`, `server`). In `web`, vue-i18n parses them: write a literal `@`, `|`, or `{` as `{'@'}`.
+- UI strings live in each package's `src/locales/en.json` (`web`, `desktop`, `server`), in vue-i18n's syntax: `web` shows them with vue-i18n, `server` and `desktop` with `formatMessage` (`shared/src/messages.ts`). Write a literal `@`, `|`, or `{` as `{'@'}`.
 - A changed meaning takes a new key in `en.json`: nothing else flags a translation gone stale.
 - Web layout is logical: `ms-`, `me-`, `ps-`, and `pe-` classes, and `inline-start` and `inline-end` in CSS. Physical sides fail the lint and `web/src/logical-css.test.ts`.
 - Text a reader or feed wrote sits in `<bdi>` or has `dir="auto"`, in inputs too; URLs, codes, and patterns have `dir="ltr"`. `t()` isolates parameters itself, so a message that gets stored goes through `withoutIsolates`.

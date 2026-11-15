@@ -34,6 +34,17 @@ const placeholders = (message: string) =>
 /** The forms of a plural message; `{'|'}` is a literal, not a separator. */
 export const pluralForms = (message: string) => message.replace(/\{'.'\}/g, '').split('|');
 
+const LITERALS = /\{'(?:[^'\\]|\\.)*'\}/g;
+
+/**
+ * Keys of the messages that link to another (`@:key`), which only the web app's vue-i18n
+ * follows; the server and desktop show messages with `formatMessage`.
+ */
+export const linkedMessages = (messages: object): string[] =>
+  messageEntries(messages)
+    .filter(([, message]) => /@(?:\.\w+)?:/.test(message.replace(LITERALS, '')))
+    .map(([key]) => key);
+
 const BIDI_CONTROLS = /[\u200E\u200F\u202A-\u202E\u2066-\u2069]/;
 
 function compileErrors(message: string): string[] {
@@ -52,8 +63,9 @@ export function missingKeys(source: object, messages: object): string[] {
 
 /**
  * What is wrong with a language's messages, each of which would show wrongly or not at all.
- * Missing keys are not wrong. `forms` is how many plural forms the language has, unset for the
- * source language, whose messages define the rest.
+ * Missing keys are not wrong. `forms` is how many plural forms the language has; unset, as for
+ * the web app's source language (whose zero forms vue-i18n's default rule picks), the source's
+ * messages define the rest.
  */
 export function localeProblems(source: object, messages: object, forms?: number): string[] {
   const originals = new Map(messageEntries(source));

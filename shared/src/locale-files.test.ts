@@ -1,6 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { LOCALE_PACKAGES, localeFiles, localeProblems, repositoryFile } from './locale-check.ts';
+import {
+  LOCALE_PACKAGES,
+  linkedMessages,
+  localeFiles,
+  localeProblems,
+  repositoryFile,
+} from './locale-check.ts';
 import { DEFAULT_LOCALE, LOCALES } from './locales.ts';
 
 const codes = LOCALES.map((locale) => locale.code).sort();
@@ -16,10 +22,19 @@ describe.each(LOCALE_PACKAGES)('%s locale files', (name) => {
   it.each(LOCALES.map((locale) => [locale.code, locale] as const))(
     '%s is sound',
     (code, locale) => {
-      const forms = code === DEFAULT_LOCALE ? undefined : locale.plurals.length;
+      // Only the web app's vue-i18n keeps its default rule for the source language.
+      const forms = name === 'web' && code === DEFAULT_LOCALE ? undefined : locale.plurals.length;
       expect(localeProblems(source, files.get(code) ?? {}, forms)).toEqual([]);
     },
   );
+
+  it.skipIf(name === 'web')('link no messages, which only the web app follows', () => {
+    expect(
+      [...files].flatMap(([code, messages]) =>
+        linkedMessages(messages).map((key) => `${code}: ${key}`),
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe('Vuetify messages', () => {

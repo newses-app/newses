@@ -27,7 +27,9 @@
 - Plural forms are separated by ` | `.
 - Zero is a separate key, and each message counts one thing: join separate counts in code.
 - `{duration}` is a noun phrase from `time.*`, so a sentence around it needs no agreement with it.
-- In `web`, write a literal `@`, `|`, or `{` as `{'@'}`.
+- Write a literal `@`, `|`, or `{` as `{'@'}`.
+- Linked messages (`@:key`) only in `web`: the server and desktop show messages without vue-i18n.
+- In `server` and `desktop`, English plural messages have the registry's English forms, as zero is a separate key.
 - Not translated: the name Newses, search operators, the parser's explanation in `{detail}`, API `message`, the CLI, the compatibility APIs, operator alerts, the project site, and the downloads page.
 
 ## Pseudo-locales

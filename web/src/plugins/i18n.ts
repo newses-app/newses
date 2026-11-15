@@ -1,9 +1,8 @@
 import { DEFAULT_LOCALE, type Locale, LOCALES } from '@newses/shared/locales';
+import { pluralRule, shownParam } from '@newses/shared/messages';
 import { createI18n, useI18n } from 'vue-i18n';
 import { en as vuetifyEn } from 'vuetify/locale';
 import { createVueI18nAdapter } from 'vuetify/locale/adapters/vue-i18n';
-import { shownParam } from '../lib/message-params.ts';
-import { pluralRule } from '../lib/plurals.ts';
 import { PSEUDO_LOCALES, pseudoMessages } from '../lib/pseudo-locale.ts';
 import en from '../locales/en.json';
 

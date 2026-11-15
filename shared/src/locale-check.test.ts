@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { localeProblems, messageEntries, missingKeys, pluralForms } from './locale-check.ts';
+import {
+  linkedMessages,
+  localeProblems,
+  messageEntries,
+  missingKeys,
+  pluralForms,
+} from './locale-check.ts';
 
 const source = {
   greeting: 'Hello {name}',
@@ -29,6 +35,19 @@ describe('pluralForms', () => {
   it('takes a literal pipe as text', () => {
     expect(pluralForms("a {'|'} b")).toHaveLength(1);
     expect(pluralForms('a | b')).toHaveLength(2);
+  });
+});
+
+describe('linkedMessages', () => {
+  it('finds links, but not literal at signs', () => {
+    expect(
+      linkedMessages({
+        plain: 'Mail {name}',
+        literal: "{'@'}{handle}",
+        escaped: "Write {'@:'} first",
+        linked: { message: 'See @:other', modified: 'See @.lower:other' },
+      }),
+    ).toEqual(['linked.message', 'linked.modified']);
   });
 });
 
