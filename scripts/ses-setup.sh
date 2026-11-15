@@ -1,31 +1,34 @@
 #!/usr/bin/env bash
 # Shows the account's SES status in the deployment's region and each mail stage's domain identity,
 # which the stage's deploy creates, and what the options would change: asking AWS for production
-# access (--production) and verifying test recipients while the account is in the SES sandbox
-# (--verify). Only --apply makes the changes.
+# access (--request-production-access) and adding test recipients while the account is in the SES
+# sandbox (--test-recipient). Only --apply makes the changes.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/ses-setup.sh [--production [--website-url URL] [--use-case TEXT] [--contact ADDRESS]...]
-                            [--verify ADDRESS]... [--apply]
+Usage: scripts/ses-setup.sh [--request-production-access [--website-url URL] [--use-case TEXT]
+                              [--contact ADDRESS]...] [--test-recipient ADDRESS]... [--apply]
 
 Shows the account's SES status in the deployment's region (sandbox or production access, a
 pending review, the sending quota), each stage that sets mail with its domain identity
-(verification, DKIM, MAIL FROM), and the verified test recipients; then what the options below
+(verification, DKIM, MAIL FROM), and the test recipients; then what the options below
 would change, which only --apply makes.
 
-  --production       Asks AWS for production access, so the mail stages can email any address:
-                     transactional mail, the website and use case below. Skipped once granted or
-                     while a review is pending; AWS answers by email to the account's contacts
-  --website-url URL  The website in the request (default: https:// and the prod stage's domain,
-                     else the first mail stage's)
-  --use-case TEXT    The use case in the request (default: a description of Newses's user mail)
-  --contact ADDRESS  Another address AWS sends its answer to (repeatable)
-  --verify ADDRESS   Lets the stages email ADDRESS while the account is in the sandbox; SES
-                     mails it a confirmation link (repeatable; skipped when ADDRESS is already an
-                     identity)
-  --apply            Make the changes the options describe
+  --request-production-access
+                           Asks AWS to take the account out of the SES sandbox, so the mail
+                           stages can email any address: transactional mail, the website and use
+                           case below. Account-wide in the region, not per stage. Skipped once
+                           granted or while a review is pending; AWS answers by email to the
+                           account's contacts
+  --website-url URL        The website in the request (default: https:// and the prod stage's
+                           domain, else the first mail stage's)
+  --use-case TEXT          The use case in the request (default: a description of Newses's mail)
+  --contact ADDRESS        Another address AWS sends its answer to (repeatable)
+  --test-recipient ADDRESS Lets the stages email ADDRESS while the account is in the sandbox; SES
+                           mails it a link to follow first (repeatable; skipped when ADDRESS is
+                           already a test recipient)
+  --apply                  Make the changes the options describe
 
 Every run can be repeated. Needs AWS CLI credentials for the deployment's account
 (infra/deploy.config.json).
@@ -39,18 +42,18 @@ die() {
 
 email_pattern='^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'
 
-production=false website_url='' use_case='' apply=false
+request_access=false website_url='' use_case='' apply=false
 contacts=() recipients=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --production) production=true; shift ;;
-    --website-url | --use-case | --contact | --verify)
+    --request-production-access) request_access=true; shift ;;
+    --website-url | --use-case | --contact | --test-recipient)
       [ $# -ge 2 ] || die "$1 needs a value"
       case "$1" in
         --website-url) website_url=$2 ;;
         --use-case) use_case=$2 ;;
         --contact) contacts+=("$2") ;;
-        --verify) recipients+=("$2") ;;
+        --test-recipient) recipients+=("$2") ;;
       esac
       shift 2
       ;;
@@ -62,8 +65,8 @@ done
 for address in ${contacts[@]+"${contacts[@]}"} ${recipients[@]+"${recipients[@]}"}; do
   [[ $address =~ $email_pattern ]] || die "not an email address: $address"
 done
-$production || [ -z "$website_url$use_case${contacts[*]-}" ] ||
-  die '--website-url, --use-case, and --contact go with --production'
+$request_access || [ -z "$website_url$use_case${contacts[*]-}" ] ||
+  die '--website-url, --use-case, and --contact go with --request-production-access'
 [ -z "$website_url" ] || [[ $website_url =~ ^https?://[^[:space:]]+$ ]] ||
   die "not a website URL: $website_url"
 [ "${#use_case}" -le 5000 ] || die 'the use case is longer than 5000 characters'
@@ -100,7 +103,7 @@ read -r production_access review sending quota sent <<<"$status"
 if [ "$production_access" = True ]; then
   echo "Production access: granted"
 else
-  echo "Production access: no, the account is in the sandbox (it emails verified addresses only)"
+  echo "Production access: no, the account is in the sandbox (it emails only test recipients)"
 fi
 [ "$review" = None ] || echo "Production access review: $review"
 echo "Sending: $([ "$sending" = True ] && echo enabled || echo paused), $sent of $quota sent in the last 24 hours"
@@ -133,7 +136,7 @@ fi
 
 # What the options would do.
 request=false
-if $production; then
+if $request_access; then
   if [ "$production_access" = True ]; then
     echo
     echo 'Production access is already granted; not asking again.'
@@ -156,16 +159,16 @@ stops mail to addresses that bounced or complained. Volume is low: a few message
 day."
   fi
 fi
-to_verify=()
+to_add=()
 for address in ${recipients[@]+"${recipients[@]}"}; do
   if grep -qixF "$address" < <(cut -f 1 <<<"$verified"); then
-    echo "$address is already an identity; not verifying it again."
+    echo "$address is already a test recipient; not adding it again."
   else
-    to_verify+=("$address")
+    to_add+=("$address")
   fi
 done
 
-$request || [ "${#to_verify[@]}" -gt 0 ] || exit 0
+$request || [ "${#to_add[@]}" -gt 0 ] || exit 0
 if ! $apply; then
   echo
   if $request; then
@@ -173,7 +176,7 @@ if ! $apply; then
       "${contacts[*]+with answers also to ${contacts[*]}}"
     echo "Use case: $use_case"
   fi
-  for address in ${to_verify[@]+"${to_verify[@]}"}; do echo "Would verify $address"; done
+  for address in ${to_add[@]+"${to_add[@]}"}; do echo "Would add the test recipient $address"; done
   echo
   echo 'Nothing changed: rerun with --apply to make these changes.'
   exit 0
@@ -194,8 +197,8 @@ if $request; then
   echo 'the request; rerun this script to see the review status.'
 fi
 
-for address in ${to_verify[@]+"${to_verify[@]}"}; do
-  step="verifying $address"
+for address in ${to_add[@]+"${to_add[@]}"}; do
+  step="adding the test recipient $address"
   "${ses[@]}" create-email-identity --email-identity "$address" >/dev/null
   echo "SES mailed $address a confirmation link; the stages can email it once it is followed."
 done
