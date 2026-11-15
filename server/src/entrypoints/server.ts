@@ -1,6 +1,7 @@
 import { PgBoss } from 'pg-boss';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import { buildApp } from '../api/app.ts';
+import { AccountEmailService } from '../core/auth/account-email.ts';
 import { createAuthServices } from '../core/auth/index.ts';
 import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
@@ -38,11 +39,20 @@ onShutdown(() => realtime.stop());
 const feedDeps = createFeedDeps({ config, db, boss, realtime, logger, ops: ops.recorder });
 onShutdown(() => feedDeps.fetcher.close());
 onShutdown(() => feedDeps.push.close());
+const feeds = createFeedServices(feedDeps);
+const prefs = new PrefsService(db);
 const services = {
   ...createAuthServices(db, config.appSecret),
-  feeds: createFeedServices(feedDeps),
+  email: new AccountEmailService({
+    db,
+    mailer: feedDeps.mailer,
+    limits: feeds.rateLimits,
+    prefs,
+    logger: feedDeps.logger,
+  }),
+  feeds,
   entries: createEntryServices(db, realtime, createArchiveReader(config, feedDeps.blobs)),
-  prefs: new PrefsService(db),
+  prefs,
   themes: new ThemeService(db),
   realtime,
   ops,

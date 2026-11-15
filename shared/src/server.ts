@@ -18,6 +18,8 @@ export const serverInfoSchema = z.object({
    * distributor its operator offers readers (`PUSH_DISTRIBUTOR_URL`), when there is one.
    */
   push: z.object({ key: z.string(), distributor: z.url().optional() }).optional(),
+  /** From API 1.14: whether the server can email users, who may then add their address. */
+  mail: z.boolean().optional(),
 });
 
 export type ServerInfo = z.infer<typeof serverInfoSchema>;

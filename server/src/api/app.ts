@@ -10,6 +10,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { AccountEmailService } from '../core/auth/account-email.ts';
 import type { AppPasswordService } from '../core/auth/app-passwords.ts';
 import type { AuthService } from '../core/auth/auth-service.ts';
 import type { SessionService } from '../core/auth/sessions.ts';
@@ -32,6 +33,7 @@ import { registerOpsTracking } from './ops-tracking.ts';
 import { adminOpsRoutes } from './routes/admin-ops.ts';
 import { adminSiteRoutes } from './routes/admin-sites.ts';
 import { adminThemeRoutes } from './routes/admin-themes.ts';
+import { accountRoutes } from './routes/account.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
 import { archiveRoutes } from './routes/archive.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -72,6 +74,8 @@ export interface ApiServices {
   users: UserService;
   twoFactor: TwoFactorService;
   appPasswords: AppPasswordService;
+  /** Users' email addresses, and the mail confirming them. */
+  email: AccountEmailService;
   feeds: FeedServices;
   entries: EntryServices;
   prefs: PrefsService;
@@ -218,10 +222,15 @@ export function buildApp(deps: AppDeps) {
           source: deps.sourceUrl ?? null,
           pushKey: services.feeds.push.publicKey,
           pushDistributor: deps.pushDistributorUrl ?? null,
+          mail: services.email.enabled,
         });
         await api.register(authRoutes, {
           ...services,
           iconTokens: services.feeds.iconTokens,
+          publicUrl: deps.publicUrl ?? null,
+        });
+        await api.register(accountRoutes, {
+          email: services.email,
           publicUrl: deps.publicUrl ?? null,
         });
         await api.register(adminUserRoutes, services);

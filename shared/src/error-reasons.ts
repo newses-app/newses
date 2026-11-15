@@ -46,6 +46,8 @@ export const ERROR_REASONS = {
   feed_login_unreadable: [],
   /** A discovered feed is on another site than the one the credentials were given for. */
   feed_login_elsewhere: ['url'],
+  /** An email confirmation link that expired or was replaced by a newer one (API 1.14). */
+  email_link_invalid: [],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

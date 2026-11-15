@@ -3,6 +3,7 @@ import type {
   AppConnection,
   AppPassword,
   changePasswordRequestSchema,
+  ConfirmEmailResponse,
   CreateAppPasswordResponse,
   createAppPasswordRequestSchema,
   createUserRequestSchema,
@@ -273,6 +274,16 @@ export function createApiClient(options: ApiClientOptions = {}) {
             body: { code },
           }),
       },
+    },
+
+    /** From API 1.14, where `ServerInfo.mail` is set. */
+    account: {
+      /** Mails a confirmation link to the address, which waits as `pendingEmail`. */
+      setEmail: (email: string) => request<User>('PUT', '/account/email', { body: { email } }),
+      removeEmail: () => request<undefined>('DELETE', '/account/email'),
+      /** The token from the mailed link; needs no session. */
+      confirmEmail: (token: string) =>
+        request<ConfirmEmailResponse>('POST', '/account/email/confirm', { body: { token } }),
     },
 
     admin: {

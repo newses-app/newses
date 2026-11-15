@@ -7,5 +7,10 @@
   "notAvailableText": "This link does not exist or is no longer shared.",
   "publishedTitle": "Published articles",
   "publishedDescription": "Articles published from Newses",
-  "opmlTitle": "Newses subscriptions"
+  "opmlTitle": "Newses subscriptions",
+  "confirmEmailSubject": "Confirm your email address",
+  "confirmEmailIntro": "Confirm this address to receive email from Newses for the account {login}.",
+  "confirmEmailAction": "Confirm address",
+  "confirmEmailExpiry": "The link works for 24 hours.",
+  "confirmEmailIgnore": "If you didn't ask for this, ignore this email: nothing is sent to this address until it is confirmed."
 }

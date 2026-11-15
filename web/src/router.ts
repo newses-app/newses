@@ -39,6 +39,13 @@ export const router = createRouter({
       meta: { public: true },
     },
     {
+      // The link mailed to confirm an address; the token is its fragment.
+      path: '/confirm-email',
+      name: 'confirm-email',
+      component: () => import('./views/ConfirmEmailView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/change-password',
       name: 'change-password',
       component: () => import('./views/ChangePasswordView.vue'),

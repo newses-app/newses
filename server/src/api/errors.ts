@@ -28,6 +28,8 @@ const DOMAIN_STATUS: Record<DomainErrorCode, number> = {
   feed_not_found: 422,
   fetch_failed: 502,
   resync_required: 410,
+  mail_unavailable: 503,
+  mail_failed: 502,
 };
 
 export function errorHandler(err: FastifyError, request: FastifyRequest, reply: FastifyReply) {

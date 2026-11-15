@@ -4,10 +4,10 @@ import { rateLimits } from '../db/schema.ts';
 import { ThrottledError } from './errors.ts';
 
 /**
- * User actions limited per user: those that make the server fetch from a remote host, and OPML
- * imports, which write many rows at once.
+ * User actions limited per user: those that make the server fetch from a remote host, OPML
+ * imports, which write many rows at once, and mail to addresses not yet confirmed.
  */
-export type LimitedAction = 'fulltext' | 'subscribe' | 'page' | 'debug' | 'import';
+export type LimitedAction = 'fulltext' | 'subscribe' | 'page' | 'debug' | 'import' | 'emailConfirm';
 
 /** Each action's requests per user per WINDOW_SECONDS. */
 export const RATE_LIMITS: Record<LimitedAction, number> = {
@@ -16,6 +16,7 @@ export const RATE_LIMITS: Record<LimitedAction, number> = {
   page: 10,
   debug: 5,
   import: 5,
+  emailConfirm: 3,
 };
 
 const WINDOW_SECONDS = 60;

@@ -32,6 +32,10 @@ export const messagesFor = (locale: string): Messages =>
 /** The language of a user's preference, for what they own: null follows no device here. */
 export const ownerLocale = (language: string | null) => negotiateLocale(language ? [language] : []);
 
+/** The language of mail a user asked for: theirs, else their device's, else the default. */
+export const userLocale = (language: string | null, acceptLanguage?: string) =>
+  negotiateLocale([...(language ? [language] : []), ...acceptedLanguages(acceptLanguage)]);
+
 /** The languages of an `Accept-Language` header, most wanted first. */
 export function acceptedLanguages(header: string | undefined): string[] {
   const ranges = (header ?? '').split(',').map((range) => {

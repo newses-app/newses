@@ -306,6 +306,7 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 
 - Every user mail comes from `MAIL_FROM` (default `Newses <newses@host>` on the `PUBLIC_URL` host, else `localhost`); a user's address only appears as `Reply-To`.
 - `SMTP_URL` (`smtp://` or `smtps://`) turns user mail on, independent of alert email; `ALERT_EMAIL_FROM` defaults to `MAIL_FROM`. `SMTP_URL` and `MAIL_SES_CONFIGURATION_SET` exclude each other; the Docker image refuses SES, whose SDK only the functions bundle.
+- A user's address receives mail once confirmed: `PUT /account/email` keeps it pending and mails `PUBLIC_URL/confirm-email#<token>` (else the request's origin), whose page posts the token to `POST /account/email/confirm` after a click, without a session; the token's hash is kept for 24 hours, and a new request replaces it. Requests are limited per user (`emailConfirm`).
 - Mail sent on a schedule carries `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058); SES receives raw MIME, so the headers are kept.
 
 ## Data model
@@ -314,7 +315,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 
 | Entity | Scope | Notes |
 |---|---|---|
-| `users` | Instance | Login (unique), Argon2id hash, role (`admin`/`user`), disabled flag; sealed TOTP secret, enabled time, last accepted time step |
+| `users` | Instance | Login (unique), Argon2id hash, role (`admin`/`user`), disabled flag; sealed TOTP secret, enabled time, last accepted time step; confirmed email address and when; a pending address with its link token's hash and expiry |
 | `recovery_codes` | User | SHA-256 hash, used time |
 | `sessions` | User | Token hash, kind (`cookie`/`bearer`/`api`), user agent, app password (`api` only), last seen, expiry |
 | `app_passwords` | User | Name, hash, last used |
@@ -430,7 +431,7 @@ Admins:
 
 ### Native REST API
 
-- `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config), where its source is (`source`, see Third-party notices), and the VAPID public key devices subscribe to push with (`push.key`, API 1.11), with the UnifiedPush distributor the operator offers readers (`push.distributor`, `PUSH_DISTRIBUTOR_URL`; the Docker `ntfy` profile sets it, and on AWS the stage's `pushDistributorUrl`). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
+- `GET /server` returns the product (`newses`; apps also accept the earlier `rss-reader`), the server build (`NEWSES_VERSION`: the commit on AWS, a Docker build argument, else `dev`), the API version (`API_VERSION` in `shared`), the instance name when the operator set one (`INSTANCE_NAME`; on AWS the stage's `instanceName` in the deployment config), where its source is (`source`, see Third-party notices), and the VAPID public key devices subscribe to push with (`push.key`, API 1.11), with the UnifiedPush distributor the operator offers readers (`push.distributor`, `PUSH_DISTRIBUTOR_URL`; the Docker `ntfy` profile sets it, and on AWS the stage's `pushDistributorUrl`), and whether users can add an email address, as user mail is configured (`mail`, API 1.14). A new major breaks existing apps; a new minor adds endpoints apps may require. Users who must change their password can still reach it.
 - Names, titles, notes, and addresses have one set of length limits (`shared/src/limits.ts`). The schemas check them, and the services check them again, so the compatibility APIs and OPML import hold to them too. Titles a feed gives itself are cut to the limit instead.
 - `/api/v1` responses over 1 KB are compressed for clients that accept it (Brotli at quality 4, else gzip), except event streams and images. On AWS, CloudFront's API behaviour does not cache, so it forwards `Accept-Encoding` to the API and passes compressed responses through, and the Lambda adapter returns them base64-encoded, which keeps large sync and content pages under Lambda's 6 MB response limit.
 - CORS on `/api/v1/*` allows the app origins `app://newses` (Electron) and `https://localhost` (Capacitor Android): requests with `Authorization` and `Content-Type`, `Retry-After` exposed, preflights cached for a day. Credentials are never allowed, so apps use bearer tokens and cookie sessions stay same-origin. Other origins get no CORS headers. CORS is applied before authentication, so apps can read errors too.

@@ -7,5 +7,10 @@
   "notAvailableText": "Este enlace no existe o ya no se comparte.",
   "publishedTitle": "Artículos publicados",
   "publishedDescription": "Artículos publicados desde Newses",
-  "opmlTitle": "Suscripciones de Newses"
+  "opmlTitle": "Suscripciones de Newses",
+  "confirmEmailSubject": "Confirma tu dirección de correo",
+  "confirmEmailIntro": "Confirma esta dirección para recibir correos de Newses para la cuenta {login}.",
+  "confirmEmailAction": "Confirmar dirección",
+  "confirmEmailExpiry": "El enlace funciona durante 24 horas.",
+  "confirmEmailIgnore": "Si no lo pediste, ignora este correo: no se envía nada a esta dirección hasta que se confirme."
 }

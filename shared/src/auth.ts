@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { COMMON_PASSWORDS } from './common-passwords.ts';
+import { MAX_EMAIL_LENGTH } from './limits.ts';
 
 export const loginNameSchema = z
   .string()
@@ -38,7 +39,21 @@ export const userSchema = z.object({
   passwordChangeRequired: z.boolean(),
   createdAt: z.iso.datetime(),
   lastLoginAt: z.iso.datetime().nullable(),
+  /** From API 1.14: the confirmed address user mail goes to. */
+  email: z.string().nullable().optional(),
+  /** From API 1.14: an address awaiting confirmation through the link mailed to it. */
+  pendingEmail: z.string().nullable().optional(),
 });
+
+export const emailAddressSchema = z.string().trim().max(MAX_EMAIL_LENGTH).pipe(z.email());
+
+/** `PUT /account/email`: mails a confirmation link to the address. */
+export const setEmailRequestSchema = z.object({ email: emailAddressSchema });
+
+/** `POST /account/email/confirm`: the token from the link is the credential. */
+export const confirmEmailRequestSchema = z.object({ token: z.string().min(1).max(128) });
+
+export const confirmEmailResponseSchema = z.object({ email: z.string() });
 
 export const loginRequestSchema = z.object({
   login: z.string().trim().min(1).max(64),
@@ -186,3 +201,4 @@ export type AppConnection = z.infer<typeof appConnectionSchema>;
 export type CurrentSession = z.infer<typeof currentSessionSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+export type ConfirmEmailResponse = z.infer<typeof confirmEmailResponseSchema>;

@@ -25,6 +25,8 @@ const PASSWORD_CHANGE_ROUTES = new Set([
   '/api/v1/auth/password',
   '/api/v1/auth/logout',
   '/api/v1/server',
+  // The link's token is the credential, whoever is signed in where it opens.
+  '/api/v1/account/email/confirm',
 ]);
 
 export interface RequestAuth {

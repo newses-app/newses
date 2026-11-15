@@ -19,7 +19,9 @@ export const serverRoutes: FastifyPluginAsyncZod<{
   pushKey: string;
   /** A UnifiedPush distributor the apps suggest; null for none. */
   pushDistributor: string | null;
-}> = (app, { version, name, source, pushKey, pushDistributor }) => {
+  /** Whether users can add an email address: the server has mail configured. */
+  mail: boolean;
+}> = (app, { version, name, source, pushKey, pushDistributor, mail }) => {
   app.get('/server', { schema: { security: [], response: { 200: serverInfoSchema } } }, () => ({
     product: PRODUCT_NAME,
     version,
@@ -27,6 +29,7 @@ export const serverRoutes: FastifyPluginAsyncZod<{
     ...(name && { name }),
     ...(source && { source }),
     push: { key: pushKey, ...(pushDistributor && { distributor: pushDistributor }) },
+    mail,
   }));
 
   // Signed in only: exact versions would tell anyone which known vulnerabilities to try.

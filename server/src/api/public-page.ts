@@ -1,6 +1,7 @@
 import type { Entry } from '@newses/shared';
 import { LOCALES } from '@newses/shared/locales';
 import { VIDEO_FRAME_SOURCES } from '@newses/shared/web-csp';
+import { escapeHtml } from '../core/html.ts';
 import { messagesFor } from '../i18n.ts';
 
 /**
@@ -17,17 +18,6 @@ export const PUBLIC_PAGE_CSP = [
   "form-action 'none'",
   "frame-ancestors 'none'",
 ].join('; ');
-
-const ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-/** Text and attribute values as HTML. */
-export const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ESCAPES[c] ?? c);
 
 const isHttp = (url: string | null): url is string => url !== null && /^https?:/i.test(url);
 

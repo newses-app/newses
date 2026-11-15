@@ -21,6 +21,7 @@ import {
 import { useUiStore } from '../../stores/ui.ts';
 import ProfileAvatar from '../profiles/ProfileAvatar.vue';
 import AppPasswordsSection from './AppPasswordsSection.vue';
+import EmailSection from './EmailSection.vue';
 import NotificationsSection from './NotificationsSection.vue';
 import PasswordForm from './PasswordForm.vue';
 import TwoFactorSection from './TwoFactorSection.vue';
@@ -234,6 +235,9 @@ async function revoke(id: number) {
 
     <!-- In the apps and in browsers. -->
     <NotificationsSection />
+
+    <!-- Where the server can email users. -->
+    <EmailSection />
 
     <h2 class="text-title-large mb-4">{{ t('account.changePassword') }}</h2>
     <PasswordForm @changed="passwordChanged" />

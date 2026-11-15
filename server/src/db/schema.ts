@@ -62,9 +62,20 @@ export const users = pgTable(
     totpEnabledAt: tstz('totp_enabled_at'),
     // Last accepted time step, so a code cannot be used twice.
     totpLastStep: bigint('totp_last_step', { mode: 'number' }),
+    // The confirmed address user mail goes to; not unique, as accounts may share an inbox.
+    email: text('email'),
+    emailConfirmedAt: tstz('email_confirmed_at'),
+    // An address awaiting confirmation through the link mailed to it, of which only the hash of
+    // the token is kept, until it expires.
+    pendingEmail: text('pending_email'),
+    emailTokenHash: text('email_token_hash'),
+    emailTokenExpiresAt: tstz('email_token_expires_at'),
     ...timestamps(),
   },
-  (t) => [uniqueIndex('users_login_key').on(sql`lower(${t.login})`)],
+  (t) => [
+    uniqueIndex('users_login_key').on(sql`lower(${t.login})`),
+    uniqueIndex('users_email_token_hash_key').on(t.emailTokenHash),
+  ],
 );
 
 export const recoveryCodes = pgTable(

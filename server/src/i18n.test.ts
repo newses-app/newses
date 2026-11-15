@@ -50,7 +50,8 @@ describe('messagesFor', () => {
   it('shows messages not yet translated in English', () => {
     MESSAGES.xx = { untitled: 'xx' };
     expect(messagesFor('xx')).toMatchObject({ untitled: 'xx', attachments: en.attachments });
-    expect(messagesFor('unknown')).toEqual(en);
+    expect(messagesFor('unknown')).toEqual(messagesFor('en'));
+    expect(messagesFor('unknown').untitled).toBe(en.untitled);
   });
 });
 

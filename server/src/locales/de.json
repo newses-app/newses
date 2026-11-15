@@ -7,5 +7,10 @@
   "notAvailableText": "Dieser Link existiert nicht oder wird nicht mehr geteilt.",
   "publishedTitle": "Veröffentlichte Artikel",
   "publishedDescription": "Aus Newses veröffentlichte Artikel",
-  "opmlTitle": "Newses-Abonnements"
+  "opmlTitle": "Newses-Abonnements",
+  "confirmEmailSubject": "Bestätige deine E-Mail-Adresse",
+  "confirmEmailIntro": "Bestätige diese Adresse, um E-Mails von Newses für das Konto {login} zu erhalten.",
+  "confirmEmailAction": "Adresse bestätigen",
+  "confirmEmailExpiry": "Der Link funktioniert 24 Stunden lang.",
+  "confirmEmailIgnore": "Wenn du das nicht angefordert hast, ignoriere diese E-Mail: An diese Adresse wird nichts gesendet, bis sie bestätigt ist."
 }

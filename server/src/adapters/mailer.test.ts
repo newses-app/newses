@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NodemailerMailer, smtpTransport, type MailTransport } from './mailer.ts';
+import { NodemailerMailer, SMTP_TIMEOUTS, smtpTransport, type MailTransport } from './mailer.ts';
 
 function recording(): MailTransport & { sent: unknown[] } {
   const sent: unknown[] = [];
@@ -105,5 +105,24 @@ describe('NodemailerMailer', () => {
     expect(raw[0]).toContain('List-Unsubscribe-Post: List-Unsubscribe=One-Click');
     expect(raw[0]).toContain('multipart/alternative');
     expect(typeof smtpTransport('smtp://mail:25')).toBe('function');
+  });
+});
+
+describe('smtpTransport', () => {
+  const options = async (url: string) =>
+    ((await smtpTransport(url)()) as unknown as { transporter: { options: object } }).transporter
+      .options;
+
+  it('gives up on an unanswering relay within seconds, unless the URL says otherwise', async () => {
+    expect(await options('smtps://user%40example.com:secret@mail.example.com:465')).toMatchObject({
+      ...SMTP_TIMEOUTS,
+      host: 'mail.example.com',
+      port: 465,
+      secure: true,
+      auth: { user: 'user@example.com', pass: 'secret' },
+    });
+    expect(await options('smtp://mail:25?connectionTimeout=60000')).toMatchObject({
+      connectionTimeout: 60_000,
+    });
   });
 });

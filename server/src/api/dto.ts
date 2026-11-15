@@ -28,6 +28,8 @@ export function toUser(row: UserRow): User {
     passwordChangeRequired: row.passwordChangeRequired,
     createdAt: row.createdAt.toISOString(),
     lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
+    email: row.email,
+    pendingEmail: row.pendingEmail,
   };
 }
 

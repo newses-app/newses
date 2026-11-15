@@ -22,6 +22,7 @@
 | Push and notifications | Timely updates | Family members are notified of new entries in browsers, installed web apps, and the Android app while they are closed, soon after the fetch that finds them and at most every 30 minutes; open apps on AWS no longer poll the API; with no vendor account or key to set up; on Docker and AWS |
 | Migration and search | TTRSS parity | Family members read feeds behind HTTP Basic authentication, those the TTRSS import brings included, in the web, desktop, and Android apps and TTRSS clients; search finds words whatever their accents and forms, online as offline, with TTRSS's query syntax; on Docker and AWS |
 | Mobile refresh and Docker apps | Native apps | Family members reload a list by pulling it down on a touch screen; Docker operators build the Linux, Windows, and Android apps of their release and serve them from their server, which the apps update from; the Docker image ships only what Docker runs |
+| Email | User mail | Family members get articles and a digest of their unread articles by email, at addresses they confirmed, on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -97,7 +98,7 @@
 | Publish a page | Published pages | Any web page joins the user's published feed with an optional title and text; a missing title or text is taken from the page, and a page that cannot be read is still published; publishing the same address again updates it; works from Settings and TTRSS clients |
 | Bookmarklets | Published pages | "Subscribe in Newses" and "Publish in Newses" bookmarklets in Settings → Sharing open the app's Subscribe or Publish dialog filled in with the page (its title and selected text), through sign-in, without acting on their own |
 | Share to the app | Published pages | Pages shared from other apps to the Android app or an installed web app are offered to subscribe to or publish, with the page's title |
-| Email | Later | Email an article; scheduled digest of unread entries |
+| Email | Email | Email an article; scheduled digest of unread entries |
 
 ### Content processing
 
@@ -122,6 +123,7 @@
 | Preferences | P1 | Per-user preferences for all reading/updating options |
 | TOTP 2FA | P1.6 | Enrol via QR code, recovery codes, required at every password login (web, desktop, mobile) once enabled; admin can reset |
 | App passwords | P1.6 | Named, revocable passwords for TTRSS/Google Reader API clients; bypass TOTP; last-used time shown |
+| Account email | Email | Where the server can send mail, users add an email address in Settings → Account, which receives mail only once confirmed through the link mailed to it, in the user's language; the link works for 24 hours, in any browser, after a click; a new address waits while the confirmed one stays; users resend or cancel the link and remove the address; admins see each user's confirmed address |
 
 ### APIs and clients
 

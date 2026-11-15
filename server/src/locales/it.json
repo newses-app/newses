@@ -7,5 +7,10 @@
   "notAvailableText": "Questo link non esiste o non è più condiviso.",
   "publishedTitle": "Articoli pubblicati",
   "publishedDescription": "Articoli pubblicati da Newses",
-  "opmlTitle": "Iscrizioni di Newses"
+  "opmlTitle": "Iscrizioni di Newses",
+  "confirmEmailSubject": "Conferma il tuo indirizzo email",
+  "confirmEmailIntro": "Conferma questo indirizzo per ricevere email da Newses per l'account {login}.",
+  "confirmEmailAction": "Conferma indirizzo",
+  "confirmEmailExpiry": "Il link funziona per 24 ore.",
+  "confirmEmailIgnore": "Se non l'hai chiesto tu, ignora questa email: a questo indirizzo non viene inviato nulla finché non è confermato."
 }

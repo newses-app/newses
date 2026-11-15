@@ -10,7 +10,9 @@ export type DomainErrorCode =
   | 'invalid_input'
   | 'feed_not_found'
   | 'fetch_failed'
-  | 'resync_required';
+  | 'resync_required'
+  | 'mail_unavailable'
+  | 'mail_failed';
 
 /** Expected failures of a domain operation; the API maps codes to HTTP statuses. */
 export class DomainError extends Error {

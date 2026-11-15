@@ -119,7 +119,12 @@ async function remove(user: User) {
       </thead>
       <tbody>
         <tr v-for="user in users.data.value" :key="user.id">
-          <td>{{ user.login }}</td>
+          <td>
+            {{ user.login }}
+            <div v-if="user.email" class="text-body-small text-medium-emphasis" dir="ltr">
+              {{ user.email }}
+            </div>
+          </td>
           <td>
             <v-checkbox-btn
               :model-value="user.role === 'admin'"

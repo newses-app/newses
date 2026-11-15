@@ -316,6 +316,13 @@
       "when": 1794453297420,
       "tag": "0044_search_index",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1794749172489,
+      "tag": "0045_user_email",
+      "breakpoints": true
     }
   ]
 }

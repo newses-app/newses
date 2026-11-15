@@ -52,7 +52,19 @@ export function mailOptions(from: string, message: MailMessage): SendMailOptions
   };
 }
 
+/**
+ * How long a send waits on the relay, in milliseconds: shorter than nodemailer's minutes, so a
+ * wrong or unreachable host fails while the user waits for the answer. The URL's query
+ * (`?connectionTimeout=…`) overrides them.
+ */
+export const SMTP_TIMEOUTS = {
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 30_000,
+};
+
 /** An SMTP transport for `smtp://` or `smtps://` URLs; nodemailer loads on first send. */
 export function smtpTransport(url: string): () => Promise<MailTransport> {
-  return async () => (await import('nodemailer')).default.createTransport(url);
+  return async () =>
+    (await import('nodemailer')).default.createTransport({ url, ...SMTP_TIMEOUTS });
 }

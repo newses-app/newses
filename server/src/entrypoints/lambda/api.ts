@@ -1,5 +1,6 @@
 import awsLambdaFastify from '@fastify/aws-lambda';
 import { buildApp } from '../../api/app.ts';
+import { AccountEmailService } from '../../core/auth/account-email.ts';
 import { createAuthServices } from '../../core/auth/index.ts';
 import { createEntryServices } from '../../core/entries/index.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
@@ -9,6 +10,8 @@ import { binaryResponse, createApiHandler } from './api-handler.ts';
 import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
 
 const { config, logger, pool, db, feedDeps, ops, archive } = await createLambdaRuntime('api');
+const feeds = createFeedServices(feedDeps);
+const prefs = new PrefsService(db);
 
 const app = buildApp({
   logger,
@@ -23,9 +26,16 @@ const app = buildApp({
   events: false,
   services: {
     ...createAuthServices(db, config.appSecret),
-    feeds: createFeedServices(feedDeps),
+    email: new AccountEmailService({
+      db,
+      mailer: feedDeps.mailer,
+      limits: feeds.rateLimits,
+      prefs,
+      logger,
+    }),
+    feeds,
     entries: createEntryServices(db, feedDeps.realtime, archive),
-    prefs: new PrefsService(db),
+    prefs,
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,

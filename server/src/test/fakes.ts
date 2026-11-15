@@ -17,6 +17,8 @@ import type {
   EnqueueOptions,
   JobQueue,
   Logger,
+  MailMessage,
+  Mailer,
   PushOptions,
   PushOutcome,
   PushSender,
@@ -57,6 +59,18 @@ export class RecordingPushSender implements PushSender {
   send(target: PushTarget, payload: string, options: PushOptions): Promise<PushOutcome> {
     this.sent.push({ endpoint: target.endpoint, payload: JSON.parse(payload), options });
     return Promise.resolve(this.outcomes.get(target.endpoint) ?? 'sent');
+  }
+}
+
+/** Records mail; `failure`, when set, is thrown instead. */
+export class RecordingMailer implements Mailer {
+  readonly sent: MailMessage[] = [];
+  failure: Error | null = null;
+
+  send(message: MailMessage): Promise<void> {
+    if (this.failure) return Promise.reject(this.failure);
+    this.sent.push(message);
+    return Promise.resolve();
   }
 }
 

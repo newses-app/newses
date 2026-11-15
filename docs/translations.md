@@ -89,3 +89,4 @@ Development builds offer two generated languages in Settings. Neither is in prod
 | check | Fetching a feed for new articles | comprobar | controllare | abrufen |
 | shortcut | A keyboard binding | atajo | scorciatoia | Tastenkürzel |
 | sync | Exchanging changes with the server | sincronizar | sincronizzare | synchronisieren |
+| email address | Where a user's mail goes | dirección de correo | indirizzo email | E-Mail-Adresse |
