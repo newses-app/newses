@@ -446,6 +446,11 @@ describe('EntryService.list', () => {
       .update(userEntries)
       .set({ sortAt: at('2024-05-02T08:00:00Z') })
       .where(eq(userEntries.id, ids.banana ?? 0));
+    // Hours ago can be yesterday just after midnight.
+    await db
+      .update(userEntries)
+      .set({ sortAt: new Date() })
+      .where(eq(userEntries.id, ids.cherry ?? 0));
     const find = async (q: string, timeZone?: string) =>
       titles(
         (

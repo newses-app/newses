@@ -69,7 +69,7 @@ describe('EmailSection', () => {
       withoutIsolates(t('email.sent', { email: 'ann@example.com' })),
     );
     expect(text(section)).toContain('ann@example.com');
-    expect(text(section)).toContain(t('email.pending'));
+    expect(text(section)).toContain(t('email.unconfirmed'));
     expect(section.get('input').element.value).toBe('');
   });
 
@@ -85,7 +85,7 @@ describe('EmailSection', () => {
       pendingEmail: 'new@example.com',
     });
     await section
-      .get(`[aria-label="${t('email.resendNamed', { email: 'new@example.com' })}"]`)
+      .get(`[aria-label="${t('email.sendLinkNamed', { email: 'new@example.com' })}"]`)
       .trigger('click');
     await flushPromises();
     expect(api.account.setEmail).toHaveBeenLastCalledWith('new@example.com');
@@ -127,6 +127,6 @@ describe('EmailSection', () => {
     api.account.setEmail.mockRejectedValue(new ApiError(429, 'throttled', 'Too many requests', 30));
     await submit(section, 'ann@example.com');
     expect(ui.notice).toEqual({ text: t('errors.code.throttled'), error: true });
-    expect(text(section)).not.toContain(t('email.pending'));
+    expect(text(section)).not.toContain(t('email.unconfirmed'));
   });
 });

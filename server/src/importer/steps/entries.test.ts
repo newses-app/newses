@@ -4,6 +4,7 @@ import { Ingester } from '../../core/feeds/ingest.ts';
 import { PAGES_SOURCE_URL, pageGuid } from '../../core/feeds/pages.ts';
 import { createDb, type Db } from '../../db/client.ts';
 import {
+  digestState,
   enclosures,
   entries,
   feedSources,
@@ -450,6 +451,26 @@ describe('TTRSS entries import', () => {
     expect(
       (await db.select().from(entries)).filter((e) => e.link === 'https://one.example/a'),
     ).toHaveLength(1);
+  });
+
+  it('starts digests after the entries imported, which are not new to their reader', async () => {
+    await sourceDb.pool.query('UPDATE ttrss_users SET email_digest = true WHERE id = 2');
+    try {
+      await run();
+      const pat = await userId('pat');
+      const newest = Math.max(...[...(await entriesOf('pat')).values()].map((r) => r.ue.id));
+      const state = async () => (await db.select().from(digestState))[0];
+      expect(await db.select().from(digestState)).toHaveLength(1);
+      expect(await state()).toMatchObject({ userId: pat, watermark: newest });
+      expect((await state())?.nextDueAt.getTime()).toBeLessThanOrEqual(Date.now());
+
+      // A digest task that ran during the import started from fewer entries.
+      await db.update(digestState).set({ watermark: 0 });
+      await run();
+      expect((await state())?.watermark).toBe(newest);
+    } finally {
+      await sourceDb.pool.query('UPDATE ttrss_users SET email_digest = false WHERE id = 2');
+    }
   });
 
   it('reads TTRSS durations', () => {

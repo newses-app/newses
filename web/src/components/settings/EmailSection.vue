@@ -102,7 +102,7 @@ async function remove() {
           />
         </template>
       </v-list-item>
-      <v-list-item v-if="pending" :subtitle="t('email.pending')">
+      <v-list-item v-if="pending" :subtitle="t('email.unconfirmed')">
         <template #title
           ><span dir="ltr">{{ pending }}</span></template
         >
@@ -112,7 +112,7 @@ async function remove() {
             variant="text"
             size="small"
             :disabled="busy"
-            :aria-label="t('email.resendNamed', { email: pending })"
+            :aria-label="t('email.sendLinkNamed', { email: pending })"
             @click="send(pending)"
           />
           <v-btn size="small" variant="text" :disabled="busy" @click="cancel">

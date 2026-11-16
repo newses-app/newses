@@ -23,8 +23,10 @@ let db: Db;
 let adminHash = '';
 
 const SOURCE_ROWS = `
-  INSERT INTO ttrss_users (id, login, pwd_hash, access_level) VALUES
-    (1, 'admin', 'x', 10), (2, 'pat', 'x', 0), (3, 'bad name!', 'x', 0);
+  -- The admin's TTRSS predates digest preferences: theirs is on in the user's row.
+  INSERT INTO ttrss_users (id, login, pwd_hash, access_level, email, email_digest) VALUES
+    (1, 'admin', 'x', 10, 'boss@example.com', true), (2, 'pat', 'x', 0, ' pat@example.com ', false),
+    (3, 'bad name!', 'x', 0, '', false);
   -- World (10) is listed before its parent News (20).
   INSERT INTO ttrss_feed_categories (id, owner_uid, title, parent_cat, order_id) VALUES
     (20, 2, 'News', NULL, 1), (10, 2, 'World', 20, 2), (30, 2, 'Tech', NULL, 3);
@@ -44,7 +46,10 @@ const SOURCE_ROWS = `
     (2, 'FRESH_ARTICLE_MAX_AGE', NULL, '48'),
     (2, 'COMBINED_DISPLAY_MODE', NULL, 'true'),
     (2, '_DEFAULT_VIEW_MODE', NULL, 'marked'),
-    (2, 'USER_TIMEZONE', NULL, 'Europe/London'),
+    (2, 'USER_TIMEZONE', NULL, 'Asia/Kolkata'),
+    (2, 'DIGEST_ENABLE', NULL, 'true'),
+    (2, 'DIGEST_PREFERRED_TIME', NULL, '06:45'),
+    (2, 'DIGEST_CATCHUP', NULL, 'true'),
     (2, 'USER_LANGUAGE', NULL, 'en_GB'),
     (1, 'USER_LANGUAGE', NULL, 'tlh_KL'),
     (2, 'HIDE_READ_FEEDS', NULL, 'true');`;
@@ -110,6 +115,42 @@ describe('TTRSS import steps', () => {
       }),
     ]);
     expect(await db.select().from(users)).toHaveLength(2);
+  });
+
+  it('imports email addresses to be confirmed, keeping an adopted user’s own', async () => {
+    let report = await run();
+    // Nothing is mailed: the address waits for its owner to ask for a link.
+    expect(await userNamed('pat')).toMatchObject({
+      email: null,
+      pendingEmail: 'pat@example.com',
+      emailTokenHash: null,
+    });
+    expect(await userNamed('Admin')).toMatchObject({ pendingEmail: 'boss@example.com' });
+    expect(report.notes('pat')).toContainEqual(
+      expect.objectContaining({
+        text: 'email pat@example.com waits for confirmation in Settings > Account',
+      }),
+    );
+
+    await db.delete(users);
+    await db.delete(importMap);
+    await db
+      .insert(users)
+      .values({ login: 'Admin', passwordHash: adminHash, email: 'own@example.com' });
+    await sourceDb.pool.query("UPDATE ttrss_users SET email = 'pat at home' WHERE id = 2");
+    try {
+      report = await run();
+    } finally {
+      await sourceDb.pool.query("UPDATE ttrss_users SET email = ' pat@example.com ' WHERE id = 2");
+    }
+    expect(await userNamed('Admin')).toMatchObject({
+      email: 'own@example.com',
+      pendingEmail: null,
+    });
+    expect(await userNamed('pat')).toMatchObject({ pendingEmail: null });
+    expect(report.notes('pat')).toContainEqual(
+      expect.objectContaining({ text: 'email "pat at home" not imported: not an address' }),
+    );
   });
 
   it('imports nested categories and feeds onto shared sources', async () => {
@@ -195,8 +236,13 @@ describe('TTRSS import steps', () => {
       layout: 'combined',
       hideReadFeeds: true,
       language: 'en',
+      timeZone: 'Asia/Kolkata',
+      digestFrequency: 'daily',
+      // TTRSS's 06:45 UTC is 12:15 in Kolkata.
+      digestHour: 12,
+      digestMarkRead: true,
     });
-    expect(report.tally('pat', 'preferences')).toEqual({ source: 5, imported: 4 });
+    expect(report.tally('pat', 'preferences')).toEqual({ source: 9, imported: 8 });
     expect(report.skipped('pat')).toContainEqual(
       expect.objectContaining({ reason: '_DEFAULT_VIEW_MODE = "marked" has no equivalent value' }),
     );
@@ -204,8 +250,18 @@ describe('TTRSS import steps', () => {
       expect.objectContaining({ reason: 'USER_LANGUAGE = "tlh_KL" has no equivalent value' }),
     );
     expect(report.notes('pat')).toContainEqual(
-      expect.objectContaining({ item: 'preferences', text: 'not imported: USER_TIMEZONE' }),
+      expect.objectContaining({
+        item: 'preferences',
+        text: 'digest time 06:45 UTC imported as 12:00 Asia/Kolkata',
+      }),
     );
+    // Digests on in the user's row come at TTRSS's default time, midnight UTC.
+    const admin = (await userNamed('Admin'))?.id ?? 0;
+    const adminPrefs = await db.select().from(userPrefs).where(eq(userPrefs.userId, admin));
+    expect(Object.fromEntries(adminPrefs.map((p) => [p.key, p.value]))).toEqual({
+      digestFrequency: 'daily',
+      digestHour: 0,
+    });
   });
 
   it.each(['', 'auto'])(
