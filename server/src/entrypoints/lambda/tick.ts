@@ -3,6 +3,7 @@ import { EntryService } from '../../core/entries/entries.ts';
 import { SyncService } from '../../core/entries/sync.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
 import { DigestService } from '../../core/mail/digest-service.ts';
+import { PluginStorageService } from '../../core/plugins/storage.ts';
 import { PrefsService } from '../../core/prefs.ts';
 import { createTickHandler } from '../scheduled-tasks.ts';
 import { createLambdaRuntime } from './runtime.ts';
@@ -27,6 +28,7 @@ export const handler = createTickHandler({
     logger,
   }),
   ops,
+  plugins: { storage: new PluginStorageService(db) },
   archive,
   logger,
 });

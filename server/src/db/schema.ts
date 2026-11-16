@@ -815,3 +815,72 @@ export const opsState = pgTable('ops_state', {
   value: jsonb('value').notNull(),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
+
+// Plugins: what admins and users set for each installed plugin, and the plugins' own data. Rows
+// are keyed by the plugin's id, not tied to the installed plugins, so a plugin's settings outlast
+// its removal until an admin removes them.
+
+// The instance's settings of a plugin. `secrets` maps each secret field to its value sealed with
+// the `plugin-secrets` key; `failures` counts failed runs in a row, and at the limit the plugin is
+// turned off with `disabled_reason` set, until an admin enables it again.
+export const pluginSettings = pgTable('plugin_settings', {
+  pluginId: text('plugin_id').primaryKey(),
+  enabled: boolean('enabled').notNull().default(false),
+  settings: jsonb('settings').notNull().default({}),
+  secrets: jsonb('secrets').$type<Record<string, string>>().notNull().default({}),
+  approvedHosts: text('approved_hosts')
+    .array()
+    .notNull()
+    .default(sql`'{}'`),
+  failures: integer('failures').notNull().default(0),
+  lastFailure: text('last_failure'),
+  lastFailureAt: tstz('last_failure_at'),
+  disabledReason: text('disabled_reason'),
+  updatedAt: tstz('updated_at').notNull().defaultNow(),
+});
+
+// A user's settings of a plugin with user scope, as `plugin_settings` holds the instance's.
+export const pluginUserSettings = pgTable(
+  'plugin_user_settings',
+  {
+    pluginId: text('plugin_id').notNull(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    enabled: boolean('enabled').notNull().default(false),
+    settings: jsonb('settings').notNull().default({}),
+    secrets: jsonb('secrets').$type<Record<string, string>>().notNull().default({}),
+    failures: integer('failures').notNull().default(0),
+    lastFailure: text('last_failure'),
+    lastFailureAt: tstz('last_failure_at'),
+    disabledReason: text('disabled_reason'),
+    updatedAt: tstz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.pluginId, t.userId] }),
+    index('plugin_user_settings_user_idx').on(t.userId),
+  ],
+);
+
+// Plugins' key-value data, per plugin for the instance (no user) or per plugin and user; `size`
+// is the value's length as JSON. Expired rows are ignored, and pruned with the other purges.
+export const pluginStorage = pgTable(
+  'plugin_storage',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    pluginId: text('plugin_id').notNull(),
+    userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: jsonb('value').notNull(),
+    size: integer('size').notNull(),
+    expiresAt: tstz('expires_at'),
+    updatedAt: tstz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    unique('plugin_storage_key').on(t.pluginId, t.userId, t.key).nullsNotDistinct(),
+    index('plugin_storage_user_idx').on(t.userId),
+    index('plugin_storage_expires_at_idx')
+      .on(t.expiresAt)
+      .where(sql`${t.expiresAt} IS NOT NULL`),
+  ],
+);

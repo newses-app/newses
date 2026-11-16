@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Replaces the data of a Docker install or an AWS stage with a bundle from
 # scripts/export-instance.sh: restores the database, applies the target's newer migrations,
-# re-seals feed passwords and two-factor secrets with the target's APP_SECRET, and replaces the blobs.
+# re-seals feed passwords, plugin secrets, and two-factor secrets with the target's APP_SECRET, and
+# replaces the blobs.
 # See https://newses.app/guide/self-hosting.
 set -euo pipefail
 
@@ -182,7 +183,7 @@ SQL
 echo "Applying newer migrations..."
 migrate
 
-echo "Re-sealing feed passwords and two-factor secrets with the target's APP_SECRET..."
+echo "Re-sealing feed passwords, plugin secrets, and two-factor secrets with the target's APP_SECRET..."
 cli reseal-secrets <"$bundle/app-secret"
 
 echo "Replacing the blobs..."

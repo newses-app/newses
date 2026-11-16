@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { opsAlerts, opsState } from '../../db/schema.ts';
+import { opsAlerts, opsState, pluginSettings } from '../../db/schema.ts';
 import type { OpsSettings } from '../config.ts';
 import type { AlertNotice, Logger, Notifier } from '../ports.ts';
 
@@ -147,6 +147,7 @@ export class OpsChecker {
       ...(await this.#backlogFindings()),
       ...(await this.#staleFindings()),
       ...(await this.#apiFindings()),
+      ...(await this.#pluginFindings()),
     ];
   }
 
@@ -282,6 +283,25 @@ export class OpsChecker {
         details: { requests: row.requests, errors: row.errors },
       },
     ];
+  }
+
+  /** Plugins turned off after failing repeatedly: open until an admin enables them again. */
+  async #pluginFindings(): Promise<Finding[]> {
+    const rows = await this.#db
+      .select({
+        pluginId: pluginSettings.pluginId,
+        failures: pluginSettings.failures,
+        lastFailure: pluginSettings.lastFailure,
+      })
+      .from(pluginSettings)
+      .where(eq(pluginSettings.disabledReason, 'failures'));
+    return rows.map((row) => ({
+      rule: 'plugin.disabled',
+      subject: row.pluginId,
+      severity: 'warning' as const,
+      summary: `The plugin ${row.pluginId} was turned off after ${String(row.failures)} failed runs in a row (last: ${row.lastFailure ?? 'unknown'})`,
+      details: { failures: row.failures, lastFailure: row.lastFailure },
+    }));
   }
 }
 

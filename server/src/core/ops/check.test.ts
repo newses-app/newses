@@ -7,6 +7,7 @@ import {
   jobStatsHourly,
   opsAlerts,
   opsState,
+  pluginSettings,
   requestStatsHourly,
   subscriptions,
   users,
@@ -53,6 +54,7 @@ beforeEach(async () => {
     requestStatsHourly,
     opsAlerts,
     opsState,
+    pluginSettings,
     feedSources,
     users,
   ])
@@ -137,6 +139,25 @@ describe('OpsChecker', () => {
 
     const findings = await checker.evaluate();
     expect(findings.map((f) => [f.rule, f.details.overdue])).toEqual([['ingest.stale', 1]]);
+  });
+
+  it('flags plugins turned off after failing, until enabled again', async () => {
+    await db.insert(pluginSettings).values([
+      { pluginId: 'webhook', failures: 10, lastFailure: 'timeout', disabledReason: 'failures' },
+      { pluginId: 'off', failures: 3 },
+    ]);
+    const findings = await checker.evaluate();
+    expect(findings).toEqual([
+      {
+        rule: 'plugin.disabled',
+        subject: 'webhook',
+        severity: 'warning',
+        summary: 'The plugin webhook was turned off after 10 failed runs in a row (last: timeout)',
+        details: { failures: 10, lastFailure: 'timeout' },
+      },
+    ]);
+    await db.update(pluginSettings).set({ enabled: true, disabledReason: null, failures: 0 });
+    expect(await checker.evaluate()).toEqual([]);
   });
 
   it('opens alerts once, keeps them while they hold, and resolves them after', async () => {

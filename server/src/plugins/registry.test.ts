@@ -1,4 +1,7 @@
+import { secret, STORAGE_LIMITS, url } from '@newses/plugin-api';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { STORE_LIMITS } from '../core/plugins/storage.ts';
 import { PluginRegistry } from './registry.ts';
 
 const plugin = (overrides: Record<string, unknown> = {}) => ({
@@ -23,7 +26,12 @@ describe('PluginRegistry', () => {
     expect(registry.refused).toEqual([]);
     expect(registry.list().map((p) => p.definition.id)).toEqual(['webhook']);
     expect(registry.get('webhook')).toEqual({
+      id: 'webhook',
+      version: '1.2.0',
       source: '@newses/plugin-webhook@1.2.0',
+      scopes: ['user'],
+      hosts: ['hooks.example'],
+      settings: { instance: null, user: null },
       definition,
     });
     expect(registry.get('webhook')?.definition).toBe(definition);
@@ -42,6 +50,27 @@ describe('PluginRegistry', () => {
       [plugin({ hosts: ['Hooks.Example'] }), 'webhook', 'host names'],
       [plugin({ hosts: ['https://hooks.example/'] }), 'webhook', 'host names'],
       [plugin({ hooks: { 'entry.read': () => undefined } }), 'webhook', 'entry.read'],
+      [plugin({ settings: { user: { target: 'text' } } }), 'webhook', 'zod object schema'],
+      [plugin({ settings: { everyone: z.object({}) } }), 'webhook', 'everyone'],
+      [
+        plugin({ scopes: ['instance'], settings: { user: z.object({}) } }),
+        'webhook',
+        'user settings need the user scope',
+      ],
+      [
+        plugin({
+          settings: { user: z.object({ count: z.number().meta({ newses: { secret: true } }) }) },
+        }),
+        'webhook',
+        'count is marked secret or url but is not a string',
+      ],
+      [
+        plugin({
+          settings: { user: z.object({ headers: z.array(z.object({ value: secret() })) }) },
+        }),
+        'webhook',
+        'top-level settings only, not inside headers',
+      ],
     ];
     for (const [definition, id, detail] of cases) {
       const registry = load([{ source: 'x@1.0.0', plugin: definition }]);
@@ -50,6 +79,45 @@ describe('PluginRegistry', () => {
       expect(registry.refused[0]).toMatchObject({ source: 'x@1.0.0', id, reason: 'invalid' });
       expect(registry.refused[0]?.detail).toContain(detail);
     }
+  });
+
+  it("reads each scope's settings: secret and URL fields, and the plugin's own check", () => {
+    const registry = load([
+      {
+        source: 'w@1.0.0',
+        plugin: plugin({
+          scopes: ['instance', 'user'],
+          settings: {
+            instance: z.object({ region: z.enum(['eu', 'us']).default('eu') }),
+            user: z.object({
+              target: url({ secret: true }),
+              token: secret().optional().describe('Bearer token'),
+              callback: url().nullable(),
+              note: z.string().max(5).optional(),
+            }),
+          },
+        }),
+      },
+    ]);
+    const settings = registry.get('webhook')?.settings;
+    expect(settings?.instance?.fields).toEqual(
+      new Map([['region', { secret: false, url: false }]]),
+    );
+    expect(settings?.instance?.parse({})).toEqual({ ok: true, value: { region: 'eu' } });
+    expect(settings?.user?.fields).toEqual(
+      new Map([
+        ['target', { secret: true, url: true }],
+        ['token', { secret: true, url: false }],
+        ['callback', { secret: false, url: true }],
+        ['note', { secret: false, url: false }],
+      ]),
+    );
+    expect(
+      settings?.user?.parse({ target: 'ftp://x.example/', callback: null, note: 'too long' }),
+    ).toEqual({
+      ok: false,
+      issues: expect.stringMatching(/^target: .+; note: .+$/) as string,
+    });
   });
 
   it('refuses plugins written for another contract version', () => {
@@ -111,5 +179,11 @@ describe('PluginRegistry', () => {
       expect.objectContaining({ plugin: 'bad', source: 'bad@1.0.0', reason: 'incompatible' }),
       'Plugin refused',
     );
+  });
+});
+
+describe('STORAGE_LIMITS', () => {
+  it('are the limits the server keeps', () => {
+    expect(STORAGE_LIMITS).toEqual(STORE_LIMITS);
   });
 });

@@ -330,6 +330,13 @@
       "when": 1794759569860,
       "tag": "0046_digest_state",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1794868181197,
+      "tag": "0047_plugin_settings",
+      "breakpoints": true
     }
   ]
 }

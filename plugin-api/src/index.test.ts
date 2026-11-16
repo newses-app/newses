@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { acceptsApiVersion, definePlugin, isApiRange, PLUGIN_API_VERSION } from './index.ts';
+import { z } from 'zod';
+import {
+  acceptsApiVersion,
+  definePlugin,
+  FIELD_MARKS,
+  isApiRange,
+  PLUGIN_API_VERSION,
+  secret,
+  url,
+} from './index.ts';
 
 describe('acceptsApiVersion', () => {
   it('takes later patches of the same minor while the major is 0', () => {
@@ -44,5 +53,36 @@ describe('definePlugin', () => {
       hooks: {},
     };
     expect(definePlugin(plugin)).toBe(plugin);
+  });
+});
+
+describe('secret and url', () => {
+  it('mark settings, through optional and described copies', () => {
+    expect(secret().optional().unwrap().meta()?.[FIELD_MARKS]).toEqual({ secret: true });
+    expect(secret().describe('API key').meta()?.[FIELD_MARKS]).toEqual({ secret: true });
+    expect(url().meta()?.[FIELD_MARKS]).toEqual({ url: true });
+    expect(url({ secret: true }).meta()?.[FIELD_MARKS]).toEqual({ url: true, secret: true });
+  });
+
+  it('take non-empty secrets and http(s) URLs only', () => {
+    expect(secret().safeParse('').success).toBe(false);
+    expect(secret().safeParse('sk-1').success).toBe(true);
+    expect(url().safeParse('https://hooks.example/build').success).toBe(true);
+    expect(url().safeParse('ftp://hooks.example/').success).toBe(false);
+    expect(url().safeParse('javascript:alert(1)').success).toBe(false);
+  });
+
+  it('build object schemas plugins declare as settings', () => {
+    const plugin = definePlugin({
+      id: 'webhook',
+      version: '1.0.0',
+      apiVersion: '^0.1',
+      scopes: ['user'],
+      settings: { user: z.object({ target: url({ secret: true }), token: secret().optional() }) },
+      hooks: {},
+    });
+    expect(plugin.settings.user.parse({ target: 'https://a.example/' })).toEqual({
+      target: 'https://a.example/',
+    });
   });
 });

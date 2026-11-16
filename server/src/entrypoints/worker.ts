@@ -9,6 +9,7 @@ import { SyncService } from '../core/entries/sync.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { DigestService } from '../core/mail/digest-service.ts';
 import { createOpsServices } from '../core/ops/index.ts';
+import { PluginStorageService } from '../core/plugins/storage.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
 import {
@@ -75,6 +76,7 @@ const tasks = {
     logger,
   }),
   ops,
+  plugins: { storage: new PluginStorageService(db) },
   archive: createArchiveReader(config, deps.blobs),
   logger,
 };

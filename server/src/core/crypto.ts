@@ -16,7 +16,8 @@ export type KeyPurpose =
   | 'feed-icons'
   | 'vapid'
   | 'changes'
-  | 'digest-unsubscribe';
+  | 'digest-unsubscribe'
+  | 'plugin-secrets';
 
 export type Keys = Record<KeyPurpose, Buffer>;
 
@@ -29,6 +30,7 @@ const PURPOSES: KeyPurpose[] = [
   'vapid',
   'changes',
   'digest-unsubscribe',
+  'plugin-secrets',
 ];
 const VERSION = 'v1';
 const IV_BYTES = 12;

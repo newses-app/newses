@@ -143,6 +143,33 @@ describe('cli', () => {
     expect(await sealed()).toBe(before);
   });
 
+  it('re-seals feed passwords and plugin secrets before two-factor secrets', async () => {
+    const keys: string[] = [];
+    const output: string[] = [];
+    const resealWith =
+      (name: string, purpose: 'feed-credentials' | 'plugin-secrets') => (previousKey: Buffer) => {
+        expect(previousKey).toEqual(deriveKey(TEST_APP_SECRET, purpose));
+        keys.push(name);
+        return Promise.resolve(2);
+      };
+    const code = await runCli(
+      ['reseal-secrets'],
+      {
+        ...services,
+        resealFeedPasswords: resealWith('feeds', 'feed-credentials'),
+        resealPluginSecrets: resealWith('plugins', 'plugin-secrets'),
+      },
+      { readPassword: () => Promise.resolve(TEST_APP_SECRET), print: (line) => output.push(line) },
+    );
+    expect(code).toBe(0);
+    expect(keys).toEqual(['feeds', 'plugins']);
+    expect(output).toEqual([
+      'Re-sealed 2 feed passwords',
+      'Re-sealed 2 plugin secrets',
+      'Re-sealed 0 two-factor secrets',
+    ]);
+  });
+
   it('copies blobs to and from a directory', async () => {
     const calls: [string, string, string][] = [];
     const output: string[] = [];

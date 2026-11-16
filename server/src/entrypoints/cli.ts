@@ -4,6 +4,8 @@ import { copyBlobs } from '../core/blob-copy.ts';
 import { deriveKey } from '../core/crypto.ts';
 import { DomainError } from '../core/errors.ts';
 import { FeedCredentialSealer } from '../core/feeds/credentials.ts';
+import { NO_PLUGINS } from '../core/plugins/catalog.ts';
+import { PluginSettingsService } from '../core/plugins/settings.ts';
 import { createDb } from '../db/client.ts';
 import { importTtrss } from '../importer/importer.ts';
 import { TtrssSource } from '../importer/source.ts';
@@ -21,11 +23,18 @@ async function readStdinLine(): Promise<string> {
 const { config, pool } = createRuntime('cli');
 const db = createDb(pool);
 const feedCredentials = new FeedCredentialSealer(deriveKey(config.appSecret, 'feed-credentials'));
+// Re-sealing needs no installed plugins: secrets are kept by plugin id.
+const pluginSettings = new PluginSettingsService({
+  db,
+  key: deriveKey(config.appSecret, 'plugin-secrets'),
+  catalog: NO_PLUGINS,
+});
 let code: number;
 try {
   const services = {
     ...createAuthServices(db, config.appSecret),
     resealFeedPasswords: (previousKey: Buffer) => feedCredentials.reseal(db, previousKey),
+    resealPluginSecrets: (previousKey: Buffer) => pluginSettings.reseal(previousKey),
     async importTtrss(url: string, options: Parameters<typeof importTtrss>[1]) {
       const source = await TtrssSource.open(url);
       try {

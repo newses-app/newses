@@ -2,22 +2,32 @@ import type { PluginContext } from '@newses/plugin-api';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { z } from 'zod';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
+import type { PluginRuntime, PluginSettingsService } from '../core/plugins/settings.ts';
+import type { KeyValueStore } from '../core/plugins/storage.ts';
 import type { Logger } from '../core/ports.ts';
 import { PluginNetwork } from './network.ts';
-import type { LoadedPlugin } from './registry.ts';
+import { type LoadedPlugin, PluginRegistry } from './registry.ts';
 import { hookJobName, pluginLogger, PluginRunner } from './runner.ts';
 
-const plugin: LoadedPlugin = {
-  source: '@newses/plugin-webhook@1.0.0',
-  definition: {
-    id: 'webhook',
-    version: '1.0.0',
-    apiVersion: '^0.1',
-    scopes: ['user'],
-    hosts: ['hooks.example'],
-    hooks: {},
-  },
-};
+const plugin = PluginRegistry.load(
+  [
+    {
+      source: '@newses/plugin-webhook@1.0.0',
+      plugin: {
+        id: 'webhook',
+        version: '1.0.0',
+        apiVersion: '^0.1',
+        scopes: ['user'],
+        hosts: ['hooks.example'],
+        settings: { user: z.object({ target: z.string() }) },
+        hooks: {},
+      },
+    },
+  ],
+  { logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
+).get('webhook') as LoadedPlugin;
+
+const store = (name: string) => ({ name }) as unknown as KeyValueStore;
 
 let logger: {
   debug: ReturnType<typeof vi.fn>;
@@ -26,6 +36,11 @@ let logger: {
   error: ReturnType<typeof vi.fn>;
 };
 let ops: { recordJob: Mock<OpsRecorder['recordJob']> };
+let runtime: PluginRuntime | Error;
+let settings: {
+  runtime: Mock<PluginSettingsService['runtime']>;
+  recordRun: Mock<PluginSettingsService['recordRun']>;
+};
 let runner: PluginRunner;
 
 beforeEach(() => {
@@ -36,15 +51,29 @@ beforeEach(() => {
     ops: null,
     userAgent: 'Newses/test',
   });
+  runtime = {
+    active: true,
+    approvedHosts: new Set(['hooks.example']),
+    settings: { region: 'eu' },
+    userSettings: null,
+  };
+  settings = {
+    runtime: vi.fn<PluginSettingsService['runtime']>(() =>
+      runtime instanceof Error ? Promise.reject(runtime) : Promise.resolve(runtime),
+    ),
+    recordRun: vi.fn<PluginSettingsService['recordRun']>(() => Promise.resolve(null)),
+  };
   runner = new PluginRunner({
     network,
     logger: logger as Logger,
     ops,
-    approvedHosts: (id) => new Set(id === 'webhook' ? ['hooks.example'] : []),
+    settings,
+    storage: { store: (id, userId) => store(`${id}:${String(userId)}`) },
   });
 });
 
 const recorded = () => ops.recordJob.mock.calls.map(([run]) => run);
+const counted = () => settings.recordRun.mock.calls.map(([, userId, outcome]) => [userId, outcome]);
 
 describe('PluginRunner', () => {
   it('returns what a hook gives, checked against the hook output', async () => {
@@ -59,6 +88,7 @@ describe('PluginRunner', () => {
     expect(recorded()).toEqual([
       expect.objectContaining({ job: 'plugin:webhook:digest.compose', ok: true }),
     ]);
+    expect(counted()).toEqual([[null, { ok: true }]]);
   });
 
   it('ignores the result of hooks without an output', async () => {
@@ -84,9 +114,60 @@ describe('PluginRunner', () => {
       });
     }
     expect(recorded().map((r) => r.ok)).toEqual([false, false]);
+    expect(counted()).toEqual([
+      [null, { ok: false, failure: 'error' }],
+      [null, { ok: false, failure: 'error' }],
+    ]);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ plugin: 'webhook', hook: 'h', failure: 'error' }),
       'Plugin hook failed',
+    );
+  });
+
+  it('runs nothing for a plugin that is off, or whose settings no longer fit', async () => {
+    const call = vi.fn();
+    for (const reason of ['disabled', 'invalid_settings'] as const) {
+      runtime = { active: false, reason };
+      expect(await runner.run({ plugin, hook: 'h', userId: 3, timeoutMs: 1000, call })).toEqual({
+        ok: false,
+        failure: 'disabled',
+      });
+    }
+    expect(call).not.toHaveBeenCalled();
+    expect(settings.runtime).toHaveBeenCalledWith(plugin, 3);
+    expect(recorded()).toEqual([]);
+    expect(counted()).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts unreadable settings as a failed run', async () => {
+    runtime = new Error('Sealed value cannot be opened');
+    const call = vi.fn();
+    expect(await runner.run({ plugin, hook: 'h', userId: 3, timeoutMs: 1000, call })).toEqual({
+      ok: false,
+      failure: 'error',
+    });
+    expect(call).not.toHaveBeenCalled();
+    expect(recorded()).toEqual([expect.objectContaining({ ok: false })]);
+    expect(counted()).toEqual([[3, { ok: false, failure: 'error' }]]);
+  });
+
+  it('says when failing turned the plugin off, and survives failing to count', async () => {
+    settings.recordRun.mockResolvedValueOnce('user');
+    const call = () => Promise.reject(new Error('boom'));
+    await runner.run({ plugin, hook: 'h', userId: 3, timeoutMs: 1000, call });
+    expect(logger.warn).toHaveBeenCalledWith(
+      { plugin: 'webhook', hook: 'h', scope: 'user', userId: 3 },
+      'Plugin turned off after failing repeatedly',
+    );
+    settings.recordRun.mockRejectedValueOnce(new Error('database down'));
+    expect(await runner.run({ plugin, hook: 'h', timeoutMs: 1000, call })).toEqual({
+      ok: false,
+      failure: 'error',
+    });
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ plugin: 'webhook' }),
+      'Plugin run not counted',
     );
   });
 
@@ -132,11 +213,38 @@ describe('PluginRunner', () => {
       },
     });
     expect(context?.pluginId).toBe('webhook');
+    expect(context?.settings).toEqual({ region: 'eu' });
+    expect(context?.userSettings).toBeNull();
+    expect(context?.storage).toEqual({ name: 'webhook:null' });
+    expect(context?.userStorage).toBeNull();
     await expect(context?.fetch('https://elsewhere.example/')).rejects.toThrow(
       'elsewhere.example is not approved for the plugin webhook',
     );
     context?.logger.info('Sent', { status: 204 });
     expect(logger.info).toHaveBeenCalledWith({ status: 204, plugin: 'webhook' }, 'Sent');
+  });
+
+  it("gives a user's run their settings and storage", async () => {
+    runtime = {
+      active: true,
+      approvedHosts: new Set(),
+      settings: {},
+      userSettings: { target: 'https://hooks.example/' },
+    };
+    let context: PluginContext | undefined;
+    await runner.run({
+      plugin,
+      hook: 'h',
+      userId: 7,
+      timeoutMs: 1000,
+      call: (c) => {
+        context = c;
+      },
+    });
+    expect(context?.userSettings).toEqual({ target: 'https://hooks.example/' });
+    expect(context?.storage).toEqual({ name: 'webhook:null' });
+    expect(context?.userStorage).toEqual({ name: 'webhook:7' });
+    expect(counted()).toEqual([[7, { ok: true }]]);
   });
 });
 

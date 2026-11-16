@@ -8,6 +8,7 @@ import type { FeedServices } from '../core/feeds/index.ts';
 import type { Jobs } from '../core/jobs.ts';
 import type { DigestService } from '../core/mail/digest-service.ts';
 import type { OpsServices } from '../core/ops/index.ts';
+import type { PluginStorageService } from '../core/plugins/storage.ts';
 import type { ArchiveReader, JobQueue, Logger, Scheduler } from '../core/ports.ts';
 import { setOpenAlerts } from '../telemetry/index.ts';
 import { trackRun } from './tracking.ts';
@@ -32,6 +33,7 @@ export interface TaskDeps {
     checker: Pick<OpsServices['checker'], 'run'>;
     prune: OpsServices['prune'];
   };
+  plugins: { storage: Pick<PluginStorageService, 'prune'> };
   archive: Pick<ArchiveReader, 'compact'> | null;
   logger: Logger;
 }
@@ -43,11 +45,12 @@ export const WORKER_COMPACT_BUDGET_MS = 10 * 60 * 1000;
 /** Compaction stops starting months after this, within the tick's 5-minute timeout. */
 export const TICK_COMPACT_BUDGET_MS = 3 * 60 * 1000;
 
-async function purge({ feeds, sync, ops, logger }: TaskDeps): Promise<void> {
+async function purge({ feeds, sync, ops, plugins, logger }: TaskDeps): Promise<void> {
   logger.info(await feeds.purger.purge(), 'Purged old entries');
   logger.info({ images: await feeds.images.purge() }, 'Purged cached images');
   await sync.pruneTombstones();
   logger.info(await ops.prune(), 'Pruned operations data');
+  logger.info({ values: await plugins.storage.prune() }, 'Pruned expired plugin data');
 }
 
 async function pruneAuth({ feeds, sessions, throttle }: TaskDeps): Promise<void> {

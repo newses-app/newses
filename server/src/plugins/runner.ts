@@ -1,19 +1,27 @@
 import type { PluginContext, PluginLogger } from '@newses/plugin-api';
 import type { z } from 'zod';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
+import type { PluginRuntime, PluginSettingsService } from '../core/plugins/settings.ts';
+import type { PluginStorageService } from '../core/plugins/storage.ts';
 import type { Logger } from '../core/ports.ts';
 import { getInstruments, recordError, withSpan } from '../telemetry/index.ts';
 import type { PluginNetwork } from './network.ts';
 import type { LoadedPlugin } from './registry.ts';
 
-/** Why a hook gave nothing: it threw, ran out of time, or returned what the hook does not take. */
-export type HookFailure = 'error' | 'timeout' | 'invalid';
+/**
+ * Why a hook gave nothing: it threw, ran out of time, or returned what the hook does not take;
+ * or it did not run, the plugin being off (for the instance or the user) or its saved settings
+ * no longer what it takes.
+ */
+export type HookFailure = 'error' | 'timeout' | 'invalid' | 'disabled';
 
 export type HookOutcome<T> = { ok: true; value: T } | { ok: false; failure: HookFailure };
 
 export interface HookRun<T> {
   plugin: LoadedPlugin;
   hook: string;
+  /** The user the hook runs for; without one it runs for the instance. */
+  userId?: number | null;
   timeoutMs: number;
   /** What the hook must return; without it the hook's result is ignored. */
   output?: z.ZodType<T>;
@@ -24,45 +32,70 @@ export interface HookRun<T> {
 export const hookJobName = (pluginId: string, hook: string) => `plugin:${pluginId}:${hook}`;
 
 /**
- * Runs plugins' hooks: each under its time limit, with a context of its own, in a span. A hook
- * that throws, times out, or returns something unusable is a failure the caller can skip; it
- * never throws. Each run counts with the jobs, so the Operations page lists plugins' runs and
- * failures, and failing ones raise the jobs alert.
+ * Runs plugins' hooks, when the plugin is on: each under its time limit, with a context of its
+ * own, in a span. A hook that throws, times out, or returns something unusable is a failure the
+ * caller can skip; it never throws. Each run counts with the jobs, so the Operations page lists
+ * plugins' runs and failures and failing ones raise the jobs alert, and toward the failures in a
+ * row that turn a plugin off.
  */
 export class PluginRunner {
   readonly #network: PluginNetwork;
   readonly #logger: Logger;
   readonly #ops: Pick<OpsRecorder, 'recordJob'> | null;
-  readonly #approvedHosts: (pluginId: string) => ReadonlySet<string>;
+  readonly #settings: Pick<PluginSettingsService, 'runtime' | 'recordRun'>;
+  readonly #storage: Pick<PluginStorageService, 'store'>;
 
   constructor(deps: {
     network: PluginNetwork;
     logger: Logger;
     ops: Pick<OpsRecorder, 'recordJob'> | null;
-    /** The hosts an admin approved for each plugin. */
-    approvedHosts: (pluginId: string) => ReadonlySet<string>;
+    settings: Pick<PluginSettingsService, 'runtime' | 'recordRun'>;
+    storage: Pick<PluginStorageService, 'store'>;
   }) {
     this.#network = deps.network;
     this.#logger = deps.logger;
     this.#ops = deps.ops;
-    this.#approvedHosts = deps.approvedHosts;
+    this.#settings = deps.settings;
+    this.#storage = deps.storage;
   }
 
-  run<T>(run: HookRun<T>): Promise<HookOutcome<T>> {
-    const pluginId = run.plugin.definition.id;
+  async run<T>(run: HookRun<T>): Promise<HookOutcome<T>> {
+    const pluginId = run.plugin.id;
+    const userId = run.userId ?? null;
     const job = hookJobName(pluginId, run.hook);
+    const started = performance.now();
+    let runtime: PluginRuntime;
+    try {
+      runtime = await this.#settings.runtime(run.plugin, userId);
+    } catch (err) {
+      this.#logger.error({ plugin: pluginId, hook: run.hook, err }, 'Plugin settings unreadable');
+      const outcome = { ok: false, failure: 'error' } as const;
+      await this.#count(run, userId, outcome, performance.now() - started);
+      return outcome;
+    }
+    if (!runtime.active) {
+      if (runtime.reason === 'invalid_settings')
+        this.#logger.warn(
+          { plugin: pluginId, hook: run.hook, userId },
+          'Plugin skipped: its settings no longer fit it',
+        );
+      return { ok: false, failure: 'disabled' };
+    }
+    const { approvedHosts, settings, userSettings } = runtime;
     return withSpan(
       `plugin ${pluginId} ${run.hook}`,
       { attributes: { 'rss.job': job, 'rss.plugin.id': pluginId, 'rss.plugin.hook': run.hook } },
       async (span): Promise<HookOutcome<T>> => {
-        const started = performance.now();
         const signal = AbortSignal.timeout(run.timeoutMs);
-        const hosts = this.#approvedHosts(pluginId);
         const context: PluginContext = {
           pluginId,
           signal,
           logger: pluginLogger(this.#logger, pluginId),
-          fetch: this.#network.fetchFor(pluginId, (host) => hosts.has(host), signal),
+          fetch: this.#network.fetchFor(pluginId, (host) => approvedHosts.has(host), signal),
+          settings,
+          userSettings,
+          storage: this.#storage.store(pluginId, null),
+          userStorage: userId === null ? null : this.#storage.store(pluginId, userId),
         };
         let outcome: HookOutcome<T>;
         try {
@@ -91,15 +124,40 @@ export class PluginRunner {
             failure === 'timeout' ? 'Plugin hook ran out of time' : 'Plugin hook failed',
           );
         }
-        const durationMs = performance.now() - started;
         span.setAttribute('rss.plugin.outcome', outcome.ok ? 'ok' : outcome.failure);
-        this.#ops?.recordJob({ job, ok: outcome.ok, durationMs });
-        const instruments = getInstruments();
-        instruments.jobDuration.record(durationMs / 1000, { 'rss.job': job });
-        if (!outcome.ok) instruments.jobFailures.add(1, { 'rss.job': job });
+        await this.#count(run, userId, outcome, performance.now() - started);
         return outcome;
       },
     );
+  }
+
+  /** Counts a run with the jobs and toward the plugin's failures in a row. */
+  async #count(
+    run: HookRun<unknown>,
+    userId: number | null,
+    outcome: HookOutcome<unknown>,
+    durationMs: number,
+  ): Promise<void> {
+    const pluginId = run.plugin.id;
+    const job = hookJobName(pluginId, run.hook);
+    this.#ops?.recordJob({ job, ok: outcome.ok, durationMs });
+    const instruments = getInstruments();
+    instruments.jobDuration.record(durationMs / 1000, { 'rss.job': job });
+    if (!outcome.ok) instruments.jobFailures.add(1, { 'rss.job': job });
+    try {
+      const turnedOff = await this.#settings.recordRun(
+        run.plugin,
+        userId,
+        outcome.ok ? { ok: true } : { ok: false, failure: outcome.failure },
+      );
+      if (turnedOff)
+        this.#logger.warn(
+          { plugin: pluginId, hook: run.hook, scope: turnedOff, userId },
+          'Plugin turned off after failing repeatedly',
+        );
+    } catch (err) {
+      this.#logger.error({ plugin: pluginId, err }, 'Plugin run not counted');
+    }
   }
 }
 

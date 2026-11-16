@@ -33,7 +33,7 @@ Workspace packages exist only where runtime or toolchain differs.
 | `desktop/` | Electron shell around the web build |
 | `mobile/` | Capacitor shell around the web build |
 | `shared/` | Zod schemas, API types, typed API client (browser and Node) |
-| `plugin-api/` | `@newses/plugin-api`: the contract plugins are written against (`definePlugin`, context and hook types, `PLUGIN_API_VERSION`) |
+| `plugin-api/` | `@newses/plugin-api`: the contract plugins are written against (`definePlugin`, `secret()` and `url()`, context, hook, and storage types, `STORAGE_LIMITS`, `PLUGIN_API_VERSION`); `zod` is a peer dependency, so settings schemas use the server's copy |
 | `infra/` | CDK app: stage stacks, per-stage deploy and release pipelines, release buildspecs |
 | `docker/` | Dockerfile, `compose.yaml`, `.env.example`, reverse-proxy examples, the apps build (`compose.apps.yaml`, `apps.Dockerfile`, `apps-build.sh`) |
 
@@ -285,7 +285,7 @@ Operations data (`OpsRecorder` counts in memory and adds to the tables every min
 |---|---|---|
 | `user_activity_daily` | User, day, client (`web`, `desktop`, `mobile` from `X-RSS-Client`; `greader`, `ttrss`, `public`, `other` by path) | Users tab; articles read come from `user_entries.read_at` |
 | `request_stats_hourly` | Hour, client, status class | Summary, `api.errors` |
-| `host_fetch_stats_hourly` | Hour, host, purpose (`feed`, `favicon`, `image`, `fulltext`, `subscribe`), outcome | Sites tab, host rules |
+| `host_fetch_stats_hourly` | Hour, host, purpose (`feed`, `favicon`, `image`, `fulltext`, `subscribe`, `plugin`), outcome | Sites tab, host rules |
 | `job_stats_hourly` | Hour, job or task | Jobs tab, `jobs.failing` |
 | `audit_events` | One security event (the `logSecurity` events) | Audit tab |
 | `ops_alerts`, `ops_state` | One alert episode per rule and subject; the last check | Alerts tab, stale-monitoring banner |
@@ -303,6 +303,7 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 | `jobs.backlog` | Queue | Warning | 100 or more jobs ready and waiting (pg-boss) |
 | `ingest.stale` | `all` | Critical | Enabled feeds with an unpaused subscription overdue by more than 2 hours |
 | `api.errors` | `all` | Critical | More than 5% of ≥ 20 API requests answered 5xx in the current or previous hour |
+| `plugin.disabled` | Plugin | Warning | The plugin was turned off for the instance after failing repeatedly, until an admin enables it |
 
 ## User email
 
@@ -319,7 +320,11 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 - `@newses/plugin-api` versions the contract apart from the app. While its major is 0, additions raise the patch and breaking changes the minor. A plugin's `apiVersion` is a caret range (`^0.1`, `^0.1.2`) that must accept `PLUGIN_API_VERSION`.
 - The registry takes the installed plugins (source and default export) and refuses, with the reason, each one whose definition does not parse (id, semver version, scopes, lower-case hosts, known hooks only), whose `apiVersion` rejects this contract, or whose id an earlier plugin took. It logs what it loads and refuses, and never throws.
 - The runner runs one hook of one plugin under the hook's time limit, aborting the context's `signal` when it ends, and checks the result against the hook's output schema. A throw, timeout, or unusable result is a failure the caller skips. Each run has a span (`rss.plugin.id`, `rss.plugin.hook`, `rss.plugin.outcome`) and counts as job `plugin:<id>:<hook>` in the job statistics and metrics, so the Operations page and the failing-jobs alert cover plugins.
-- A hook's context: the plugin's id, the hook's `signal`, the server's logger with every line tagged `plugin`, and a standard `fetch`. That `fetch` reaches http(s) URLs on hosts approved for the plugin only, through `PoliteFetcher.request` (the per-host limits and pauses of feed fetches; a 429, or 503 with `Retry-After`, pauses the host), with the address guard of `HttpFetcher` (`FETCH_ALLOW_PRIVATE_NETWORKS`), returning redirects instead of following them, ending with the hook's `signal` or after 60 s. Requests count in the per-host statistics as purpose `plugin`; refusals reject with a `TypeError`.
+- A hook runs only while the plugin is on for the instance and, with scope `user`, for the user it runs for, and while its saved settings parse with the installed version's schema; otherwise the runner skips it without counting a run.
+- A hook's context: the plugin's id, the hook's `signal`, the server's logger with every line tagged `plugin`, the instance settings and (for a user's run of a plugin with user settings) the user's, with secrets opened, its storage for the instance and (for a user's run) the user, and a standard `fetch`. That `fetch` reaches http(s) URLs on hosts approved for the plugin only, through `PoliteFetcher.request` (the per-host limits and pauses of feed fetches; a 429, or 503 with `Retry-After`, pauses the host), with the address guard of `HttpFetcher` (`FETCH_ALLOW_PRIVATE_NETWORKS`), returning redirects instead of following them, ending with the hook's `signal` or after 60 s. Requests count in the per-host statistics as purpose `plugin`; refusals reject with a `TypeError`.
+- Settings (`core/plugins`, behind the `PluginCatalog` port the registry implements): a plugin's `settings.instance` and `settings.user` are zod object schemas, user settings only with scope `user`. `secret()` and `url()` mark top-level string fields; a mark anywhere else refuses the plugin. Admins enable a plugin, set its instance settings, and approve its hosts (at most 50); users enable plugins with scope `user` and set their settings. A change replaces the plain fields; a secret given is set, given null cleared, left out kept. The result must parse with the schema whenever settings change or the scope is on, URL fields only on approved hosts, at most 64 KiB with sealed secrets. Views of settings name the secrets set, never their values. Rows outlast the plugin's removal until an admin removes them, with its storage; a user's go with the user.
+- Storage: per plugin for the instance, or per plugin and user; keys of 1 to 200 characters, JSON values of at most 64 KiB, at most 10,000 keys and 16 MiB per store (`STORAGE_LIMITS`, checked under a per-store advisory lock), optional expiry of at most 366 days. Expired values are ignored and deleted with the 6-hourly purge.
+- Failures: every counted run resets or adds to the plugin's failures in a row, a user's run of a plugin with user settings on the user's row, any other on the instance's. The 10th in a row turns the plugin off there (`disabled_reason` `failures`); on the instance's that raises `plugin.disabled`. Enabling it again clears the count.
 
 ## Data model
 
@@ -350,6 +355,9 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `themes` | User | Name (unique per user, case-insensitive, at most 60 characters), built-in base key, partial tokens (JSON) over the base, shared flag; at most 50 per user. Not synced |
 | `filters` / `filter_rules` / `filter_actions` | User | Ordered filters; match any/all, inverse, enabled; rules: field (title, content, title-or-content, author, link, tag), RE2 pattern, inverse, scope (subscription and category id arrays; empty for all feeds); actions: type with a label, tag, or score |
 | `access_keys` | User | Secret keys for published feed and generated feeds |
+| `plugin_settings` | Instance | Per plugin id, installed or not: enabled, settings (JSON), secret fields sealed (`plugin-secrets` key, plugin, scope, and field as context), approved hosts, failed runs in a row, last failure, why the server turned it off. Not synced |
+| `plugin_user_settings` | User | The same per plugin and user, without hosts. Not synced |
+| `plugin_storage` | Instance or user | Plugins' key-value data: plugin id, user (null for the instance), key, JSON value and its size, expiry. Not synced |
 | `import_map` | Instance | (TTRSS table, source id) → new id and owning user; on user rows, when that user's last import finished |
 
 Key indexes:
@@ -393,7 +401,7 @@ Search:
 - Starting enrolment and turning 2FA off re-check the password; turning off and regenerating recovery codes need a code. Enabling 2FA signs out the user's other sessions. Admins (`POST /admin/users/:id/2fa/reset`) and `cli user reset-2fa` turn it off and sign the user out everywhere.
 - App passwords are 160-bit random values shown once (`xxxx-xxxx-…`; case and dashes ignored), stored as SHA-256 hashes, at most 50 per user. Creating one re-checks the account password. `AuthService.authenticateAppPassword` is the only check that accepts them: it skips TOTP, refuses account passwords, shares the login throttle, and records last use at most hourly. `/auth/login` never accepts them. An admin password reset revokes them; a disabled user's are refused.
 - Changing or resetting a password, or disabling a user, revokes their other sessions.
-- `APP_SECRET` (Docker env; SSM `app-secret` on AWS) is the root of per-purpose keys derived with HKDF-SHA256 (`server/src/core/crypto.ts`). Stored secrets are sealed with AES-256-GCM as `v1.<iv>.<ciphertext>.<tag>`, authenticated against their owning row; tokens are signed with HMAC-SHA256. A new secret voids every sealed value and signature; there is no rotation. `cli reseal-secrets` re-seals feed passwords and TOTP secrets sealed under another instance's secret, read from stdin, with this one; feed passwords this secret opens already are left, so it can be run again.
+- `APP_SECRET` (Docker env; SSM `app-secret` on AWS) is the root of per-purpose keys derived with HKDF-SHA256 (`server/src/core/crypto.ts`). Stored secrets are sealed with AES-256-GCM as `v1.<iv>.<ciphertext>.<tag>`, authenticated against their owning row; tokens are signed with HMAC-SHA256. A new secret voids every sealed value and signature; there is no rotation. `cli reseal-secrets` re-seals feed passwords, plugin secrets, and TOTP secrets sealed under another instance's secret, read from stdin, with this one; feed passwords and plugin secrets this secret opens already are left, so it can be run again.
 
 ### Authorization
 

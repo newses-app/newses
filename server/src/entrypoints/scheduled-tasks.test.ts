@@ -60,6 +60,7 @@ function services(options: { archive?: boolean; failing?: string } = {}) {
       checker: { run: step('checker.run', { open: 1 }) as TaskDeps['ops']['checker']['run'] },
       prune: step('ops.prune', { stats: 0, audit: 0 }),
     },
+    plugins: { storage: { prune: step('plugins.prune', 0) } },
     archive: options.archive ? { compact: step('compact', 2) } : null,
     logger,
   };
@@ -188,6 +189,7 @@ describe('scheduleWorkerTasks', () => {
       'images.purge',
       'tombstones.prune',
       'ops.prune',
+      'plugins.prune',
       'sessions.prune',
       'throttle.prune',
       'rateLimits.prune',
@@ -250,6 +252,7 @@ describe('createTickHandler', () => {
       'images.purge',
       'tombstones.prune',
       'ops.prune',
+      'plugins.prune',
       'stats.flush',
       'sessions.prune',
       'throttle.prune',
