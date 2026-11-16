@@ -46,19 +46,32 @@ export default defineConfig(
           zones: [
             {
               target: `${server}/core`,
-              from: layers('adapters', 'api', 'entrypoints', 'importer', 'telemetry'),
+              from: layers('adapters', 'api', 'entrypoints', 'importer', 'plugins', 'telemetry'),
             },
             {
               target: `${server}/telemetry`,
-              from: layers('core', 'db', 'adapters', 'api', 'entrypoints', 'importer'),
+              from: layers('core', 'db', 'adapters', 'api', 'entrypoints', 'importer', 'plugins'),
             },
             {
               target: `${server}/db`,
-              from: layers('core', 'adapters', 'api', 'entrypoints', 'importer'),
+              from: layers('core', 'adapters', 'api', 'entrypoints', 'importer', 'plugins'),
             },
-            { target: `${server}/adapters`, from: layers('api', 'entrypoints', 'importer') },
-            { target: `${server}/api`, from: layers('adapters', 'entrypoints', 'importer') },
-            { target: `${server}/importer`, from: layers('adapters', 'api', 'entrypoints') },
+            {
+              target: `${server}/adapters`,
+              from: layers('api', 'entrypoints', 'importer', 'plugins'),
+            },
+            {
+              target: `${server}/api`,
+              from: layers('adapters', 'entrypoints', 'importer', 'plugins'),
+            },
+            {
+              target: `${server}/importer`,
+              from: layers('adapters', 'api', 'entrypoints', 'plugins'),
+            },
+            {
+              target: `${server}/plugins`,
+              from: layers('adapters', 'api', 'entrypoints', 'importer'),
+            },
           ],
         },
       ],
@@ -108,6 +121,11 @@ export default defineConfig(
             {
               group: ['fastify', 'fastify/*', '@fastify/*', 'pg-boss', '@aws-sdk/*'],
               message: 'core must not depend on frameworks or cloud SDKs; use a port.',
+            },
+            {
+              group: ['@newses/plugin-api', '@newses/plugin-api/*'],
+              message:
+                'Only server/src/plugins uses the plugin contract; core runs hooks through a port.',
             },
           ],
         },

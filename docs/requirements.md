@@ -23,6 +23,7 @@
 | Migration and search | TTRSS parity | Family members read feeds behind HTTP Basic authentication, those the TTRSS import brings included, in the web, desktop, and Android apps and TTRSS clients; search finds words whatever their accents and forms, online as offline, with TTRSS's query syntax; on Docker and AWS |
 | Mobile refresh and Docker apps | Native apps | Family members reload a list by pulling it down on a touch screen; Docker operators build the Linux, Windows, and Android apps of their release and serve them from their server, which the apps update from; the Docker image ships only what Docker runs |
 | Email | User mail | Family members get articles and a digest of their unread articles by email, at addresses they confirmed, on Docker and AWS |
+| Plugins | Extensibility | Operators add plugins on Docker and AWS; admins enable them and approve the hosts they reach, and users set their own, in the web, desktop, and Android apps; a failing plugin never fails a fetch, a request, or a digest, and is disabled with an alert; authors build on a published API with a guide and a template; the project's own plugins call a webhook when a user's published feed changes and summarise digests with an LLM; on Docker and AWS |
 | Later | Backlog | Not scheduled |
 
 ## Features
@@ -177,7 +178,19 @@
 | Alerts | Observability | A site rate limiting or failing, more requests to one site in an hour than the budget, failing or backed-up jobs, stalled fetching, and API server errors raise alerts on the Operations page, emailed when SMTP is configured (Docker) or an address subscribes to the stage's alert topic (AWS), and resolve on their own |
 | Telemetry export | Observability | Traces, metrics, and logs export over OTLP when an endpoint is configured; the Docker setup offers Grafana with dashboards for the API, jobs, remote sites, and runtime. On AWS, traces go to X-Ray at a sampling rate set per stage, without CloudWatch metrics or dashboards |
 | Cost budget | Observability | On AWS, one monthly budget over running the project, without its build pipelines (limit set in the infra config), emails its subscribers as spend nears or is forecast past it |
-| Plugin API | Later | Third-party modules register content and lifecycle hooks |
+
+### Plugins
+
+| Feature | Phase | Acceptance criteria |
+|---|---|---|
+| Plugin install | Plugins | Operators add npm plugins at exact versions: on AWS in the stage's deploy config, applied by its next deployment; on Docker in an image built from the release image. A plugin written for an incompatible plugin API version is refused at startup with the reason on the Operations page. Installed plugins, their versions, and their licences show in Settings → About and the SBOMs |
+| Plugin settings | Plugins | In Settings → Plugins, admins enable installed plugins, set their instance settings, and approve the hosts each may reach; users set their own settings for plugins that take them; forms come from each plugin's schema, in the user's language; secrets are never shown again; online only |
+| Plugin events | Plugins | Plugins are told, after the change is saved and at least once, of entries added to a user's feeds and of entries added to or removed from a user's published feed by any path (the apps, TTRSS and Google Reader clients, published pages, filters); changes within the plugin's window arrive as one delivery |
+| Digest additions | Plugins | Plugins add an overview and a line per entry to a user's digest, as text placed against the entries the digest lists; the digest goes out without them when a plugin fails or takes more than 60 s |
+| Plugin failures | Plugins | A failing plugin never fails a fetch, a request, or a digest; repeated failures disable it and raise an alert, until an admin enables it again |
+| Plugin authoring | Plugins | `@newses/plugin-api` on npm, with a test kit, a template repository, and a guide on newses.app, lets anyone write and test a plugin outside this repository |
+| Webhook plugin | Plugins | A user's URL, on a host the admin approved, is called when their published feed changes, with their method, secret headers, body template, and optional signature; changes within a window (2 minutes by default) make one call; a test call shows the response's status; repeated failures stop it and say why |
+| Digest summary plugin | Plugins | Users who opt in get digests that open with an overview of what is unread and a line per entry, written by Claude with the admin's Anthropic API key, in the user's language, within monthly token budgets per instance and user; entries of feeds with credentials and published pages are never sent; the settings say what is sent and to whom |
 
 ## Non-functional requirements
 
@@ -185,8 +198,8 @@
 |---|---|
 | Scale | ~1,000 feeds and several million entries per instance; ~10 users |
 | Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
-| Privacy | No calls to third parties beyond feed, icon, and article fetches; telemetry goes only to endpoints the operator configures, never carries credentials, secret keys, or article content, and carries feed URLs only when the operator turns on debug logging or the compatibility trace; no trace context is sent to remote hosts |
-| Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; OWASP ASVS L1 |
+| Privacy | No calls to third parties beyond feed, icon, and article fetches, and the hosts an admin approves for a plugin they enable; telemetry goes only to endpoints the operator configures, never carries credentials, secret keys, or article content, and carries feed URLs only when the operator turns on debug logging or the compatibility trace; no trace context is sent to remote hosts |
+| Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; plugins installed only by operators, at deployment, and the project's own plugins reaching the network only through the server's fetcher; OWASP ASVS L1 |
 | Dependencies | High and critical advisories in production dependencies fail the pipeline (`pnpm audit`) and are fixed before the next deployment, at most 7 days after disclosure; moderate ones within 30 days; other dependency updates at least every 90 days |
 | Accessibility | Fully keyboard operable; WCAG 2.2 AA contrast; screen-reader labels on controls; single-key shortcuts can be turned off; every drag action has a non-drag alternative |
 | Internationalisation | All UI strings externalised; each user chooses a language or follows their device, on every app; strings without a translation show in English; layouts work right to left; English, Spanish, Italian, and German shipped |

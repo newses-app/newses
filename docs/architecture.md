@@ -46,6 +46,7 @@ Workspace packages exist only where runtime or toolchain differs.
 | `api` | Native REST, TTRSS-compatible and Google Reader routes, SSE endpoint | `core`, `db`, `shared`, `telemetry` |
 | `telemetry` | OpenTelemetry helpers, instruments, SDK preload, Fastify tracing | `shared` |
 | `importer` | TTRSS importer | `core`, `db`, `shared` |
+| `plugins` | Plugin host: loads installed plugins and implements the core ports that run their hooks | `core`, `db`, `shared`, `telemetry` |
 | `entrypoints` | `server`, `worker`, `migrate`, `cli`, and `lambda/` handlers — wire adapters into core | anything |
 
 ## Runtime model
