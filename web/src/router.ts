@@ -75,7 +75,7 @@ export const router = createRouter({
           if (link) shares.offer(link);
         }),
         {
-          path: 'settings/:tab(preferences|appearance|shortcuts|feeds|labels|filters|sharing|offline|account|about|users|operations)?',
+          path: 'settings/:tab(preferences|appearance|shortcuts|feeds|labels|filters|sharing|offline|account|about|users|operations|plugins)?',
           name: 'settings',
           component: () => import('./views/SettingsView.vue'),
         },

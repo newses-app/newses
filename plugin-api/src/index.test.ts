@@ -5,6 +5,7 @@ import {
   definePlugin,
   FIELD_MARKS,
   isApiRange,
+  multiline,
   PLUGIN_API_VERSION,
   secret,
   url,
@@ -62,6 +63,7 @@ describe('secret and url', () => {
     expect(secret().describe('API key').meta()?.[FIELD_MARKS]).toEqual({ secret: true });
     expect(url().meta()?.[FIELD_MARKS]).toEqual({ url: true });
     expect(url({ secret: true }).meta()?.[FIELD_MARKS]).toEqual({ url: true, secret: true });
+    expect(multiline().meta()?.[FIELD_MARKS]).toEqual({ multiline: true });
   });
 
   it('take non-empty secrets and http(s) URLs only', () => {

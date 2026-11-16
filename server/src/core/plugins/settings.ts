@@ -1,3 +1,4 @@
+import { MAX_PLUGIN_HOSTS } from '@newses/shared';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { pluginSettings, pluginStorage, pluginUserSettings } from '../../db/schema.ts';
@@ -8,7 +9,7 @@ import type { PluginCatalog, PluginInfo, SettingsSpec } from './catalog.ts';
 /** Failed runs in a row that turn a plugin off, for the instance or for one user. */
 export const PLUGIN_FAILURE_LIMIT = 10;
 /** Hosts an admin may approve for one plugin. */
-export const MAX_APPROVED_HOSTS = 50;
+export const MAX_APPROVED_HOSTS = MAX_PLUGIN_HOSTS;
 /** A scope's settings and sealed secrets, as JSON. */
 export const MAX_SETTINGS_BYTES = 64 * 1024;
 
@@ -45,8 +46,8 @@ export interface InstancePluginSettingsView extends PluginSettingsView {
  * shutdown after failures.
  */
 export interface SettingsChange {
-  enabled?: boolean;
-  settings?: Record<string, unknown>;
+  enabled?: boolean | undefined;
+  settings?: Record<string, unknown> | undefined;
 }
 
 /** What a hook run gets of the settings. */
@@ -103,6 +104,26 @@ export class PluginSettingsService {
     return row ? this.#instanceView(row) : null;
   }
 
+  /** A user's settings of every plugin they set. */
+  async listForUser(userId: number): Promise<PluginSettingsView[]> {
+    const rows = await this.#db
+      .select()
+      .from(pluginUserSettings)
+      .where(eq(pluginUserSettings.userId, userId))
+      .orderBy(pluginUserSettings.pluginId);
+    return rows.map((row) => this.#view(row));
+  }
+
+  /** The ids of plugins with settings or storage kept, installed or not. */
+  async storedIds(): Promise<string[]> {
+    const result = await this.#db.execute<{ plugin_id: string }>(sql`
+      SELECT plugin_id FROM ${pluginSettings}
+      UNION SELECT plugin_id FROM ${pluginUserSettings}
+      UNION SELECT plugin_id FROM ${pluginStorage}
+      ORDER BY plugin_id`);
+    return result.rows.map((row) => row.plugin_id);
+  }
+
   async user(pluginId: string, userId: number): Promise<PluginSettingsView | null> {
     const [row] = await this.#db
       .select()
@@ -114,7 +135,7 @@ export class PluginSettingsService {
   /** Changes an installed plugin's instance settings, and the hosts it may reach. */
   async updateInstance(
     pluginId: string,
-    change: SettingsChange & { approvedHosts?: string[] },
+    change: SettingsChange & { approvedHosts?: string[] | undefined },
   ): Promise<InstancePluginSettingsView> {
     const info = this.#installed(pluginId);
     const approvedHosts = change.approvedHosts && approvedHostsOf(change.approvedHosts);
@@ -156,7 +177,9 @@ export class PluginSettingsService {
   ): Promise<PluginSettingsView> {
     const info = this.#installed(pluginId);
     if (!info.scopes.includes('user'))
-      throw new DomainError('invalid_input', `The plugin ${pluginId} has no user settings`);
+      throw new DomainError('invalid_input', `The plugin ${pluginId} has no user settings`, {
+        reason: 'plugin_no_user_settings',
+      });
     return this.#db.transaction(async (tx) => {
       const [instance] = await tx
         .select({ approvedHosts: pluginSettings.approvedHosts })
@@ -391,8 +414,12 @@ export class PluginSettingsService {
     const currentSettings = (current?.settings ?? {}) as Record<string, unknown>;
     const currentSecrets = current?.secrets ?? {};
     if (!spec) {
-      if (change.settings && Object.keys(change.settings).length > 0)
-        throw new DomainError('invalid_input', `The plugin ${info.id} takes no such settings`);
+      const [field] = Object.keys(change.settings ?? {});
+      if (field !== undefined)
+        throw new DomainError('invalid_input', `The plugin ${info.id} has no setting ${field}`, {
+          reason: 'plugin_setting_unknown',
+          params: { name: field },
+        });
       return { settings: {}, secrets: {} };
     }
     if (!change.settings && !enabled) return { settings: currentSettings, secrets: currentSecrets };
@@ -415,11 +442,17 @@ export class PluginSettingsService {
     }
     for (const field of Object.keys(change.settings ?? {}))
       if (!spec.fields.has(field))
-        throw new DomainError('invalid_input', `The plugin ${info.id} has no setting ${field}`);
+        throw new DomainError('invalid_input', `The plugin ${info.id} has no setting ${field}`, {
+          reason: 'plugin_setting_unknown',
+          params: { name: field },
+        });
 
     const parsed = spec.parse(merged);
     if (!parsed.ok)
-      throw new DomainError('invalid_input', `Settings of ${info.id}: ${parsed.issues}`);
+      throw new DomainError('invalid_input', `Settings of ${info.id}: ${parsed.issues}`, {
+        reason: 'plugin_settings_invalid',
+        params: { detail: parsed.issues },
+      });
     const settings: Record<string, unknown> = {};
     const secrets: Record<string, string> = {};
     for (const [field, value] of Object.entries(parsed.value)) {
@@ -431,6 +464,7 @@ export class PluginSettingsService {
           throw new DomainError(
             'invalid_input',
             `${host} is not approved for the plugin ${info.id}`,
+            { reason: 'plugin_host_not_approved', params: { host } },
           );
       }
       // Secrets are strings (the registry refuses other marked fields); a null one is unset.
@@ -440,7 +474,9 @@ export class PluginSettingsService {
       } else settings[field] = value;
     }
     if (JSON.stringify({ settings, secrets }).length > MAX_SETTINGS_BYTES)
-      throw new DomainError('invalid_input', `Settings of ${info.id} are too large`);
+      throw new DomainError('invalid_input', `Settings of ${info.id} are too large`, {
+        reason: 'plugin_settings_too_large',
+      });
     return { settings, secrets };
   }
 
@@ -481,11 +517,15 @@ function approvedHostsOf(hosts: string[]): string[] {
   const unique = [...new Set(hosts.map((host) => host.trim().toLowerCase()))];
   const invalid = unique.find((host) => !isHostName(host));
   if (invalid !== undefined)
-    throw new DomainError('invalid_input', `${invalid} is not a host name`);
+    throw new DomainError('invalid_input', `${invalid} is not a host name`, {
+      reason: 'invalid_host',
+      params: { host: invalid },
+    });
   if (unique.length > MAX_APPROVED_HOSTS)
     throw new DomainError(
       'invalid_input',
       `At most ${String(MAX_APPROVED_HOSTS)} hosts may be approved for a plugin`,
+      { reason: 'plugin_hosts_limit', params: { max: MAX_APPROVED_HOSTS } },
     );
   return unique.sort();
 }

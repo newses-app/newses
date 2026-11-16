@@ -5,6 +5,7 @@ import type { FeedDeps } from '../core/feeds/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { createMailServices } from '../core/mail/index.ts';
 import { createOpsServices } from '../core/ops/index.ts';
+import { createPluginServices, NO_PLUGINS, type PluginCatalog } from '../core/plugins/index.ts';
 import type { Fetcher } from '../core/feeds/http.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { ThemeService } from '../core/themes.ts';
@@ -14,11 +15,12 @@ import { silentLogger, TEST_APP_SECRET, TEST_OPS_SETTINGS, testFeedDeps } from '
 /** The public URL test services link scheduled mail to. */
 export const TEST_PUBLIC_URL = 'https://reader.example';
 
-/** Every API service over `db`, with fake adapters unless overridden. */
+/** Every API service over `db`, with fake adapters unless overridden, and `plugins` installed. */
 export function createTestServices(
   db: Db,
   fetcher: Fetcher,
   overrides: Partial<FeedDeps> = {},
+  plugins: PluginCatalog = NO_PLUGINS,
 ): ApiServices {
   const deps = testFeedDeps(db, fetcher, overrides);
   const feeds = createFeedServices(deps);
@@ -43,5 +45,6 @@ export function createTestServices(
     themes: new ThemeService(db),
     realtime: deps.realtime,
     ops: createOpsServices({ db, logger: silentLogger, settings: TEST_OPS_SETTINGS }),
+    plugins: createPluginServices({ db, keys: deps.keys, catalog: plugins }),
   };
 }

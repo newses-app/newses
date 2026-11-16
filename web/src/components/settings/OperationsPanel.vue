@@ -139,6 +139,8 @@ const AUDIT_EVENTS = [
   'user_deleted',
   'site_interval_set',
   'site_interval_cleared',
+  'plugin_updated',
+  'plugin_removed',
 ];
 </script>
 

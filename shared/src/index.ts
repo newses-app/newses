@@ -18,6 +18,7 @@ export * from './api-version.ts';
 export * from './error-reasons.ts';
 export * from './server.ts';
 export * from './ops.ts';
+export * from './plugins.ts';
 export * from './push.ts';
 export * from './search-languages.ts';
 export * from './search-query.ts';

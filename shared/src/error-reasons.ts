@@ -50,6 +50,13 @@ export const ERROR_REASONS = {
   email_link_invalid: [],
   /** Mail that replies come back to needs the sender's confirmed address (API 1.14). */
   email_unconfirmed: [],
+  /** Plugin settings the plugin refuses, with its own (English) description (API 1.15). */
+  plugin_settings_invalid: ['detail'],
+  plugin_setting_unknown: ['name'],
+  plugin_host_not_approved: ['host'],
+  plugin_hosts_limit: ['max'],
+  plugin_settings_too_large: [],
+  plugin_no_user_settings: [],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

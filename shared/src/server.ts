@@ -22,6 +22,8 @@ export const serverInfoSchema = z.object({
   mail: z.boolean().optional(),
   /** From API 1.14: whether the server emails digests, which needs mail and its public URL. */
   digest: z.boolean().optional(),
+  /** From API 1.15: whether plugins are installed, which Settings → Plugins lists. */
+  plugins: z.boolean().optional(),
 });
 
 export type ServerInfo = z.infer<typeof serverInfoSchema>;

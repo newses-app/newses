@@ -18,6 +18,8 @@ export interface FieldMarks {
   secret?: boolean;
   /** An http(s) URL, saved only when its host is approved for the plugin. */
   url?: boolean;
+  /** Text of several lines, such as a template. */
+  multiline?: boolean;
 }
 
 /** The metadata key `secret()` and `url()` set on a schema. */
@@ -45,6 +47,14 @@ export function url(options: { secret?: boolean } = {}): z.ZodURL {
     .url({ protocol: /^https?$/ })
     .max(2048)
     .meta({ [FIELD_MARKS]: marks });
+}
+
+/** Text of several lines, such as a body template, edited in a larger box. */
+export function multiline(): z.ZodString {
+  return z
+    .string()
+    .max(10_000)
+    .meta({ [FIELD_MARKS]: { multiline: true } satisfies FieldMarks });
 }
 
 /** A scope's settings: an object schema of `zod`, the copy the server uses. */
@@ -132,8 +142,19 @@ export interface PluginDefinition {
    * failing, the plugin is turned off for that user if it has user settings, else for everyone.
    */
   settings?: { instance?: SettingsSchema; user?: SettingsSchema };
+  /**
+   * The plugin's text in Settings → Plugins, per language (`en`, `de`, `pt-BR`), as plain text;
+   * a message missing in the user's language is shown in English, else as its key. Keys:
+   * `name`, `description` (what the plugin sends, and to whom), `settings.<field>` (a label),
+   * `settings.<field>.hint`, `settings.<field>.option.<value>` (a choice), and
+   * `settings.<field>.item.<property>` (a property of a list's items).
+   */
+  messages?: PluginMessages;
   hooks: PluginHooks;
 }
+
+/** Messages per language, each a map of key to plain text. */
+export type PluginMessages = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
 /** Declares a plugin; the module's default export. Checks types only. */
 export function definePlugin<const T extends PluginDefinition>(plugin: T): T {

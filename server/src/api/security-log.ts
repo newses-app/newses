@@ -36,7 +36,9 @@ export type SecurityEvent =
   | 'user_two_factor_reset'
   | 'theme_unpublished'
   | 'site_interval_set'
-  | 'site_interval_cleared';
+  | 'site_interval_cleared'
+  | 'plugin_updated'
+  | 'plugin_removed';
 
 const WARN = new Set<SecurityEvent>([
   'login_failed',

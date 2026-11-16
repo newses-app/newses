@@ -53,6 +53,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           'offline',
           'account',
           'users',
+          'plugins',
         ]) {
           await page.goto(`/settings/${tab}`);
           await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();

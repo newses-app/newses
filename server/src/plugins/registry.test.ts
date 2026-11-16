@@ -1,4 +1,4 @@
-import { secret, STORAGE_LIMITS, url } from '@newses/plugin-api';
+import { multiline, secret, STORAGE_LIMITS, url } from '@newses/plugin-api';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { STORE_LIMITS } from '../core/plugins/storage.ts';
@@ -32,6 +32,7 @@ describe('PluginRegistry', () => {
       scopes: ['user'],
       hosts: ['hooks.example'],
       settings: { instance: null, user: null },
+      messages: {},
       definition,
     });
     expect(registry.get('webhook')?.definition).toBe(definition);
@@ -101,15 +102,15 @@ describe('PluginRegistry', () => {
     ]);
     const settings = registry.get('webhook')?.settings;
     expect(settings?.instance?.fields).toEqual(
-      new Map([['region', { secret: false, url: false }]]),
+      new Map([['region', { secret: false, url: false, multiline: false }]]),
     );
     expect(settings?.instance?.parse({})).toEqual({ ok: true, value: { region: 'eu' } });
     expect(settings?.user?.fields).toEqual(
       new Map([
-        ['target', { secret: true, url: true }],
-        ['token', { secret: true, url: false }],
-        ['callback', { secret: false, url: true }],
-        ['note', { secret: false, url: false }],
+        ['target', { secret: true, url: true, multiline: false }],
+        ['token', { secret: true, url: false, multiline: false }],
+        ['callback', { secret: false, url: true, multiline: false }],
+        ['note', { secret: false, url: false, multiline: false }],
       ]),
     );
     expect(
@@ -118,6 +119,48 @@ describe('PluginRegistry', () => {
       ok: false,
       issues: expect.stringMatching(/^target: .+; note: .+$/) as string,
     });
+  });
+
+  it('describes settings as JSON Schema for forms, marks included and secret defaults left out', () => {
+    const registry = load([
+      {
+        source: 'w@1.0.0',
+        plugin: plugin({
+          settings: {
+            user: z.object({
+              token: secret().default('do-not-show'),
+              target: url().optional(),
+              body: multiline().optional(),
+              method: z.enum(['POST', 'PUT']).default('POST'),
+            }),
+          },
+          messages: { en: { name: 'Webhook' }, 'pt-BR': { name: 'Gancho' } },
+        }),
+      },
+    ]);
+    const loaded = registry.get('webhook');
+    expect(loaded?.messages).toEqual({ en: { name: 'Webhook' }, 'pt-BR': { name: 'Gancho' } });
+    expect(loaded?.settings.user?.jsonSchema).toEqual({
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      type: 'object',
+      properties: {
+        token: { type: 'string', minLength: 1, maxLength: 4096, newses: { secret: true } },
+        target: expect.objectContaining({
+          type: 'string',
+          format: 'uri',
+          newses: { url: true },
+        }) as object,
+        body: { type: 'string', maxLength: 10_000, newses: { multiline: true } },
+        method: { type: 'string', enum: ['POST', 'PUT'], default: 'POST' },
+      },
+    });
+  });
+
+  it('refuses messages it cannot show', () => {
+    for (const messages of [{ English: { name: 'x' } }, { en: { name: 7 } }, { en: { '': 'x' } }]) {
+      const registry = load([{ source: 'w@1.0.0', plugin: plugin({ messages }) }]);
+      expect(registry.refused).toEqual([expect.objectContaining({ reason: 'invalid' })]);
+    }
   });
 
   it('refuses plugins written for another contract version', () => {

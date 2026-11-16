@@ -20,11 +20,16 @@ function spec(
 ): SettingsSpec {
   return {
     fields: new Map(
-      Object.keys(schema.shape).map((name) => [
+      Object.keys(schema.shape).map((name): [string, SettingsField] => [
         name,
-        { secret: false, url: false, ...marks[name] },
+        {
+          secret: marks[name]?.secret ?? false,
+          url: marks[name]?.url ?? false,
+          multiline: marks[name]?.multiline ?? false,
+        },
       ]),
     ),
+    jsonSchema: {},
     parse(values) {
       const parsed = schema.safeParse(values);
       return parsed.success
@@ -41,6 +46,7 @@ const info = (id: string, overrides: Partial<PluginInfo>): PluginInfo => ({
   scopes: ['instance'],
   hosts: [],
   settings: { instance: null, user: null },
+  messages: {},
   ...overrides,
 });
 
@@ -165,7 +171,7 @@ describe('PluginSettingsService instance settings', () => {
     ).toBe('The plugin summary has no setting extra');
     expect(
       (await failure(service.updateInstance('webhook', { settings: { target: 'x' } }))).message,
-    ).toBe('The plugin webhook takes no such settings');
+    ).toBe('The plugin webhook has no setting target');
     expect(
       (await failure(service.updateInstance('webhook', { approvedHosts: ['https://a.example/'] })))
         .message,

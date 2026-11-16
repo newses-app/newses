@@ -19,6 +19,7 @@ import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
 import type { MailServices } from '../core/mail/index.ts';
 import type { OpsServices } from '../core/ops/index.ts';
+import type { PluginServices } from '../core/plugins/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
 import type { ThemeService } from '../core/themes.ts';
@@ -35,6 +36,7 @@ import { adminSiteRoutes } from './routes/admin-sites.ts';
 import { adminThemeRoutes } from './routes/admin-themes.ts';
 import { accountRoutes } from './routes/account.ts';
 import { adminUserRoutes } from './routes/admin-users.ts';
+import { pluginRoutes } from './routes/plugins.ts';
 import { archiveRoutes } from './routes/archive.ts';
 import { authRoutes } from './routes/auth.ts';
 import { entryRoutes } from './routes/entries.ts';
@@ -82,6 +84,8 @@ export interface ApiServices {
   themes: ThemeService;
   realtime: Realtime;
   ops: OpsServices;
+  /** The installed plugins, their settings and storage. */
+  plugins: PluginServices;
 }
 
 export interface AppDeps {
@@ -224,6 +228,7 @@ export function buildApp(deps: AppDeps) {
           pushDistributor: deps.pushDistributorUrl ?? null,
           mail: services.mail.account.enabled,
           digest: services.mail.digest.enabled,
+          plugins: services.plugins.catalog.list().length > 0,
         });
         await api.register(authRoutes, {
           ...services,
@@ -238,6 +243,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(adminOpsRoutes, { ops: services.ops });
         await api.register(adminThemeRoutes, { themes: services.themes });
         await api.register(adminSiteRoutes, { hostRules: services.feeds.hostRules });
+        await api.register(pluginRoutes, { plugins: services.plugins });
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {
           ...services.entries,

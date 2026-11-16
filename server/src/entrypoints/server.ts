@@ -6,6 +6,7 @@ import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { createMailServices } from '../core/mail/index.ts';
 import { createOpsServices } from '../core/ops/index.ts';
+import { createPluginHost } from '../plugins/index.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { ThemeService } from '../core/themes.ts';
 import { createDb } from '../db/client.ts';
@@ -61,6 +62,7 @@ const services = {
   themes: new ThemeService(db),
   realtime,
   ops,
+  plugins: createPluginHost({ db, keys: feedDeps.keys, logger }),
 };
 await bootstrapAdmin(services.users, config, logger);
 

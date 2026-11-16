@@ -65,6 +65,17 @@ const definitionSchema = z
     settings: z
       .strictObject({ instance: objectSchema.optional(), user: objectSchema.optional() })
       .optional(),
+    messages: z
+      .record(
+        z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/, 'language tags such as en or pt-BR'),
+        z.record(z.string().min(1).max(200), z.string().max(2000)),
+      )
+      .refine((all) => Object.keys(all).length <= 100, 'at most 100 languages')
+      .refine(
+        (all) => Object.values(all).every((messages) => Object.keys(messages).length <= 500),
+        'at most 500 messages per language',
+      )
+      .optional(),
     hooks: hooksSchema,
   })
   .refine((plugin) => !plugin.settings?.user || plugin.scopes.includes('user'), {
@@ -149,6 +160,7 @@ export class PluginRegistry implements PluginCatalog {
         scopes: parsed.data.scopes,
         hosts: parsed.data.hosts ?? [],
         settings,
+        messages: parsed.data.messages ?? {},
         definition,
       });
       options.logger.info({ plugin: id, source, version: parsed.data.version }, 'Plugin loaded');
@@ -243,14 +255,16 @@ function settingsSpec(schema: SettingsSchema | undefined): SettingsSpec | null {
     }
     const secret = marks.secret === true;
     const url = marks.url === true;
+    const multiline = marks.multiline === true;
     if ((secret || url) && kindOf(inner) !== 'string')
       throw new Error(`The setting ${name} is marked secret or url but is not a string`);
     if (childrenOf(inner).some((child) => marked(child)))
       throw new Error(`secret() and url() mark top-level settings only, not inside ${name}`);
-    fields.set(name, { secret, url });
+    fields.set(name, { secret, url, multiline });
   }
   return {
     fields,
+    jsonSchema: formSchema(schema, fields),
     parse(values) {
       const parsed = schema.safeParse(values);
       if (parsed.success) return { ok: true, value: parsed.data };
@@ -262,4 +276,36 @@ function settingsSpec(schema: SettingsSchema | undefined): SettingsSpec | null {
       };
     },
   };
+}
+
+/**
+ * The settings as JSON Schema for forms, each top-level property with its marks as `newses`; a
+ * secret's default would show it, so it has none. Throws when zod cannot describe them.
+ */
+function formSchema(
+  schema: SettingsSchema,
+  fields: ReadonlyMap<string, SettingsField>,
+): Record<string, unknown> {
+  let json: Record<string, unknown>;
+  try {
+    json = z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' });
+  } catch (err) {
+    throw new Error(`The settings cannot be described as a form: ${(err as Error).message}`, {
+      cause: err,
+    });
+  }
+  const properties = (json.properties ?? {}) as Record<string, Record<string, unknown>>;
+  for (const [name, { secret, url, multiline }] of fields) {
+    const property = properties[name];
+    if (!property) continue;
+    Reflect.deleteProperty(property, FIELD_MARKS);
+    const marks = {
+      ...(secret && { secret }),
+      ...(url && { url }),
+      ...(multiline && { multiline }),
+    };
+    if (Object.keys(marks).length > 0) property[FIELD_MARKS] = marks;
+    if (secret) delete property.default;
+  }
+  return json;
 }

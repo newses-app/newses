@@ -4,11 +4,18 @@ export interface SettingsField {
   secret: boolean;
   /** An http(s) URL whose host must be approved for the plugin. */
   url: boolean;
+  /** Text of several lines. */
+  multiline: boolean;
 }
 
 /** A plugin's settings for one scope, as the core needs them: its fields, and a check. */
 export interface SettingsSpec {
   readonly fields: ReadonlyMap<string, SettingsField>;
+  /**
+   * The settings as JSON Schema (draft 2020-12, as input), for forms: each top-level property
+   * carries its marks as `newses` (`secret`, `url`, `multiline`); secrets have no default.
+   */
+  readonly jsonSchema: Readonly<Record<string, unknown>>;
   /** The settings the plugin's schema makes of `values`, or what is wrong with them. */
   parse(
     values: Record<string, unknown>,
@@ -26,6 +33,8 @@ export interface PluginInfo {
   /** The hosts the plugin asks for; admins approve them and may add others. */
   readonly hosts: readonly string[];
   readonly settings: { instance: SettingsSpec | null; user: SettingsSpec | null };
+  /** Plain-text messages per language, for Settings → Plugins. */
+  readonly messages: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 /** The installed plugins; `server/src/plugins` implements it. */

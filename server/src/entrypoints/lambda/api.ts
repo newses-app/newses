@@ -6,6 +6,7 @@ import { createFeedServices } from '../../core/feeds/index.ts';
 import { createMailServices } from '../../core/mail/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
 import { ThemeService } from '../../core/themes.ts';
+import { createPluginHost } from '../../plugins/index.ts';
 import { binaryResponse, createApiHandler } from './api-handler.ts';
 import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
 
@@ -44,6 +45,7 @@ const app = buildApp({
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,
+    plugins: createPluginHost({ db, keys: feedDeps.keys, logger }),
   },
   healthChecks: {
     db: async () => {

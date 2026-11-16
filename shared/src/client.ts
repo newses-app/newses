@@ -70,6 +70,12 @@ import type {
   OpsUser,
   OpsWindow,
 } from './ops.ts';
+import type {
+  Plugin,
+  PluginsResponse,
+  UpdateAccountPluginRequest,
+  UpdatePluginRequest,
+} from './plugins.ts';
 import type { ThirdPartyLicense } from './credits.ts';
 import type { ServerInfo } from './server.ts';
 
@@ -285,6 +291,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** The token from the mailed link; needs no session. */
       confirmEmail: (token: string) =>
         request<ConfirmEmailResponse>('POST', '/account/email/confirm', { body: { token } }),
+      /** The user's settings of a plugin with user scope (API 1.15). */
+      updatePlugin: (pluginId: string, body: UpdateAccountPluginRequest) =>
+        request<Plugin>('PATCH', `/account/plugins/${encodeURIComponent(pluginId)}`, { body }),
+      /** Removes the user's settings of a plugin and its data for them (API 1.15). */
+      removePlugin: (pluginId: string) =>
+        request<undefined>('DELETE', `/account/plugins/${encodeURIComponent(pluginId)}`),
+    },
+
+    /** From API 1.15, where `ServerInfo.plugins` is set (admins may list none installed). */
+    plugins: {
+      list: () => request<PluginsResponse>('GET', '/plugins'),
     },
 
     admin: {
@@ -310,6 +327,14 @@ export function createApiClient(options: ApiClientOptions = {}) {
         users: () => request<OpsUser[]>('GET', '/admin/ops/users'),
         alerts: () => request<OpsAlert[]>('GET', '/admin/ops/alerts'),
         audit: (query: AuditQuery = {}) => request<AuditPage>('GET', '/admin/ops/audit', { query }),
+      },
+      /** API 1.15: a plugin's instance settings and approved hosts. */
+      plugins: {
+        update: (pluginId: string, body: UpdatePluginRequest) =>
+          request<Plugin>('PATCH', `/admin/plugins/${encodeURIComponent(pluginId)}`, { body }),
+        /** Removes a plugin's settings, every user's, and its data; installed or not. */
+        remove: (pluginId: string) =>
+          request<undefined>('DELETE', `/admin/plugins/${encodeURIComponent(pluginId)}`),
       },
       sites: {
         rules: () => request<HostRule[]>('GET', '/admin/sites/rules'),

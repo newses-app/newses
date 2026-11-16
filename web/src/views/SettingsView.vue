@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useQuery } from '@tanstack/vue-query';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
@@ -11,10 +12,12 @@ import FiltersPanel from '../components/settings/FiltersPanel.vue';
 import LabelsPanel from '../components/settings/LabelsPanel.vue';
 import OfflinePanel from '../components/settings/OfflinePanel.vue';
 import OperationsPanel from '../components/settings/OperationsPanel.vue';
+import PluginsPanel from '../components/settings/PluginsPanel.vue';
 import PrefsPanel from '../components/settings/PrefsPanel.vue';
 import SharingPanel from '../components/settings/SharingPanel.vue';
 import ShortcutsPanel from '../components/settings/ShortcutsPanel.vue';
 import UsersPanel from '../components/settings/UsersPanel.vue';
+import { api } from '../api.ts';
 import { useDocumentTitle } from '../composables/useDocumentTitle.ts';
 import { useSession } from '../composables/useSession.ts';
 import { useUiStore } from '../stores/ui.ts';
@@ -25,6 +28,13 @@ const ui = useUiStore();
 const { session } = useSession();
 
 const isAdmin = computed(() => session.value?.user.role === 'admin');
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+});
+/** Admins always, to see none are installed; others where the server has plugins (API 1.15). */
+const showPlugins = computed(() => isAdmin.value || serverInfo.data.value?.plugins === true);
 const tabs = computed(() => [
   'preferences',
   'appearance',
@@ -36,6 +46,7 @@ const tabs = computed(() => [
   'offline',
   'account',
   ...(isAdmin.value ? ['users', 'operations'] : []),
+  ...(showPlugins.value ? ['plugins'] : []),
   'about',
 ]);
 const tab = computed(
@@ -78,6 +89,7 @@ useDocumentTitle(() =>
       <AccountPanel v-else-if="tab === 'account'" />
       <UsersPanel v-else-if="tab === 'users' && isAdmin" />
       <OperationsPanel v-else-if="tab === 'operations' && isAdmin" />
+      <PluginsPanel v-else-if="tab === 'plugins' && showPlugins" />
       <AboutPanel v-else-if="tab === 'about'" signed-in />
     </v-container>
   </v-main>

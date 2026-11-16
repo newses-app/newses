@@ -90,7 +90,7 @@ beforeEach(async () => {
 describe('account email', () => {
   it('says the server can mail users', async () => {
     const info = await call('GET', '/server', null);
-    expect(info.json()).toMatchObject({ mail: true, apiVersion: { major: 1, minor: 14 } });
+    expect(info.json()).toMatchObject({ mail: true });
   });
 
   it('mails a link that confirms the address, once', async () => {

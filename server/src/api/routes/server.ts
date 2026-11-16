@@ -23,7 +23,9 @@ export const serverRoutes: FastifyPluginAsyncZod<{
   mail: boolean;
   /** Whether users can turn digests on: mail, and a public URL for their links. */
   digest: boolean;
-}> = (app, { version, name, source, pushKey, pushDistributor, mail, digest }) => {
+  /** Whether plugins are installed. */
+  plugins: boolean;
+}> = (app, { version, name, source, pushKey, pushDistributor, mail, digest, plugins }) => {
   app.get('/server', { schema: { security: [], response: { 200: serverInfoSchema } } }, () => ({
     product: PRODUCT_NAME,
     version,
@@ -33,6 +35,7 @@ export const serverRoutes: FastifyPluginAsyncZod<{
     push: { key: pushKey, ...(pushDistributor && { distributor: pushDistributor }) },
     mail,
     digest,
+    plugins,
   }));
 
   // Signed in only: exact versions would tell anyone which known vulnerabilities to try.
