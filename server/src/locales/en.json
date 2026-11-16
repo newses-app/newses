@@ -14,5 +14,22 @@
   "confirmEmailExpiry": "The link works for 24 hours.",
   "confirmEmailIgnore": "If you didn't ask for this, ignore this email: nothing is sent to this address until it is confirmed.",
   "articleSentBy": "{login} sent you this article from Newses.",
-  "articleReply": "Reply to this email to answer {login}."
+  "articleReply": "Reply to this email to answer {login}.",
+  "digestSubject": "Newses digest: {n} unread article | Newses digest: {n} unread articles",
+  "digestIntro": "New unread articles for {login} since the last digest.",
+  "digestUncategorised": "Uncategorised",
+  "digestOriginal": "Original",
+  "digestMore": "And {n} more unread article in Newses. | And {n} more unread articles in Newses.",
+  "digestOpen": "Open Newses",
+  "digestMarkedRead": "The articles in this digest are now marked read.",
+  "digestDaily": "You get this digest every day at {time} ({zone}).",
+  "digestWeekly": "You get this digest every {day} at {time} ({zone}).",
+  "digestSettings": "Digest settings",
+  "digestUnsubscribe": "Unsubscribe",
+  "unsubscribeTitle": "Stop email digests",
+  "unsubscribeText": "Stop the digest of unread articles Newses emails you? You can turn it on again in Settings, under Account.",
+  "unsubscribeAction": "Stop digests",
+  "unsubscribedTitle": "Digests stopped",
+  "unsubscribedText": "Newses won't email you digests any more. You can turn them on again in Settings, under Account.",
+  "unsubscribeInvalid": "This unsubscribe link isn't valid."
 }

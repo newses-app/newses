@@ -51,7 +51,7 @@ Workspace packages exist only where runtime or toolchain differs.
 ## Runtime model
 
 - Docker: one container image, role selected by command: `server`, `worker`, `migrate`, `cli`.
-- AWS: Lambda handlers `api`, `tick` (dispatch, purge, auth prune, archive compaction), `fetch`, `favicon`, `extract`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
+- AWS: Lambda handlers `api`, `tick` (dispatch with push, digests, alert checks, and kept images; purge, auth prune, archive compaction), `fetch`, `favicon`, `extract`, `migrate`, bundled by esbuild; each reads the database password parameter once per cold start.
 
 Rules:
 - Server is stateless; sessions live in Postgres.
@@ -308,6 +308,8 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 - `SMTP_URL` (`smtp://` or `smtps://`) turns user mail on, independent of alert email; `ALERT_EMAIL_FROM` defaults to `MAIL_FROM`. `SMTP_URL` and `MAIL_SES_CONFIGURATION_SET` exclude each other; the Docker image refuses SES, whose SDK only the functions bundle.
 - A user's address receives mail once confirmed: `PUT /account/email` keeps it pending and mails `PUBLIC_URL/confirm-email#<token>` (else the request's origin), whose page posts the token to `POST /account/email/confirm` after a click, without a session; the token's hash is kept for 24 hours, and a new request replaces it. Requests are limited per user (`emailConfirm`).
 - `POST /entries/:id/email` mails the user's entry (whole content, else its excerpt, with its link) to at most 5 addresses with an optional note; `Reply-To` is the sender's confirmed address, without which it is refused (`email_unconfirmed`). With the sender's `proxyImages`, images are signed proxy URLs on `PUBLIC_URL`. Limited per user (`emailArticle`).
+- Unread digest (`digestFrequency` daily or weekly, at `digestHour` on `digestWeekday` in `timeZone`, UTC when unset; the web app sets the device's zone when turning it on): `digest.send` (every 5 minutes on Docker, after each dispatch on AWS) creates the state of users with digests on and none (after a restore), then claims at most 50 users whose digest is due (`SKIP LOCKED`, leased for an hour). Each gets their unread entries above the watermark shown in All (not hidden from All, not scored below `scoreHideBelow`), the newest 100 listed by category and feed with their excerpt, a link into the `reader` route and to the original, and the rest counted; with `digestMarkRead`, the listed ones are marked read. The watermark moves past every entry above it, read or not, once mailed or when none is unread; a failed mail or a user without a confirmed address keeps it. Changing a digest preference or the time zone sets the next due time, turning digests off deletes the state. Digests need mail and `PUBLIC_URL` (`GET /server`'s `digest`) and are in the user's language.
+- Digest unsubscribe: `PUBLIC_URL/public/unsubscribe/<user id>.<HMAC>` (`digest-unsubscribe` key, so a restore onto another `APP_SECRET` invalidates old links). `GET` shows a page whose button posts back, `POST` (the page's, or the mail client's one-click with any body) turns digests off.
 - Mail sent on a schedule carries `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058); SES receives raw MIME, so the headers are kept.
 
 ## Data model
@@ -322,6 +324,7 @@ Shared rows are stored once per instance; per-user rows carry `user_id`. Every t
 | `app_passwords` | User | Name, hash, last used |
 | `push_subscriptions` | User | → session (one each, deleted with it); push service endpoint (unique), device public key and auth secret, last delivery. Not synced |
 | `push_state` | User | Highest user entry id pushed (`watermark`), whether entries wait for the window to end, last message time. Not synced |
+| `digest_state` | User | Highest user entry id a digest covered (`watermark`), when the next is due, last digest time; only for users with digests on. Not synced |
 | `image_cache` | Instance | Blob key, fetch time, size, failed flag, failures in a row |
 | `entry_images` | Entry | Images (blob key, URL) of a kept entry's content version, which `entry_image_sets` records |
 | `user_prefs` | User | One row per changed preference (JSON value); unset keys take the defaults in `shared` |
@@ -647,7 +650,7 @@ Operator setup, once per account:
 | Bundle file | Contents |
 |---|---|
 | `manifest` | `key=value` lines: format (`1`), source, export time, whether blobs are archive only, user, subscription, entry, and blob counts; written last, so a bundle without it is incomplete |
-| `db.dump` | `pg_dump -Fc --no-owner --no-acl`, without the `pgboss` schema or the rows of `sessions`, `push_subscriptions`, `push_state`, `login_attempts`, `rate_limits`, the hourly stats, `ops_alerts`, and `ops_state` |
+| `db.dump` | `pg_dump -Fc --no-owner --no-acl`, without the `pgboss` schema or the rows of `sessions`, `push_subscriptions`, `push_state`, `digest_state`, `login_attempts`, `rate_limits`, the hourly stats, `ops_alerts`, and `ops_state` |
 | `migrations` | The source's applied migration hashes |
 | `blobs/` | `LocalBlobStore` layout (data files, content types under `.meta/`); `cli blobs pull\|push DIR` copies it from and to S3 |
 | `app-secret` | The source's `APP_SECRET`, for re-sealing only |

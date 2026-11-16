@@ -922,7 +922,20 @@
     "deviceHint": "Hands the article's title and web address to this device's share sheet or mail app, where you choose who gets it. Its public link goes along too, if it has one.",
     "deviceNeedsLink": "This article has no web address. Create a public link for it with Share, then share it from here.",
     "shareFromDevice": "Share",
-    "sharedCopy": "Also readable here: {url}"
+    "sharedCopy": "Also readable here: {url}",
+    "digest": {
+      "heading": "Digest",
+      "hint": "A summary of the unread articles that came in since the last one, emailed to your confirmed address at the time you choose.",
+      "needsAddress": "Confirm an email address to get a digest of your unread articles.",
+      "frequency": "Email digest",
+      "off": "Off",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "day": "Day",
+      "time": "Time",
+      "timeZone": "Time zone",
+      "markRead": "Mark the articles in a digest read"
+    }
   },
   "users": {
     "invalid": "Logins use letters, digits, and . _ {'@'} - only, up to 64 characters. Passwords need at least 8 characters and can't be a common one.",

@@ -38,6 +38,8 @@ const app = buildApp({
       entries: entries.entries,
       images: feeds.images,
       logger,
+      publicUrl: config.publicUrl,
+      unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
     }),
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,

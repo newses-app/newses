@@ -14,5 +14,22 @@
   "confirmEmailExpiry": "Der Link funktioniert 24 Stunden lang.",
   "confirmEmailIgnore": "Wenn du das nicht angefordert hast, ignoriere diese E-Mail: An diese Adresse wird nichts gesendet, bis sie bestätigt ist.",
   "articleSentBy": "{login} hat dir diesen Artikel aus Newses gesendet.",
-  "articleReply": "Antworte auf diese E-Mail, um {login} zu antworten."
+  "articleReply": "Antworte auf diese E-Mail, um {login} zu antworten.",
+  "digestSubject": "Newses-Übersicht: {n} ungelesener Artikel | Newses-Übersicht: {n} ungelesene Artikel",
+  "digestIntro": "Neue ungelesene Artikel für {login} seit der letzten Übersicht.",
+  "digestUncategorised": "Ohne Kategorie",
+  "digestOriginal": "Original",
+  "digestMore": "Und {n} weiterer ungelesener Artikel in Newses. | Und {n} weitere ungelesene Artikel in Newses.",
+  "digestOpen": "Newses öffnen",
+  "digestMarkedRead": "Die Artikel dieser Übersicht sind jetzt als gelesen markiert.",
+  "digestDaily": "Du bekommst diese Übersicht jeden Tag um {time} ({zone}).",
+  "digestWeekly": "Du bekommst diese Übersicht jeden {day} um {time} ({zone}).",
+  "digestSettings": "Einstellungen der Übersicht",
+  "digestUnsubscribe": "Abbestellen",
+  "unsubscribeTitle": "E-Mail-Übersichten beenden",
+  "unsubscribeText": "Die Übersicht ungelesener Artikel, die Newses dir mailt, beenden? Du kannst sie in den Einstellungen unter Konto wieder einschalten.",
+  "unsubscribeAction": "Übersichten beenden",
+  "unsubscribedTitle": "Übersichten beendet",
+  "unsubscribedText": "Newses mailt dir keine Übersichten mehr. Du kannst sie in den Einstellungen unter Konto wieder einschalten.",
+  "unsubscribeInvalid": "Dieser Abmeldelink ist ungültig."
 }

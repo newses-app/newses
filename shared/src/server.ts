@@ -20,6 +20,8 @@ export const serverInfoSchema = z.object({
   push: z.object({ key: z.string(), distributor: z.url().optional() }).optional(),
   /** From API 1.14: whether the server can email users, who may then add their address. */
   mail: z.boolean().optional(),
+  /** From API 1.14: whether the server emails digests, which needs mail and its public URL. */
+  digest: z.boolean().optional(),
 });
 
 export type ServerInfo = z.infer<typeof serverInfoSchema>;

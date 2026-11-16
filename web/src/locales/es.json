@@ -922,7 +922,20 @@
     "deviceHint": "Pasa el título y la dirección web del artículo al menú de compartir o a la aplicación de correo de este dispositivo, donde eliges quién lo recibe. Su enlace público también se incluye, si lo tiene.",
     "deviceNeedsLink": "Este artículo no tiene dirección web. Crea un enlace público con Compartir y compártelo desde aquí.",
     "shareFromDevice": "Compartir",
-    "sharedCopy": "También se puede leer aquí: {url}"
+    "sharedCopy": "También se puede leer aquí: {url}",
+    "digest": {
+      "heading": "Resumen",
+      "hint": "Un resumen de los artículos sin leer llegados desde el último, enviado a tu dirección confirmada a la hora que elijas.",
+      "needsAddress": "Confirma una dirección de correo para recibir un resumen de tus artículos sin leer.",
+      "frequency": "Resumen por correo",
+      "off": "Desactivado",
+      "daily": "Diario",
+      "weekly": "Semanal",
+      "day": "Día",
+      "time": "Hora",
+      "timeZone": "Zona horaria",
+      "markRead": "Marcar como leídos los artículos de un resumen"
+    }
   },
   "users": {
     "invalid": "Los nombres de usuario solo admiten letras, dígitos y . _ {'@'} -, hasta 64 caracteres. Las contraseñas necesitan al menos 8 caracteres y no pueden ser comunes.",

@@ -11,6 +11,9 @@ import { ThemeService } from '../core/themes.ts';
 import type { Db } from '../db/client.ts';
 import { silentLogger, TEST_APP_SECRET, TEST_OPS_SETTINGS, testFeedDeps } from './fakes.ts';
 
+/** The public URL test services link scheduled mail to. */
+export const TEST_PUBLIC_URL = 'https://reader.example';
+
 /** Every API service over `db`, with fake adapters unless overridden. */
 export function createTestServices(
   db: Db,
@@ -34,6 +37,8 @@ export function createTestServices(
       entries: entries.entries,
       images: feeds.images,
       logger: deps.logger,
+      publicUrl: TEST_PUBLIC_URL,
+      unsubscribeKey: deps.keys['digest-unsubscribe'],
     }),
     themes: new ThemeService(db),
     realtime: deps.realtime,

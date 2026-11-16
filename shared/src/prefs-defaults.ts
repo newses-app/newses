@@ -23,4 +23,9 @@ export const DEFAULT_PREFS: Prefs = {
   updateIntervalMinutes: null,
   purgeDays: null,
   language: null,
+  timeZone: null,
+  digestFrequency: 'off',
+  digestHour: 7,
+  digestWeekday: 1,
+  digestMarkRead: false,
 };

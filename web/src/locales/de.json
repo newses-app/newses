@@ -922,7 +922,20 @@
     "deviceHint": "Übergibt Titel und Webadresse des Artikels an das Teilen-Menü oder die Mail-App dieses Geräts, wo du die Empfänger wählst. Sein öffentlicher Link geht mit, falls er einen hat.",
     "deviceNeedsLink": "Dieser Artikel hat keine Webadresse. Erstelle mit „Teilen“ einen öffentlichen Link und teile ihn dann von hier.",
     "shareFromDevice": "Teilen",
-    "sharedCopy": "Auch hier zu lesen: {url}"
+    "sharedCopy": "Auch hier zu lesen: {url}",
+    "digest": {
+      "heading": "Übersicht",
+      "hint": "Eine Übersicht der ungelesenen Artikel seit der letzten, an deine bestätigte Adresse gemailt, zur Zeit deiner Wahl.",
+      "needsAddress": "Bestätige eine E-Mail-Adresse, um eine Übersicht deiner ungelesenen Artikel zu bekommen.",
+      "frequency": "E-Mail-Übersicht",
+      "off": "Aus",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "day": "Tag",
+      "time": "Uhrzeit",
+      "timeZone": "Zeitzone",
+      "markRead": "Artikel einer Übersicht als gelesen markieren"
+    }
   },
   "users": {
     "invalid": "Benutzernamen bestehen nur aus Buchstaben, Ziffern und . _ {'@'} - und haben höchstens 64 Zeichen. Passwörter brauchen mindestens 8 Zeichen und dürfen kein gängiges Passwort sein.",

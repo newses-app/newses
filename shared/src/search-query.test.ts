@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTimeZone, parseSearchQuery, searchDayRange } from './search-query.ts';
+import { parseSearchQuery, searchDayRange } from './search-query.ts';
 
 describe('parseSearchQuery', () => {
   it('keeps free text as written, quotes, OR, and negation included', () => {
@@ -112,12 +112,5 @@ describe('searchDayRange', () => {
       from: new Date('2024-03-30T00:00:00Z'),
       to: new Date('2024-03-31T00:00:00Z'),
     });
-  });
-});
-
-describe('isTimeZone', () => {
-  it('knows IANA zones only', () => {
-    expect(isTimeZone('Europe/Berlin')).toBe(true);
-    expect(isTimeZone('Mars/Olympus')).toBe(false);
   });
 });

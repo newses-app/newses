@@ -9,6 +9,7 @@ import { api } from '../../api.ts';
 import { useErrorText } from '../../composables/useErrorText.ts';
 import { SESSION_KEY, useSession } from '../../composables/useSession.ts';
 import { useUiStore } from '../../stores/ui.ts';
+import DigestSection from './DigestSection.vue';
 
 const { t } = useI18n();
 const errorText = useErrorText();
@@ -137,6 +138,7 @@ async function remove() {
         {{ t('email.send') }}
       </v-btn>
     </v-form>
+    <DigestSection />
   </template>
 </template>
 

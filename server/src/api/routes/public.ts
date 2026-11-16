@@ -7,9 +7,16 @@ import type { AccessKeyService } from '../../core/entries/access-keys.ts';
 import type { EntryService } from '../../core/entries/entries.ts';
 import { PUBLISHED_FEED_LENGTH, publishedFeedXml } from '../../core/entries/published-feed.ts';
 import type { ImageProxy } from '../../core/feeds/images.ts';
+import type { DigestService } from '../../core/mail/digest-service.ts';
 import type { PrefsService } from '../../core/prefs.ts';
 import { messagesFor, ownerLocale, pageLocale } from '../../i18n.ts';
-import { notFoundPage, PUBLIC_PAGE_CSP, sharedEntryPage } from '../public-page.ts';
+import {
+  notFoundPage,
+  PUBLIC_PAGE_CSP,
+  sharedEntryPage,
+  UNSUBSCRIBE_PAGE_CSP,
+  unsubscribePage,
+} from '../public-page.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -18,14 +25,18 @@ export interface PublicRouteDeps {
   accessKeys: AccessKeyService;
   prefs: PrefsService;
   images: ImageProxy;
+  digest: Pick<DigestService, 'tokenUser' | 'unsubscribe'>;
   /** Origin of public URLs, e.g. `https://reader.example`; null uses the request's. */
   publicUrl: string | null;
 }
 
-/** Unauthenticated pages: shared entries and published feeds, addressed by unguessable ids. */
+/**
+ * Unauthenticated pages: shared entries, published feeds, and digest unsubscribe links, addressed
+ * by unguessable ids or signed tokens.
+ */
 export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
   app,
-  { entries, accessKeys, prefs, images, publicUrl },
+  { entries, accessKeys, prefs, images, digest, publicUrl },
 ) => {
   const origin = (request: FastifyRequest) => publicUrl ?? `${request.protocol}://${request.host}`;
 
@@ -35,11 +46,11 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
     return list.map((e) => (e.content ? { ...e, content: images.rewrite(e.content, base) } : e));
   }
 
-  const html = (reply: FastifyReply, status: number, body: string) =>
+  const html = (reply: FastifyReply, status: number, body: string, csp = PUBLIC_PAGE_CSP) =>
     reply
       .code(status)
       .type('text/html; charset=utf-8')
-      .header('content-security-policy', PUBLIC_PAGE_CSP)
+      .header('content-security-policy', csp)
       .header('referrer-policy', 'no-referrer')
       .header('x-frame-options', 'DENY')
       .header('x-robots-tag', 'noindex')
@@ -99,6 +110,39 @@ export const publicRoutes: FastifyPluginAsyncZod<PublicRouteDeps> = (
       return reply.type('application/rss+xml; charset=utf-8').send(xml);
     },
   );
+
+  // One-click unsubscribe (RFC 8058) posts `List-Unsubscribe=One-Click` as a form, and the page's
+  // button an empty one; the token alone decides.
+  app.addContentTypeParser('*', { parseAs: 'string', bodyLimit: 4096 }, (_request, _body, done) => {
+    done(null, null);
+  });
+  const unsubscribe = {
+    schema: { params: z.object({ token: z.string().max(200) }), hide: true },
+    config: { logSecrets: ['token'] },
+  };
+  /** The page in the viewer's language, else the digest owner's. */
+  async function unsubscribeLocale(request: FastifyRequest, userId: number | null) {
+    const owner = userId === null ? null : (await prefs.get(userId)).language;
+    return pageLocale(request.headers['accept-language'], owner);
+  }
+
+  app.get('/unsubscribe/:token', unsubscribe, async (request, reply) => {
+    const { token } = request.params;
+    const userId = digest.tokenUser(token);
+    const locale = await unsubscribeLocale(request, userId);
+    return userId === null
+      ? html(reply, 404, unsubscribePage(locale, 'invalid'))
+      : html(reply, 200, unsubscribePage(locale, 'ask'), UNSUBSCRIBE_PAGE_CSP);
+  });
+
+  app.post('/unsubscribe/:token', unsubscribe, async (request, reply) => {
+    const { token } = request.params;
+    const userId = digest.tokenUser(token);
+    const locale = await unsubscribeLocale(request, userId);
+    return (await digest.unsubscribe(token))
+      ? html(reply, 200, unsubscribePage(locale, 'done'))
+      : html(reply, 404, unsubscribePage(locale, 'invalid'));
+  });
 
   return Promise.resolve();
 };

@@ -4,9 +4,12 @@ import { PgBoss } from 'pg-boss';
 import { IntervalScheduler } from '../adapters/interval-scheduler.ts';
 import { PgNotifyRealtime } from '../adapters/pg-notify-realtime.ts';
 import { createAuthServices } from '../core/auth/index.ts';
+import { EntryService } from '../core/entries/entries.ts';
 import { SyncService } from '../core/entries/sync.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
+import { DigestService } from '../core/mail/digest-service.ts';
 import { createOpsServices } from '../core/ops/index.ts';
+import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
 import {
   createArchiveReader,
@@ -62,6 +65,15 @@ const tasks = {
   sessions,
   throttle,
   sync,
+  digest: new DigestService({
+    db,
+    mailer: deps.mailer,
+    prefs: new PrefsService(db),
+    entries: new EntryService(db, deps.realtime),
+    publicUrl: config.publicUrl,
+    unsubscribeKey: deps.keys['digest-unsubscribe'],
+    logger,
+  }),
   ops,
   archive: createArchiveReader(config, deps.blobs),
   logger,

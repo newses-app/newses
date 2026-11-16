@@ -166,6 +166,21 @@ export const pushState = pgTable('push_state', {
   lastSentAt: tstz('last_sent_at'),
 });
 
+// The unread digest of each user who has one on: the highest user entry id a digest covered,
+// and when the next is due (the user's hour in their time zone).
+export const digestState = pgTable(
+  'digest_state',
+  {
+    userId: integer('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    watermark: bigint('watermark', { mode: 'number' }).notNull(),
+    nextDueAt: tstz('next_due_at').notNull(),
+    lastSentAt: tstz('last_sent_at'),
+  },
+  (t) => [index('digest_state_next_due_at_idx').on(t.nextDueAt)],
+);
+
 // Image proxy cache index: the blob lives at `key`; failures are remembered so hosts are not
 // asked again until the entry expires.
 export const imageCache = pgTable(

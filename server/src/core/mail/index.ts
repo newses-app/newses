@@ -9,6 +9,7 @@ import type { Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import { type ArticleMailInclude, articleMail, isHttp } from './article-mail.ts';
+import { DigestService } from './digest-service.ts';
 
 export interface MailDeps {
   db: Db;
@@ -19,6 +20,10 @@ export interface MailDeps {
   entries: EntryService;
   images: ImageProxy;
   logger: Logger;
+  /** Origin of the web app that scheduled mail (digests) links to; null stops digests. */
+  publicUrl: string | null;
+  /** Signs digest unsubscribe links (the `digest-unsubscribe` key). */
+  unsubscribeKey: Buffer;
 }
 
 /** What a request that mails something knows of where it came from. */
@@ -96,11 +101,12 @@ export class ArticleMailService {
   }
 }
 
-/** Mail to users: the addresses they confirm, and the articles they send. */
+/** Mail to users: the addresses they confirm, the articles they send, and their digests. */
 export function createMailServices(deps: MailDeps) {
   return {
     account: new AccountEmailService(deps),
     articles: new ArticleMailService(deps),
+    digest: new DigestService(deps),
   };
 }
 

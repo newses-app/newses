@@ -22,4 +22,5 @@ export * from './push.ts';
 export * from './search-languages.ts';
 export * from './search-query.ts';
 export * from './share-link.ts';
+export * from './time-zone.ts';
 export type * from './platform-bridge.ts';

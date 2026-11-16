@@ -223,6 +223,7 @@ export function buildApp(deps: AppDeps) {
           pushKey: services.feeds.push.publicKey,
           pushDistributor: deps.pushDistributorUrl ?? null,
           mail: services.mail.account.enabled,
+          digest: services.mail.digest.enabled,
         });
         await api.register(authRoutes, {
           ...services,
@@ -263,7 +264,11 @@ export function buildApp(deps: AppDeps) {
           publicUrl: deps.publicUrl ?? null,
         });
         await api.register(imageRoutes, { images: services.feeds.images });
-        await api.register(prefsRoutes, { prefs: services.prefs, updater: services.feeds.updater });
+        await api.register(prefsRoutes, {
+          prefs: services.prefs,
+          updater: services.feeds.updater,
+          digest: services.mail.digest,
+        });
         await api.register(themeRoutes, { themes: services.themes });
         await api.register(pushRoutes, { push: services.feeds.push });
         if (deps.events === false) await api.register(noEventRoutes);
@@ -277,6 +282,7 @@ export function buildApp(deps: AppDeps) {
       accessKeys: services.entries.accessKeys,
       prefs: services.prefs,
       images: services.feeds.images,
+      digest: services.mail.digest,
       publicUrl: deps.publicUrl ?? null,
     });
     void app.register(legacyPublicRoutes);

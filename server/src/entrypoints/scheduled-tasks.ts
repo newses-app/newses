@@ -6,6 +6,7 @@ import type { AuthServices } from '../core/auth/index.ts';
 import type { SyncService } from '../core/entries/sync.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
 import type { Jobs } from '../core/jobs.ts';
+import type { DigestService } from '../core/mail/digest-service.ts';
 import type { OpsServices } from '../core/ops/index.ts';
 import type { ArchiveReader, JobQueue, Logger, Scheduler } from '../core/ports.ts';
 import { setOpenAlerts } from '../telemetry/index.ts';
@@ -25,6 +26,7 @@ export interface TaskDeps {
   sessions: Pick<AuthServices['sessions'], 'pruneExpired'>;
   throttle: Pick<AuthServices['throttle'], 'prune'>;
   sync: Pick<SyncService, 'pruneTombstones'>;
+  digest: Pick<DigestService, 'sendDue'>;
   ops: {
     recorder: Pick<OpsServices['recorder'], 'recordJob' | 'flush'>;
     checker: Pick<OpsServices['checker'], 'run'>;
@@ -92,7 +94,7 @@ export function scheduleWorkerTasks(
   deps: TaskDeps,
   heartbeatFile: string,
 ): void {
-  const { feeds, ops, archive, logger } = deps;
+  const { feeds, digest, ops, archive, logger } = deps;
   const task = (name: string, intervalSeconds: number, run: () => Promise<void>) => {
     scheduler.every(name, intervalSeconds, () =>
       trackRun(ops.recorder, name, run, { kind: 'task' }),
@@ -109,6 +111,11 @@ export function scheduleWorkerTasks(
   task('push.flush', 5 * 60, async () => {
     const pushed = await feeds.push.flush();
     if (pushed > 0) logger.debug({ pushed }, 'Pushed new entries');
+  });
+  // Digests are due on the hour; a run every 5 minutes sends them within that.
+  task('digest.send', 5 * 60, async () => {
+    const sent = await digest.sendDue();
+    if (sent > 0) logger.debug({ sent }, 'Sent digests');
   });
   task('images.keep', 5 * 60, async () => {
     const kept = await feeds.images.keep(IMAGES_KEEP_BUDGET_MS);
@@ -142,7 +149,7 @@ const TICK_TASKS = {
 
 /** The tick Lambda's handler: runs the event's task, then writes the run's statistics. */
 export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise<void> {
-  const { feeds, ops, archive, logger } = deps;
+  const { feeds, digest, ops, archive, logger } = deps;
   const tracked = (name: string, run: () => Promise<unknown>) =>
     trackRun(ops.recorder, name, run, { kind: 'task' });
 
@@ -154,6 +161,10 @@ export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise
         // New entries from the last cycle's fetches that waited for a user's push window to end.
         await tracked('push.flush', async () => {
           logger.info({ pushed: await feeds.push.flush() }, 'Pushed new entries');
+        });
+        // Digests are due on the hour; dispatch runs at :00 and :30.
+        await tracked('digest.send', async () => {
+          logger.info({ sent: await digest.sendDue() }, 'Sent digests');
         });
         // Rides the dispatch schedule rather than a schedule of its own.
         await ops.recorder.flush();

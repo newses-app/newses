@@ -2,6 +2,7 @@
 // offline search. No Zod, so browsers can import it.
 
 import { normaliseTag } from './limits.ts';
+import { startOfDay, wallClock } from './time-zone.ts';
 
 /** Fields matched by their text: a substring, ignoring case; tags and labels whole. */
 export type SearchField = 'title' | 'author' | 'note' | 'tag' | 'label';
@@ -153,63 +154,6 @@ export function parseSearchQuery(q: string): SearchQuery {
   return { text: free.join(' '), terms, groups, filters };
 }
 
-/** This device's IANA time zone. */
-export const localTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-/** Whether `timeZone` is an IANA time zone this runtime knows. */
-export function isTimeZone(timeZone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const formatters = new Map<string, Intl.DateTimeFormat>();
-
-/** Calendar fields of `instant` in `timeZone`. */
-function fields(instant: number, timeZone: string) {
-  let format = formatters.get(timeZone);
-  if (!format) {
-    format = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-    });
-    formatters.set(timeZone, format);
-  }
-  const parts = format.formatToParts(new Date(instant));
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return {
-    year: get('year'),
-    month: get('month'),
-    day: get('day'),
-    hour: get('hour'),
-    minute: get('minute'),
-    second: get('second'),
-  };
-}
-
-/** How far `timeZone`'s wall clock is ahead of UTC at `instant`, in milliseconds. */
-function offset(instant: number, timeZone: string): number {
-  const f = fields(instant, timeZone);
-  const wall = Date.UTC(f.year, f.month - 1, f.day, f.hour, f.minute, f.second);
-  return wall - Math.floor(instant / 1000) * 1000;
-}
-
-/** The instant a calendar day (as UTC midnight of that date) begins in `timeZone`. */
-function startOfDay(utcMidnight: number, timeZone: string): number {
-  const guess = utcMidnight - offset(utcMidnight, timeZone);
-  return utcMidnight - offset(guess, timeZone);
-}
-
 /**
  * The instants a search date's day begins (inclusive) and ends (exclusive) in `timeZone`, with
  * relative days counted back from `now`.
@@ -224,7 +168,7 @@ export function searchDayRange(
     const [y, m, d] = date.day.split('-').map(Number) as [number, number, number];
     midnight = Date.UTC(y, m - 1, d);
   } else {
-    const today = fields(now.getTime(), timeZone);
+    const today = wallClock(now.getTime(), timeZone);
     midnight = Date.UTC(today.year, today.month - 1, today.day - date.daysAgo);
   }
   return {

@@ -14,5 +14,22 @@
   "confirmEmailExpiry": "El enlace funciona durante 24 horas.",
   "confirmEmailIgnore": "Si no lo pediste, ignora este correo: no se envía nada a esta dirección hasta que se confirme.",
   "articleSentBy": "{login} te envió este artículo desde Newses.",
-  "articleReply": "Responde a este correo para contestar a {login}."
+  "articleReply": "Responde a este correo para contestar a {login}.",
+  "digestSubject": "Resumen de Newses: {n} artículo sin leer | Resumen de Newses: {n} artículos sin leer",
+  "digestIntro": "Artículos nuevos sin leer para {login} desde el último resumen.",
+  "digestUncategorised": "Sin categoría",
+  "digestOriginal": "Original",
+  "digestMore": "Y {n} artículo más sin leer en Newses. | Y {n} artículos más sin leer en Newses.",
+  "digestOpen": "Abrir Newses",
+  "digestMarkedRead": "Los artículos de este resumen ya están marcados como leídos.",
+  "digestDaily": "Recibes este resumen todos los días a las {time} ({zone}).",
+  "digestWeekly": "Recibes este resumen cada {day} a las {time} ({zone}).",
+  "digestSettings": "Ajustes del resumen",
+  "digestUnsubscribe": "Darse de baja",
+  "unsubscribeTitle": "Dejar de recibir resúmenes",
+  "unsubscribeText": "¿Dejar de recibir el resumen de artículos sin leer que te envía Newses? Puedes volver a activarlo en Ajustes, en Cuenta.",
+  "unsubscribeAction": "Dejar de recibir resúmenes",
+  "unsubscribedTitle": "Resúmenes desactivados",
+  "unsubscribedText": "Newses ya no te enviará resúmenes. Puedes volver a activarlos en Ajustes, en Cuenta.",
+  "unsubscribeInvalid": "Este enlace para darse de baja no es válido."
 }

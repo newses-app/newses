@@ -195,7 +195,7 @@ describe('feed icon path', () => {
 });
 
 describe('server info', () => {
-  it('names the product, versions, push key, and whether it mails users, without a session', async () => {
+  it('names the product, versions, push key, and whether it mails users and digests, without a session', async () => {
     const res = await app.inject({ url: '/api/v1/server' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
@@ -204,6 +204,7 @@ describe('server info', () => {
       apiVersion: API_VERSION,
       push: { key: services.feeds.push.publicKey },
       mail: false,
+      digest: false,
     });
   });
 

@@ -15,7 +15,7 @@ import {
   MAX_TAGS_PER_ENTRY,
 } from './limits.ts';
 import { headlineOrderSchema, viewModeSchema } from './prefs.ts';
-import { isTimeZone } from './search-query.ts';
+import { isTimeZone } from './time-zone.ts';
 
 export const specialFeedSchema = z.enum(['all', 'fresh', 'starred', 'published', 'recentlyRead']);
 

@@ -55,6 +55,8 @@ const services = {
     entries: entries.entries,
     images: feeds.images,
     logger: feedDeps.logger,
+    publicUrl: config.publicUrl,
+    unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
   }),
   themes: new ThemeService(db),
   realtime,

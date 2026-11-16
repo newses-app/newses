@@ -14,5 +14,22 @@
   "confirmEmailExpiry": "Il link funziona per 24 ore.",
   "confirmEmailIgnore": "Se non l'hai chiesto tu, ignora questa email: a questo indirizzo non viene inviato nulla finché non è confermato.",
   "articleSentBy": "{login} ti ha inviato questo articolo da Newses.",
-  "articleReply": "Rispondi a questa email per rispondere a {login}."
+  "articleReply": "Rispondi a questa email per rispondere a {login}.",
+  "digestSubject": "Riepilogo di Newses: {n} articolo non letto | Riepilogo di Newses: {n} articoli non letti",
+  "digestIntro": "Nuovi articoli non letti per {login} dall'ultimo riepilogo.",
+  "digestUncategorised": "Senza categoria",
+  "digestOriginal": "Originale",
+  "digestMore": "E {n} altro articolo non letto in Newses. | E altri {n} articoli non letti in Newses.",
+  "digestOpen": "Apri Newses",
+  "digestMarkedRead": "Gli articoli di questo riepilogo ora sono segnati come letti.",
+  "digestDaily": "Ricevi questo riepilogo ogni giorno alle {time} ({zone}).",
+  "digestWeekly": "Ricevi questo riepilogo ogni {day} alle {time} ({zone}).",
+  "digestSettings": "Impostazioni del riepilogo",
+  "digestUnsubscribe": "Annulla l'iscrizione",
+  "unsubscribeTitle": "Interrompi i riepiloghi via email",
+  "unsubscribeText": "Interrompere il riepilogo degli articoli non letti che Newses ti invia? Puoi riattivarlo in Impostazioni, sotto Account.",
+  "unsubscribeAction": "Interrompi i riepiloghi",
+  "unsubscribedTitle": "Riepiloghi interrotti",
+  "unsubscribedText": "Newses non ti invierà più riepiloghi. Puoi riattivarli in Impostazioni, sotto Account.",
+  "unsubscribeInvalid": "Questo link per annullare l'iscrizione non è valido."
 }

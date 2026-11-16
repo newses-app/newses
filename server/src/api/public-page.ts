@@ -19,6 +19,12 @@ export const PUBLIC_PAGE_CSP = [
   "frame-ancestors 'none'",
 ].join('; ');
 
+/** The unsubscribe page's policy: a public page's, but its button posts back to this server. */
+export const UNSUBSCRIBE_PAGE_CSP = PUBLIC_PAGE_CSP.replace(
+  "form-action 'none'",
+  "form-action 'self'",
+);
+
 const isHttp = (url: string | null): url is string => url !== null && /^https?:/i.test(url);
 
 const STYLE = `
@@ -37,6 +43,7 @@ const STYLE = `
   audio, video { direction: ltr; }
   blockquote { margin-inline: 0; padding-inline-start: 1rem; border-inline-start: 3px solid var(--muted); }
   footer { margin-top: 3rem; }
+  button { font: inherit; padding: .5rem 1.25rem; border: 0; border-radius: 1.25rem; background: var(--link); color: var(--bg); cursor: pointer; }
 `;
 
 function page(locale: string, title: string, body: string): string {
@@ -112,5 +119,33 @@ export function notFoundPage(locale: string): string {
     locale,
     text.notAvailable,
     `<h1>${escapeHtml(text.notAvailable)}</h1>\n<p>${escapeHtml(text.notAvailableText)}</p>`,
+  );
+}
+
+/**
+ * The digest's unsubscribe page: `ask` has a button that posts back to it (mail scanners follow
+ * links, so a GET never unsubscribes), `done` says digests stopped, `invalid` that the link is not
+ * one this server made.
+ */
+export function unsubscribePage(locale: string, state: 'ask' | 'done' | 'invalid'): string {
+  const text = messagesFor(locale);
+  if (state === 'invalid')
+    return page(
+      locale,
+      text.notAvailable,
+      `<h1>${escapeHtml(text.notAvailable)}</h1>\n<p>${escapeHtml(text.unsubscribeInvalid)}</p>`,
+    );
+  if (state === 'done')
+    return page(
+      locale,
+      text.unsubscribedTitle,
+      `<h1>${escapeHtml(text.unsubscribedTitle)}</h1>\n<p>${escapeHtml(text.unsubscribedText)}</p>`,
+    );
+  return page(
+    locale,
+    text.unsubscribeTitle,
+    `<h1>${escapeHtml(text.unsubscribeTitle)}</h1>
+<p>${escapeHtml(text.unsubscribeText)}</p>
+<form method="post"><button type="submit">${escapeHtml(text.unsubscribeAction)}</button></form>`,
   );
 }

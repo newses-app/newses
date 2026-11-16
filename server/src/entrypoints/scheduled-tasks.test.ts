@@ -51,6 +51,7 @@ function services(options: { archive?: boolean; failing?: string } = {}) {
     sessions: { pruneExpired: step('sessions.prune', undefined) },
     throttle: { prune: step('throttle.prune', undefined) },
     sync: { pruneTombstones: step('tombstones.prune', 0) },
+    digest: { sendDue: step('digest.send', 1) },
     ops: {
       recorder: {
         recordJob: (run) => void jobs.push({ job: run.job, ok: run.ok }),
@@ -148,6 +149,7 @@ describe('scheduleWorkerTasks', () => {
     expect(intervals(schedule().tasks)).toEqual({
       'feeds.dispatch': 60,
       'push.flush': 300,
+      'digest.send': 300,
       'images.keep': 300,
       'feeds.purge': 21_600,
       'auth.prune': 3600,
@@ -174,11 +176,12 @@ describe('scheduleWorkerTasks', () => {
     expect(jobs).toEqual([{ job: 'feeds.dispatch', ok: true }]);
   });
 
-  it('purges, prunes, pushes, and keeps images', async () => {
+  it('purges, prunes, pushes, sends digests, and keeps images', async () => {
     const { run, calls } = schedule();
     await run('feeds.purge');
     await run('auth.prune');
     await run('push.flush');
+    await run('digest.send');
     await run('images.keep');
     expect(calls).toEqual([
       'purge',
@@ -189,6 +192,7 @@ describe('scheduleWorkerTasks', () => {
       'throttle.prune',
       'rateLimits.prune',
       'push.flush',
+      'digest.send',
       'images.keep [120000]',
     ]);
   });
@@ -214,12 +218,13 @@ describe('scheduleWorkerTasks', () => {
 });
 
 describe('createTickHandler', () => {
-  it('dispatches, then pushes, checks the alert rules, and keeps images, each tracked', async () => {
+  it('dispatches, then pushes, sends digests, checks the alert rules, and keeps images, each tracked', async () => {
     const { deps, calls, jobs } = services();
     await createTickHandler(deps)({ task: 'dispatch' });
     expect(calls).toEqual([
       'dispatchDue',
       'push.flush',
+      'digest.send',
       'stats.flush',
       'checker.run',
       'images.keep [120000]',
@@ -227,6 +232,7 @@ describe('createTickHandler', () => {
     ]);
     expect(jobs.map((j) => j.job)).toEqual([
       'push.flush',
+      'digest.send',
       'ops.check',
       'images.keep',
       'feeds.dispatch',

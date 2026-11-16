@@ -2,10 +2,12 @@ import { z } from 'zod';
 import { MAX_SCORE } from './limits.ts';
 import { isKeySequence, MAX_BINDINGS_PER_ACTION, SHORTCUT_ACTIONS } from './shortcuts.ts';
 import { BUILTIN_THEME_KEYS, FONT_KEYS } from './themes-builtin.ts';
+import { isTimeZone } from './time-zone.ts';
 import { partialThemeTokensSchema } from './themes.ts';
 
 export const viewModeSchema = z.enum(['all', 'unread', 'adaptive']);
 export const headlineOrderSchema = z.enum(['newest', 'oldest', 'title']);
+export const digestFrequencySchema = z.enum(['off', 'daily', 'weekly']);
 
 const LANGUAGE_TAG = /^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/;
 
@@ -54,11 +56,22 @@ const prefsShape = {
   purgeDays: z.number().int().min(0).max(3650).nullable(),
   /** A language tag, null to follow the device. Any tag, as apps may ship languages this server doesn't. */
   language: z.string().max(35).regex(LANGUAGE_TAG).nullable(),
+  /** The user's IANA time zone, for times the server keeps (digests); null is UTC. */
+  timeZone: z.string().max(64).refine(isTimeZone, 'Unknown time zone').nullable(),
+  /** How often the unread digest is emailed to the user's confirmed address. */
+  digestFrequency: digestFrequencySchema,
+  /** The hour of the day, in `timeZone`, the digest goes out. */
+  digestHour: z.number().int().min(0).max(23),
+  /** The day weekly digests go out, 0 Sunday to 6 Saturday. */
+  digestWeekday: z.number().int().min(0).max(6),
+  /** Marks the entries a digest lists read. */
+  digestMarkRead: z.boolean(),
 };
 
 export const prefsSchema = z.object(prefsShape);
 export const updatePrefsRequestSchema = z.object(prefsShape).partial().strict();
 
 export type Prefs = z.infer<typeof prefsSchema>;
+export type DigestFrequency = z.infer<typeof digestFrequencySchema>;
 export type PrefKey = keyof Prefs;
 export type UpdatePrefsRequest = z.infer<typeof updatePrefsRequestSchema>;
