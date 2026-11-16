@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import { feedSources, fetchHosts, users } from '../../db/schema.ts';
 import { FakeFetcher } from '../../test/fake-fetcher.ts';
@@ -82,6 +82,21 @@ describe('PoliteFetcher', () => {
     fake.set('https://short.example/x', throttle(429, 60, 'https://cdn.example/x'));
     await polite.fetch('https://short.example/x').catch(() => undefined);
     expect(await blockedHosts()).toEqual(['cdn.example']);
+  });
+
+  it('runs other requests within the same pauses, and pauses when their result asks', async () => {
+    const send = vi.fn(() => Promise.resolve({ status: 429 }));
+    const pauseFor = (result: { status: number }) => (result.status === 429 ? 300 : null);
+    expect(await polite.request('hooks.example', send, pauseFor)).toEqual({ status: 429 });
+    expect(await polite.blockedSeconds('hooks.example')).toBeGreaterThan(250);
+
+    const refused = await polite.request('hooks.example', send, pauseFor).catch((e: unknown) => e);
+    expect(refused).toMatchObject({ code: 'host_blocked' });
+    expect(send).toHaveBeenCalledTimes(1);
+
+    send.mockResolvedValueOnce({ status: 200 });
+    await polite.request('other.example', send, pauseFor);
+    expect(await blockedHosts()).toEqual(['hooks.example']);
   });
 });
 

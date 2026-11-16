@@ -10,6 +10,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY server/package.json server/
 COPY shared/package.json shared/
+COPY plugin-api/package.json plugin-api/
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod --filter "@newses/server..."
 
@@ -50,6 +51,7 @@ COPY server/package.json ./server/
 COPY server/src ./server/src
 COPY shared ./shared
 COPY --from=deps /app/shared/node_modules ./shared/node_modules
+COPY plugin-api ./plugin-api
 # The licences of the server's dependencies, read by GET /server/licenses.
 RUN node shared/src/third-party-licenses.ts --node-modules node_modules \
     --out server/src/third-party-licenses.json

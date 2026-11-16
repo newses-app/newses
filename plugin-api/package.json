@@ -1,0 +1,18 @@
+{
+  "name": "@newses/plugin-api",
+  "private": true,
+  "description": "The contract Newses server plugins are written against",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/newses-app/newses",
+    "directory": "plugin-api"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

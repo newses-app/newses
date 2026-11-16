@@ -155,6 +155,8 @@ importers:
         specifier: ^0.28.2
         version: 0.28.2
 
+  plugin-api: {}
+
   server:
     dependencies:
       '@aws-sdk/client-s3':
@@ -184,6 +186,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
+      '@newses/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
       '@newses/shared':
         specifier: workspace:*
         version: link:../shared

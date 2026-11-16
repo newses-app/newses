@@ -50,7 +50,8 @@ export class FetchError extends Error {
 }
 
 /** Why a remote host is asked, for per-host statistics. */
-export type FetchPurpose = 'feed' | 'favicon' | 'image' | 'fulltext' | 'page' | 'subscribe';
+export type FetchPurpose =
+  'feed' | 'favicon' | 'image' | 'fulltext' | 'page' | 'subscribe' | 'plugin';
 
 export interface FetchRequest {
   purpose?: FetchPurpose;
@@ -372,7 +373,8 @@ function basicAuthorization({ login, password }: FeedCredentials): string {
   return `Basic ${Buffer.from(`${login}:${password}`, 'utf8').toString('base64')}`;
 }
 
-function parseRetryAfter(value: string | null): number | null {
+/** Seconds from a Retry-After header (seconds or an HTTP date); null when absent or unreadable. */
+export function parseRetryAfter(value: string | null): number | null {
   if (!value) return null;
   const seconds = Number(value);
   if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds));

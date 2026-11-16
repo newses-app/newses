@@ -33,11 +33,7 @@ export class PoliteFetcher implements Fetcher {
     const host = hostOf(url);
     // Checked once a slot is free, so requests queued behind a 429 see it.
     return this.#hosts.run(host, async () => {
-      const blocked = await this.blockedSeconds(host);
-      if (blocked > 0)
-        throw new FetchError('host_blocked', `${host} asked to wait before more requests`, {
-          retryAfterSeconds: blocked,
-        });
+      await this.#refuseWhileBlocked(host);
       try {
         return await this.#fetcher.fetch(url, request);
       } catch (err) {
@@ -51,6 +47,25 @@ export class PoliteFetcher implements Fetcher {
     });
   }
 
+  /**
+   * Runs a request that is not a fetch (a plugin's) within the same per-host limits, refusing it
+   * with `host_blocked` while the host asks to wait. When `pauseSeconds` finds the result asking
+   * every client to wait, the host is paused for that long.
+   */
+  request<T>(
+    host: string,
+    send: () => Promise<T>,
+    pauseSeconds: (result: T) => number | null,
+  ): Promise<T> {
+    return this.#hosts.run(host, async () => {
+      await this.#refuseWhileBlocked(host);
+      const result = await send();
+      const seconds = pauseSeconds(result);
+      if (seconds !== null) await this.#block(host, seconds);
+      return result;
+    });
+  }
+
   /** Seconds until `host` may be fetched again; 0 when it has not asked to wait. */
   async blockedSeconds(host: string): Promise<number> {
     const [row] = await this.#db
@@ -60,6 +75,14 @@ export class PoliteFetcher implements Fetcher {
       .from(fetchHosts)
       .where(and(eq(fetchHosts.host, host), sql`${fetchHosts.blockedUntil} > now()`));
     return row?.seconds ?? 0;
+  }
+
+  async #refuseWhileBlocked(host: string): Promise<void> {
+    const blocked = await this.blockedSeconds(host);
+    if (blocked > 0)
+      throw new FetchError('host_blocked', `${host} asked to wait before more requests`, {
+        retryAfterSeconds: blocked,
+      });
   }
 
   async #block(host: string, seconds: number): Promise<void> {

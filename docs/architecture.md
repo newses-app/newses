@@ -33,6 +33,7 @@ Workspace packages exist only where runtime or toolchain differs.
 | `desktop/` | Electron shell around the web build |
 | `mobile/` | Capacitor shell around the web build |
 | `shared/` | Zod schemas, API types, typed API client (browser and Node) |
+| `plugin-api/` | `@newses/plugin-api`: the contract plugins are written against (`definePlugin`, context and hook types, `PLUGIN_API_VERSION`) |
 | `infra/` | CDK app: stage stacks, per-stage deploy and release pipelines, release buildspecs |
 | `docker/` | Dockerfile, `compose.yaml`, `.env.example`, reverse-proxy examples, the apps build (`compose.apps.yaml`, `apps.Dockerfile`, `apps-build.sh`) |
 
@@ -46,7 +47,7 @@ Workspace packages exist only where runtime or toolchain differs.
 | `api` | Native REST, TTRSS-compatible and Google Reader routes, SSE endpoint | `core`, `db`, `shared`, `telemetry` |
 | `telemetry` | OpenTelemetry helpers, instruments, SDK preload, Fastify tracing | `shared` |
 | `importer` | TTRSS importer | `core`, `db`, `shared` |
-| `plugins` | Plugin host: loads installed plugins and implements the core ports that run their hooks | `core`, `db`, `shared`, `telemetry` |
+| `plugins` | Plugin host: registry, plugins' network access, hook runner; implements the core ports that run hooks | `core`, `db`, `shared`, `telemetry` |
 | `entrypoints` | `server`, `worker`, `migrate`, `cli`, and `lambda/` handlers — wire adapters into core | anything |
 
 ## Runtime model
@@ -312,6 +313,13 @@ Rollups and resolved alerts are pruned after `OPS_RETENTION_DAYS`, audit events 
 - Unread digest (`digestFrequency` daily or weekly, at `digestHour` on `digestWeekday` in `timeZone`, UTC when unset; the web app sets the device's zone when turning it on): `digest.send` (every 5 minutes on Docker, after each dispatch on AWS) creates the state of users with digests on and none (after a restore), then claims at most 50 users whose digest is due (`SKIP LOCKED`, leased for an hour). Each gets their unread entries above the watermark shown in All (not hidden from All, not scored below `scoreHideBelow`), the newest 100 listed by category and feed with their excerpt, a link into the `reader` route and to the original, and the rest counted; with `digestMarkRead`, the listed ones are marked read. The watermark moves past every entry above it, read or not, once mailed or when none is unread; a failed mail or a user without a confirmed address keeps it. Changing a digest preference or the time zone sets the next due time, turning digests off deletes the state. Digests need mail and `PUBLIC_URL` (`GET /server`'s `digest`) and are in the user's language.
 - Digest unsubscribe: `PUBLIC_URL/public/unsubscribe/<user id>.<HMAC>` (`digest-unsubscribe` key, so a restore onto another `APP_SECRET` invalidates old links). `GET` shows a page whose button posts back, `POST` (the page's, or the mail client's one-click with any body) turns digests off.
 - Mail sent on a schedule carries `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058); SES receives raw MIME, so the headers are kept.
+
+## Plugins
+
+- `@newses/plugin-api` versions the contract apart from the app. While its major is 0, additions raise the patch and breaking changes the minor. A plugin's `apiVersion` is a caret range (`^0.1`, `^0.1.2`) that must accept `PLUGIN_API_VERSION`.
+- The registry takes the installed plugins (source and default export) and refuses, with the reason, each one whose definition does not parse (id, semver version, scopes, lower-case hosts, known hooks only), whose `apiVersion` rejects this contract, or whose id an earlier plugin took. It logs what it loads and refuses, and never throws.
+- The runner runs one hook of one plugin under the hook's time limit, aborting the context's `signal` when it ends, and checks the result against the hook's output schema. A throw, timeout, or unusable result is a failure the caller skips. Each run has a span (`rss.plugin.id`, `rss.plugin.hook`, `rss.plugin.outcome`) and counts as job `plugin:<id>:<hook>` in the job statistics and metrics, so the Operations page and the failing-jobs alert cover plugins.
+- A hook's context: the plugin's id, the hook's `signal`, the server's logger with every line tagged `plugin`, and a standard `fetch`. That `fetch` reaches http(s) URLs on hosts approved for the plugin only, through `PoliteFetcher.request` (the per-host limits and pauses of feed fetches; a 429, or 503 with `Retry-After`, pauses the host), with the address guard of `HttpFetcher` (`FETCH_ALLOW_PRIVATE_NETWORKS`), returning redirects instead of following them, ending with the hook's `signal` or after 60 s. Requests count in the per-host statistics as purpose `plugin`; refusals reject with a `TypeError`.
 
 ## Data model
 

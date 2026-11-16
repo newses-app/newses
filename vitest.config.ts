@@ -21,7 +21,7 @@ const STARTUP_WIRING = [
 
 export default defineConfig({
   test: {
-    projects: ['desktop', 'infra', 'mobile', 'server', 'shared', 'web'],
+    projects: ['desktop', 'infra', 'mobile', 'plugin-api', 'server', 'shared', 'web'],
     passWithNoTests: true,
     // The pipeline's vCPUs (CodeBuild ARM LARGE); more workers starve the server's database tests,
     // which share the cores with Postgres.
@@ -31,7 +31,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       // Files no test imports count too, at 0%.
-      include: ['{desktop,infra,mobile,server,shared,web}/src/**/*.{ts,vue}'],
+      include: ['{desktop,infra,mobile,plugin-api,server,shared,web}/src/**/*.{ts,vue}'],
       exclude: ['**/*.test.ts', '**/*.d.ts', '*/src/test/**', ...STARTUP_WIRING],
       // LCOV for Sonar, HTML to browse, the JSON summary for `pnpm coverage:status`.
       reporter: ['text-summary', 'json-summary', 'lcov', 'html'],
