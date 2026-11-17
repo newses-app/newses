@@ -1,5 +1,6 @@
-import type { DigestComposeInput, PluginContext } from '@newses/plugin-api';
+import { type DigestComposeInput, EVENT_LIMITS, type PluginContext } from '@newses/plugin-api';
 import { describe, expect, it, vi } from 'vitest';
+import { MAX_DELIVERY_EVENTS } from '../core/plugins/events.ts';
 import type { PluginRuntime } from '../core/plugins/settings.ts';
 import type { KeyValueStore } from '../core/plugins/storage.ts';
 import { silentLogger } from '../test/fakes.ts';
@@ -54,6 +55,11 @@ describe('EventHookRunner', () => {
     expect(await runner.run(plugin, 'published.changed', 3, event)).toBe('disabled');
     expect(await runner.run(plugin, 'entries.added', 3, event)).toBe('disabled');
     expect(plugin.events).toEqual(new Map([['published.changed', { debounceSeconds: 120 }]]));
+  });
+
+  it("keeps to the contract's limits", () => {
+    expect(EVENT_HOOK_TIMEOUT_MS).toBe(EVENT_LIMITS.timeoutSeconds * 1000);
+    expect(MAX_DELIVERY_EVENTS).toBe(EVENT_LIMITS.entries);
   });
 });
 

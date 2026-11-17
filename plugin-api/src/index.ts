@@ -168,14 +168,17 @@ export interface PublishedChangedEvent {
   unpublished: number[];
 }
 
+/** What an event delivery carries at most, and how long its hook may run. */
+export const EVENT_LIMITS = { entries: 500, timeoutSeconds: 60 } as const;
+
 /**
  * A hook told of changes after they are saved, at least once: a delivery that fails (throws,
  * times out) is retried with backoff. Changes within `debounceSeconds` of the first (0 to 3600;
  * 0 by default) arrive as one event.
  */
-export interface EventHook<E> {
+export interface EventHook<E, C extends PluginContext = PluginContext> {
   debounceSeconds?: number;
-  run(event: E, context: PluginContext): unknown;
+  run(event: E, context: C): unknown;
 }
 
 /** An entry a digest lists, as the user sees it. */
@@ -212,25 +215,53 @@ export interface DigestAdditions {
 /** What a digest takes of a plugin at most: characters of overview and per entry, and time. */
 export const DIGEST_LIMITS = { overview: 4000, entryText: 1000, timeoutSeconds: 60 } as const;
 
+/** What a `digest.compose` hook may return; anything else adds nothing. */
+export const digestAdditionsSchema: z.ZodType<DigestAdditions | null | undefined> = z
+  .object({
+    overview: z.string().max(DIGEST_LIMITS.overview).nullish(),
+    entries: z
+      .array(z.object({ id: z.number().int(), text: z.string().max(DIGEST_LIMITS.entryText) }))
+      .max(1000)
+      .nullish(),
+  })
+  .nullish();
+
 /**
  * A hook that adds to a user's digest before it is sent. A hook that throws, runs out of time,
  * or returns more than `DIGEST_LIMITS` adds nothing; the digest goes out without it.
  */
-export interface DigestHook {
+export interface DigestHook<C extends PluginContext = PluginContext> {
   run(
     input: DigestComposeInput,
-    context: PluginContext,
+    context: C,
   ): DigestAdditions | null | undefined | Promise<DigestAdditions | null | undefined>;
 }
 
-/** The hooks a plugin implements. Each hook arrives in the patch release that names it. */
-export interface PluginHooks {
-  'entries.added'?: EventHook<EntriesAddedEvent>;
-  'published.changed'?: EventHook<PublishedChangedEvent>;
-  'digest.compose'?: DigestHook;
+/**
+ * The hooks a plugin implements, each given a context typed by the plugin's settings. Each hook
+ * arrives in the patch release that names it.
+ */
+export interface PluginHooks<C extends PluginContext = PluginContext> {
+  'entries.added'?: EventHook<EntriesAddedEvent, C>;
+  'published.changed'?: EventHook<PublishedChangedEvent, C>;
+  'digest.compose'?: DigestHook<C>;
 }
 
-export interface PluginDefinition {
+/** The settings a schema gives hooks: its output, or none without one. */
+type SettingsOf<S extends SettingsSchema | undefined> = S extends SettingsSchema
+  ? z.output<S>
+  : Record<string, never>;
+
+/** The context of a plugin whose settings schemas are `Instance` and `User`. */
+export type ContextOf<
+  Instance extends SettingsSchema | undefined,
+  User extends SettingsSchema | undefined,
+> = PluginContext<SettingsOf<Instance>, SettingsOf<User>>;
+
+export interface PluginDefinition<
+  Instance extends SettingsSchema | undefined = SettingsSchema | undefined,
+  User extends SettingsSchema | undefined = SettingsSchema | undefined,
+> {
   /** Stable id, 1 to 40 lower-case letters, digits, and hyphens, starting with a letter. */
   id: string;
   /** The plugin's own version (semver). */
@@ -245,7 +276,7 @@ export interface PluginDefinition {
    * Mark secrets with `secret()` and URLs with `url()`. When a hook that runs for a user keeps
    * failing, the plugin is turned off for that user if it has user settings, else for everyone.
    */
-  settings?: { instance?: SettingsSchema; user?: SettingsSchema };
+  settings?: { instance?: Instance; user?: User };
   /**
    * The plugin's text in Settings → Plugins, per language (`en`, `de`, `pt-BR`), as plain text;
    * a message missing in the user's language is shown in English, else as its key. Keys:
@@ -254,14 +285,20 @@ export interface PluginDefinition {
    * `settings.<field>.item.<property>` (a property of a list's items).
    */
   messages?: PluginMessages;
-  hooks: PluginHooks;
+  hooks: PluginHooks<ContextOf<Instance, User>>;
 }
 
 /** Messages per language, each a map of key to plain text. */
 export type PluginMessages = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
-/** Declares a plugin; the module's default export. Checks types only. */
-export function definePlugin<const T extends PluginDefinition>(plugin: T): T {
+/**
+ * Declares a plugin; the module's default export. Checks types only, giving hooks a context whose
+ * `settings` and `userSettings` are what the plugin's settings schemas give.
+ */
+export function definePlugin<
+  Instance extends SettingsSchema | undefined = undefined,
+  User extends SettingsSchema | undefined = undefined,
+>(plugin: PluginDefinition<Instance, User>): PluginDefinition<Instance, User> {
   return plugin;
 }
 

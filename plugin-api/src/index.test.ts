@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import {
   acceptsApiVersion,
@@ -83,8 +83,44 @@ describe('secret and url', () => {
       settings: { user: z.object({ target: url({ secret: true }), token: secret().optional() }) },
       hooks: {},
     });
-    expect(plugin.settings.user.parse({ target: 'https://a.example/' })).toEqual({
+    expect(plugin.settings?.user?.parse({ target: 'https://a.example/' })).toEqual({
       target: 'https://a.example/',
+    });
+  });
+
+  it("give hooks a context typed by the plugin's settings", () => {
+    definePlugin({
+      id: 'typed',
+      version: '1.0.0',
+      apiVersion: '^0.1',
+      scopes: ['instance', 'user'],
+      settings: {
+        instance: z.object({ region: z.string().default('eu') }),
+        user: z.object({ target: url(), retries: z.number().optional() }),
+      },
+      hooks: {
+        'published.changed': {
+          run: (_event, context) => {
+            expectTypeOf(context.settings.region).toEqualTypeOf<string>();
+            expectTypeOf(context.userSettings?.target).toEqualTypeOf<string | undefined>();
+            expectTypeOf(context.userSettings?.retries).toEqualTypeOf<number | undefined>();
+          },
+        },
+      },
+    });
+    definePlugin({
+      id: 'plain',
+      version: '1.0.0',
+      apiVersion: '^0.1',
+      scopes: ['instance'],
+      hooks: {
+        'digest.compose': {
+          run: (_input, context) => {
+            expectTypeOf(context.settings).toEqualTypeOf<Readonly<Record<string, never>>>();
+            return null;
+          },
+        },
+      },
     });
   });
 });

@@ -32,6 +32,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm --filter @newses/web test:e2e` | Playwright tests against a running deployment, signed in as an admin with subscriptions (checked before the tests run; its sessions are signed out before and after): `E2E_BASE_URL`, `E2E_LOGIN`, and `E2E_PASSWORD`, from the environment or `playwright.env` at the repository root; not part of `pnpm check` |
 | `pnpm --filter @newses/infra cdk synth` | Synthesise the AWS stacks and pipelines (build `web` first, and install the stages' plugins); deployments run through the pipelines |
 | `pnpm --filter @newses/infra plugins:install` | Install each AWS stage's `plugins` from the deployment config into `server/.plugins/<stage>`, audited, for synth to bundle (the pipelines run it) |
+| `node plugin-api/src/publish.ts` | Build `@newses/plugin-api` for npm in `plugin-api/dist`, versioned `PLUGIN_API_VERSION`, and list its files; `--publish` (with `--otp CODE`) publishes it, signed in to npm as a maintainer of the `@newses` scope |
 | `node server/src/plugins/install.ts --dir DIR NAME@VERSION...` | Install plugins into DIR and write their list (`--no-audit`, `--link` to point `#installed-plugins` at it; `docker/compose.plugins.yaml` runs it) |
 | `scripts/store-deploy-config.sh` | Checks the AWS deployment config (`infra/deploy.config.json`, gitignored; copy `infra/deploy.config.example.json`) against its schema and shows how it differs from the copy the pipelines' synth reads, SSM `/<prefix>/deploy-config`, and each stage's plugin changes; `--apply` stores it there, `--release dev\|prod` then starts the stage's deploy pipeline (`--help`). The file is needed by `cdk` and the AWS scripts locally too |
 | `git tag v1.2.3-rc.1 && git push origin v1.2.3-rc.1` | Release the apps to the dev stage (prerelease tags) or, with `v1.2.3`, to prod; the stage's release pipeline builds, signs, and publishes to `/downloads/`, and the server image to the stage's `imageRepository`. Prereleases must be `-rc.1` to `-rc.98`, each a higher Android versionCode than the last and below the release |
@@ -77,6 +78,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `docs/translations.md` | Adding a language, the translation pass, message rules, pseudo-locales, the glossary |
 | `docs/adr/` | Decision history |
 | `README.md` | The repository's front page: what Newses is, a screenshot, links to the site |
+| `plugin-api/README.md` | The plugin API's npm page: install, a minimal plugin, links to the author guide and template |
 | `CONTRIBUTING.md` | The contribution workflow: issues, pull requests, license of contributions |
 | `CREDITS.md` | Third-party work the apps ship or adapt (generated from `shared/src/credits.ts`) |
 | `CODE_OF_CONDUCT.md`, `.github/` | Code of conduct, security policy, issue forms, pull request template |

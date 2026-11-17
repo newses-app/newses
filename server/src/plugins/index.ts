@@ -1,5 +1,4 @@
-import { DIGEST_LIMITS, type DigestAdditions } from '@newses/plugin-api';
-import { z } from 'zod';
+import { DIGEST_LIMITS, digestAdditionsSchema, EVENT_LIMITS } from '@newses/plugin-api';
 import type { Keys } from '../core/crypto.ts';
 import type { PoliteFetcher } from '../core/feeds/polite-fetcher.ts';
 import { stripControlChars } from '../core/feeds/sanitize.ts';
@@ -24,7 +23,7 @@ import { type InstalledPlugin, type LoadedPlugin, PluginRegistry } from './regis
 import { PluginRunner } from './runner.ts';
 
 /** How long an event hook may run. */
-export const EVENT_HOOK_TIMEOUT_MS = 60_000;
+export const EVENT_HOOK_TIMEOUT_MS = EVENT_LIMITS.timeoutSeconds * 1000;
 
 /**
  * The installed plugins, checked once per process; a plugin the registry refuses is logged, left
@@ -80,17 +79,6 @@ export class EventHookRunner implements PluginEventRunner {
     return outcome.failure === 'disabled' ? 'disabled' : 'failed';
   }
 }
-
-/** What `digest.compose` may return. */
-const digestAdditionsSchema: z.ZodType<DigestAdditions | null | undefined> = z
-  .object({
-    overview: z.string().max(DIGEST_LIMITS.overview).nullish(),
-    entries: z
-      .array(z.object({ id: z.number().int(), text: z.string().max(DIGEST_LIMITS.entryText) }))
-      .max(1000)
-      .nullish(),
-  })
-  .nullish();
 
 /** A plugin's plain text for mail: line breaks as `\n`, no other control characters, trimmed. */
 function mailText(text: string | null | undefined): string | null {
