@@ -126,6 +126,17 @@ export class AppStack extends Stack {
       deadLetterQueue: { queue: extractDlq, maxReceiveCount: 2 },
     });
 
+    // Wakes for plugins' due deliveries; the deliveries themselves are kept in the database.
+    const pluginDlq = new sqs.Queue(this, 'PluginDispatchDlq', {
+      queueName: resourceName(stage, 'plugin-dispatch-dlq'),
+      retentionPeriod: Duration.days(14),
+    });
+    const pluginQueue = new sqs.Queue(this, 'PluginDispatchQueue', {
+      queueName: resourceName(stage, 'plugin-dispatch'),
+      visibilityTimeout: Duration.minutes(30),
+      deadLetterQueue: { queue: pluginDlq, maxReceiveCount: 2 },
+    });
+
     const adotLayer =
       stage.traceSampling > 0
         ? lambda.LayerVersion.fromLayerVersionArn(this, 'AdotLayer', ADOT_LAYER_ARN)
@@ -170,6 +181,7 @@ export class AppStack extends Stack {
           FEED_FETCH_QUEUE_URL: fetchQueue.queueUrl,
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
           ENTRY_EXTRACT_QUEUE_URL: extractQueue.queueUrl,
+          PLUGIN_DISPATCH_QUEUE_URL: pluginQueue.queueUrl,
           // The Lambda runtime's CA bundle includes the RDS certificate authorities.
           NODE_EXTRA_CA_CERTS: '/var/runtime/ca-cert.pem',
           NODE_OPTIONS: '--enable-source-maps',
@@ -209,6 +221,7 @@ export class AppStack extends Stack {
       fetchQueue.grantSendMessages(handler);
       faviconQueue.grantSendMessages(handler);
       extractQueue.grantSendMessages(handler);
+      pluginQueue.grantSendMessages(handler);
       if (adotLayer) {
         handler.addToRolePolicy(
           new iam.PolicyStatement({
@@ -317,6 +330,16 @@ export class AppStack extends Stack {
       }),
     );
 
+    const plugin = fn('plugin', { timeout: Duration.minutes(5) });
+    // Plugins' due deliveries, a wake at a time; deliveries are claimed, so wakes may overlap.
+    plugin.addEventSource(
+      new SqsEventSource(pluginQueue, {
+        batchSize: 1,
+        maxConcurrency: 2,
+        reportBatchItemFailures: true,
+      }),
+    );
+
     const migrate = fn('migrate', { timeout: Duration.minutes(10) });
     migrate.addEnvironment('ADMIN_LOGIN', ADMIN_LOGIN);
     migrate.addEnvironment('ADMIN_PASSWORD_PARAMETER', adminPassword.parameterName);
@@ -333,7 +356,7 @@ export class AppStack extends Stack {
       handler: migrate,
       timeout: Duration.minutes(10),
       executeOnHandlerChange: true,
-      executeBefore: [api, tick, fetch, favicon],
+      executeBefore: [api, tick, fetch, favicon, plugin],
     });
   }
 

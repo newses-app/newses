@@ -123,8 +123,66 @@ export interface PluginContext<
   readonly userStorage: PluginStore | null;
 }
 
+/** An entry as the user sees it when the event is delivered. */
+export interface EventEntry {
+  /** The user's entry id, stable for the user. */
+  id: number;
+  title: string;
+  link: string | null;
+  author: string | null;
+  /** ISO 8601; when the article says it was published, else when it was fetched. */
+  publishedAt: string;
+  /** In the user's published feed. */
+  published: boolean;
+  unread: boolean;
+  /**
+   * The feed, as the user named it; null for pages published from outside any feed. `url` is
+   * null for a feed with a login, whose address is the user's own.
+   */
+  feed: { id: number; title: string; url: string | null; withLogin: boolean } | null;
+}
+
+/** An entry with its text, for hooks that read articles. */
+export interface EventEntryWithText extends EventEntry {
+  /** The article as plain text (full text when extracted), at most 20,000 characters. */
+  text: string;
+  /** Changes when the title, link, or content does. */
+  contentHash: string;
+}
+
+/** `entries.added`: entries fetched into one user's feeds, or given to a new subscription. */
+export interface EntriesAddedEvent {
+  userId: number;
+  /** Those the user still has, in the order they arrived. */
+  entries: EventEntryWithText[];
+}
+
+/** `published.changed`: entries added to or removed from one user's published feed. */
+export interface PublishedChangedEvent {
+  userId: number;
+  /** The published feed's public address, once the user has one and the server a `PUBLIC_URL`. */
+  feedUrl: string | null;
+  /** Entries now in the published feed. */
+  published: EventEntry[];
+  /** Ids of entries that left it, or no longer exist. */
+  unpublished: number[];
+}
+
+/**
+ * A hook told of changes after they are saved, at least once: a delivery that fails (throws,
+ * times out) is retried with backoff. Changes within `debounceSeconds` of the first (0 to 3600;
+ * 0 by default) arrive as one event.
+ */
+export interface EventHook<E> {
+  debounceSeconds?: number;
+  run(event: E, context: PluginContext): unknown;
+}
+
 /** The hooks a plugin implements. Each hook arrives in the patch release that names it. */
-export type PluginHooks = Record<string, never>;
+export interface PluginHooks {
+  'entries.added'?: EventHook<EntriesAddedEvent>;
+  'published.changed'?: EventHook<PublishedChangedEvent>;
+}
 
 export interface PluginDefinition {
   /** Stable id, 1 to 40 lower-case letters, digits, and hyphens, starting with a letter. */

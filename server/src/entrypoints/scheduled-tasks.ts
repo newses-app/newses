@@ -8,6 +8,7 @@ import type { FeedServices } from '../core/feeds/index.ts';
 import type { Jobs } from '../core/jobs.ts';
 import type { DigestService } from '../core/mail/digest-service.ts';
 import type { OpsServices } from '../core/ops/index.ts';
+import type { PluginEventService } from '../core/plugins/events.ts';
 import type { PluginStorageService } from '../core/plugins/storage.ts';
 import type { ArchiveReader, JobQueue, Logger, Scheduler } from '../core/ports.ts';
 import { setOpenAlerts } from '../telemetry/index.ts';
@@ -33,10 +34,21 @@ export interface TaskDeps {
     checker: Pick<OpsServices['checker'], 'run'>;
     prune: OpsServices['prune'];
   };
-  plugins: { storage: Pick<PluginStorageService, 'prune'> };
+  plugins: {
+    storage: Pick<PluginStorageService, 'prune'>;
+    events: Pick<PluginEventService, 'dispatch'>;
+    /** Queues a wake for the next due delivery where nothing polls (AWS). */
+    wake?: () => Promise<void>;
+  };
   archive: Pick<ArchiveReader, 'compact'> | null;
   logger: Logger;
 }
+
+/** How often the worker runs plugins' due deliveries, and how long one run may take. */
+const PLUGIN_DISPATCH_SECONDS = 30;
+const PLUGIN_DISPATCH_BUDGET_MS = 25_000;
+/** How long the tick spends on plugins' deliveries; the plugin function does the rest. */
+const TICK_PLUGIN_BUDGET_MS = 60_000;
 
 /** How long one run may spend keeping kept entries' images. */
 const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
@@ -115,6 +127,11 @@ export function scheduleWorkerTasks(
     const pushed = await feeds.push.flush();
     if (pushed > 0) logger.debug({ pushed }, 'Pushed new entries');
   });
+  // Plugins' deliveries whose debounce window or retry delay has passed.
+  task('plugins.dispatch', PLUGIN_DISPATCH_SECONDS, async () => {
+    const ran = await deps.plugins.events.dispatch(Date.now() + PLUGIN_DISPATCH_BUDGET_MS);
+    if (ran > 0) logger.debug({ ran }, 'Ran plugin deliveries');
+  });
   // Digests are due on the hour; a run every 5 minutes sends them within that.
   task('digest.send', 5 * 60, async () => {
     const sent = await digest.sendDue();
@@ -168,6 +185,12 @@ export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise
         // Digests are due on the hour; dispatch runs at :00 and :30.
         await tracked('digest.send', async () => {
           logger.info({ sent: await digest.sendDue() }, 'Sent digests');
+        });
+        // Deliveries a wake missed; then a wake for what is left.
+        await tracked('plugins.dispatch', async () => {
+          const ran = await deps.plugins.events.dispatch(Date.now() + TICK_PLUGIN_BUDGET_MS);
+          logger.info({ ran }, 'Ran plugin deliveries');
+          await deps.plugins.wake?.();
         });
         // Rides the dispatch schedule rather than a schedule of its own.
         await ops.recorder.flush();

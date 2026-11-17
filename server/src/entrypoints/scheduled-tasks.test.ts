@@ -60,7 +60,11 @@ function services(options: { archive?: boolean; failing?: string } = {}) {
       checker: { run: step('checker.run', { open: 1 }) as TaskDeps['ops']['checker']['run'] },
       prune: step('ops.prune', { stats: 0, audit: 0 }),
     },
-    plugins: { storage: { prune: step('plugins.prune', 0) } },
+    plugins: {
+      storage: { prune: step('plugins.prune', 0) },
+      events: { dispatch: step('plugins.dispatch', 2) },
+      wake: step('plugins.wake', undefined),
+    },
     archive: options.archive ? { compact: step('compact', 2) } : null,
     logger,
   };
@@ -149,6 +153,7 @@ describe('scheduleWorkerTasks', () => {
       Object.fromEntries([...tasks].map(([name, { seconds }]) => [name, seconds]));
     expect(intervals(schedule().tasks)).toEqual({
       'feeds.dispatch': 60,
+      'plugins.dispatch': 30,
       'push.flush': 300,
       'digest.send': 300,
       'images.keep': 300,
@@ -175,6 +180,12 @@ describe('scheduleWorkerTasks', () => {
       'Could not write the worker heartbeat',
     );
     expect(jobs).toEqual([{ job: 'feeds.dispatch', ok: true }]);
+  });
+
+  it("runs plugins' due deliveries within a budget", async () => {
+    const { run, calls } = schedule();
+    await run('plugins.dispatch');
+    expect(calls).toEqual([`plugins.dispatch [${String(NOW + 25_000)}]`]);
   });
 
   it('purges, prunes, pushes, sends digests, and keeps images', async () => {
@@ -220,13 +231,15 @@ describe('scheduleWorkerTasks', () => {
 });
 
 describe('createTickHandler', () => {
-  it('dispatches, then pushes, sends digests, checks the alert rules, and keeps images, each tracked', async () => {
+  it("dispatches, then pushes, sends digests, runs plugins' deliveries, checks the alert rules, and keeps images, each tracked", async () => {
     const { deps, calls, jobs } = services();
     await createTickHandler(deps)({ task: 'dispatch' });
     expect(calls).toEqual([
       'dispatchDue',
       'push.flush',
       'digest.send',
+      `plugins.dispatch [${String(NOW + 60_000)}]`,
+      'plugins.wake',
       'stats.flush',
       'checker.run',
       'images.keep [120000]',
@@ -235,6 +248,7 @@ describe('createTickHandler', () => {
     expect(jobs.map((j) => j.job)).toEqual([
       'push.flush',
       'digest.send',
+      'plugins.dispatch',
       'ops.check',
       'images.keep',
       'feeds.dispatch',

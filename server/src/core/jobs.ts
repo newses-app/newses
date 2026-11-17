@@ -6,6 +6,8 @@ export type Jobs = {
   'feed.favicon': { feedSourceId: number };
   /** Full text for a feed source's newest entries not tried yet. */
   'entry.extract': { feedSourceId: number };
+  /** Runs plugins' due deliveries; queued on AWS when something becomes due. */
+  'plugin.dispatch': Record<string, never>;
 };
 
 export const JOB_DEFINITIONS: JobDefinitions<Jobs> = {
@@ -14,4 +16,6 @@ export const JOB_DEFINITIONS: JobDefinitions<Jobs> = {
   'feed.favicon': { dedupeByKey: true, retryLimit: 1, timeoutSeconds: 60 },
   // Keyed by feed source; failures are recorded per entry, so jobs are not retried.
   'entry.extract': { dedupeByKey: true, retryLimit: 0, timeoutSeconds: 600 },
+  // Deliveries keep their own retries; a missed wake is caught up by the next one or the tick.
+  'plugin.dispatch': { dedupeByKey: true, retryLimit: 0, timeoutSeconds: 300 },
 };

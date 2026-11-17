@@ -5,6 +5,7 @@ import type { Db } from '../../db/client.ts';
 import { enclosures, entries } from '../../db/schema.ts';
 import type { FeedSettings } from '../config.ts';
 import type { Realtime } from '../ports.ts';
+import { recordEntriesAdded } from '../plugins/events.ts';
 import { runFilters } from '../filters/run.ts';
 import { userPrefInt } from '../prefs.ts';
 import type { PushService } from '../push/push-service.ts';
@@ -200,9 +201,13 @@ export class Ingester {
     await this.#notify(users);
   }
 
-  /** Fans out, then runs each recipient's filters over what they received. */
+  /**
+   * Fans out, tells the plugins listening (by recording `entries.added`), then runs each
+   * recipient's filters over what they received.
+   */
   async #deliver(executor: Pick<Db, 'execute'>, condition: SQL): Promise<number[]> {
     const delivered = await this.#fanOut(executor, condition);
+    await recordEntriesAdded(executor, delivered);
     await runFilters(executor, delivered);
     return [...new Set(delivered.map((d) => d.userId))];
   }

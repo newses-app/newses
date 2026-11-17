@@ -1,7 +1,13 @@
 import { MAX_PLUGIN_HOSTS } from '@newses/shared';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { pluginSettings, pluginStorage, pluginUserSettings } from '../../db/schema.ts';
+import {
+  pluginDeliveries,
+  pluginEvents,
+  pluginSettings,
+  pluginStorage,
+  pluginUserSettings,
+} from '../../db/schema.ts';
 import { CryptoError, open, seal } from '../crypto.ts';
 import { DomainError } from '../errors.ts';
 import type { PluginCatalog, PluginInfo, SettingsSpec } from './catalog.ts';
@@ -155,6 +161,9 @@ export class PluginSettingsService {
       const values = {
         enabled,
         approvedHosts: hosts,
+        // As the server keeps them at startup, so the triggers see the plugin's hooks at once.
+        hooks: [...info.events.keys()],
+        userScope: info.scopes.includes('user'),
         ...saved,
         ...(change.enabled && { failures: 0, disabledReason: null }),
         updatedAt: sql`now()`,
@@ -227,6 +236,8 @@ export class PluginSettingsService {
         await tx.delete(pluginSettings).where(eq(pluginSettings.pluginId, pluginId)),
         await tx.delete(pluginUserSettings).where(eq(pluginUserSettings.pluginId, pluginId)),
         await tx.delete(pluginStorage).where(eq(pluginStorage.pluginId, pluginId)),
+        await tx.delete(pluginEvents).where(eq(pluginEvents.pluginId, pluginId)),
+        await tx.delete(pluginDeliveries).where(eq(pluginDeliveries.pluginId, pluginId)),
       ];
       return counts.some((result) => (result.rowCount ?? 0) > 0);
     });
@@ -244,6 +255,12 @@ export class PluginSettingsService {
         await tx
           .delete(pluginStorage)
           .where(and(eq(pluginStorage.pluginId, pluginId), eq(pluginStorage.userId, userId))),
+        await tx
+          .delete(pluginEvents)
+          .where(and(eq(pluginEvents.pluginId, pluginId), eq(pluginEvents.userId, userId))),
+        await tx
+          .delete(pluginDeliveries)
+          .where(and(eq(pluginDeliveries.pluginId, pluginId), eq(pluginDeliveries.userId, userId))),
       ];
       return counts.some((result) => (result.rowCount ?? 0) > 0);
     });

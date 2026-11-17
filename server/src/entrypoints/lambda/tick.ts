@@ -3,18 +3,29 @@ import { EntryService } from '../../core/entries/entries.ts';
 import { SyncService } from '../../core/entries/sync.ts';
 import { createFeedServices } from '../../core/feeds/index.ts';
 import { DigestService } from '../../core/mail/digest-service.ts';
-import { PluginStorageService } from '../../core/plugins/storage.ts';
 import { PrefsService } from '../../core/prefs.ts';
+import { createProcessPlugins } from '../feed-deps.ts';
 import { createTickHandler } from '../scheduled-tasks.ts';
 import { createLambdaRuntime } from './runtime.ts';
 
-const { config, logger, db, feedDeps, ops, archive } = await createLambdaRuntime('tick');
+const runtime = await createLambdaRuntime('tick');
+const { config, logger, db, feedDeps, ops, archive } = runtime;
+const feeds = createFeedServices(feedDeps);
+const plugins = createProcessPlugins({
+  config,
+  registry: runtime.plugins,
+  db,
+  keys: feedDeps.keys,
+  logger,
+  ops: ops.recorder,
+  polite: feeds.polite,
+});
 const { sessions, throttle } = createAuthServices(db, config.appSecret);
 
 export type { TickEvent } from '../scheduled-tasks.ts';
 
 export const handler = createTickHandler({
-  feeds: createFeedServices(feedDeps),
+  feeds,
   sessions,
   throttle,
   sync: new SyncService(db),
@@ -28,7 +39,7 @@ export const handler = createTickHandler({
     logger,
   }),
   ops,
-  plugins: { storage: new PluginStorageService(db) },
+  plugins: { ...plugins, wake: runtime.wakePlugins },
   archive,
   logger,
 });

@@ -6,11 +6,12 @@ import { createFeedServices } from '../../core/feeds/index.ts';
 import { createMailServices } from '../../core/mail/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
 import { ThemeService } from '../../core/themes.ts';
-import { createPluginHost } from '../../plugins/index.ts';
+import { createProcessPlugins } from '../feed-deps.ts';
 import { binaryResponse, createApiHandler } from './api-handler.ts';
 import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
 
-const { config, logger, pool, db, feedDeps, ops, archive } = await createLambdaRuntime('api');
+const runtime = await createLambdaRuntime('api');
+const { config, logger, pool, db, feedDeps, ops, archive } = runtime;
 const feeds = createFeedServices(feedDeps);
 const prefs = new PrefsService(db);
 const entries = createEntryServices(db, feedDeps.realtime, archive);
@@ -45,7 +46,15 @@ const app = buildApp({
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,
-    plugins: createPluginHost({ db, keys: feedDeps.keys, logger }),
+    plugins: createProcessPlugins({
+      config,
+      registry: runtime.plugins,
+      db,
+      keys: feedDeps.keys,
+      logger,
+      ops: ops.recorder,
+      polite: feeds.polite,
+    }),
   },
   healthChecks: {
     db: async () => {

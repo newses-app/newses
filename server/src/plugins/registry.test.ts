@@ -33,6 +33,7 @@ describe('PluginRegistry', () => {
       hosts: ['hooks.example'],
       settings: { instance: null, user: null },
       messages: {},
+      events: new Map(),
       definition,
     });
     expect(registry.get('webhook')?.definition).toBe(definition);
@@ -51,6 +52,12 @@ describe('PluginRegistry', () => {
       [plugin({ hosts: ['Hooks.Example'] }), 'webhook', 'host names'],
       [plugin({ hosts: ['https://hooks.example/'] }), 'webhook', 'host names'],
       [plugin({ hooks: { 'entry.read': () => undefined } }), 'webhook', 'entry.read'],
+      [
+        plugin({ hooks: { 'published.changed': { debounceSeconds: 7200, run: () => undefined } } }),
+        'webhook',
+        'published.changed',
+      ],
+      [plugin({ hooks: { 'entries.added': { run: 'x' } } }), 'webhook', 'a function'],
       [plugin({ settings: { user: { target: 'text' } } }), 'webhook', 'zod object schema'],
       [plugin({ settings: { everyone: z.object({}) } }), 'webhook', 'everyone'],
       [

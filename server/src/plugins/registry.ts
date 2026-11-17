@@ -8,11 +8,12 @@ import {
   type SettingsSchema,
 } from '@newses/plugin-api';
 import { z } from 'zod';
-import type {
-  PluginCatalog,
-  PluginInfo,
-  SettingsField,
-  SettingsSpec,
+import {
+  EVENT_HOOKS,
+  type PluginCatalog,
+  type PluginInfo,
+  type SettingsField,
+  type SettingsSpec,
 } from '../core/plugins/catalog.ts';
 import { isHostName } from '../core/plugins/settings.ts';
 import type { Logger } from '../core/ports.ts';
@@ -44,7 +45,14 @@ const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 // Hooks this server runs; a plugin naming any other was written for a newer contract.
-const hooksSchema = z.strictObject({});
+const eventHookSchema = z.object({
+  debounceSeconds: z.number().int().min(0).max(3600).optional(),
+  run: z.custom<(...args: unknown[]) => unknown>((run) => typeof run === 'function', 'a function'),
+});
+const hooksSchema = z.strictObject({
+  'entries.added': eventHookSchema.optional(),
+  'published.changed': eventHookSchema.optional(),
+});
 
 const objectSchema = z.custom<SettingsSchema>(
   (value) =>
@@ -161,6 +169,12 @@ export class PluginRegistry implements PluginCatalog {
         hosts: parsed.data.hosts ?? [],
         settings,
         messages: parsed.data.messages ?? {},
+        events: new Map(
+          EVENT_HOOKS.flatMap((hook) => {
+            const declared = parsed.data.hooks[hook];
+            return declared ? [[hook, { debounceSeconds: declared.debounceSeconds ?? 0 }]] : [];
+          }),
+        ),
         definition,
       });
       options.logger.info({ plugin: id, source, version: parsed.data.version }, 'Plugin loaded');

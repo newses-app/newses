@@ -8,7 +8,8 @@ usage() {
 Usage: scripts/freeze-stage.sh <dev|prod> [--undo]
 
   Stops the stage's api and tick functions (requests fail; schedules are skipped) and the
-  fetch, favicon, and extract functions' queue polling (jobs wait). Running invocations finish.
+  fetch, favicon, extract, and plugin functions' queue polling (jobs wait). Running invocations
+  finish.
   The migrate function keeps working.
 
   --undo  Unfreeze

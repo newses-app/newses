@@ -822,7 +822,9 @@ export const opsState = pgTable('ops_state', {
 
 // The instance's settings of a plugin. `secrets` maps each secret field to its value sealed with
 // the `plugin-secrets` key; `failures` counts failed runs in a row, and at the limit the plugin is
-// turned off with `disabled_reason` set, until an admin enables it again.
+// turned off with `disabled_reason` set, until an admin enables it again. `hooks` (the event hooks
+// the installed version implements) and `user_scope` are kept by the server at startup, for the
+// triggers that record events.
 export const pluginSettings = pgTable('plugin_settings', {
   pluginId: text('plugin_id').primaryKey(),
   enabled: boolean('enabled').notNull().default(false),
@@ -836,6 +838,11 @@ export const pluginSettings = pgTable('plugin_settings', {
   lastFailure: text('last_failure'),
   lastFailureAt: tstz('last_failure_at'),
   disabledReason: text('disabled_reason'),
+  hooks: text('hooks')
+    .array()
+    .notNull()
+    .default(sql`'{}'`),
+  userScope: boolean('user_scope').notNull().default(false),
   updatedAt: tstz('updated_at').notNull().defaultNow(),
 });
 
@@ -882,5 +889,51 @@ export const pluginStorage = pgTable(
     index('plugin_storage_expires_at_idx')
       .on(t.expiresAt)
       .where(sql`${t.expiresAt} IS NOT NULL`),
+  ],
+);
+
+// Changes waiting for a plugin's event hook, one row per plugin, user, and user entry, recorded
+// in the transaction that made them (by the fan-out, and by triggers on `user_entries`) for
+// enabled plugins listening to the hook. `published` is the entry's state for
+// `published.changed`. Grouped into deliveries once the hook's debounce window has passed.
+export const pluginEvents = pgTable(
+  'plugin_events',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    pluginId: text('plugin_id').notNull(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hook: text('hook').notNull(),
+    userEntryId: bigint('user_entry_id', { mode: 'number' }).notNull(),
+    published: boolean('published'),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('plugin_events_group_idx').on(t.pluginId, t.userId, t.hook, t.id),
+    index('plugin_events_user_idx').on(t.userId),
+  ],
+);
+
+// One call of a plugin's event hook for a user: the user entry ids (and published states) of
+// the changes it carries. Claimed with a lease; a failed one is retried at `due_at`, with backoff.
+export const pluginDeliveries = pgTable(
+  'plugin_deliveries',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    pluginId: text('plugin_id').notNull(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    hook: text('hook').notNull(),
+    events: jsonb('events').$type<{ id: number; published?: boolean }[]>().notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    dueAt: tstz('due_at').notNull().defaultNow(),
+    leasedUntil: tstz('leased_until'),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('plugin_deliveries_due_at_idx').on(t.dueAt),
+    index('plugin_deliveries_user_idx').on(t.userId),
   ],
 );

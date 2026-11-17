@@ -17,8 +17,11 @@ import type { AppConfig } from '../../core/config.ts';
 import type { FeedDeps } from '../../core/feeds/index.ts';
 import type { Jobs } from '../../core/jobs.ts';
 import { createOpsServices, type OpsServices } from '../../core/ops/index.ts';
+import { PluginEventService } from '../../core/plugins/events.ts';
+import { PluginWaker, wakingRealtime } from '../../core/plugins/waker.ts';
 import type { ArchiveReader, Logger, Mailer } from '../../core/ports.ts';
 import { createDb } from '../../db/client.ts';
+import { loadPlugins } from '../../plugins/index.ts';
 import { linkToProducer } from '../../telemetry/index.ts';
 import {
   createArchiveWriter,
@@ -115,19 +118,29 @@ export async function createLambdaRuntime(role: string) {
       : undefined,
   });
   const keys = deriveKeys(config.appSecret);
+  const queue = new SqsJobQueue<Jobs>(
+    {
+      'feed.fetch': requireEnv('FEED_FETCH_QUEUE_URL'),
+      'feed.favicon': requireEnv('FEED_FAVICON_QUEUE_URL'),
+      'entry.extract': requireEnv('ENTRY_EXTRACT_QUEUE_URL'),
+      'plugin.dispatch': requireEnv('PLUGIN_DISPATCH_QUEUE_URL'),
+    },
+    new SQSClient({}),
+  );
+  // Every function runs the same plugins. Nothing polls for their deliveries, so changes that
+  // may have recorded events wake the plugin function for when the next is due.
+  const plugins = await loadPlugins({ db, logger });
+  const waker = new PluginWaker({
+    events: new PluginEventService({ db, catalog: plugins, runner: null, logger, publicUrl: null }),
+    queue,
+    logger,
+  });
   const feedDeps: FeedDeps = {
     db,
     fetcher: createFetcher(config, ops.recorder),
-    queue: new SqsJobQueue<Jobs>(
-      {
-        'feed.fetch': requireEnv('FEED_FETCH_QUEUE_URL'),
-        'feed.favicon': requireEnv('FEED_FAVICON_QUEUE_URL'),
-        'entry.extract': requireEnv('ENTRY_EXTRACT_QUEUE_URL'),
-      },
-      new SQSClient({}),
-    ),
+    queue,
     // No function holds client streams open; clients poll each user's marker from the edge.
-    realtime: new MarkerRealtime(blobs, keys.changes, logger),
+    realtime: wakingRealtime(new MarkerRealtime(blobs, keys.changes, logger), waker),
     push: createPushSender(config, keys, logger),
     mailer: createLambdaMailer(config),
     blobs,
@@ -144,6 +157,9 @@ export async function createLambdaRuntime(role: string) {
     feedDeps,
     ops,
     archive: createArchiveReader(config),
+    plugins,
+    /** Queues a wake of the plugin function for the next due delivery. */
+    wakePlugins: () => waker.wake(),
   };
 }
 

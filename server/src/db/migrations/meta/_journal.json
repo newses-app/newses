@@ -337,6 +337,20 @@
       "when": 1794868181197,
       "tag": "0047_plugin_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794871410905,
+      "tag": "0048_plugin_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1794871411804,
+      "tag": "0049_plugin_event_triggers",
+      "breakpoints": true
     }
   ]
 }

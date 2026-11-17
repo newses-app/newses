@@ -35,6 +35,25 @@ export interface PluginInfo {
   readonly settings: { instance: SettingsSpec | null; user: SettingsSpec | null };
   /** Plain-text messages per language, for Settings → Plugins. */
   readonly messages: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** The event hooks it implements, with their debounce windows. */
+  readonly events: ReadonlyMap<EventHookName, { debounceSeconds: number }>;
+}
+
+/** Hooks told of changes after they are saved, through the deliveries. */
+export const EVENT_HOOKS = ['entries.added', 'published.changed'] as const;
+export type EventHookName = (typeof EVENT_HOOKS)[number];
+
+/** Why a delivery's hook gave nothing: it failed (and is retried), or the plugin is off there. */
+export type EventRunOutcome = 'ok' | 'failed' | 'disabled';
+
+/** Runs a plugin's event hook for one user; `server/src/plugins` implements it. */
+export interface PluginEventRunner {
+  run(
+    plugin: PluginInfo,
+    hook: EventHookName,
+    userId: number,
+    event: unknown,
+  ): Promise<EventRunOutcome>;
 }
 
 /** The installed plugins; `server/src/plugins` implements it. */

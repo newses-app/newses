@@ -25,6 +25,9 @@ import type {
   Notifier,
 } from '../core/ports.ts';
 import type { Db } from '../db/client.ts';
+import { createPluginHost } from '../plugins/index.ts';
+import type { PluginRegistry } from '../plugins/registry.ts';
+import type { PoliteFetcher } from '../core/feeds/polite-fetcher.ts';
 
 /** Self-hosted adapters for the feed services, shared by the server and worker. */
 export function createFeedDeps(args: {
@@ -125,4 +128,27 @@ export function createArchiveReader(config: AppConfig, blobs: BlobStore): Archiv
   return config.archiveEnabled && !config.blobBucket
     ? new DuckDbArchiveReader(config.blobDir, blobs)
     : null;
+}
+
+/** The plugins of this process: settings, storage, and event deliveries, fetching through `polite`. */
+export function createProcessPlugins(args: {
+  config: AppConfig;
+  registry: PluginRegistry;
+  db: Db;
+  keys: Keys;
+  logger: Logger;
+  ops: OpsRecorder;
+  polite: Pick<PoliteFetcher, 'request'>;
+}) {
+  return createPluginHost({
+    registry: args.registry,
+    db: args.db,
+    keys: args.keys,
+    logger: args.logger,
+    ops: args.ops,
+    polite: args.polite,
+    allowPrivateNetworks: args.config.fetchAllowPrivateNetworks,
+    userAgent: userAgentFor(args.config.version),
+    publicUrl: args.config.publicUrl,
+  });
 }

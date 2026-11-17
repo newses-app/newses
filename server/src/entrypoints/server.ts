@@ -6,11 +6,16 @@ import { createEntryServices } from '../core/entries/index.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { createMailServices } from '../core/mail/index.ts';
 import { createOpsServices } from '../core/ops/index.ts';
-import { createPluginHost } from '../plugins/index.ts';
+import { loadPlugins } from '../plugins/index.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { ThemeService } from '../core/themes.ts';
 import { createDb } from '../db/client.ts';
-import { createArchiveReader, createFeedDeps, PG_BOSS_TELEMETRY } from './feed-deps.ts';
+import {
+  createArchiveReader,
+  createFeedDeps,
+  createProcessPlugins,
+  PG_BOSS_TELEMETRY,
+} from './feed-deps.ts';
 import { bootstrapAdmin, createRuntime, processSnapshot } from './runtime.ts';
 import { scheduleOpsFlush } from './tracking.ts';
 
@@ -41,6 +46,16 @@ const feedDeps = createFeedDeps({ config, db, boss, realtime, logger, ops: ops.r
 onShutdown(() => feedDeps.fetcher.close());
 onShutdown(() => feedDeps.push.close());
 const feeds = createFeedServices(feedDeps);
+const plugins = createProcessPlugins({
+  config,
+  registry: await loadPlugins({ db, logger }),
+  db,
+  keys: feedDeps.keys,
+  logger,
+  ops: ops.recorder,
+  polite: feeds.polite,
+});
+onShutdown(() => plugins.close());
 const prefs = new PrefsService(db);
 const entries = createEntryServices(db, realtime, createArchiveReader(config, feedDeps.blobs));
 const services = {
@@ -62,7 +77,7 @@ const services = {
   themes: new ThemeService(db),
   realtime,
   ops,
-  plugins: createPluginHost({ db, keys: feedDeps.keys, logger }),
+  plugins,
 };
 await bootstrapAdmin(services.users, config, logger);
 

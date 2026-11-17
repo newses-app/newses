@@ -47,6 +47,7 @@ const info = (id: string, overrides: Partial<PluginInfo>): PluginInfo => ({
   hosts: [],
   settings: { instance: null, user: null },
   messages: {},
+  events: new Map(),
   ...overrides,
 });
 

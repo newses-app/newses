@@ -85,6 +85,8 @@ export function createFeedServices(deps: FeedDeps) {
     limits,
   });
   return {
+    /** The fetcher every service shares, with its per-host limits; plugins' requests use it too. */
+    polite: fetcher,
     categories,
     subscriptions,
     feedDebugger: new FeedDebugger({ db, fetcher, limits, subscriptions, sealer }),

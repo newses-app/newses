@@ -64,7 +64,9 @@ describe('NewsesStage', () => {
       }),
     ) as { Properties: { FunctionName: string; Tags: { Key: string; Value: string }[] } }[];
     expect(functions.map((f) => f.Properties.FunctionName).sort()).toEqual(
-      ['api', 'extract', 'favicon', 'fetch', 'migrate', 'tick'].map((name) => `newses-dev-${name}`),
+      ['api', 'extract', 'favicon', 'fetch', 'migrate', 'plugin', 'tick'].map(
+        (name) => `newses-dev-${name}`,
+      ),
     );
     for (const { Properties } of functions) {
       expect(Properties.Tags).toEqual(
@@ -75,6 +77,15 @@ describe('NewsesStage', () => {
       );
     }
     app.hasResourceProperties('AWS::SQS::Queue', { QueueName: 'newses-dev-feed-fetch' });
+    app.hasResourceProperties('AWS::SQS::Queue', {
+      QueueName: 'newses-dev-plugin-dispatch',
+      VisibilityTimeout: 1800,
+    });
+    app.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+      BatchSize: 1,
+      ScalingConfig: { MaximumConcurrency: 2 },
+      FunctionResponseTypes: ['ReportBatchItemFailures'],
+    });
     app.hasResourceProperties('AWS::Scheduler::Schedule', { Name: 'newses-dev-auth-prune' });
     edge.hasResourceProperties('AWS::CloudFront::Function', { Name: 'newses-dev-spa-routes' });
     edge.hasResourceProperties('AWS::CloudFront::Function', {
@@ -215,7 +226,7 @@ describe('App', () => {
         },
       }),
     ) as { Properties: Record<string, unknown> }[];
-    expect(functions).toHaveLength(6);
+    expect(functions).toHaveLength(7);
     app.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'newses-dev-api',
       Environment: { Variables: Match.objectLike({ TRUST_PROXY: '2' }) },

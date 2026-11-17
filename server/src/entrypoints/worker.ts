@@ -9,13 +9,14 @@ import { SyncService } from '../core/entries/sync.ts';
 import { createFeedServices } from '../core/feeds/index.ts';
 import { DigestService } from '../core/mail/digest-service.ts';
 import { createOpsServices } from '../core/ops/index.ts';
-import { PluginStorageService } from '../core/plugins/storage.ts';
 import { PrefsService } from '../core/prefs.ts';
 import { createDb } from '../db/client.ts';
+import { loadPlugins } from '../plugins/index.ts';
 import {
   createArchiveReader,
   createFeedDeps,
   createNotifier,
+  createProcessPlugins,
   PG_BOSS_TELEMETRY,
 } from './feed-deps.ts';
 import { createRuntime } from './runtime.ts';
@@ -58,6 +59,16 @@ const deps = createFeedDeps({
 onShutdown(() => deps.fetcher.close());
 onShutdown(() => deps.push.close());
 const feeds = createFeedServices(deps);
+const plugins = createProcessPlugins({
+  config,
+  registry: await loadPlugins({ db, logger }),
+  db,
+  keys: deps.keys,
+  logger,
+  ops: ops.recorder,
+  polite: feeds.polite,
+});
+onShutdown(() => plugins.close());
 const { sessions, throttle } = createAuthServices(db, config.appSecret);
 const sync = new SyncService(db);
 
@@ -76,7 +87,7 @@ const tasks = {
     logger,
   }),
   ops,
-  plugins: { storage: new PluginStorageService(db) },
+  plugins,
   archive: createArchiveReader(config, deps.blobs),
   logger,
 };
