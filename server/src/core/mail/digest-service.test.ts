@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import {
   categories,
@@ -16,6 +16,7 @@ import { deriveKey } from '../crypto.ts';
 import { EntryService } from '../entries/entries.ts';
 import { Ingester } from '../feeds/ingest.ts';
 import type { ParsedEntry } from '../feeds/parse.ts';
+import type { DigestComposeInput, DigestComposer } from '../plugins/catalog.ts';
 import { PrefsService } from '../prefs.ts';
 import { DIGEST_MAX_ENTRIES, DigestService } from './digest-service.ts';
 
@@ -57,6 +58,20 @@ const items = (n: number, title: string): ParsedEntry[] =>
     };
   });
 
+/** The digests, with plugins' additions from `composer`. */
+const digestWith = (composer: DigestComposer | null = null) =>
+  new DigestService({
+    db,
+    mailer,
+    prefs,
+    entries: new EntryService(db, new RecordingRealtime()),
+    publicUrl: APP_URL,
+    unsubscribeKey: deriveKey('test secret', 'digest-unsubscribe'),
+    logger: silentLogger,
+    composer,
+    now: () => now,
+  });
+
 async function turnOn(userId: number, changes: Parameters<PrefsService['update']>[1] = {}) {
   await prefs.update(userId, {
     digestFrequency: 'daily',
@@ -91,16 +106,7 @@ beforeEach(async () => {
   mailer = new RecordingMailer();
   prefs = new PrefsService(db);
   const realtime = new RecordingRealtime();
-  digest = new DigestService({
-    db,
-    mailer,
-    prefs,
-    entries: new EntryService(db, realtime),
-    publicUrl: APP_URL,
-    unsubscribeKey: deriveKey('test secret', 'digest-unsubscribe'),
-    logger: silentLogger,
-    now: () => now,
-  });
+  digest = digestWith();
   ingester = new Ingester(db, realtime, {
     updateIntervalSeconds: 1800,
     purgeDays: 30,
@@ -296,9 +302,9 @@ describe('DigestService', () => {
     await turnOn(carol);
     await ingester.ingest(news, null, items(1, 'Vote'));
     now = new Date('2026-06-15T05:00:00Z');
-    expect(await digest.sendDue(1)).toBe(1);
-    expect(await digest.sendDue(1)).toBe(1);
-    expect(await digest.sendDue(1)).toBe(0);
+    expect(await digest.sendDue({ limit: 1 })).toBe(1);
+    expect(await digest.sendDue({ limit: 1 })).toBe(1);
+    expect(await digest.sendDue({ limit: 1 })).toBe(0);
     expect(mailer.sent.map((mail) => mail.to[0]).sort()).toEqual([
       'alice@example.com',
       'carol@example.com',
@@ -317,6 +323,102 @@ describe('DigestService', () => {
     now = new Date('2026-06-15T07:00:00Z');
     expect(await digest.sendDue()).toBe(0);
     expect(await stateOf(alice)).toBeUndefined();
+  });
+
+  it("places plugins' overviews and text against listed entries, escaped", async () => {
+    await turnOn(alice, { language: 'de' });
+    await ingester.ingest(tech, null, items(2, 'Chip'));
+    now = new Date('2026-06-15T05:00:00Z');
+    const given: DigestComposeInput[] = [];
+    const composer: DigestComposer = {
+      composes: true,
+      compose: (input) => {
+        given.push(input);
+        const [newest] = input.entries;
+        return Promise.resolve([
+          {
+            pluginId: 'summary',
+            name: 'Zusammenfassung <KI>',
+            overview: '<script>alert(1)</script>\n\nZweiter & letzter\nTeil',
+            entries: new Map([
+              [newest?.id ?? 0, 'Kurz: <a href="https://evil.example">hier</a>'],
+              [999_999, 'Not listed'],
+            ]),
+          },
+        ]);
+      },
+    };
+    expect(await digestWith(composer).sendDue()).toBe(1);
+    expect(given).toEqual([
+      {
+        userId: alice,
+        language: 'de',
+        frequency: 'daily',
+        entries: [2, 1].map(
+          (n) =>
+            expect.objectContaining({
+              title: `Chip ${String(n)}`,
+              excerpt: `About Chip ${String(n)}.`,
+              contentHash: expect.any(String) as string,
+              unread: true,
+              feed: expect.objectContaining({
+                id: feed.tech,
+                title: 'Tech & feed',
+                url: 'https://tech.example/rss',
+                withLogin: false,
+              }) as unknown,
+            }) as unknown,
+        ),
+        more: 0,
+      },
+    ]);
+    const [mail] = mailer.sent;
+    const html = mail?.html ?? '';
+    expect(html).toContain('>Zusammenfassung &lt;KI&gt;</p>');
+    expect(html).toContain('>&lt;script&gt;alert(1)&lt;/script&gt;</p>');
+    expect(html).toContain('>Zweiter &amp; letzter<br>Teil</p>');
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('evil.example"');
+    expect(html).not.toContain('Not listed');
+    // The overview before the entries, each note after its entry's excerpt.
+    expect(html.indexOf('Zusammenfassung')).toBeLessThan(html.indexOf('Chip 2'));
+    const note = html.indexOf('Kurz: &lt;a href=');
+    expect(note).toBeGreaterThan(html.indexOf('About Chip 2.'));
+    expect(note).toBeLessThan(html.indexOf('Chip 1'));
+    expect(mail?.text).toContain(
+      'Zusammenfassung <KI>\n\n<script>alert(1)</script>\n\nZweiter & letzter\nTeil',
+    );
+    expect(mail?.text).toContain('About Chip 2.\nKurz: <a href="https://evil.example">hier</a>\n');
+  });
+
+  it('sends the digest without additions when the plugins fail or none composes', async () => {
+    await turnOn(alice);
+    await ingester.ingest(news, null, items(1, 'Vote'));
+    now = new Date('2026-06-15T05:00:00Z');
+    const failing: DigestComposer = {
+      composes: true,
+      compose: () => Promise.reject(new Error('database gone')),
+    };
+    expect(await digestWith(failing).sendDue()).toBe(1);
+    expect(mailer.sent[0]?.html).toContain('Vote 1');
+
+    await ingester.ingest(news, null, items(1, 'Poll'));
+    now = new Date('2026-06-16T05:00:00Z');
+    const compose = vi.fn<DigestComposer['compose']>();
+    expect(await digestWith({ composes: false, compose }).sendDue()).toBe(1);
+    expect(compose).not.toHaveBeenCalled();
+    expect(mailer.sent[1]?.html).toContain('Poll 1');
+  });
+
+  it('starts no digest after the deadline, leaving the users it did not reach due', async () => {
+    await turnOn(alice);
+    await turnOn(carol);
+    await ingester.ingest(news, null, items(1, 'Vote'));
+    now = new Date('2026-06-15T05:00:00Z');
+    expect(await digest.sendDue({ deadline: Date.now() - 1 })).toBe(0);
+    expect((await stateOf(alice))?.nextDueAt).toEqual(now);
+    expect((await stateOf(carol))?.nextDueAt).toEqual(now);
+    expect(await digest.sendDue()).toBe(2);
   });
 
   it('turns digests off from a signed unsubscribe token', async () => {

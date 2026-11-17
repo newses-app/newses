@@ -45,13 +45,18 @@ const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 // Hooks this server runs; a plugin naming any other was written for a newer contract.
+const hookRunSchema = z.custom<(...args: unknown[]) => unknown>(
+  (run) => typeof run === 'function',
+  'a function',
+);
 const eventHookSchema = z.object({
   debounceSeconds: z.number().int().min(0).max(3600).optional(),
-  run: z.custom<(...args: unknown[]) => unknown>((run) => typeof run === 'function', 'a function'),
+  run: hookRunSchema,
 });
 const hooksSchema = z.strictObject({
   'entries.added': eventHookSchema.optional(),
   'published.changed': eventHookSchema.optional(),
+  'digest.compose': z.object({ run: hookRunSchema }).optional(),
 });
 
 const objectSchema = z.custom<SettingsSchema>(

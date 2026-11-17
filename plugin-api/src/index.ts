@@ -178,10 +178,56 @@ export interface EventHook<E> {
   run(event: E, context: PluginContext): unknown;
 }
 
+/** An entry a digest lists, as the user sees it. */
+export interface DigestEntry extends EventEntry {
+  /** The start of the article as plain text, as the digest shows it; null when it has none. */
+  excerpt: string | null;
+  /** Changes when the title, link, or content does. */
+  contentHash: string;
+}
+
+/** What `digest.compose` is given: one user's digest, about to be sent. */
+export interface DigestComposeInput {
+  userId: number;
+  /** The digest's language (`en`, `pt-BR`), which additions should be written in. */
+  language: string;
+  frequency: 'daily' | 'weekly';
+  /** The entries the digest lists, newest first. */
+  entries: DigestEntry[];
+  /** Unread entries the digest counts but does not list. */
+  more: number;
+}
+
+/**
+ * What a plugin adds to a digest, as plain text: never HTML or links, which the digest shows as
+ * written. Blank lines separate paragraphs. See `DIGEST_LIMITS`.
+ */
+export interface DigestAdditions {
+  /** Opens the digest, under the plugin's name. */
+  overview?: string | null | undefined;
+  /** Text under entries the digest lists; other ids are ignored. */
+  entries?: readonly { id: number; text: string }[] | null | undefined;
+}
+
+/** What a digest takes of a plugin at most: characters of overview and per entry, and time. */
+export const DIGEST_LIMITS = { overview: 4000, entryText: 1000, timeoutSeconds: 60 } as const;
+
+/**
+ * A hook that adds to a user's digest before it is sent. A hook that throws, runs out of time,
+ * or returns more than `DIGEST_LIMITS` adds nothing; the digest goes out without it.
+ */
+export interface DigestHook {
+  run(
+    input: DigestComposeInput,
+    context: PluginContext,
+  ): DigestAdditions | null | undefined | Promise<DigestAdditions | null | undefined>;
+}
+
 /** The hooks a plugin implements. Each hook arrives in the patch release that names it. */
 export interface PluginHooks {
   'entries.added'?: EventHook<EntriesAddedEvent>;
   'published.changed'?: EventHook<PublishedChangedEvent>;
+  'digest.compose'?: DigestHook;
 }
 
 export interface PluginDefinition {

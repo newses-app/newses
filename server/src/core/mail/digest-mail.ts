@@ -2,6 +2,7 @@ import type { DigestFrequency, Entry } from '@newses/shared';
 import type { MessageParams } from '@newses/shared/messages';
 import { type MessageKey, translate } from '../../i18n.ts';
 import { escapeHtml } from '../html.ts';
+import type { DigestAddition } from '../plugins/catalog.ts';
 import type { MailMessage } from '../ports.ts';
 import { isHttp } from './article-mail.ts';
 import { buttonHtml, mailDocument } from './layout.ts';
@@ -31,6 +32,8 @@ export interface DigestContent {
   groups: DigestGroup[];
   /** Unread entries left out over the cap. */
   more: number;
+  /** Plugins' overviews and text under listed entries. */
+  additions?: readonly DigestAddition[];
   frequency: Exclude<DigestFrequency, 'off'>;
   hour: number;
   weekday: number;
@@ -45,6 +48,18 @@ const FEED = 'font-size:16px;margin:24px 0 8px;color:#5f5b66';
 const ITEM = 'margin:0 0 16px';
 const TITLE = 'font-weight:600;color:#3f51b5;text-decoration:none';
 const LINK = 'color:#3f51b5';
+const ADDITION = 'margin:24px 0';
+const NOTE = 'margin-top:4px;color:#5f5b66;font-style:italic';
+
+/** Plain text as paragraphs (split at blank lines) of escaped lines. */
+const paragraphs = (text: string, style: string) =>
+  text
+    .split(/\n{2,}/)
+    .map(
+      (paragraph) =>
+        `<p style="${style}" dir="auto">${escapeHtml(paragraph).replaceAll('\n', '<br>')}</p>`,
+    )
+    .join('');
 
 /**
  * Entries grouped by category, then subscription, both by title (entries without a category
@@ -95,10 +110,14 @@ function schedule(
 /**
  * The unread digest: unread entries that came in since the last, by category and subscription,
  * each linked into the web app and to the original, with how many more there are, when it comes,
- * and links to its settings and to unsubscribe. Every part is escaped; no entry content is sent.
+ * and links to its settings and to unsubscribe. Plugins' overviews open it, under each plugin's
+ * name, and their text follows the entries it is for. Every part is escaped; no entry content is
+ * sent.
  */
 export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' | 'html' | 'text'> {
   const { locale, appUrl, groups, more } = content;
+  const additions = content.additions ?? [];
+  const lang = escapeHtml(locale);
   const message = (key: MessageKey, params: MessageParams = {}) =>
     translate(locale, key, { login: content.login, ...params });
   const count = groups.reduce(
@@ -111,6 +130,16 @@ export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' 
 
   const html: string[] = [`<p style="${MUTED}">${escapeHtml(message('digestIntro'))}</p>`];
   const text: string[] = [message('digestIntro')];
+  for (const addition of additions) {
+    if (!addition.overview) continue;
+    html.push(
+      `<div style="${ADDITION}" lang="${lang}">` +
+        `<p style="${MUTED};font-size:14px;margin:0 0 8px" dir="auto">${escapeHtml(addition.name)}</p>` +
+        paragraphs(addition.overview, 'margin:0 0 8px') +
+        `</div>`,
+    );
+    text.push(`${addition.name}\n\n${addition.overview}`);
+  }
   for (const group of groups) {
     if (categories) {
       const title = group.title ?? message('digestUncategorised');
@@ -122,20 +151,33 @@ export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' 
       text.push(`-- ${feed.title} --`);
       for (const entry of feed.entries) {
         const title = entry.title ?? message('untitled');
-        const lang = entry.lang ? ` lang="${escapeHtml(entry.lang)}"` : '';
+        const entryLang = entry.lang ? ` lang="${escapeHtml(entry.lang)}"` : '';
+        const notes = additions.flatMap((addition) => addition.entries.get(entry.id) ?? []);
         const inApp = appEntryUrl(appUrl, entry);
         const original = isHttp(entry.link) ? entry.link : null;
         html.push(
-          `<div style="${ITEM}" dir="auto"${lang}>` +
+          `<div style="${ITEM}" dir="auto"${entryLang}>` +
             `<a href="${escapeHtml(inApp)}" style="${TITLE}">${escapeHtml(title)}</a>` +
             (entry.excerpt ? `<br>${escapeHtml(entry.excerpt)}` : '') +
+            notes
+              .map(
+                (note) =>
+                  `<div style="${NOTE}" lang="${lang}" dir="auto">${escapeHtml(note).replaceAll('\n', '<br>')}</div>`,
+              )
+              .join('') +
             (original
               ? `<br><a href="${escapeHtml(original)}" style="${LINK};font-size:14px">${escapeHtml(message('digestOriginal'))}</a>`
               : '') +
             `</div>`,
         );
         text.push(
-          [title, entry.excerpt, inApp, original && `${message('digestOriginal')}: ${original}`]
+          [
+            title,
+            entry.excerpt,
+            ...notes,
+            inApp,
+            original && `${message('digestOriginal')}: ${original}`,
+          ]
             .filter((part): part is string => !!part)
             .join('\n'),
         );

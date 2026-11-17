@@ -1,15 +1,14 @@
 import { and, eq, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
 import { accessKeys, pluginDeliveries, pluginSettings } from '../../db/schema.ts';
-import { PAGES_SOURCE_URL } from '../feeds/pages.ts';
 import type { Logger } from '../ports.ts';
-import { plainText } from '../entries/text.ts';
 import {
   EVENT_HOOKS,
   type EventHookName,
   type PluginCatalog,
   type PluginEventRunner,
 } from './catalog.ts';
+import { readPluginEntries } from './entries.ts';
 
 /** Changes one delivery carries at most; a larger window is split. */
 export const MAX_DELIVERY_EVENTS = 500;
@@ -17,8 +16,6 @@ export const MAX_DELIVERY_EVENTS = 500;
 export const MAX_DELIVERY_ATTEMPTS = 6;
 /** How long a claimed delivery stays claimed: beyond the hook's limit. */
 const LEASE_SECONDS = 180;
-/** Characters of article text an event carries. */
-const MAX_TEXT = 20_000;
 
 /** Seconds before the next attempt of a delivery that failed `attempts` times: 1 min to 6 h. */
 export const retryDelaySeconds = (attempts: number) =>
@@ -39,22 +36,6 @@ export async function recordEntriesAdded(
     ) AS d(id, user_id)
     CROSS JOIN LATERAL plugin_listeners('entries.added', d.user_id) AS l(plugin_id)
     WHERE plugin_hook_listened('entries.added')`);
-}
-
-interface EntryRow extends Record<string, unknown> {
-  id: string;
-  title: string | null;
-  link: string | null;
-  author: string | null;
-  at: string;
-  published: boolean;
-  unread: boolean;
-  content: string | null;
-  content_hash: string;
-  subscription_id: number | null;
-  feed_title: string | null;
-  feed_url: string | null;
-  with_login: boolean | null;
 }
 
 /**
@@ -272,65 +253,30 @@ export class PluginEventService {
     userId: number,
     events: { id: number; published?: boolean }[],
   ): Promise<object | null> {
-    const rows = await this.#entries(
+    const withText = hook === 'entries.added';
+    const read = await readPluginEntries(
+      this.#db,
       userId,
       events.map((e) => e.id),
-      hook === 'entries.added',
+      { text: withText },
     );
-    if (hook === 'entries.added') {
-      if (rows.length === 0) return null;
-      return { userId, entries: rows };
+    if (withText) {
+      if (read.length === 0) return null;
+      return {
+        userId,
+        entries: read.map(({ entry, text, contentHash }) => ({
+          ...entry,
+          text: text ?? '',
+          contentHash,
+        })),
+      };
     }
+    const rows = read.map(({ entry }) => entry);
     const present = new Map(rows.map((row) => [row.id, row]));
     const published = rows.filter((row) => row.published);
     const unpublished = events.map((e) => e.id).filter((id) => present.get(id)?.published !== true);
     if (published.length === 0 && unpublished.length === 0) return null;
     return { userId, feedUrl: await this.#feedUrl(userId), published, unpublished };
-  }
-
-  async #entries(userId: number, ids: number[], withText: boolean) {
-    const rows = await this.#db.execute<EntryRow>(sql`
-      SELECT ue.id, e.title, e.link, e.author,
-        coalesce(e.published_at, e.fetched_at)::text AS at, ue.published, ue.unread,
-        ${withText ? sql`coalesce(e.full_content, e.content)` : sql`NULL`} AS content,
-        e.content_hash, s.id AS subscription_id,
-        coalesce(s.title, fs.title, fs.url) AS feed_title, fs.url AS feed_url,
-        fs.auth_login IS NOT NULL AS with_login
-      FROM user_entries ue
-      JOIN entries e ON e.id = ue.entry_id
-      LEFT JOIN subscriptions s ON s.id = ue.subscription_id
-      LEFT JOIN feed_sources fs ON fs.id = e.feed_source_id AND fs.url <> ${PAGES_SOURCE_URL}
-      WHERE ue.user_id = ${userId} AND ue.id = ANY(${sql.param(ids)}::bigint[])`);
-    const order = new Map(ids.map((id, index) => [id, index]));
-    return rows.rows
-      .map((row) => {
-        const entry = {
-          id: Number(row.id),
-          title: row.title ?? '',
-          link: row.link,
-          author: row.author,
-          publishedAt: new Date(row.at).toISOString(),
-          published: row.published,
-          unread: row.unread,
-          feed:
-            row.subscription_id !== null && row.feed_title !== null
-              ? {
-                  id: row.subscription_id,
-                  title: row.feed_title,
-                  url: row.with_login ? null : row.feed_url,
-                  withLogin: row.with_login === true,
-                }
-              : null,
-        };
-        return withText
-          ? {
-              ...entry,
-              text: (plainText(row.content) ?? '').slice(0, MAX_TEXT),
-              contentHash: row.content_hash,
-            }
-          : entry;
-      })
-      .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
   }
 
   /** The published feed's address, when the user has one and the server a public URL. */

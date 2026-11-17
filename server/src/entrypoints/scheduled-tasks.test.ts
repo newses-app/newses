@@ -205,7 +205,7 @@ describe('scheduleWorkerTasks', () => {
       'throttle.prune',
       'rateLimits.prune',
       'push.flush',
-      'digest.send',
+      `digest.send [{"deadline":${String(NOW + 4 * 60_000)}}]`,
       'images.keep [120000]',
     ]);
   });
@@ -237,7 +237,7 @@ describe('createTickHandler', () => {
     expect(calls).toEqual([
       'dispatchDue',
       'push.flush',
-      'digest.send',
+      `digest.send [{"deadline":${String(NOW + 60_000)}}]`,
       `plugins.dispatch [${String(NOW + 60_000)}]`,
       'plugins.wake',
       'stats.flush',

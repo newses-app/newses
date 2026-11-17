@@ -85,6 +85,7 @@ const tasks = {
     publicUrl: config.publicUrl,
     unsubscribeKey: deps.keys['digest-unsubscribe'],
     logger,
+    composer: plugins.digest,
   }),
   ops,
   plugins,

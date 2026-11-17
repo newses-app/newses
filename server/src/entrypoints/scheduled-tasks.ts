@@ -50,6 +50,13 @@ const PLUGIN_DISPATCH_BUDGET_MS = 25_000;
 /** How long the tick spends on plugins' deliveries; the plugin function does the rest. */
 const TICK_PLUGIN_BUDGET_MS = 60_000;
 
+/**
+ * When a run stops starting digests, plugins' additions taking up to a minute each; the users
+ * left stay due for the next run.
+ */
+const WORKER_DIGEST_BUDGET_MS = 4 * 60 * 1000;
+const TICK_DIGEST_BUDGET_MS = 60_000;
+
 /** How long one run may spend keeping kept entries' images. */
 const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
 /** How long the worker's daily archive compaction may run; the rest waits for the next day. */
@@ -134,7 +141,7 @@ export function scheduleWorkerTasks(
   });
   // Digests are due on the hour; a run every 5 minutes sends them within that.
   task('digest.send', 5 * 60, async () => {
-    const sent = await digest.sendDue();
+    const sent = await digest.sendDue({ deadline: Date.now() + WORKER_DIGEST_BUDGET_MS });
     if (sent > 0) logger.debug({ sent }, 'Sent digests');
   });
   task('images.keep', 5 * 60, async () => {
@@ -184,7 +191,8 @@ export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise
         });
         // Digests are due on the hour; dispatch runs at :00 and :30.
         await tracked('digest.send', async () => {
-          logger.info({ sent: await digest.sendDue() }, 'Sent digests');
+          const sent = await digest.sendDue({ deadline: Date.now() + TICK_DIGEST_BUDGET_MS });
+          logger.info({ sent }, 'Sent digests');
         });
         // Deliveries a wake missed; then a wake for what is left.
         await tracked('plugins.dispatch', async () => {

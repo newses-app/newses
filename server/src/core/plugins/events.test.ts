@@ -393,7 +393,7 @@ describe('PluginWaker', () => {
     }
     const wake = () => Promise.resolve();
     expect(wakingRealtime(new Marked(), { wake }).changesPath?.(7)).toBe('changes/7');
-    expect(wakingRealtime(new RecordingRealtime(), { wake }).changesPath).toBeUndefined();
+    expect(wakingRealtime(new RecordingRealtime(), { wake })).not.toHaveProperty('changesPath');
   });
 
   it('wakes nothing where no installed plugin has event hooks, and never throws', async () => {

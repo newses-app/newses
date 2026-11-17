@@ -56,6 +56,47 @@ export interface PluginEventRunner {
   ): Promise<EventRunOutcome>;
 }
 
+/** An entry as hooks see it (the contract's `EventEntry`). */
+export interface PluginEntry {
+  id: number;
+  title: string;
+  link: string | null;
+  author: string | null;
+  publishedAt: string;
+  published: boolean;
+  unread: boolean;
+  feed: { id: number; title: string; url: string | null; withLogin: boolean } | null;
+}
+
+/** One user's digest as `digest.compose` gets it (the contract's `DigestComposeInput`). */
+export interface DigestComposeInput {
+  userId: number;
+  language: string;
+  frequency: 'daily' | 'weekly';
+  entries: (PluginEntry & { excerpt: string | null; contentHash: string })[];
+  more: number;
+}
+
+/**
+ * What one plugin adds to a digest, checked: plain text without control characters, trimmed,
+ * and per-entry text only for entries the digest lists.
+ */
+export interface DigestAddition {
+  pluginId: string;
+  /** The plugin's name in the digest's language. */
+  name: string;
+  overview: string | null;
+  entries: ReadonlyMap<number, string>;
+}
+
+/** Runs the installed plugins' `digest.compose`; `server/src/plugins` implements it. */
+export interface DigestComposer {
+  /** Whether any installed plugin composes digests. */
+  readonly composes: boolean;
+  /** The additions of the plugins on for the user, in install order; never throws. */
+  compose(input: DigestComposeInput): Promise<DigestAddition[]>;
+}
+
 /** The installed plugins; `server/src/plugins` implements it. */
 export interface PluginCatalog {
   get(id: string): PluginInfo | undefined;

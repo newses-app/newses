@@ -1,7 +1,13 @@
+import { DIGEST_LIMITS, type DigestAdditions } from '@newses/plugin-api';
+import { z } from 'zod';
 import type { Keys } from '../core/crypto.ts';
 import type { PoliteFetcher } from '../core/feeds/polite-fetcher.ts';
+import { stripControlChars } from '../core/feeds/sanitize.ts';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
 import type {
+  DigestAddition,
+  DigestComposeInput,
+  DigestComposer,
   EventHookName,
   EventRunOutcome,
   PluginEventRunner,
@@ -13,7 +19,7 @@ import type { Logger } from '../core/ports.ts';
 import type { Db } from '../db/client.ts';
 import { INSTALLED_PLUGINS } from './installed.ts';
 import { PluginNetwork } from './network.ts';
-import { type InstalledPlugin, PluginRegistry } from './registry.ts';
+import { type InstalledPlugin, type LoadedPlugin, PluginRegistry } from './registry.ts';
 import { PluginRunner } from './runner.ts';
 
 /** How long an event hook may run. */
@@ -73,9 +79,91 @@ export class EventHookRunner implements PluginEventRunner {
   }
 }
 
+/** What `digest.compose` may return. */
+const digestAdditionsSchema: z.ZodType<DigestAdditions | null | undefined> = z
+  .object({
+    overview: z.string().max(DIGEST_LIMITS.overview).nullish(),
+    entries: z
+      .array(z.object({ id: z.number().int(), text: z.string().max(DIGEST_LIMITS.entryText) }))
+      .max(1000)
+      .nullish(),
+  })
+  .nullish();
+
+/** A plugin's plain text for mail: line breaks as `\n`, no other control characters, trimmed. */
+function mailText(text: string | null | undefined): string | null {
+  const clean = stripControlChars((text ?? '').replace(/\r\n?/g, '\n'))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return clean === '' ? null : clean;
+}
+
+/** The plugin's name in `locale`, else its language, else English, else its id. */
+export function pluginName(plugin: Pick<LoadedPlugin, 'id' | 'messages'>, locale: string): string {
+  const language = locale.split('-')[0] ?? locale;
+  for (const tag of [locale, language, 'en']) {
+    const name = plugin.messages[tag]?.['name'];
+    if (name) return name;
+  }
+  return plugin.id;
+}
+
 /**
- * What a process needs of the plugins: their settings and storage, and their event deliveries,
- * whose requests share the feeds' per-host limits through `polite`.
+ * Runs the plugins' `digest.compose` for a user's digest, all at once, each under
+ * `DIGEST_LIMITS.timeoutSeconds`. A plugin that is off for the user, fails, or returns more
+ * than the limits adds nothing.
+ */
+export class DigestHookComposer implements DigestComposer {
+  readonly #plugins: LoadedPlugin[];
+  readonly #runner: Pick<PluginRunner, 'run'>;
+  readonly #timeoutMs: number;
+
+  constructor(
+    registry: PluginRegistry,
+    runner: Pick<PluginRunner, 'run'>,
+    timeoutMs = DIGEST_LIMITS.timeoutSeconds * 1000,
+  ) {
+    this.#plugins = registry.list().filter((plugin) => plugin.definition.hooks['digest.compose']);
+    this.#runner = runner;
+    this.#timeoutMs = timeoutMs;
+  }
+
+  get composes(): boolean {
+    return this.#plugins.length > 0;
+  }
+
+  async compose(input: DigestComposeInput): Promise<DigestAddition[]> {
+    const listed = new Set(input.entries.map((entry) => entry.id));
+    const outcomes = await Promise.all(
+      this.#plugins.map(async (plugin) => {
+        const hook = plugin.definition.hooks['digest.compose'];
+        if (!hook) return null;
+        const outcome = await this.#runner.run({
+          plugin,
+          hook: 'digest.compose',
+          userId: input.userId,
+          timeoutMs: this.#timeoutMs,
+          output: digestAdditionsSchema,
+          call: (context) => hook.run(structuredClone(input), context),
+        });
+        if (!outcome.ok || !outcome.value) return null;
+        const entries = new Map<number, string>();
+        for (const { id, text } of outcome.value.entries ?? []) {
+          const clean = mailText(text);
+          if (clean && listed.has(id) && !entries.has(id)) entries.set(id, clean);
+        }
+        const overview = mailText(outcome.value.overview);
+        if (!overview && entries.size === 0) return null;
+        return { pluginId: plugin.id, name: pluginName(plugin, input.language), overview, entries };
+      }),
+    );
+    return outcomes.filter((addition) => addition !== null);
+  }
+}
+
+/**
+ * What a process needs of the plugins: their settings and storage, their event deliveries, and
+ * their digest additions, whose requests share the feeds' per-host limits through `polite`.
  */
 export function createPluginHost(deps: {
   registry: PluginRegistry;
@@ -91,6 +179,7 @@ export function createPluginHost(deps: {
 }): PluginServices & {
   registry: PluginRegistry;
   events: PluginEventService;
+  digest: DigestHookComposer;
   close: () => Promise<void>;
 } {
   const { registry, db, logger } = deps;
@@ -115,5 +204,6 @@ export function createPluginHost(deps: {
     logger,
     publicUrl: deps.publicUrl,
   });
-  return { ...services, registry, events, close: () => network.close() };
+  const digest = new DigestHookComposer(registry, runner);
+  return { ...services, registry, events, digest, close: () => network.close() };
 }

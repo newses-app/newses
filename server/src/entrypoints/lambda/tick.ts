@@ -37,6 +37,7 @@ export const handler = createTickHandler({
     publicUrl: config.publicUrl,
     unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
     logger,
+    composer: plugins.digest,
   }),
   ops,
   plugins: { ...plugins, wake: runtime.wakePlugins },

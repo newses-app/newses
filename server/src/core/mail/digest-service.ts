@@ -12,6 +12,8 @@ import {
   toEntry,
 } from '../entries/entries.ts';
 import { shownCondition } from '../entries/streams.ts';
+import type { DigestAddition, DigestComposer } from '../plugins/catalog.ts';
+import { readPluginEntries } from '../plugins/entries.ts';
 import type { Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
 import { type DigestEntry, digestMail, groupDigest } from './digest-mail.ts';
@@ -34,6 +36,8 @@ export interface DigestDeps {
   /** Signs unsubscribe links. */
   unsubscribeKey: Buffer;
   logger: Logger;
+  /** Plugins' additions to digests; none without it. */
+  composer?: DigestComposer | null;
   now?: () => Date;
 }
 
@@ -61,6 +65,7 @@ export class DigestService {
   readonly #publicUrl: string | null;
   readonly #key: Buffer;
   readonly #logger: Logger;
+  readonly #composer: DigestComposer | null;
   readonly #now: () => Date;
 
   constructor(deps: DigestDeps) {
@@ -71,6 +76,7 @@ export class DigestService {
     this.#publicUrl = deps.publicUrl;
     this.#key = deps.unsubscribeKey;
     this.#logger = deps.logger;
+    this.#composer = deps.composer ?? null;
     this.#now = deps.now ?? (() => new Date());
   }
 
@@ -120,10 +126,14 @@ export class DigestService {
   }
 
   /**
-   * Sends the digests that are due, to at most `limit` users; returns how many were sent. Users
-   * with digests on but no state (after a restore, which leaves it out) start from now.
+   * Sends the digests that are due, to at most `limit` users, starting none after `deadline` (ms
+   * since the epoch; users it does not reach stay due); returns how many were sent. Users with
+   * digests on but no state (after a restore, which leaves it out) start from now.
    */
-  async sendDue(limit = DIGEST_BATCH): Promise<number> {
+  async sendDue({
+    limit = DIGEST_BATCH,
+    deadline = Infinity,
+  }: { limit?: number; deadline?: number } = {}): Promise<number> {
     const mailer = this.#mailer;
     const appUrl = this.#publicUrl;
     if (!mailer || !appUrl) return 0;
@@ -145,7 +155,14 @@ export class DigestService {
       WHERE d.user_id = due.user_id
       RETURNING d.user_id, d.watermark`);
     let sent = 0;
-    for (const row of claimed.rows) {
+    for (const [index, row] of claimed.rows.entries()) {
+      if (Date.now() >= deadline) {
+        const left = claimed.rows.slice(index).map((r) => r.user_id);
+        await this.#db.execute(sql`
+          UPDATE digest_state SET next_due_at = ${at}
+          WHERE user_id = ANY(${sql.param(left)}::int[])`);
+        break;
+      }
       try {
         if (await this.#send(mailer, appUrl, row.user_id, Number(row.watermark), now)) sent++;
       } catch (err) {
@@ -213,6 +230,14 @@ export class DigestService {
       categoryTitle: row.category_title,
     }));
     const locale = ownerLocale(prefs.language);
+    const frequency = prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily';
+    const additions = await this.#compose({
+      userId,
+      language: locale,
+      frequency,
+      listed,
+      more: count - listed.length,
+    });
     const unsubscribeUrl = `${appUrl}/public/unsubscribe/${this.unsubscribeToken(userId)}`;
     try {
       await mailer.send({
@@ -224,7 +249,8 @@ export class DigestService {
           appUrl,
           groups: groupDigest(listed, locale),
           more: count - listed.length,
-          frequency: prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily',
+          additions,
+          frequency,
           hour: prefs.digestHour,
           weekday: prefs.digestWeekday,
           timeZone: prefs.timeZone ?? 'UTC',
@@ -246,5 +272,41 @@ export class DigestService {
       );
     await moveOn({ seen: true, sent: true });
     return true;
+  }
+
+  /** What the plugins on for the user add to their digest; none when that fails. */
+  async #compose(digest: {
+    userId: number;
+    language: string;
+    frequency: 'daily' | 'weekly';
+    listed: DigestEntry[];
+    more: number;
+  }): Promise<DigestAddition[]> {
+    const composer = this.#composer;
+    if (!composer?.composes) return [];
+    const { userId, listed } = digest;
+    try {
+      const excerpts = new Map(listed.map((entry) => [entry.id, entry.excerpt]));
+      const read = await readPluginEntries(
+        this.#db,
+        userId,
+        listed.map((entry) => entry.id),
+        { text: false },
+      );
+      return await composer.compose({
+        userId,
+        language: digest.language,
+        frequency: digest.frequency,
+        entries: read.map(({ entry, contentHash }) => ({
+          ...entry,
+          excerpt: excerpts.get(entry.id) ?? null,
+          contentHash,
+        })),
+        more: digest.more,
+      });
+    } catch (err) {
+      this.#logger.warn({ err, userId }, 'digest additions failed');
+      return [];
+    }
   }
 }
