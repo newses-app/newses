@@ -11,6 +11,7 @@ import { useSession } from '../../composables/useSession.ts';
 import { pluginText } from '../../lib/plugin-form.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import PluginSettingsForm from './PluginSettingsForm.vue';
+import PluginTest from './PluginTest.vue';
 
 const { t, locale } = useI18n();
 const errorText = useErrorText();
@@ -77,15 +78,24 @@ const removeSettings = whenOnline(async (id: string) => {
     await run(`${id}:instance`, () => api.admin.plugins.remove(id), t('plugins.removed'));
 });
 
-/** Says why the server turned a plugin off, if it did. */
+/** Says why the server turned a plugin off, if it did: what the last run said, or how it failed. */
 function turnedOff(state: PluginSettingsState, mine: boolean): string | null {
   if (state.disabledReason !== 'failures') return null;
+  if (state.lastFailureDetail)
+    return t(mine ? 'plugins.turnedOffMineSaying' : 'plugins.turnedOffSaying', {
+      count: state.failures,
+      detail: state.lastFailureDetail,
+    });
   const failure = t(`plugins.failure.${state.lastFailure ?? 'error'}`);
   return t(mine ? 'plugins.turnedOffMine' : 'plugins.turnedOff', {
     count: state.failures,
     failure,
   });
 }
+
+/** "Send test" with the instance's saved settings, or the user's. */
+const testServer = (plugin: Plugin) => () => api.admin.plugins.test(plugin.id);
+const testMine = (plugin: Plugin) => () => api.account.testPlugin(plugin.id);
 
 const hasMine = (state: PluginSettingsState) =>
   state.enabled || state.secretsSet.length > 0 || Object.keys(state.settings).length > 0;
@@ -174,6 +184,10 @@ const hasMine = (state: PluginSettingsState) =>
             class="mb-4"
             @save="(settings) => updateInstance(plugin, { settings }, t('plugins.saved'))"
           />
+          <PluginTest
+            v-if="plugin.testable && plugin.enabled && !plugin.settingsSchemas.user"
+            :run="testServer(plugin)"
+          />
         </template>
 
         <template v-if="plugin.user && plugin.enabled">
@@ -206,6 +220,10 @@ const hasMine = (state: PluginSettingsState) =>
             :label="t('plugins.mySettingsOf', { name: nameOf(plugin) })"
             class="mb-2"
             @save="(settings) => updateMine(plugin, { settings }, t('plugins.saved'))"
+          />
+          <PluginTest
+            v-if="plugin.testable && plugin.user.enabled && plugin.settingsSchemas.user"
+            :run="testMine(plugin)"
           />
           <v-btn
             v-if="hasMine(plugin.user)"

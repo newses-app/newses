@@ -189,7 +189,7 @@
 | Digest additions | Plugins | Plugins add an overview and a line per entry to a user's digest, as text placed against the entries the digest lists; the digest goes out without them when a plugin fails or takes more than 60 s |
 | Plugin failures | Plugins | A failing plugin never fails a fetch, a request, or a digest; repeated failures disable it and raise an alert, until an admin enables it again |
 | Plugin authoring | Plugins | `@newses/plugin-api` on npm, with a test kit, a template repository, and a guide on newses.app, lets anyone write and test a plugin outside this repository |
-| Webhook plugin | Plugins | A user's URL, on a host the admin approved, is called when their published feed changes, with their method, secret headers, body template, and optional signature; changes within a window (2 minutes by default) make one call; a test call shows the response's status; repeated failures stop it and say why |
+| Webhook plugin | Plugins | A user's URL, on a host the admin approved, is called when their published feed changes, with their method, secret headers, body template, and optional signature; changes within 2 minutes make one call; a test call shows the response's status; repeated failures stop it and say why |
 | Digest summary plugin | Plugins | Users who opt in get digests that open with an overview of what is unread and a line per entry, written by Claude with the admin's Anthropic API key, in the user's language, within monthly token budgets per instance and user; entries of feeds with credentials and published pages are never sent; the settings say what is sent and to whom |
 
 ## Non-functional requirements

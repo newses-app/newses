@@ -57,6 +57,8 @@ export const ERROR_REASONS = {
   plugin_hosts_limit: ['max'],
   plugin_settings_too_large: [],
   plugin_no_user_settings: [],
+  /** A plugin tested while it is off there, or its saved settings no longer fit it (API 1.16). */
+  plugin_off: [],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

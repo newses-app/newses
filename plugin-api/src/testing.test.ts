@@ -8,6 +8,7 @@ import {
   fixtureEntryWithText,
   MemoryStore,
   runHook,
+  runTest,
 } from './testing.ts';
 
 describe('MemoryStore', () => {
@@ -166,5 +167,32 @@ describe('runHook', () => {
         unpublished: [],
       }),
     ).rejects.toThrow('does not accept the plugin API');
+  });
+
+  it('runs a test as "Send test" does, checking what it reports', async () => {
+    const testable = definePlugin({
+      id: 'tested',
+      version: '1.0.0',
+      apiVersion: '^0.1',
+      scopes: ['instance'],
+      hosts: ['hooks.example'],
+      hooks: {
+        test: {
+          run: async (context) => {
+            const response = await context.fetch('https://hooks.example/ping', { method: 'POST' });
+            return { ok: response.ok, message: `HTTP ${String(response.status)}` };
+          },
+        },
+      },
+    });
+    const { value } = await runTest(testable, {
+      fetch: () => Promise.resolve(new Response(null, { status: 204 })),
+    });
+    expect(value).toEqual({ ok: true, message: 'HTTP 204' });
+    const odd = definePlugin({
+      ...testable,
+      hooks: { test: { run: () => ({ ok: true, message: 'x'.repeat(501) }) } },
+    });
+    await expect(runTest(odd)).rejects.toThrow('what a test does not');
   });
 });

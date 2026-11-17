@@ -2,6 +2,7 @@ import type { Plugin, PluginsResponse } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { HttpFetcher } from '../core/feeds/http.ts';
+import type { PluginTestOutcome, PluginTester } from '../core/plugins/catalog.ts';
 import { createDb, type Db } from '../db/client.ts';
 import { auditEvents, pluginSettings, pluginStorage, pluginUserSettings } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
@@ -15,6 +16,15 @@ let app: ReturnType<typeof buildApp>;
 let services: ApiServices;
 let pat: Auth;
 let admin: Auth;
+/** What the next test of a plugin gives, and the tests run. */
+let testOutcome: PluginTestOutcome = { ok: true, message: 'HTTP 204 No Content', failure: null };
+const tests: [string, number | null][] = [];
+const tester: PluginTester = {
+  test: (plugin, userId) => {
+    tests.push([plugin.id, userId]);
+    return Promise.resolve(testOutcome);
+  },
+};
 
 interface Auth {
   cookie: string;
@@ -26,7 +36,12 @@ async function sessionFor(userId: number): Promise<Auth> {
   return { cookie: `rss_session=${token}`, csrf: session.csrfToken ?? '' };
 }
 
-const call = (method: 'GET' | 'PATCH' | 'DELETE', url: string, auth: Auth, payload?: object) =>
+const call = (
+  method: 'GET' | 'PATCH' | 'DELETE' | 'POST',
+  url: string,
+  auth: Auth,
+  payload?: object,
+) =>
   app.inject({
     method,
     url: `/api/v1${url}`,
@@ -40,6 +55,7 @@ beforeAll(async () => {
   database = await createTestDatabase();
   db = createDb(database.pool);
   services = createTestServices(db, new HttpFetcher(), {}, testPluginCatalog());
+  services = { ...services, plugins: { ...services.plugins, tester } };
   pat = await sessionFor((await services.users.create('pat', 'pat password')).id);
   admin = await sessionFor((await services.users.create('root', 'root password', 'admin')).id);
   app = buildApp({ logger: pino({ level: 'silent' }), healthChecks: {}, services });
@@ -58,7 +74,7 @@ afterAll(async () => {
 describe('plugins API', () => {
   it('tells apps that plugins are installed', async () => {
     const info = await app.inject({ method: 'GET', url: '/api/v1/server' });
-    expect(info.json()).toMatchObject({ plugins: true, apiVersion: { major: 1, minor: 15 } });
+    expect(info.json()).toMatchObject({ plugins: true, apiVersion: { major: 1, minor: 16 } });
   });
 
   it('lists every installed plugin to admins, with its form and instance settings', async () => {
@@ -194,6 +210,35 @@ describe('plugins API', () => {
 
     expect((await call('DELETE', '/account/plugins/webhook', pat)).statusCode).toBe(204);
     expect((await list(pat)).plugins[0]?.user).toMatchObject({ enabled: false, secretsSet: [] });
+  });
+
+  it("tests a plugin with the user's saved settings, while it is on", async () => {
+    tests.length = 0;
+    const [patId] = (await services.users.list()).filter((u) => u.login === 'pat').map((u) => u.id);
+    expect((await list(admin)).plugins.map((p) => [p.id, p.testable])).toEqual([
+      ['webhook', true],
+      ['summary', false],
+    ]);
+    // Off for the instance: not there for users.
+    expect((await call('POST', '/account/plugins/webhook/test', pat)).statusCode).toBe(404);
+    await call('PATCH', '/admin/plugins/webhook', admin, { enabled: true });
+    const tested = await call('POST', '/account/plugins/webhook/test', pat);
+    expect(tested.statusCode).toBe(200);
+    expect(tested.json()).toEqual({ ok: true, message: 'HTTP 204 No Content', failure: null });
+    expect(tests).toEqual([['webhook', patId]]);
+
+    testOutcome = 'off';
+    const off = await call('POST', '/account/plugins/webhook/test', pat);
+    expect(off.statusCode).toBe(409);
+    expect(off.json()).toMatchObject({ reason: 'plugin_off' });
+    testOutcome = { ok: false, message: 'HTTP 401 Unauthorized', failure: 'error' };
+    expect((await call('POST', '/account/plugins/webhook/test', pat)).json()).toEqual(testOutcome);
+
+    // Without user settings, only admins test it, for the instance; without a test hook, nobody.
+    expect((await call('POST', '/account/plugins/summary/test', pat)).statusCode).toBe(404);
+    expect((await call('POST', '/admin/plugins/summary/test', admin)).statusCode).toBe(404);
+    expect((await call('POST', '/admin/plugins/webhook/test', pat)).statusCode).toBe(403);
+    testOutcome = { ok: true, message: 'HTTP 204 No Content', failure: null };
   });
 
   it('lets admins remove the settings of plugins no longer installed', async () => {

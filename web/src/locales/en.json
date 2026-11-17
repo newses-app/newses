@@ -144,6 +144,7 @@
       "plugin_host_not_approved": "{host} isn't approved for this plugin. Ask an admin to approve it.",
       "plugin_hosts_limit": "At most {max} hosts can be approved for a plugin.",
       "plugin_no_user_settings": "This plugin has no settings of your own.",
+      "plugin_off": "Turn the plugin on, and save settings it accepts, before testing it.",
       "plugin_setting_unknown": "The plugin has no setting \"{name}\".",
       "plugin_settings_invalid": "The plugin can't use these settings: {detail}",
       "plugin_settings_too_large": "These settings are too large.",
@@ -1138,10 +1139,22 @@
     "saved": "Settings saved.",
     "turnedOff": "Turned off after {count} failed runs in a row, the last {failure}. Turn it on again once the cause is fixed.",
     "turnedOffMine": "Turned off for you after {count} failed runs in a row, the last {failure}. Check your settings, then turn it on again.",
+    "turnedOffSaying": "Turned off after {count} failed runs in a row, the last saying: {detail}. Turn it on again once the cause is fixed.",
+    "turnedOffMineSaying": "Turned off for you after {count} failed runs in a row, the last saying: {detail}. Check your settings, then turn it on again.",
     "failure": {
       "error": "with an error",
       "timeout": "out of time",
       "invalid": "with an unusable result"
+    },
+    "sendTest": "Send test",
+    "testHint": "Uses the saved settings.",
+    "testPassed": "Test passed: {message}",
+    "testPassedQuietly": "Test passed.",
+    "testFailed": "Test failed: {message}",
+    "testFailure": {
+      "error": "Test failed with an error.",
+      "timeout": "Test ran out of time.",
+      "invalid": "Test failed: the plugin gave an unusable result."
     },
     "removeMine": "Remove my settings",
     "removeMineConfirm": "Remove your settings of {name} and what it keeps for you?",

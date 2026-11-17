@@ -4,7 +4,13 @@ import { MAX_DELIVERY_EVENTS } from '../core/plugins/events.ts';
 import type { PluginRuntime } from '../core/plugins/settings.ts';
 import type { KeyValueStore } from '../core/plugins/storage.ts';
 import { silentLogger } from '../test/fakes.ts';
-import { DigestHookComposer, EventHookRunner, EVENT_HOOK_TIMEOUT_MS, pluginName } from './index.ts';
+import {
+  DigestHookComposer,
+  EventHookRunner,
+  EVENT_HOOK_TIMEOUT_MS,
+  HookTester,
+  pluginName,
+} from './index.ts';
 import { PluginNetwork } from './network.ts';
 import { PluginRegistry } from './registry.ts';
 import { type HookOutcome, type HookRun, PluginRunner } from './runner.ts';
@@ -63,6 +69,82 @@ describe('EventHookRunner', () => {
   });
 });
 
+/** Hook runs as the server makes them, with the plugins in `off` off. */
+function realRunner(off: string[] = []) {
+  return new PluginRunner({
+    network: new PluginNetwork({
+      polite: { request: (_host, send) => send() },
+      ops: null,
+      userAgent: 'Newses/test',
+    }),
+    logger: silentLogger,
+    ops: null,
+    settings: {
+      runtime: (plugin): Promise<PluginRuntime> =>
+        Promise.resolve(
+          off.includes(plugin.id)
+            ? { active: false, reason: 'disabled' }
+            : { active: true, approvedHosts: new Set(), settings: {}, userSettings: null },
+        ),
+      recordRun: () => Promise.resolve(null),
+    },
+    storage: { store: () => ({}) as KeyValueStore },
+  });
+}
+
+describe('HookTester', () => {
+  const testing = (id: string, run: () => unknown) => ({
+    source: `${id}@1.0.0`,
+    plugin: {
+      id,
+      version: '1.0.0',
+      apiVersion: '^0.1',
+      scopes: ['instance'],
+      hooks: { test: { run } },
+    },
+  });
+  const plugins = PluginRegistry.load(
+    [
+      testing('passes', () => ({ ok: true, message: ' HTTP 204\r\nNo Content ' })),
+      testing('reports', () => Promise.resolve({ ok: false, message: 'HTTP 401' })),
+      testing('throws', () => {
+        throw new Error('connect ECONNREFUSED');
+      }),
+      testing('slow', () => new Promise(() => undefined)),
+      testing('odd', () => ({ ok: 'yes' })),
+      testing('off', () => ({ ok: true, message: '' })),
+      { source: 'plain@1.0.0', plugin: { ...testing('plain', () => null).plugin, hooks: {} } },
+    ],
+    { logger: silentLogger },
+  );
+  const tester = new HookTester(plugins, realRunner(['off']), 30);
+  const outcomeOf = (id: string) => {
+    const plugin = plugins.get(id);
+    if (!plugin) throw new Error(`no ${id}`);
+    return tester.test(plugin, 3);
+  };
+
+  it("reports the plugin's result, or how its test failed", async () => {
+    expect(plugins.get('passes')?.testable).toBe(true);
+    expect(plugins.get('plain')?.testable).toBe(false);
+    expect(await outcomeOf('passes')).toEqual({
+      ok: true,
+      message: 'HTTP 204\nNo Content',
+      failure: null,
+    });
+    expect(await outcomeOf('reports')).toEqual({ ok: false, message: 'HTTP 401', failure: null });
+    expect(await outcomeOf('throws')).toEqual({
+      ok: false,
+      message: 'connect ECONNREFUSED',
+      failure: 'error',
+    });
+    expect(await outcomeOf('slow')).toEqual({ ok: false, message: '', failure: 'timeout' });
+    expect(await outcomeOf('odd')).toEqual({ ok: false, message: '', failure: 'invalid' });
+    expect(await outcomeOf('off')).toBe('off');
+    expect(await outcomeOf('plain')).toBe('off');
+  });
+});
+
 describe('DigestHookComposer', () => {
   const input: DigestComposeInput = {
     userId: 3,
@@ -97,26 +179,7 @@ describe('DigestHookComposer', () => {
   /** A composer over real hook runs, with the plugins in `off` off for the user. */
   function composer(installed: ReturnType<typeof composing>[], off: string[] = []) {
     const plugins = PluginRegistry.load(installed, { logger: silentLogger });
-    const runner = new PluginRunner({
-      network: new PluginNetwork({
-        polite: { request: (_host, send) => send() },
-        ops: null,
-        userAgent: 'Newses/test',
-      }),
-      logger: silentLogger,
-      ops: null,
-      settings: {
-        runtime: (plugin): Promise<PluginRuntime> =>
-          Promise.resolve(
-            off.includes(plugin.id)
-              ? { active: false, reason: 'disabled' }
-              : { active: true, approvedHosts: new Set(), settings: {}, userSettings: null },
-          ),
-        recordRun: () => Promise.resolve(null),
-      },
-      storage: { store: () => ({}) as KeyValueStore },
-    });
-    return new DigestHookComposer(plugins, runner, 50);
+    return new DigestHookComposer(plugins, realRunner(off), 50);
   }
 
   it('composes nothing without plugins that compose digests', async () => {

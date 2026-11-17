@@ -34,6 +34,7 @@ describe('PluginRegistry', () => {
       settings: { instance: null, user: null },
       messages: {},
       events: new Map(),
+      testable: false,
       definition,
     });
     expect(registry.get('webhook')?.definition).toBe(definition);

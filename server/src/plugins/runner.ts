@@ -1,8 +1,9 @@
-import type { PluginContext, PluginLogger } from '@newses/plugin-api';
+import { FAILURE_DETAIL_LENGTH, type PluginContext, type PluginLogger } from '@newses/plugin-api';
 import type { z } from 'zod';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
 import type { PluginRuntime, PluginSettingsService } from '../core/plugins/settings.ts';
 import type { PluginStorageService } from '../core/plugins/storage.ts';
+import { stripControlChars } from '../core/feeds/sanitize.ts';
 import type { Logger } from '../core/ports.ts';
 import { getInstruments, recordError, withSpan } from '../telemetry/index.ts';
 import type { PluginNetwork } from './network.ts';
@@ -15,7 +16,9 @@ import type { LoadedPlugin } from './registry.ts';
  */
 export type HookFailure = 'error' | 'timeout' | 'invalid' | 'disabled';
 
-export type HookOutcome<T> = { ok: true; value: T } | { ok: false; failure: HookFailure };
+/** A failure's `detail` is what the hook said: the message it threw, plain and short. */
+export type HookOutcome<T> =
+  { ok: true; value: T } | { ok: false; failure: HookFailure; detail?: string | null };
 
 export interface HookRun<T> {
   plugin: LoadedPlugin;
@@ -25,6 +28,8 @@ export interface HookRun<T> {
   timeoutMs: number;
   /** What the hook must return; without it the hook's result is ignored. */
   output?: z.ZodType<T>;
+  /** False for a run someone asked for (a test): not a job, and no failure toward turning it off. */
+  counted?: boolean;
   call: (context: PluginContext) => unknown;
 }
 
@@ -117,7 +122,7 @@ export class PluginRunner {
           }
         } catch (err) {
           const failure = signal.aborted ? 'timeout' : 'error';
-          outcome = { ok: false, failure };
+          outcome = { ok: false, failure, detail: failure === 'error' ? failureDetail(err) : null };
           recordError(span, err);
           this.#logger.warn(
             { plugin: pluginId, hook: run.hook, failure, err },
@@ -138,6 +143,7 @@ export class PluginRunner {
     outcome: HookOutcome<unknown>,
     durationMs: number,
   ): Promise<void> {
+    if (run.counted === false) return;
     const pluginId = run.plugin.id;
     const job = hookJobName(pluginId, run.hook);
     this.#ops?.recordJob({ job, ok: outcome.ok, durationMs });
@@ -148,7 +154,9 @@ export class PluginRunner {
       const turnedOff = await this.#settings.recordRun(
         run.plugin,
         userId,
-        outcome.ok ? { ok: true } : { ok: false, failure: outcome.failure },
+        outcome.ok
+          ? { ok: true }
+          : { ok: false, failure: outcome.failure, detail: outcome.detail ?? null },
       );
       if (turnedOff)
         this.#logger.warn(
@@ -159,6 +167,16 @@ export class PluginRunner {
       this.#logger.error({ plugin: pluginId, err }, 'Plugin run not counted');
     }
   }
+}
+
+/** What a hook threw, as plain text of at most `FAILURE_DETAIL_LENGTH` characters; null for nothing. */
+export function failureDetail(err: unknown): string | null {
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  const text = stripControlChars(message.replace(/\s+/g, ' ')).trim();
+  if (!text) return null;
+  return text.length > FAILURE_DETAIL_LENGTH
+    ? `${text.slice(0, FAILURE_DETAIL_LENGTH - 1)}…`
+    : text;
 }
 
 /** The server's logger, with each line tagged with the plugin's id. */

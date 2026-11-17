@@ -10,8 +10,8 @@ import PluginsPanel from './PluginsPanel.vue';
 
 const api = vi.hoisted(() => ({
   plugins: { list: vi.fn<() => Promise<PluginsResponse>>() },
-  admin: { plugins: { update: vi.fn(), remove: vi.fn() } },
-  account: { updatePlugin: vi.fn(), removePlugin: vi.fn() },
+  admin: { plugins: { update: vi.fn(), remove: vi.fn(), test: vi.fn() } },
+  account: { updatePlugin: vi.fn(), removePlugin: vi.fn(), testPlugin: vi.fn() },
 }));
 vi.mock('../../api.ts', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -166,5 +166,46 @@ describe('PluginsPanel', () => {
     expect(api.account.updatePlugin).toHaveBeenCalledWith('webhook', {
       settings: { target: 'https://hooks.example/b' },
     });
+  });
+
+  it('tests a testable plugin with the saved settings, and says how it went', async () => {
+    const testable = { ...webhook, testable: true };
+    api.account.testPlugin.mockResolvedValueOnce({
+      ok: false,
+      message: 'HTTP 401 Unauthorized',
+      failure: null,
+    });
+    const panel = await mounted('user', { plugins: [testable], uninstalled: [] });
+    expect(panel.text()).toContain(t('plugins.testHint'));
+    const send = panel.findAll('button').find((b) => b.text() === t('plugins.sendTest'));
+    await send?.trigger('click');
+    await flushPromises();
+    expect(api.account.testPlugin).toHaveBeenCalledWith('webhook');
+    expect(panel.text()).toContain(t('plugins.testFailed', { message: 'HTTP 401 Unauthorized' }));
+
+    api.account.testPlugin.mockResolvedValueOnce({ ok: false, message: '', failure: 'timeout' });
+    await send?.trigger('click');
+    await flushPromises();
+    expect(panel.text()).toContain(t('plugins.testFailure.timeout'));
+
+    const untested = await mounted('user', { plugins: [webhook], uninstalled: [] });
+    expect(untested.text()).not.toContain(t('plugins.sendTest'));
+  });
+
+  it('says what the last run said when the server turned a plugin off', async () => {
+    const stopped = {
+      ...webhook,
+      user: {
+        ...OFF,
+        failures: 10,
+        lastFailure: 'error',
+        lastFailureDetail: 'HTTP 404 Not Found',
+        disabledReason: 'failures' as const,
+      },
+    };
+    const panel = await mounted('user', { plugins: [stopped], uninstalled: [] });
+    expect(panel.text()).toContain(
+      t('plugins.turnedOffMineSaying', { count: 10, detail: 'HTTP 404 Not Found' }),
+    );
   });
 });

@@ -48,6 +48,7 @@ const info = (id: string, overrides: Partial<PluginInfo>): PluginInfo => ({
   settings: { instance: null, user: null },
   messages: {},
   events: new Map(),
+  testable: false,
   ...overrides,
 });
 
@@ -137,6 +138,7 @@ describe('PluginSettingsService instance settings', () => {
       approvedHosts: ['api.anthropic.com'],
       failures: 0,
       lastFailure: null,
+      lastFailureDetail: null,
       lastFailureAt: null,
       disabledReason: null,
     });
@@ -351,10 +353,30 @@ describe('PluginSettingsService.recordRun', () => {
     for (let run = 1; run < PLUGIN_FAILURE_LIMIT; run++)
       await service.recordRun(webhook, alice, fail);
     expect(await service.recordRun(webhook, alice, fail)).toBe('user');
+    await service.recordRun(webhook, alice, {
+      ok: false,
+      failure: 'error',
+      detail: 'HTTP 401 Unauthorized',
+    });
     expect(await service.user('webhook', alice)).toMatchObject({
       enabled: false,
       disabledReason: 'failures',
+      // Runs while it is off are not counted.
+      lastFailure: 'timeout',
+      lastFailureDetail: null,
     });
+    await service.updateUser('webhook', alice, { enabled: true });
+    await service.recordRun(webhook, alice, {
+      ok: false,
+      failure: 'error',
+      detail: 'HTTP 401 Unauthorized',
+    });
+    expect(await service.user('webhook', alice)).toMatchObject({
+      lastFailure: 'error',
+      lastFailureDetail: 'HTTP 401 Unauthorized',
+    });
+    await service.recordRun(webhook, alice, { ok: true });
+    await service.updateUser('webhook', alice, { enabled: false });
     expect(await service.instance('webhook')).toMatchObject({ enabled: true, failures: 0 });
     expect(await service.runtime(webhook, alice)).toEqual({ active: false, reason: 'disabled' });
     await service.updateUser('webhook', alice, { enabled: true });

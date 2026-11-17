@@ -7,7 +7,7 @@ import type { KeyValueStore } from '../core/plugins/storage.ts';
 import type { Logger } from '../core/ports.ts';
 import { PluginNetwork } from './network.ts';
 import { type LoadedPlugin, PluginRegistry } from './registry.ts';
-import { hookJobName, pluginLogger, PluginRunner } from './runner.ts';
+import { failureDetail, hookJobName, pluginLogger, PluginRunner } from './runner.ts';
 
 const plugin = PluginRegistry.load(
   [
@@ -111,12 +111,13 @@ describe('PluginRunner', () => {
       expect(await runner.run({ plugin, hook: 'h', timeoutMs: 1000, call })).toEqual({
         ok: false,
         failure: 'error',
+        detail: 'boom',
       });
     }
     expect(recorded().map((r) => r.ok)).toEqual([false, false]);
     expect(counted()).toEqual([
-      [null, { ok: false, failure: 'error' }],
-      [null, { ok: false, failure: 'error' }],
+      [null, { ok: false, failure: 'error', detail: 'boom' }],
+      [null, { ok: false, failure: 'error', detail: 'boom' }],
     ]);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ plugin: 'webhook', hook: 'h', failure: 'error' }),
@@ -149,7 +150,7 @@ describe('PluginRunner', () => {
     });
     expect(call).not.toHaveBeenCalled();
     expect(recorded()).toEqual([expect.objectContaining({ ok: false })]);
-    expect(counted()).toEqual([[3, { ok: false, failure: 'error' }]]);
+    expect(counted()).toEqual([[3, { ok: false, failure: 'error', detail: null }]]);
   });
 
   it('says when failing turned the plugin off, and survives failing to count', async () => {
@@ -164,6 +165,7 @@ describe('PluginRunner', () => {
     expect(await runner.run({ plugin, hook: 'h', timeoutMs: 1000, call })).toEqual({
       ok: false,
       failure: 'error',
+      detail: 'boom',
     });
     expect(logger.error).toHaveBeenCalledWith(
       expect.objectContaining({ plugin: 'webhook' }),
@@ -182,12 +184,40 @@ describe('PluginRunner', () => {
         return new Promise(() => undefined);
       },
     });
-    expect(outcome).toEqual({ ok: false, failure: 'timeout' });
+    expect(outcome).toEqual({ ok: false, failure: 'timeout', detail: null });
     expect(signal?.aborted).toBe(true);
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({ failure: 'timeout' }),
       'Plugin hook ran out of time',
     );
+  });
+
+  it('neither records nor counts a run someone asked for', async () => {
+    const outcome = await runner.run({
+      plugin,
+      hook: 'test',
+      userId: 3,
+      timeoutMs: 1000,
+      counted: false,
+      call: () => {
+        throw new Error('HTTP 500');
+      },
+    });
+    expect(outcome).toEqual({ ok: false, failure: 'error', detail: 'HTTP 500' });
+    expect(recorded()).toEqual([]);
+    expect(counted()).toEqual([]);
+  });
+
+  it('keeps what a failed hook said as plain text, short', () => {
+    expect(failureDetail(new Error('  HTTP 401\n\tUnauthorized\u0007 '))).toBe(
+      'HTTP 401 Unauthorized',
+    );
+    expect(failureDetail('thrown text')).toBe('thrown text');
+    expect(failureDetail({ message: 'not an error' })).toBeNull();
+    expect(failureDetail(new Error(''))).toBeNull();
+    const long = failureDetail(new Error('x'.repeat(400)));
+    expect(long).toHaveLength(300);
+    expect(long?.endsWith('…')).toBe(true);
   });
 
   it('counts a result the hook does not take as invalid', async () => {

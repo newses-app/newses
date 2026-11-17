@@ -73,6 +73,7 @@ import type {
 import type {
   Plugin,
   PluginsResponse,
+  PluginTestResult,
   UpdateAccountPluginRequest,
   UpdatePluginRequest,
 } from './plugins.ts';
@@ -297,6 +298,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Removes the user's settings of a plugin and its data for them (API 1.15). */
       removePlugin: (pluginId: string) =>
         request<undefined>('DELETE', `/account/plugins/${encodeURIComponent(pluginId)}`),
+      /** Tests a plugin with the user's saved settings (API 1.16, `Plugin.testable`). */
+      testPlugin: (pluginId: string) =>
+        request<PluginTestResult>('POST', `/account/plugins/${encodeURIComponent(pluginId)}/test`),
     },
 
     /** From API 1.15, where `ServerInfo.plugins` is set (admins may list none installed). */
@@ -335,6 +339,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
         /** Removes a plugin's settings, every user's, and its data; installed or not. */
         remove: (pluginId: string) =>
           request<undefined>('DELETE', `/admin/plugins/${encodeURIComponent(pluginId)}`),
+        /** Tests a plugin with the instance's saved settings (API 1.16). */
+        test: (pluginId: string) =>
+          request<PluginTestResult>('POST', `/admin/plugins/${encodeURIComponent(pluginId)}/test`),
       },
       sites: {
         rules: () => request<HostRule[]>('GET', '/admin/sites/rules'),

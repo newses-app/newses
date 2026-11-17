@@ -37,6 +37,8 @@ export interface PluginInfo {
   readonly messages: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** The event hooks it implements, with their debounce windows. */
   readonly events: ReadonlyMap<EventHookName, { debounceSeconds: number }>;
+  /** Whether it has a `test` hook, for "Send test". */
+  readonly testable: boolean;
 }
 
 /** Hooks told of changes after they are saved, through the deliveries. */
@@ -95,6 +97,19 @@ export interface DigestComposer {
   readonly composes: boolean;
   /** The additions of the plugins on for the user, in install order; never throws. */
   compose(input: DigestComposeInput): Promise<DigestAddition[]>;
+}
+
+/**
+ * How a test went: passed or not with the plugin's message, or failed by throwing (`error`, the
+ * message what it threw), running out of time, or returning something else; `off` when the
+ * plugin is off there, or its saved settings no longer fit it.
+ */
+export type PluginTestOutcome =
+  { ok: boolean; message: string; failure: 'error' | 'timeout' | 'invalid' | null } | 'off';
+
+/** Runs a plugin's `test` hook for a user, or the instance; `server/src/plugins` implements it. */
+export interface PluginTester {
+  test(plugin: PluginInfo, userId: number | null): Promise<PluginTestOutcome>;
 }
 
 /** The installed plugins; `server/src/plugins` implements it. */

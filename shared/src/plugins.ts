@@ -17,6 +17,8 @@ export const pluginSettingsStateSchema = z.object({
   failures: z.number().int(),
   /** How the last failed run failed: `error`, `timeout`, or `invalid`. */
   lastFailure: z.string().nullable(),
+  /** From API 1.16: what the last failed run said, as plain text, if anything. */
+  lastFailureDetail: z.string().nullable().optional(),
   lastFailureAt: z.iso.datetime().nullable(),
   /** Set when the server turned the plugin off after failing repeatedly. */
   disabledReason: z.enum(['failures']).nullable(),
@@ -32,6 +34,8 @@ export const pluginSchema = z.object({
   enabled: z.boolean(),
   /** The hosts the plugin asks to reach. */
   hosts: z.array(z.string()),
+  /** From API 1.16: whether it can be tested with its saved settings ("Send test"). */
+  testable: z.boolean().optional(),
   /** The hosts an admin approved: URL settings must be on one of them. */
   approvedHosts: z.array(z.string()),
   /**
@@ -72,6 +76,18 @@ export const updateAccountPluginRequestSchema = z.object({
   settings: z.record(z.string(), z.unknown()).optional(),
 });
 export type UpdateAccountPluginRequest = z.infer<typeof updateAccountPluginRequestSchema>;
+
+/**
+ * `POST /account/plugins/:id/test` and `POST /admin/plugins/:id/test` (API 1.16): how a test with
+ * the saved settings went. `message` is the plugin's plain text, or what it threw; `failure` says
+ * how a test that did not report failed: `error`, `timeout`, or `invalid`.
+ */
+export const pluginTestResultSchema = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  failure: z.enum(['error', 'timeout', 'invalid']).nullable(),
+});
+export type PluginTestResult = z.infer<typeof pluginTestResultSchema>;
 
 /** `PATCH /plugins/:id` (admins): also the hosts the plugin may reach. */
 export const updatePluginRequestSchema = updateAccountPluginRequestSchema.extend({

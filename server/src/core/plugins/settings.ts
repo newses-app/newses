@@ -38,6 +38,8 @@ export interface PluginSettingsView {
   /** Failed runs in a row. */
   failures: number;
   lastFailure: string | null;
+  /** What the last failed run said (the message it threw), if anything. */
+  lastFailureDetail: string | null;
   lastFailureAt: Date | null;
   disabledReason: DisabledReason | null;
 }
@@ -305,12 +307,12 @@ export class PluginSettingsService {
   /**
    * Counts a hook run toward the plugin's failures in a row: a user's run of a plugin with user
    * settings toward that user, any other toward the instance. At `PLUGIN_FAILURE_LIMIT` the
-   * plugin is turned off there; returns where it was.
+   * plugin is turned off there; returns where it was. A failure's `detail` is what the hook said.
    */
   async recordRun(
     plugin: PluginInfo,
     userId: number | null,
-    outcome: { ok: true } | { ok: false; failure: string },
+    outcome: { ok: true } | { ok: false; failure: string; detail?: string | null },
   ): Promise<'instance' | 'user' | null> {
     const forUser = userId !== null && plugin.settings.user !== null;
     const table = forUser ? pluginUserSettings : pluginSettings;
@@ -330,6 +332,7 @@ export class PluginSettingsService {
       .set({
         failures: sql`${table.failures} + 1`,
         lastFailure: outcome.failure,
+        lastFailureDetail: outcome.detail ?? null,
         lastFailureAt: sql`now()`,
         enabled: sql`NOT (${reachesLimit})`,
         disabledReason: sql`CASE WHEN ${reachesLimit} THEN 'failures' END`,
@@ -519,6 +522,7 @@ export class PluginSettingsService {
       secretsSet: Object.keys(row.secrets).sort(),
       failures: row.failures,
       lastFailure: row.lastFailure,
+      lastFailureDetail: row.lastFailureDetail,
       lastFailureAt: row.lastFailureAt,
       disabledReason: row.disabledReason as DisabledReason | null,
     };

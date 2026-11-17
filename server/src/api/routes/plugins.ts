@@ -3,14 +3,17 @@ import {
   pluginSchema,
   type PluginSettingsState,
   pluginsResponseSchema,
+  pluginTestResultSchema,
   updateAccountPluginRequestSchema,
   updatePluginRequestSchema,
 } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { DomainError } from '../../core/errors.ts';
+import type { PluginTester } from '../../core/plugins/catalog.ts';
 import type { PluginInfo, PluginServices } from '../../core/plugins/index.ts';
 import type { PluginSettingsView } from '../../core/plugins/settings.ts';
+import type { UserRateLimiter } from '../../core/rate-limit.ts';
 import { requireAdmin, requireAuth, requireUser } from '../auth.ts';
 import { logSecurity } from '../security-log.ts';
 
@@ -22,6 +25,7 @@ const OFF: PluginSettingsState = {
   secretsSet: [],
   failures: 0,
   lastFailure: null,
+  lastFailureDetail: null,
   lastFailureAt: null,
   disabledReason: null,
 };
@@ -34,6 +38,7 @@ const stateOf = (view: PluginSettingsView | null | undefined): PluginSettingsSta
         secretsSet: view.secretsSet,
         failures: view.failures,
         lastFailure: view.lastFailure,
+        lastFailureDetail: view.lastFailureDetail,
         lastFailureAt: view.lastFailureAt?.toISOString() ?? null,
         disabledReason: view.disabledReason,
       }
@@ -41,14 +46,14 @@ const stateOf = (view: PluginSettingsView | null | undefined): PluginSettingsSta
 
 /**
  * Settings → Plugins: admins enable installed plugins, set their instance settings, and approve
- * their hosts; users turn on plugins with user scope and set their own settings. No settings
- * response carries a secret's value.
+ * their hosts; users turn on plugins with user scope and set their own settings; both test a
+ * plugin with its saved settings. No settings response carries a secret's value.
  */
-export const pluginRoutes: FastifyPluginAsyncZod<{ plugins: PluginServices }> = (
-  app,
-  { plugins },
-) => {
-  const { catalog, settings } = plugins;
+export const pluginRoutes: FastifyPluginAsyncZod<{
+  plugins: PluginServices & { tester?: PluginTester };
+  limits: Pick<UserRateLimiter, 'take'>;
+}> = (app, { plugins, limits }) => {
+  const { catalog, settings, tester } = plugins;
 
   /** A plugin as `viewer` sees it, with their own settings. */
   async function present(info: PluginInfo, viewer: { id: number; admin: boolean }) {
@@ -71,6 +76,7 @@ export const pluginRoutes: FastifyPluginAsyncZod<{ plugins: PluginServices }> = 
       scopes: [...info.scopes],
       enabled: instance?.enabled ?? false,
       hosts: [...info.hosts],
+      testable: info.testable,
       approvedHosts: instance?.approvedHosts ?? [],
       messages: info.messages,
       settingsSchemas: {
@@ -169,6 +175,53 @@ export const pluginRoutes: FastifyPluginAsyncZod<{ plugins: PluginServices }> = 
         throw new DomainError('not_found', `No plugin ${id} is on`);
       await settings.updateUser(id, viewer.id, request.body);
       return present(info, viewer);
+    },
+  );
+
+  /** Tests the plugin with the saved settings of the user, or (`userId` null) the instance. */
+  async function test(info: PluginInfo, userId: number | null) {
+    if (!tester || !info.testable)
+      throw new DomainError('not_found', `The plugin ${info.id} has no test`);
+    const outcome = await tester.test(info, userId);
+    if (outcome === 'off')
+      throw new DomainError('conflict', `Turn the plugin ${info.id} on before testing it`, {
+        reason: 'plugin_off',
+      });
+    return outcome;
+  }
+
+  app.post(
+    '/admin/plugins/:id/test',
+    {
+      preHandler: requireAdmin,
+      schema: { params: idParams, response: { 200: pluginTestResultSchema } },
+    },
+    async (request) => {
+      const { id } = request.params;
+      const info = catalog.get(id);
+      if (!info) throw new DomainError('not_found', `No plugin ${id} is installed`);
+      await limits.take(requireAuth(request).user.id, 'pluginTest');
+      return test(info, null);
+    },
+  );
+
+  app.post(
+    '/account/plugins/:id/test',
+    {
+      preHandler: requireUser,
+      schema: { params: idParams, response: { 200: pluginTestResultSchema } },
+    },
+    async (request) => {
+      const { id } = request.params;
+      const viewer = viewerOf(requireAuth(request));
+      const info = catalog.get(id);
+      if (
+        !info?.settings.user ||
+        (!viewer.admin && (await settings.instance(id))?.enabled !== true)
+      )
+        throw new DomainError('not_found', `No plugin ${id} with settings of your own is on`);
+      await limits.take(viewer.id, 'pluginTest');
+      return test(info, viewer.id);
     },
   );
 

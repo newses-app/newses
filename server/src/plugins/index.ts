@@ -1,4 +1,10 @@
-import { DIGEST_LIMITS, digestAdditionsSchema, EVENT_LIMITS } from '@newses/plugin-api';
+import {
+  digestAdditionsSchema,
+  DIGEST_LIMITS,
+  EVENT_LIMITS,
+  TEST_LIMITS,
+  testResultSchema,
+} from '@newses/plugin-api';
 import type { Keys } from '../core/crypto.ts';
 import type { PoliteFetcher } from '../core/feeds/polite-fetcher.ts';
 import { stripControlChars } from '../core/feeds/sanitize.ts';
@@ -12,6 +18,8 @@ import type {
   EventRunOutcome,
   PluginEventRunner,
   PluginInfo,
+  PluginTester,
+  PluginTestOutcome,
 } from '../core/plugins/catalog.ts';
 import { PluginEventService } from '../core/plugins/events.ts';
 import { createPluginServices, type PluginServices } from '../core/plugins/index.ts';
@@ -152,8 +160,49 @@ export class DigestHookComposer implements DigestComposer {
 }
 
 /**
- * What a process needs of the plugins: their settings and storage, their event deliveries, and
- * their digest additions, whose requests share the feeds' per-host limits through `polite`.
+ * Runs plugins' `test` hooks for "Send test", under `TEST_LIMITS`, with the saved settings of the
+ * user or the instance. Tests are not counted as jobs or toward turning a plugin off.
+ */
+export class HookTester implements PluginTester {
+  readonly #registry: PluginRegistry;
+  readonly #runner: Pick<PluginRunner, 'run'>;
+  readonly #timeoutMs: number;
+
+  constructor(
+    registry: PluginRegistry,
+    runner: Pick<PluginRunner, 'run'>,
+    timeoutMs = TEST_LIMITS.timeoutSeconds * 1000,
+  ) {
+    this.#registry = registry;
+    this.#runner = runner;
+    this.#timeoutMs = timeoutMs;
+  }
+
+  async test(plugin: PluginInfo, userId: number | null): Promise<PluginTestOutcome> {
+    const loaded = this.#registry.get(plugin.id);
+    const hook = loaded?.definition.hooks.test;
+    if (!loaded || !hook) return 'off';
+    const outcome = await this.#runner.run({
+      plugin: loaded,
+      hook: 'test',
+      userId,
+      timeoutMs: this.#timeoutMs,
+      output: testResultSchema,
+      counted: false,
+      call: (context) => hook.run(context),
+    });
+    if (outcome.ok) {
+      const message = stripControlChars(outcome.value.message.replace(/\r\n?/g, '\n')).trim();
+      return { ok: outcome.value.ok, message, failure: null };
+    }
+    if (outcome.failure === 'disabled') return 'off';
+    return { ok: false, message: outcome.detail ?? '', failure: outcome.failure };
+  }
+}
+
+/**
+ * What a process needs of the plugins: their settings and storage, their event deliveries,
+ * their digest additions, and their tests, whose requests share the feeds' per-host limits through `polite`.
  */
 export function createPluginHost(deps: {
   registry: PluginRegistry;
@@ -170,6 +219,7 @@ export function createPluginHost(deps: {
   registry: PluginRegistry;
   events: PluginEventService;
   digest: DigestHookComposer;
+  tester: HookTester;
   close: () => Promise<void>;
 } {
   const { registry, db, logger } = deps;
@@ -195,5 +245,6 @@ export function createPluginHost(deps: {
     publicUrl: deps.publicUrl,
   });
   const digest = new DigestHookComposer(registry, runner);
-  return { ...services, registry, events, digest, close: () => network.close() };
+  const tester = new HookTester(registry, runner);
+  return { ...services, registry, events, digest, tester, close: () => network.close() };
 }

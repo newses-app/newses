@@ -172,6 +172,13 @@ export interface PublishedChangedEvent {
 export const EVENT_LIMITS = { entries: 500, timeoutSeconds: 60 } as const;
 
 /**
+ * A hook's failure detail: the message of what it threw (300 characters at most), kept with the
+ * failure and shown in Settings → Plugins to whoever owns the settings it ran with. Never put
+ * secrets in error messages.
+ */
+export const FAILURE_DETAIL_LENGTH = 300;
+
+/**
  * A hook told of changes after they are saved, at least once: a delivery that fails (throws,
  * times out) is retried with backoff. Changes within `debounceSeconds` of the first (0 to 3600;
  * 0 by default) arrive as one event.
@@ -237,6 +244,32 @@ export interface DigestHook<C extends PluginContext = PluginContext> {
   ): DigestAdditions | null | undefined | Promise<DigestAdditions | null | undefined>;
 }
 
+/** What a `test` hook reports: whether the test passed, and what happened, as plain text. */
+export interface TestResult {
+  ok: boolean;
+  /** Shown to whoever ran the test, such as `HTTP 204 No Content`; never put secrets in it. */
+  message: string;
+}
+
+/** What a test takes of a plugin at most: characters of message, and time. */
+export const TEST_LIMITS = { message: 500, timeoutSeconds: 30 } as const;
+
+/** What a `test` hook may return; anything else fails the test. */
+export const testResultSchema: z.ZodType<TestResult> = z.object({
+  ok: z.boolean(),
+  message: z.string().max(TEST_LIMITS.message),
+});
+
+/**
+ * "Send test" in Settings → Plugins: runs with the saved settings, for the user who pressed it
+ * (a plugin with user settings) or the instance (an admin), while the plugin is on there. A test
+ * that throws or runs out of time fails, with the error's message shown; tests never count
+ * toward turning a plugin off.
+ */
+export interface TestHook<C extends PluginContext = PluginContext> {
+  run(context: C): TestResult | Promise<TestResult>;
+}
+
 /**
  * The hooks a plugin implements, each given a context typed by the plugin's settings. Each hook
  * arrives in the patch release that names it.
@@ -245,6 +278,7 @@ export interface PluginHooks<C extends PluginContext = PluginContext> {
   'entries.added'?: EventHook<EntriesAddedEvent, C>;
   'published.changed'?: EventHook<PublishedChangedEvent, C>;
   'digest.compose'?: DigestHook<C>;
+  test?: TestHook<C>;
 }
 
 /** The settings a schema gives hooks: its output, or none without one. */

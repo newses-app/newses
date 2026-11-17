@@ -19,6 +19,7 @@ import type { EntryServices } from '../core/entries/index.ts';
 import type { FeedServices } from '../core/feeds/index.ts';
 import type { MailServices } from '../core/mail/index.ts';
 import type { OpsServices } from '../core/ops/index.ts';
+import type { PluginTester } from '../core/plugins/catalog.ts';
 import type { PluginServices } from '../core/plugins/index.ts';
 import type { Realtime } from '../core/ports.ts';
 import type { PrefsService } from '../core/prefs.ts';
@@ -84,8 +85,8 @@ export interface ApiServices {
   themes: ThemeService;
   realtime: Realtime;
   ops: OpsServices;
-  /** The installed plugins, their settings and storage. */
-  plugins: PluginServices;
+  /** The installed plugins, their settings and storage, and their tests. */
+  plugins: PluginServices & { tester?: PluginTester };
 }
 
 export interface AppDeps {
@@ -243,7 +244,10 @@ export function buildApp(deps: AppDeps) {
         await api.register(adminOpsRoutes, { ops: services.ops });
         await api.register(adminThemeRoutes, { themes: services.themes });
         await api.register(adminSiteRoutes, { hostRules: services.feeds.hostRules });
-        await api.register(pluginRoutes, { plugins: services.plugins });
+        await api.register(pluginRoutes, {
+          plugins: services.plugins,
+          limits: services.feeds.rateLimits,
+        });
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {
           ...services.entries,

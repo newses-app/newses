@@ -836,6 +836,8 @@ export const pluginSettings = pgTable('plugin_settings', {
     .default(sql`'{}'`),
   failures: integer('failures').notNull().default(0),
   lastFailure: text('last_failure'),
+  /** What the failing hook said: the message it threw, at most 300 characters. */
+  lastFailureDetail: text('last_failure_detail'),
   lastFailureAt: tstz('last_failure_at'),
   disabledReason: text('disabled_reason'),
   hooks: text('hooks')
@@ -859,6 +861,7 @@ export const pluginUserSettings = pgTable(
     secrets: jsonb('secrets').$type<Record<string, string>>().notNull().default({}),
     failures: integer('failures').notNull().default(0),
     lastFailure: text('last_failure'),
+    lastFailureDetail: text('last_failure_detail'),
     lastFailureAt: tstz('last_failure_at'),
     disabledReason: text('disabled_reason'),
     updatedAt: tstz('updated_at').notNull().defaultNow(),

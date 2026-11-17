@@ -43,6 +43,7 @@ const plugin = (
       { debounceSeconds },
     ]),
   ),
+  testable: false,
 });
 
 const webhook = plugin('webhook', { 'published.changed': 120 }, ['user']);

@@ -24,7 +24,7 @@ export const FIXTURE_PLUGINS = [
         en: { name: 'Webhook', 'settings.target': 'URL' },
         de: { name: 'Webhook (de)' },
       },
-      hooks: {},
+      hooks: { test: { run: () => ({ ok: true, message: 'HTTP 204 No Content' }) } },
     },
   },
   {

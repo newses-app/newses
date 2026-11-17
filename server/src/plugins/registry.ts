@@ -57,6 +57,7 @@ const hooksSchema = z.strictObject({
   'entries.added': eventHookSchema.optional(),
   'published.changed': eventHookSchema.optional(),
   'digest.compose': z.object({ run: hookRunSchema }).optional(),
+  test: z.object({ run: hookRunSchema }).optional(),
 });
 
 const objectSchema = z.custom<SettingsSchema>(
@@ -180,6 +181,7 @@ export class PluginRegistry implements PluginCatalog {
             return declared ? [[hook, { debounceSeconds: declared.debounceSeconds ?? 0 }]] : [];
           }),
         ),
+        testable: parsed.data.hooks.test !== undefined,
         definition,
       });
       options.logger.info({ plugin: id, source, version: parsed.data.version }, 'Plugin loaded');
