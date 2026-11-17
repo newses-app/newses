@@ -15,6 +15,34 @@ export interface Finding {
   details: Record<string, unknown>;
 }
 
+/** An installed plugin the server would not load, as `loadPlugins` records it. */
+export interface RefusedPluginRecord {
+  source: string;
+  id: string | null;
+  reason: string;
+  detail: string;
+}
+
+/** Where `loadPlugins` keeps the installed plugins it refused, for the `plugin.refused` rule. */
+const REFUSED_PLUGINS_KEY = 'plugins.refused';
+
+/** Records the plugins this deployment refused to load, replacing the last record. */
+export async function recordRefusedPlugins(
+  db: Pick<Db, 'insert'>,
+  refused: readonly RefusedPluginRecord[],
+): Promise<void> {
+  const value = refused.map(({ source, id, reason, detail }) => ({
+    source,
+    id,
+    reason,
+    detail: detail.slice(0, 1000),
+  }));
+  await db
+    .insert(opsState)
+    .values({ key: REFUSED_PLUGINS_KEY, value })
+    .onConflictDoUpdate({ target: opsState.key, set: { value, updatedAt: sql`now()` } });
+}
+
 /** Jobs waiting in a queue that a worker could run now. */
 export interface QueueBacklog {
   queue: string;
@@ -285,8 +313,23 @@ export class OpsChecker {
     ];
   }
 
-  /** Plugins turned off after failing repeatedly: open until an admin enables them again. */
+  /**
+   * Plugins turned off after failing repeatedly, open until an admin enables them again; and
+   * installed plugins the server refused to load, open until a deployment loads them or no
+   * longer installs them.
+   */
   async #pluginFindings(): Promise<Finding[]> {
+    const [state] = await this.#db
+      .select({ value: opsState.value })
+      .from(opsState)
+      .where(eq(opsState.key, REFUSED_PLUGINS_KEY));
+    const refused = ((state?.value ?? []) as RefusedPluginRecord[]).map((plugin): Finding => ({
+      rule: 'plugin.refused',
+      subject: plugin.id ?? plugin.source,
+      severity: 'warning',
+      summary: `The installed plugin ${plugin.source} was not loaded (${plugin.reason}): ${plugin.detail}`,
+      details: { source: plugin.source, reason: plugin.reason, detail: plugin.detail },
+    }));
     const rows = await this.#db
       .select({
         pluginId: pluginSettings.pluginId,
@@ -295,13 +338,14 @@ export class OpsChecker {
       })
       .from(pluginSettings)
       .where(eq(pluginSettings.disabledReason, 'failures'));
-    return rows.map((row) => ({
+    const disabled = rows.map((row) => ({
       rule: 'plugin.disabled',
       subject: row.pluginId,
       severity: 'warning' as const,
       summary: `The plugin ${row.pluginId} was turned off after ${String(row.failures)} failed runs in a row (last: ${row.lastFailure ?? 'unknown'})`,
       details: { failures: row.failures, lastFailure: row.lastFailure },
     }));
+    return [...disabled, ...refused];
   }
 }
 

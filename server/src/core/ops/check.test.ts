@@ -15,7 +15,7 @@ import {
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
 import { silentLogger, TEST_OPS_SETTINGS } from '../../test/fakes.ts';
 import type { AlertNotice, Notifier } from '../ports.ts';
-import { describeNotices, OpsChecker, type QueueBacklog } from './check.ts';
+import { describeNotices, OpsChecker, type QueueBacklog, recordRefusedPlugins } from './check.ts';
 
 let database: TestDatabase;
 let db: Db;
@@ -157,6 +157,24 @@ describe('OpsChecker', () => {
       },
     ]);
     await db.update(pluginSettings).set({ enabled: true, disabledReason: null, failures: 0 });
+    expect(await checker.evaluate()).toEqual([]);
+  });
+
+  it('flags installed plugins the server refused to load, until a deployment loads them', async () => {
+    await recordRefusedPlugins(db, [
+      { source: 'old@1.0.0', id: 'old', reason: 'incompatible', detail: 'needs plugin API ^0.2' },
+      { source: 'broken@1.0.0', id: null, reason: 'invalid', detail: 'x'.repeat(2000) },
+    ]);
+    const findings = await checker.evaluate();
+    expect(findings.map((f) => [f.rule, f.subject, f.severity])).toEqual([
+      ['plugin.refused', 'old', 'warning'],
+      ['plugin.refused', 'broken@1.0.0', 'warning'],
+    ]);
+    expect(findings[0]?.summary).toBe(
+      'The installed plugin old@1.0.0 was not loaded (incompatible): needs plugin API ^0.2',
+    );
+    expect(findings[1]?.details.detail).toHaveLength(1000);
+    await recordRefusedPlugins(db, []);
     expect(await checker.evaluate()).toEqual([]);
   });
 

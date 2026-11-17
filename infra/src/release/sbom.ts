@@ -183,11 +183,12 @@ export function splice(bom: Bom, drop: (component: Component) => boolean): Bom {
 }
 
 /**
- * Workspace packages are part of the deliverable, and the Android plugin lists the Capacitor
+ * Workspace packages (unversioned, so 0.0.0; the project's published plugins have versions) are
+ * part of the deliverable, and the Android plugin lists the Capacitor
  * Gradle projects (unversioned; their npm packages already list them) as components.
  */
 export const isFirstParty = (component: Component) =>
-  component.purl?.startsWith('pkg:npm/%40newses/') === true ||
+  /^pkg:npm\/%40newses\/[^@]+@0\.0\.0$/.test(component.purl ?? '') ||
   component.purl?.includes('project_path=') === true;
 
 /** The deliverable's root component, with the source repository's URL when there is one. */

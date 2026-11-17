@@ -114,6 +114,9 @@ describe('prepareRelease', () => {
     );
     const server = serverNames('1.2.3-rc.1');
     expect(await read(server.compose)).toContain(`${REPOSITORY}:1.2.3-rc.1@${DIGEST}`);
+    expect(await read(server.plugins)).toContain(
+      `NEWSES_IMAGE: \${NEWSES_IMAGE:-${REPOSITORY}:1.2.3-rc.1@${DIGEST}}`,
+    );
     expect(await read(server.publicKey)).toBe('-----BEGIN PUBLIC KEY-----\n');
     expect(await read('SHA256SUMS')).toContain(server.env);
     expect(manifest.server).toBeDefined();

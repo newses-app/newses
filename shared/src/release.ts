@@ -66,6 +66,8 @@ export interface ServerRelease {
   env: ReleaseFile;
   /** The override for running behind nginx-proxy. */
   nginxProxy: ReleaseFile;
+  /** The override that installs plugins into an image built from the release's. */
+  plugins: ReleaseFile;
   /** The cosign public key that verifies the image's signature. */
   publicKey: ReleaseFile;
 }

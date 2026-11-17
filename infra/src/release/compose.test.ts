@@ -46,6 +46,8 @@ function config(files: string[], env: Record<string, string>) {
         secrets?: { source: string }[];
         platform?: string;
         pull_policy?: string;
+        image?: string;
+        build?: { context?: string; dockerfile?: string; args?: Record<string, string> };
       }
     >;
   };
@@ -114,6 +116,45 @@ describe.skipIf(!available)('docker/compose.yaml', () => {
       VIRTUAL_HOST: 'reader.example.com',
     });
     expect(without.services.ntfy).toBeUndefined();
+  });
+
+  it('runs migrate, server, and worker on an image with PLUGINS installed, built from the app image', () => {
+    const { services } = config(['compose.yaml', 'compose.plugins.yaml'], {
+      PLUGINS: '@newses/plugin-webhook@1.0.0 other@0.2.0',
+    });
+    for (const name of ['migrate', 'server', 'worker']) {
+      const service = services[name];
+      expect(service?.image, name).toBe('newses-plugins:local');
+      expect(service?.pull_policy, name).toBe('build');
+      // The checkout's build of the app image is replaced, not merged.
+      expect(service?.build?.dockerfile, name).toBeUndefined();
+      expect(service?.build?.args, name).toEqual({
+        NEWSES_IMAGE: 'newses:latest',
+        PLUGINS: '@newses/plugin-webhook@1.0.0 other@0.2.0',
+      });
+    }
+    expect(services.db?.image).toMatch(/^postgres:/);
+
+    const missing = spawnSync(
+      'docker',
+      [
+        'compose',
+        '--env-file',
+        '/dev/null',
+        '-f',
+        'compose.yaml',
+        '-f',
+        'compose.plugins.yaml',
+        'config',
+      ],
+      {
+        cwd: docker,
+        encoding: 'utf8',
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, APP_SECRET: 'x'.repeat(32) },
+      },
+    );
+    expect(missing.status).not.toBe(0);
+    expect(missing.stderr).toContain('list the plugins in PLUGINS in .env');
   });
 
   it('serves the downloads volume read-only, which only the apps override builds into', () => {

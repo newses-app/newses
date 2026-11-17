@@ -45,6 +45,11 @@ export interface StageConfig {
    * `public.ecr.aws/<alias>/<name>`; stages may share one. Omitted for no image.
    */
   imageRepository?: string | undefined;
+  /**
+   * npm packages at exact versions (`name@1.2.3`) bundled into every function as plugins; see
+   * `plugins.ts`. Omitted for none.
+   */
+  plugins?: string[] | undefined;
 }
 
 /** Where the app downloads live, in the downloads bucket and under the stage's domain. */

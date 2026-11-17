@@ -98,7 +98,9 @@ describe('splice', () => {
 
 describe('isFirstParty', () => {
   it('matches workspace packages and Gradle projects only', () => {
-    expect(isFirstParty(npm('@newses/shared'))).toBe(true);
+    expect(isFirstParty(npm('@newses/shared', '0.0.0'))).toBe(true);
+    // A plugin the project publishes is a dependency like any other.
+    expect(isFirstParty(npm('@newses/plugin-webhook', '1.0.0'))).toBe(false);
     expect(
       isFirstParty({
         type: 'library',

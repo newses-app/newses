@@ -23,9 +23,10 @@ import { NewsesStage } from './stage.ts';
 const ARM_BUILD_IMAGE = codebuild.LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0;
 
 /**
- * Self-mutating pipeline: each push to the stage's branch runs `pnpm check`, builds the SPA,
- * bundles the Lambdas, deploys the shared database, then the stage and the shared project budget
- * side by side, and smoke-tests the stage. Each run's result goes to the stage's pipelines topic.
+ * Self-mutating pipeline: each push to the stage's branch runs `pnpm check`, installs the stages'
+ * plugins, builds the SPA, bundles the Lambdas with them, deploys the shared database, then the
+ * stage and the shared project budget side by side, and smoke-tests the stage. Each run's result
+ * goes to the stage's pipelines topic.
  */
 export class PipelineStack extends Stack {
   constructor(
@@ -83,6 +84,8 @@ export class PipelineStack extends Stack {
           `aws ssm get-parameter --name ${DEPLOY_CONFIG_PARAMETER} --query Parameter.Value --output text > infra/deploy.config.json`,
           'pnpm check',
           'pnpm audit --prod --audit-level high',
+          // Each stage's plugins from the deployment config, audited, for the functions' bundles.
+          'pnpm --filter @newses/infra plugins:install',
           'pnpm --filter @newses/web build',
           'cd infra && pnpm exec cdk synth',
         ],

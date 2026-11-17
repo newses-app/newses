@@ -11,6 +11,7 @@ import {
   openapiName,
   renderChecksums,
   renderCompose,
+  renderPluginsOverride,
   renderIndex,
   rewriteFeed,
   sbomArtifacts,
@@ -164,13 +165,14 @@ describe('renderChecksums', () => {
       sha256: `hash${String(i)}`,
     }));
     const lines = renderChecksums(version, withImage, true).trimEnd().split('\n');
-    expect(lines).toHaveLength(15);
+    expect(lines).toHaveLength(16);
     expect(lines).toContain(`hash12  ${imageSbom}`);
-    expect(lines.slice(-4)).toEqual([
+    expect(lines.slice(-5)).toEqual([
       `hash15  ${server.compose}`,
       `hash16  ${server.env}`,
       `hash17  ${server.nginxProxy}`,
-      `hash18  ${server.publicKey}`,
+      `hash18  ${server.plugins}`,
+      `hash19  ${server.publicKey}`,
     ]);
     expect(lines.some((line) => line.endsWith('.digest'))).toBe(false);
   });
@@ -246,6 +248,21 @@ describe('renderCompose', () => {
   });
 });
 
+describe('renderPluginsOverride', () => {
+  const pinned = `${repository}:${version}@${digest}`;
+  const source = readFileSync(
+    new URL('../../../docker/compose.plugins.yaml', import.meta.url),
+    'utf8',
+  );
+
+  it("builds docker/compose.plugins.yaml's image from the release's", () => {
+    const override = renderPluginsOverride(source, pinned);
+    expect(override).toContain(`NEWSES_IMAGE: \${NEWSES_IMAGE:-${pinned}}\n`);
+    expect(override).not.toContain('newses:latest');
+    expect(() => renderPluginsOverride('services: {}\n', pinned)).toThrow(/other than once/);
+  });
+});
+
 describe('serverCommands', () => {
   const file = (name: string, sha256: string) => ({ url: `${folder}${name}`, size: 1, sha256 });
   const commands = serverCommands({
@@ -253,6 +270,7 @@ describe('serverCommands', () => {
     compose: file(server.compose, 'c1'),
     env: file(server.env, 'e1'),
     nginxProxy: file(server.nginxProxy, 'n1'),
+    plugins: file(server.plugins, 'g1'),
     publicKey: file(server.publicKey, 'p1'),
   });
 
@@ -273,6 +291,12 @@ describe('serverCommands', () => {
     expect(commands.nginxProxy.at(-1)).toBe(
       'docker compose -f compose.yaml -f compose.nginx-proxy.yaml up -d',
     );
+    expect(commands.plugins).toEqual([
+      `curl -fL -o compose.plugins.yaml ${folder}${server.plugins}`,
+      "echo 'g1  compose.plugins.yaml' | sha256sum -c",
+      '# In .env, set PLUGINS to npm packages at exact versions: PLUGINS=name@1.2.3 other@0.4.0',
+      'docker compose -f compose.yaml -f compose.plugins.yaml up -d --build',
+    ]);
   });
 
   it("verifies the image's signature by tag with the signing key", () => {
@@ -320,7 +344,8 @@ describe('buildManifest', () => {
       compose: { url: `${folder}${server.compose}`, size: 100, sha256: 'compose' },
       env: { url: `${folder}${server.env}`, size: 101, sha256: 'env' },
       nginxProxy: { url: `${folder}${server.nginxProxy}`, size: 102, sha256: 'nginxProxy' },
-      publicKey: { url: `${folder}${server.publicKey}`, size: 103, sha256: 'publicKey' },
+      plugins: { url: `${folder}${server.plugins}`, size: 103, sha256: 'plugins' },
+      publicKey: { url: `${folder}${server.publicKey}`, size: 104, sha256: 'publicKey' },
     });
   });
 });
@@ -356,13 +381,14 @@ describe('renderIndex', () => {
     expect(imagePage).toContain('<h2>Server</h2>');
     expect(imagePage).toContain(`<a href="${folder}${server.compose}">`);
     expect(imagePage).toContain(`<a href="${folder}${server.nginxProxy}">`);
+    expect(imagePage).toContain(`<a href="${folder}${server.plugins}">`);
     expect(imagePage).toContain(
       `docker pull ${repository}:${version}\ndocker pull ${repository}@${digest}`,
     );
     expect(imagePage).toContain('echo &#39;compose  compose.yaml&#39; | sha256sum -c');
     expect(imagePage).toContain(`cosign verify --key cosign.pub ${repository}:${version}`);
-    // The server's four files and the image, then the image SBOM.
-    expect(imagePage.match(/<details>/g)).toHaveLength(15);
+    // The server's five files and the image, then the image SBOM.
+    expect(imagePage.match(/<details>/g)).toHaveLength(16);
     expect(imagePage.indexOf('<h2>Server</h2>')).toBeLessThan(imagePage.indexOf('Checksums'));
   });
 });

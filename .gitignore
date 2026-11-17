@@ -27,3 +27,5 @@ ttrss-import-*.txt
 
 # Local working notes and runbooks, not part of the repository
 /plans/
+# Plugins a deployment installs (server/src/plugins/install.ts)
+/server/.plugins/

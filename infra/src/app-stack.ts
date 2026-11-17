@@ -31,6 +31,7 @@ import {
   resourceName,
 } from './deploy-config.ts';
 import type { ParamsStack } from './params-stack.ts';
+import { pluginAliases } from './plugins.ts';
 
 const LAMBDA_DIR = join(REPO_ROOT, 'server/src/entrypoints/lambda');
 const ARGON2_VERSION = (
@@ -142,6 +143,9 @@ export class AppStack extends Stack {
         ? lambda.LayerVersion.fromLayerVersionArn(this, 'AdotLayer', ADOT_LAYER_ARN)
         : undefined;
 
+    // The stage's plugins, bundled into every function; checked only when this synth bundles.
+    const plugins = this.bundlingRequired ? pluginAliases(stage) : {};
+
     const fn = (name: string, options: { timeout: Duration; memorySize?: number }) => {
       const functionName = resourceName(stage, name);
       const handler = new nodejs.NodejsFunction(this, `${name}Function`, {
@@ -193,8 +197,11 @@ export class AppStack extends Stack {
           target: 'node24',
           mainFields: ['module', 'main'],
           sourceMap: true,
-          // For the licences of what the bundle includes; removed after bundling.
+          // For the licences of what the bundle includes, plugins too; removed after bundling.
           metafile: true,
+          esbuildArgs: Object.fromEntries(
+            Object.entries(plugins).map(([from, to]) => [`--alias:${from}`, to]),
+          ),
           banner:
             "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
           // The runtime provides the AWS SDK; argon2 is native and installed for the target below.

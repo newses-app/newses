@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "plugins:install": "node src/install-plugins.ts"
   },
   "dependencies": {
     "@newses/server": "workspace:*",

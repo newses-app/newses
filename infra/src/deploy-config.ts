@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isPluginSpec, MAX_PLUGINS } from '@newses/server/install-plugins';
 import { isReservedAdminLogin, loginNameSchema } from '@newses/shared';
 import { z } from 'zod';
 import { REPO_ROOT, type StageConfig } from './config.ts';
@@ -30,6 +31,15 @@ const stageSchema = z.object({
     .regex(
       /^public\.ecr\.aws\/[a-z][a-z0-9]+(?:[._-][a-z0-9]+)*\/[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/,
       'an ECR Public repository URI, public.ecr.aws/<alias>/<name>',
+    )
+    .optional(),
+  plugins: z
+    .array(z.string().refine(isPluginSpec, 'an npm package at an exact version, name@1.2.3'))
+    .max(MAX_PLUGINS)
+    .refine(
+      (specs) =>
+        new Set(specs.map((spec) => spec.slice(0, spec.lastIndexOf('@')))).size === specs.length,
+      'a package is listed more than once',
     )
     .optional(),
 }) satisfies z.ZodType<StageConfig>;

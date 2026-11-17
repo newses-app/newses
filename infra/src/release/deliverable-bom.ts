@@ -13,10 +13,15 @@ import {
   splice,
 } from './sbom.ts';
 
-const USAGE = `Usage: build-sbom.ts --deliverable ${DELIVERABLES.join('|')} --out DIR [--tag TAG] [--input FILE]`;
+const USAGE = `Usage: build-sbom.ts --deliverable ${DELIVERABLES.join('|')} --out DIR [--tag TAG] [--input FILE] [--plugins DIR]`;
 
 /** build-sbom.ts's options, checked: a known deliverable, and `--input` exactly when it takes one. */
-export function checkSbomOptions(options: { deliverable?: string; out?: string; input?: string }): {
+export function checkSbomOptions(options: {
+  deliverable?: string;
+  out?: string;
+  input?: string;
+  plugins?: string;
+}): {
   deliverable: Deliverable;
   out: string;
 } {
@@ -28,7 +33,33 @@ export function checkSbomOptions(options: { deliverable?: string; out?: string; 
       takesInput ? `${deliverable} needs --input` : `${deliverable} takes no --input`,
     );
   }
+  if (options.plugins && deliverable !== 'server') throw new Error('Only server takes --plugins');
   return { deliverable, out: options.out };
+}
+
+/**
+ * `npm sbom`'s SBOM of a deployment's installed plugins, as the other sources write theirs:
+ * components referenced by purl, and CycloneDX 1.6, which only adds to npm's 1.5.
+ */
+export function pluginsBom(bom: Bom): Bom {
+  const refs = new Map<string, string>();
+  const withPurl = <T extends { 'bom-ref'?: string; purl?: string }>(component: T): T => {
+    if (component['bom-ref'] && component.purl) refs.set(component['bom-ref'], component.purl);
+    return component.purl ? { ...component, 'bom-ref': component.purl } : component;
+  };
+  const root = bom.metadata?.component && withPurl(bom.metadata.component);
+  const components = (bom.components ?? []).map(withPurl);
+  const ref = (r: string) => refs.get(r) ?? r;
+  return {
+    ...bom,
+    specVersion: SPEC_VERSION,
+    metadata: { ...bom.metadata, ...(root && { component: root }) },
+    components,
+    dependencies: (bom.dependencies ?? []).map((d) => ({
+      ref: ref(d.ref),
+      dependsOn: (d.dependsOn ?? []).map(ref),
+    })),
+  };
 }
 
 /** The arguments to `pnpm` for a workspace package's CycloneDX SBOM. */
@@ -52,6 +83,8 @@ export interface BomReaders {
   gradle: () => Promise<Bom>;
   /** The `--input` SBOM, for deliverables that take one. */
   input?: Bom;
+  /** A deployment's installed plugins (`pluginsBom`), added to the server's. */
+  plugins?: Bom;
 }
 
 /**
@@ -71,5 +104,6 @@ export async function deliverableBom(
   });
   if (sources.gradle) inputs.push(await readers.gradle());
   if (readers.input) inputs.push(readers.input);
+  if (readers.plugins) inputs.push(readers.plugins);
   return splice(mergeBoms(inputs, deliverableRoot(deliverable, version, repository)), isFirstParty);
 }

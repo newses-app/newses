@@ -39,4 +39,16 @@ describe('deploy config', () => {
       expect(withImage(uri), uri).toBe(false);
     }
   });
+
+  it('takes plugins as npm packages at exact versions, each once', () => {
+    const stages = example.stages as Record<string, unknown>[];
+    const withPlugins = (plugins: unknown) =>
+      parse({ stages: stages.map((stage) => ({ ...stage, plugins })) }).success;
+    expect(withPlugins(undefined)).toBe(true);
+    expect(withPlugins([])).toBe(true);
+    expect(withPlugins(['@newses/plugin-webhook@1.0.0', 'other@0.2.0-rc.1'])).toBe(true);
+    expect(withPlugins(['@newses/plugin-webhook@^1.0.0'])).toBe(false);
+    expect(withPlugins(['@newses/plugin-webhook'])).toBe(false);
+    expect(withPlugins(['a@1.0.0', 'a@1.0.1'])).toBe(false);
+  });
 });

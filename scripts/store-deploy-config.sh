@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 # Stores the deployment config (infra/deploy.config.json, or the file NEWSES_DEPLOY_CONFIG names)
 # in the SSM parameter /<resourcePrefix>/deploy-config, which the pipelines' synth step reads.
-# Checks it against the config's schema and shows how it differs from the stored copy; only
-# --apply stores it.
+# Checks it against the config's schema and shows how it differs from the stored copy, plugins
+# per stage; only --apply stores it, and --release starts a stage's deploy pipeline after.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/store-deploy-config.sh [--apply]
+Usage: scripts/store-deploy-config.sh [--apply] [--release STAGE]
 
 Checks infra/deploy.config.json (or the file NEWSES_DEPLOY_CONFIG names) against the deployment
 config's schema, then shows how it differs from the copy in the SSM parameter
 /<resourcePrefix>/deploy-config, in the config's region, which the deploy and release pipelines
-read when they synthesise.
+read when they synthesise, and which plugins each stage adds, changes, or removes.
 
-  --apply  Store the file in the parameter
+  --apply          Store the file in the parameter
+  --release STAGE  Then start the stage's deploy pipeline (dev or prod), which deploys the stored
+                   config, its plugins too, from the stage's branch; needs --apply when the file
+                   differs from the stored copy
 
 Every run can be repeated. The pipelines use the stored config from their next run on. Needs Node
 24 with the workspace installed, and AWS CLI credentials for the config's account.
@@ -26,10 +29,15 @@ die() {
   exit 2
 }
 
-apply=false
+apply=false release=''
 while [ $# -gt 0 ]; do
   case "$1" in
     --apply) apply=true; shift ;;
+    --release)
+      [ $# -ge 2 ] || die '--release needs a stage'
+      release=$2
+      shift 2
+      ;;
     -h | --help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -59,6 +67,9 @@ file=$(cd "$(dirname "$file")" && pwd)/$(basename "$file")
 
 prefix=$(deploy_prefix)
 region=$(deploy_region)
+if [ -n "$release" ]; then
+  stage_domain "$release" >/dev/null || exit 2
+fi
 parameter=/$prefix/deploy-config
 ssm=(aws ssm --region "$region")
 
@@ -80,28 +91,52 @@ if ! stored=$("${ssm[@]}" get-parameter --name "$parameter" --query Parameter.Va
   stored=''
 fi
 
+# Starts the stage's deploy pipeline, which reads the stored config when it synthesises.
+start_release() {
+  local pipeline=$prefix-$release execution
+  execution=$(aws codepipeline start-pipeline-execution --region "$region" --name "$pipeline" \
+    --query pipelineExecutionId --output text) || die "could not start $pipeline"
+  echo
+  echo "Started $pipeline (execution $execution); it deploys the stored config."
+}
+
 echo
 if [ -z "$stored" ]; then
   echo 'Not stored yet.'
 elif [ "$(normalise <<<"$stored")" = "$local_json" ]; then
   echo 'The stored config matches the file; nothing to change.'
+  [ -z "$release" ] || start_release
   exit 0
 else
   diff -u --label "stored $parameter" --label "$file" <(normalise <<<"$stored") - \
     <<<"$local_json" || true
 fi
 
+changes=$(node "$root/infra/src/plugin-changes.ts" <(printf '%s' "$stored") "$file")
+if [ -n "$changes" ]; then
+  echo
+  echo 'Plugins:'
+  sed 's/^/  /' <<<"$changes"
+  echo 'Plugins run inside the server with access to its data: install only those you trust.'
+fi
+
 if ! $apply; then
   echo
   echo 'Nothing changed: rerun with --apply to store the file.'
+  [ -z "$release" ] || die '--release deploys the stored config: add --apply to store this one first'
   exit 0
 fi
 
 "${ssm[@]}" put-parameter --name "$parameter" --type String --overwrite \
   --value "file://$file" >/dev/null
 echo
-echo "Stored. The pipelines read it from their next run on: push, or release a change in the"
-echo "deploy pipelines ($(node -e '
+if [ -n "$release" ]; then
+  echo 'Stored.'
+  start_release
+  exit 0
+fi
+echo "Stored. The pipelines read it from their next run on: push, rerun with --release STAGE, or"
+echo "release a change in the deploy pipelines ($(node -e '
   const config = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   console.log(config.stages.map((s) => `${config.resourcePrefix}-${s.name}`).join(", "));
 ' "$file"))."

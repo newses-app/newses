@@ -6,13 +6,16 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/sbom.sh [--tag TAG] [--only LIST] [--out DIR] [--upload]
+Usage: scripts/sbom.sh [--tag TAG] [--only LIST] [--out DIR] [--plugins STAGE] [--upload]
        scripts/sbom.sh --from URL [--out DIR]
 
   --tag TAG   Version from a release tag (v1.2.3, v1.2.3-rc.1); default: an untagged build,
               0.0.0-dev, uploaded under the current branch's name
   --only LIST Comma-separated deliverables (default: server,image,web,desktop,mobile)
   --out DIR   Where to write them (default: sbom/); earlier SBOMs there are deleted
+  --plugins STAGE
+              Add the AWS stage's plugins to the server SBOM, as
+              pnpm --filter @newses/infra plugins:install installed them in server/.plugins/STAGE
   --upload    Upload them to Dependency-Track: DTRACK_URL (default http://localhost:8080) and
               DTRACK_API_KEY, from the environment or dtrack.env at the repository root
   --from URL  Upload a published release's SBOMs (desktop, mobile, and the server image's when
@@ -32,16 +35,17 @@ die() {
 SYFT=ghcr.io/anchore/syft:v1.52.0
 CYCLONEDX_CLI=cyclonedx/cyclonedx-cli:0.33.1
 
-tag='' only=server,image,web,desktop,mobile out=sbom upload=false from=''
+tag='' only=server,image,web,desktop,mobile out=sbom upload=false from='' plugins=''
 while [ $# -gt 0 ]; do
   case "$1" in
-    --tag | --only | --out | --from)
+    --tag | --only | --out | --from | --plugins)
       [ $# -ge 2 ] || die "$1 needs a value"
       case "$1" in
         --tag) tag=$2 ;;
         --only) only=$2 ;;
         --out) out=$2 ;;
         --from) from=$2 ;;
+        --plugins) plugins=$2 ;;
       esac
       shift 2
       ;;
@@ -52,6 +56,7 @@ while [ $# -gt 0 ]; do
 done
 
 [ -z "$from" ] || [ -z "$tag" ] || die '--from takes the version from the URL, not --tag'
+[ -z "$from" ] || [ -z "$plugins" ] || die '--from uploads published SBOMs, without plugins'
 IFS=, read -ra deliverables <<<"$only"
 for deliverable in "${deliverables[@]}"; do
   case "$deliverable" in server | image | web | desktop | mobile) ;; *) die "unknown deliverable: $deliverable" ;; esac
@@ -60,6 +65,11 @@ done
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
+if [ -n "$plugins" ]; then
+  [[ $plugins =~ ^(dev|prod)$ ]] || die "--plugins takes a stage, dev or prod, not $plugins"
+  [ -f "server/.plugins/$plugins/plugins.json" ] ||
+    die "no plugins installed for $plugins: run pnpm --filter @newses/infra plugins:install"
+fi
 mkdir -p "$out"
 out=$(cd "$out" && pwd)
 rm -f "$out"/*.cdx.json
@@ -104,6 +114,7 @@ for deliverable in "${deliverables[@]}"; do
       [ -n "${ANDROID_HOME:-}" ] || die 'mobile needs the Android SDK (ANDROID_HOME) and JDK 21'
       "${build[@]}" --deliverable mobile
       ;;
+    server) "${build[@]}" --deliverable server ${plugins:+--plugins "server/.plugins/$plugins"} ;;
     *) "${build[@]}" --deliverable "$deliverable" ;;
   esac
 done

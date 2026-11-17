@@ -52,6 +52,8 @@ COPY server/src ./server/src
 COPY shared ./shared
 COPY --from=deps /app/shared/node_modules ./shared/node_modules
 COPY plugin-api ./plugin-api
+# The plugin contract's peer dependency is the server's zod, as it is for installed plugins.
+RUN mkdir plugin-api/node_modules && ln -s ../../server/node_modules/zod plugin-api/node_modules/zod
 # The licences of the server's dependencies, read by GET /server/licenses.
 RUN node shared/src/third-party-licenses.ts --node-modules node_modules \
     --out server/src/third-party-licenses.json

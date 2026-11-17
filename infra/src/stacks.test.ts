@@ -891,6 +891,7 @@ describe('PipelineStack', () => {
           JSON.parse(spec) as {
             phases: {
               install?: { 'runtime-versions'?: Record<string, unknown>; commands?: string[] };
+              build?: { commands?: string[] };
             };
           },
       );
@@ -898,6 +899,14 @@ describe('PipelineStack', () => {
       spec.phases.install?.commands?.includes('corepack enable'),
     );
     expect(synth?.phases.install?.['runtime-versions']).toEqual({ nodejs: 24 });
+    // The stages' plugins are installed, after the checks, for the bundles synth makes.
+    const commands = synth?.phases.build?.commands ?? [];
+    const step = (command: string) => commands.findIndex((c) => c.startsWith(command));
+    expect(step('pnpm check')).toBeGreaterThanOrEqual(0);
+    expect(step('pnpm --filter @newses/infra plugins:install')).toBeGreaterThan(step('pnpm check'));
+    expect(step('cd infra && pnpm exec cdk synth')).toBeGreaterThan(
+      step('pnpm --filter @newses/infra plugins:install'),
+    );
     // All build projects log to the pipeline's own expiring group.
     for (const project of Object.values(template.findResources('AWS::CodeBuild::Project'))) {
       expect(project).toMatchObject({

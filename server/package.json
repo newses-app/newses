@@ -5,7 +5,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./openapi": "./src/api/openapi.ts"
+    "./openapi": "./src/api/openapi.ts",
+    "./install-plugins": "./src/plugins/install.ts"
+  },
+  "imports": {
+    "#installed-plugins": "./src/plugins/installed.ts"
   },
   "scripts": {
     "typecheck": "tsc",

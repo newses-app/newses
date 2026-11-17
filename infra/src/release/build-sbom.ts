@@ -1,15 +1,16 @@
 // Writes a deliverable's CycloneDX SBOM (sbom.ts) to DIR/newses-<version>-<deliverable>.cdx.json,
 // for scripts/sbom.sh and the release pipeline's Linux leg. The version comes from --tag
 // (local builds are 0.0.0-dev). `mobile` runs Gradle (JDK 21 and the Android SDK); `image` takes
-// syft's SBOM of the Docker image as --input.
-//   node infra/src/release/build-sbom.ts --deliverable desktop --out sbom [--tag v1.2.3] [--input FILE]
+// syft's SBOM of the Docker image as --input. `server` adds the plugins installed in --plugins
+// (server/.plugins/<stage>, from plugins:install).
+//   node infra/src/release/build-sbom.ts --deliverable desktop --out sbom [--tag v1.2.3] [--input FILE] [--plugins DIR]
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { versionFromTag } from '@newses/shared/release';
 import { REPO_ROOT } from '../config.ts';
-import { checkSbomOptions, deliverableBom } from './deliverable-bom.ts';
+import { checkSbomOptions, deliverableBom, pluginsBom } from './deliverable-bom.ts';
 import { type Bom, sbomName } from './sbom.ts';
 
 const { values } = parseArgs({
@@ -18,6 +19,7 @@ const { values } = parseArgs({
     out: { type: 'string' },
     tag: { type: 'string' },
     input: { type: 'string' },
+    plugins: { type: 'string' },
   },
 });
 const { deliverable, out } = checkSbomOptions(values);
@@ -50,6 +52,16 @@ const bom = await deliverableBom(deliverable, version, repository?.url, {
     return readJson(join(android, 'app/build/reports/cyclonedx-direct/bom.json'));
   },
   input: values.input === undefined ? undefined : await readJson(values.input),
+  plugins:
+    values.plugins === undefined
+      ? undefined
+      : pluginsBom(
+          JSON.parse(
+            run('npm', ['sbom', '--sbom-format', 'cyclonedx', '--omit', 'dev'], {
+              cwd: values.plugins,
+            }),
+          ) as Bom,
+        ),
 });
 await mkdir(out, { recursive: true });
 const path = join(out, sbomName(version, deliverable));

@@ -20,6 +20,8 @@ export default defineConfig(
     'mobile/www/',
     'mobile/android/',
     'mobile/release/',
+    // A deployment's installed plugins (server/src/plugins/install.ts).
+    'server/.plugins/',
   ]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { checkSbomOptions, deliverableBom, pnpmSbomArgs } from './deliverable-bom.ts';
+import { checkSbomOptions, deliverableBom, pluginsBom, pnpmSbomArgs } from './deliverable-bom.ts';
 import type { Bom, Component } from './sbom.ts';
 
 const npm = (name: string, version = '1.0.0'): Component => {
@@ -80,6 +80,61 @@ describe('checkSbomOptions', () => {
     expect(checkSbomOptions({ deliverable: 'image', out: 'sbom', input: 'syft.json' })).toEqual({
       deliverable: 'image',
       out: 'sbom',
+    });
+  });
+});
+
+describe('plugins', () => {
+  it('are added to the server only', () => {
+    expect(checkSbomOptions({ deliverable: 'server', out: 'sbom', plugins: 'dir' })).toEqual({
+      deliverable: 'server',
+      out: 'sbom',
+    });
+    expect(() => checkSbomOptions({ deliverable: 'web', out: 'sbom', plugins: 'dir' })).toThrow(
+      'Only server takes --plugins',
+    );
+  });
+
+  it("come from npm's SBOM, referenced by purl as the other sources do", async () => {
+    // As npm sbom writes it: CycloneDX 1.5, components referenced by name@version.
+    const npmBom: Bom = {
+      bomFormat: 'CycloneDX',
+      specVersion: '1.5',
+      metadata: {
+        component: {
+          type: 'application',
+          name: 'newses-plugins',
+          'bom-ref': 'newses-plugins@0.0.0',
+          purl: 'pkg:npm/newses-plugins@0.0.0',
+        },
+      },
+      components: [
+        { ...npm('@newses/plugin-webhook'), 'bom-ref': '@newses/plugin-webhook@1.0.0' },
+        { ...npm('undici', '7.0.0'), 'bom-ref': 'undici@7.0.0' },
+      ],
+      dependencies: [
+        { ref: 'newses-plugins@0.0.0', dependsOn: ['@newses/plugin-webhook@1.0.0'] },
+        { ref: '@newses/plugin-webhook@1.0.0', dependsOn: ['undici@7.0.0'] },
+        { ref: 'undici@7.0.0', dependsOn: [] },
+      ],
+    };
+    const plugins = pluginsBom(npmBom);
+    expect(plugins.specVersion).toBe('1.6');
+    expect(plugins.components?.map((c) => c['bom-ref'])).toEqual([
+      'pkg:npm/%40newses/plugin-webhook@1.0.0',
+      'pkg:npm/undici@7.0.0',
+    ]);
+    expect(plugins.dependencies?.[1]).toEqual({
+      ref: 'pkg:npm/%40newses/plugin-webhook@1.0.0',
+      dependsOn: ['pkg:npm/undici@7.0.0'],
+    });
+
+    const result = await deliverableBom('web', '1.2.3', undefined, { ...readers(), plugins });
+    expect(names(result)).toEqual(['@newses/plugin-webhook', 'undici', 'vue']);
+    expect(
+      result.dependencies?.find((d) => d.ref === result.metadata?.component?.['bom-ref']),
+    ).toMatchObject({
+      dependsOn: expect.arrayContaining(['pkg:npm/%40newses/plugin-webhook@1.0.0']) as unknown,
     });
   });
 });

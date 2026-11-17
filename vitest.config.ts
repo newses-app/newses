@@ -10,7 +10,7 @@ const STARTUP_WIRING = [
   'server/src/entrypoints/{server,cli,migrate,worker}.ts',
   'server/src/entrypoints/lambda/{api,extract,favicon,fetch,migrate,tick}.ts',
   'server/src/telemetry/{sdk,register}.ts',
-  'infra/src/main.ts',
+  'infra/src/{main,install-plugins}.ts',
   'infra/src/release/{build-openapi,build-sbom,publish,publish-image,upload-sbom}.ts',
   'shared/src/{coverage,locale}-status.ts',
   'web/src/main.ts',

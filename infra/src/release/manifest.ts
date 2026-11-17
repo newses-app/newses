@@ -117,6 +117,7 @@ export const serverNames = (version: string): Record<ServerFile, string> => ({
   compose: `newses-${version}-compose.yaml`,
   env: `newses-${version}-env.example`,
   nginxProxy: `newses-${version}-compose.nginx-proxy.yaml`,
+  plugins: `newses-${version}-compose.plugins.yaml`,
   publicKey: `newses-${version}-cosign.pub`,
 });
 
@@ -128,6 +129,7 @@ export const SERVER_FILES: Record<ServerFile, string> = {
   compose: 'compose.yaml',
   env: '.env.example',
   nginxProxy: 'compose.nginx-proxy.yaml',
+  plugins: 'compose.plugins.yaml',
   publicKey: 'cosign.pub',
 };
 
@@ -219,6 +221,17 @@ export function renderCompose(source: string, image: string) {
   return rendered;
 }
 
+/**
+ * The release's plugins override from `docker/compose.plugins.yaml`: the image it builds from
+ * pinned to `image`, still overridable with NEWSES_IMAGE.
+ */
+export function renderPluginsOverride(source: string, image: string) {
+  if (source.split(DEFAULT_IMAGE).length !== 2) {
+    throw new Error(`The plugins override names ${DEFAULT_IMAGE} other than once`);
+  }
+  return source.replace(DEFAULT_IMAGE, `\${NEWSES_IMAGE:-${image}}`);
+}
+
 /** The server image a stage publishes, from publish-image.ts. */
 export interface ServerImage {
   repository: string;
@@ -281,6 +294,7 @@ export function buildManifest(input: ManifestInput): ReleaseManifest {
         compose: file(server.compose),
         env: file(server.env),
         nginxProxy: file(server.nginxProxy),
+        plugins: file(server.plugins),
         publicKey: file(server.publicKey),
       },
     }),
@@ -379,6 +393,11 @@ export function serverCommands(server: ServerRelease): Record<ServerFile, string
       '# In .env, set VIRTUAL_HOST, and LETSENCRYPT_HOST with acme-companion',
       `docker compose -f ${SERVER_FILES.compose} -f ${SERVER_FILES.nginxProxy} up -d`,
     ],
+    plugins: [
+      ...fetchAndCheck(server.plugins, 'sh', SERVER_FILES.plugins),
+      '# In .env, set PLUGINS to npm packages at exact versions: PLUGINS=name@1.2.3 other@0.4.0',
+      `docker compose -f ${SERVER_FILES.compose} -f ${SERVER_FILES.plugins} up -d --build`,
+    ],
     publicKey: [
       ...fetchAndCheck(server.publicKey, 'sh', SERVER_FILES.publicKey),
       `cosign verify --key ${SERVER_FILES.publicKey} ${server.image.repository}:${server.image.tag}`,
@@ -429,6 +448,13 @@ ${list([
     'Runs the server behind nginx-proxy, which serves it over HTTPS with acme-companion',
     server.nginxProxy,
     commands.nginxProxy,
+    'Install and verify',
+  ],
+  [
+    'Plugins override',
+    'Installs plugins, listed in .env, into an image built from this release’s; they run inside the server with access to its data, so install only those you trust',
+    server.plugins,
+    commands.plugins,
     'Install and verify',
   ],
   [

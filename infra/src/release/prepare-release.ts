@@ -27,6 +27,7 @@ import {
   openapiFile,
   renderChecksums,
   renderCompose,
+  renderPluginsOverride,
   renderIndex,
   rewriteFeed,
   sbomArtifacts,
@@ -118,7 +119,8 @@ export async function prepareRelease(options: ReleaseOptions): Promise<ReleaseMa
     await writeFile(path, `${JSON.stringify(addDistributions(bom, files), null, 2)}\n`);
   }
 
-  // The server's files, the compose file pinned to the image, and the image's signing key.
+  // The server's files, the compose file and plugins override pinned to the image, and the
+  // image's signing key.
   const server: BuiltFile[] = [];
   if (serverImage) {
     const docker = options.dockerDir ?? fileURLToPath(new URL('../../../docker/', import.meta.url));
@@ -129,7 +131,11 @@ export async function prepareRelease(options: ReleaseOptions): Promise<ReleaseMa
       const text = await readFile(path, 'utf8');
       await writeFile(
         join(dir, files[file]),
-        file === 'compose' ? renderCompose(text, pinned) : text,
+        file === 'compose'
+          ? renderCompose(text, pinned)
+          : file === 'plugins'
+            ? renderPluginsOverride(text, pinned)
+            : text,
       );
       server.push(await built(files[file]));
     }

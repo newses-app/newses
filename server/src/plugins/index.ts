@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Keys } from '../core/crypto.ts';
 import type { PoliteFetcher } from '../core/feeds/polite-fetcher.ts';
 import { stripControlChars } from '../core/feeds/sanitize.ts';
+import { recordRefusedPlugins } from '../core/ops/check.ts';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
 import type {
   DigestAddition,
@@ -17,7 +18,7 @@ import { PluginEventService } from '../core/plugins/events.ts';
 import { createPluginServices, type PluginServices } from '../core/plugins/index.ts';
 import type { Logger } from '../core/ports.ts';
 import type { Db } from '../db/client.ts';
-import { INSTALLED_PLUGINS } from './installed.ts';
+import { INSTALLED_PLUGINS } from '#installed-plugins';
 import { PluginNetwork } from './network.ts';
 import { type InstalledPlugin, type LoadedPlugin, PluginRegistry } from './registry.ts';
 import { PluginRunner } from './runner.ts';
@@ -26,9 +27,9 @@ import { PluginRunner } from './runner.ts';
 export const EVENT_HOOK_TIMEOUT_MS = 60_000;
 
 /**
- * The installed plugins, checked once per process; a plugin the registry refuses is logged and
- * left out. Tells the database which event hooks they implement, so its triggers record events
- * for them.
+ * The installed plugins, checked once per process; a plugin the registry refuses is logged, left
+ * out, and recorded for the `plugin.refused` alert. Tells the database which event hooks they
+ * implement, so its triggers record events for them.
  */
 export async function loadPlugins(deps: {
   db: Db;
@@ -45,6 +46,7 @@ export async function loadPlugins(deps: {
     logger: deps.logger,
     publicUrl: null,
   }).syncInstalled();
+  await recordRefusedPlugins(deps.db, registry.refused);
   return registry;
 }
 
