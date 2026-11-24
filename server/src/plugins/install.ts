@@ -2,15 +2,17 @@
 // lists them, which `#installed-plugins` resolves to in that deployment: through an esbuild alias
 // in the Lambda bundles (infra), or `--link` in the Docker image built by compose.plugins.yaml.
 //
-//   node server/src/plugins/install.ts --dir DIR [--no-audit] [--link] NAME@VERSION...
+//   node server/src/plugins/install.ts --dir DIR [--no-audit] [--link] NAME@VERSION|./FILE.tgz...
 //
 // Install scripts never run. Plugins' peer dependencies (zod, @newses/plugin-api) are left out,
-// so a plugin resolves the server's copies from a folder under `server/`.
+// so a plugin resolves the server's copies from a folder under `server/`. The command also takes
+// plugins packed with `npm pack`, as paths inside the folder it runs in, to try them unpublished.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { gunzipSync } from 'node:zlib';
 
 /** An npm package at an exact version: `name@1.2.3`, `@scope/name@1.2.3-rc.1`. */
 const SPEC =
@@ -32,6 +34,43 @@ const DEFAULT_MODULE = fileURLToPath(new URL('installed.ts', import.meta.url));
 /** Whether `spec` names an npm package at an exact version. */
 export const isPluginSpec = (spec: string) => SPEC.test(spec);
 
+/** Whether `spec` is a plugin packed with `npm pack`: a relative `./…/name.tgz` path. */
+export const isPackedSpec = (spec: string) =>
+  /^\.\/(?:[\w.-]+\/)*[\w.-]+\.tgz$/.test(spec) && !spec.split('/').includes('..');
+
+/** A plugin to install: its package, as listed, and the packed file it comes from, if any. */
+export interface PluginToInstall {
+  name: string;
+  version: string;
+  spec: string;
+  /** The absolute path of a packed plugin; null for one from npm. */
+  file: string | null;
+}
+
+/** The name and version in a packed package's `package/package.json`, read from its tar. */
+export function packedManifest(file: string): { name: string; version: string } {
+  const tar = gunzipSync(readFileSync(file));
+  for (let at = 0; at + 512 <= tar.length;) {
+    const header = tar.subarray(at, at + 512);
+    const field = (from: number, to: number) =>
+      header.subarray(from, to).toString('utf8').replace(/\0.*$/s, '');
+    const name = field(0, 100);
+    if (!name) break;
+    const prefix = field(345, 500);
+    const size = Number.parseInt(field(124, 136).trim() || '0', 8);
+    if ((prefix ? `${prefix}/${name}` : name) === 'package/package.json') {
+      const manifest = JSON.parse(
+        tar.subarray(at + 512, at + 512 + size).toString('utf8'),
+      ) as Record<string, unknown>;
+      if (typeof manifest.name === 'string' && typeof manifest.version === 'string')
+        return { name: manifest.name, version: manifest.version };
+      break;
+    }
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  throw new Error(`${file} is not a package packed with npm pack`);
+}
+
 /** The packages and versions of `specs`; throws on one without an exact version, or a repeat. */
 export function parsePluginSpecs(specs: readonly string[]): { name: string; version: string }[] {
   if (specs.length > MAX_PLUGINS) throw new Error(`At most ${String(MAX_PLUGINS)} plugins`);
@@ -47,15 +86,45 @@ export function parsePluginSpecs(specs: readonly string[]): { name: string; vers
   return parsed;
 }
 
+/**
+ * The plugins `specs` name: npm packages at exact versions, and, with `from`, plugins packed with
+ * `npm pack` as `./…/name.tgz` paths inside that folder. Throws on anything else, a missing file,
+ * a package listed twice, or too many.
+ */
+export function pluginsToInstall(specs: readonly string[], from?: string): PluginToInstall[] {
+  const plugins = specs.map((spec): PluginToInstall => {
+    if (from === undefined || !isPackedSpec(spec)) {
+      const [parsed] = parsePluginSpecs([spec]);
+      if (!parsed) throw new Error(`${spec} is not a package`);
+      return { ...parsed, spec, file: null };
+    }
+    const file = resolve(from, spec);
+    if (!existsSync(file) || !statSync(file).isFile())
+      throw new Error(`${spec} was not found in ${from}`);
+    const { name, version } = packedManifest(file);
+    if (!isPluginSpec(`${name}@${version}`))
+      throw new Error(`${spec} holds ${name}@${version}, not an npm package at an exact version`);
+    return { name, version, spec, file };
+  });
+  if (plugins.length > MAX_PLUGINS) throw new Error(`At most ${String(MAX_PLUGINS)} plugins`);
+  const names = plugins.map((p) => p.name);
+  const repeated = names.find((name, index) => names.indexOf(name) !== index);
+  if (repeated) throw new Error(`${repeated} is listed more than once`);
+  return plugins;
+}
+
 /** The module listing the plugins, each package's default export with where it came from. */
-export function installedModule(specs: readonly string[]): string {
-  const plugins = parsePluginSpecs(specs);
+export function installedModule(
+  plugins: readonly Pick<PluginToInstall, 'name' | 'spec'>[],
+): string {
   return [
     '// Generated by server/src/plugins/install.ts: the plugins this deployment installs.',
     ...plugins.map(({ name }, i) => `import plugin${String(i)} from ${JSON.stringify(name)};`),
     '',
     'export const INSTALLED_PLUGINS = [',
-    ...specs.map((spec, i) => `  { source: ${JSON.stringify(spec)}, plugin: plugin${String(i)} },`),
+    ...plugins.map(
+      ({ spec }, i) => `  { source: ${JSON.stringify(spec)}, plugin: plugin${String(i)} },`,
+    ),
     '];',
     '',
   ].join('\n');
@@ -75,6 +144,8 @@ export interface InstallOptions {
   audit: boolean;
   /** Where each package comes from instead of the registry (`file:` for tests). */
   sources?: Readonly<Record<string, string>>;
+  /** The folder `./…/name.tgz` specs are in; without it, every spec must be from npm. */
+  from?: string;
   /** Runs npm in `dir`; the default runs it with its output on stderr. */
   npm?: (args: string[], dir: string) => void;
 }
@@ -96,7 +167,9 @@ const runNpm = (args: string[], cwd: string) => {
 export function installPlugins(options: InstallOptions): void {
   const { dir, specs } = options;
   const npm = options.npm ?? runNpm;
-  const plugins = parsePluginSpecs(specs);
+  const plugins = pluginsToInstall(specs, options.from);
+  const sourceOf = (plugin: PluginToInstall) =>
+    options.sources?.[plugin.name] ?? (plugin.file ? `file:${plugin.file}` : plugin.version);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   // A package.json of its own stops npm from resolving the enclosing workspace.
@@ -109,9 +182,7 @@ export function installPlugins(options: InstallOptions): void {
         version: '0.0.0',
         private: true,
         type: 'module',
-        dependencies: Object.fromEntries(
-          plugins.map(({ name, version }) => [name, options.sources?.[name] ?? version]),
-        ),
+        dependencies: Object.fromEntries(plugins.map((plugin) => [plugin.name, sourceOf(plugin)])),
       },
       null,
       2,
@@ -140,7 +211,7 @@ export function installPlugins(options: InstallOptions): void {
       throw new Error(`${own.join('; ')}: plugins take it as a peer dependency, from the server`);
     if (options.audit) npm(['audit', '--omit=dev', '--audit-level=high'], dir);
   }
-  writeFileSync(join(dir, INSTALLED_MODULE), installedModule(specs));
+  writeFileSync(join(dir, INSTALLED_MODULE), installedModule(plugins));
   writeFileSync(join(dir, MANIFEST), `${JSON.stringify({ plugins: specs }, null, 2)}\n`);
 }
 
@@ -165,12 +236,17 @@ if (import.meta.main) {
   });
   if (!values.dir) {
     console.error(
-      'Usage: node server/src/plugins/install.ts --dir DIR [--no-audit] [--link] NAME@VERSION...',
+      'Usage: node server/src/plugins/install.ts --dir DIR [--no-audit] [--link] NAME@VERSION|./FILE.tgz...',
     );
     process.exit(2);
   }
   try {
-    installPlugins({ dir: values.dir, specs: positionals, audit: !values['no-audit'] });
+    installPlugins({
+      dir: values.dir,
+      specs: positionals,
+      audit: !values['no-audit'],
+      from: process.cwd(),
+    });
     if (values.link) linkInstalled(values.dir);
     console.error(`Installed ${String(positionals.length)} plugins in ${values.dir}`);
   } catch (err) {

@@ -271,6 +271,35 @@ describe('DigestService', () => {
     expect(await digest.sendDue()).toBe(0);
   });
 
+  it('gives plugins the unread entries it counts but does not list, newest first', async () => {
+    await turnOn(alice);
+    await ingester.ingest(news, null, items(DIGEST_MAX_ENTRIES + 3, 'Story'));
+    now = new Date('2026-06-15T05:00:00Z');
+    const given: DigestComposeInput[] = [];
+    const composer: DigestComposer = {
+      composes: true,
+      compose: (input) => {
+        given.push(input);
+        return Promise.resolve([]);
+      },
+    };
+    expect(await digestWith(composer).sendDue()).toBe(1);
+    expect(given[0]?.entries).toHaveLength(DIGEST_MAX_ENTRIES);
+    expect(given[0]?.more).toBe(3);
+    expect(given[0]?.unlisted.map((entry) => [entry.title, entry.excerpt])).toEqual([
+      ['Story 3', 'About Story 3.'],
+      ['Story 2', 'About Story 2.'],
+      ['Story 1', 'About Story 1.'],
+    ]);
+    expect(given[0]?.unlisted[0]).toMatchObject({
+      contentHash: expect.any(String) as string,
+      feed: expect.objectContaining({ withLogin: false }) as unknown,
+    });
+    // The digest itself still lists 100.
+    expect(mailer.sent[0]?.html).toContain('And 3 more unread articles in Newses.');
+    expect(mailer.sent[0]?.html).not.toContain('>Story 3<');
+  });
+
   it('keeps what came in for a user without a confirmed address', async () => {
     await turnOn(bob);
     const before = (await stateOf(bob))?.watermark;
@@ -370,6 +399,7 @@ describe('DigestService', () => {
             }) as unknown,
         ),
         more: 0,
+        unlisted: [],
       },
     ]);
     const [mail] = mailer.sent;

@@ -6,6 +6,9 @@
 # containers run. Plugins run inside the server with access to its data: install only those you
 # trust. Needs Docker Compose 2.24.4 or later. In a checkout, build the app image first
 # (docker compose build).
+# To try a plugin before it is published, pack it (npm pack) into a plugins folder beside this
+# file and list its path in PLUGINS, such as ./plugins/newses-plugin-webhook-1.0.0.tgz; packing it
+# again and running the same command installs the new build.
 x-plugins: &plugins
   image: newses-plugins:local
   pull_policy: build
@@ -13,10 +16,14 @@ x-plugins: &plugins
     context: .
     dockerfile_inline: |
       ARG NEWSES_IMAGE
+      # Packed plugins, when there is a plugins folder; mounted to install, never in the image.
+      FROM scratch AS packed
+      COPY plugin[s] /plugins/
       FROM $${NEWSES_IMAGE}
       ARG PLUGINS
       USER root
-      RUN node /app/server/src/plugins/install.ts --dir /app/server/.plugins --link $${PLUGINS} \
+      RUN --mount=type=bind,from=packed,target=/compose cd /compose \
+        && node /app/server/src/plugins/install.ts --dir /app/server/.plugins --link $${PLUGINS} \
         && node /app/shared/src/third-party-licenses.ts --node-modules /app/node_modules \
           --node-modules /app/server/.plugins/node_modules \
           --out /app/server/src/third-party-licenses.json

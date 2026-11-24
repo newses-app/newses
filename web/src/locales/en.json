@@ -1135,6 +1135,8 @@
     "unsupported": "{name} can't be changed here and keeps its saved value.",
     "addItem": "Add",
     "removeItem": "Remove item {number}",
+    "noFeeds": "No feeds chosen",
+    "feedGone": "A feed you unsubscribed from (#{id})",
     "save": "Save",
     "saved": "Settings saved.",
     "turnedOff": "Turned off after {count} failed runs in a row, the last {failure}. Turn it on again once the cause is fixed.",

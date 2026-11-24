@@ -6,6 +6,8 @@ export interface SettingsField {
   url: boolean;
   /** Text of several lines. */
   multiline: boolean;
+  /** Some of the user's feeds, by subscription id. */
+  feeds: boolean;
 }
 
 /** A plugin's settings for one scope, as the core needs them: its fields, and a check. */
@@ -75,9 +77,14 @@ export interface DigestComposeInput {
   userId: number;
   language: string;
   frequency: 'daily' | 'weekly';
-  entries: (PluginEntry & { excerpt: string | null; contentHash: string })[];
+  entries: DigestPluginEntry[];
   more: number;
+  /** Of `more`, at most `DIGEST_MAX_UNLISTED`, newest first. */
+  unlisted: DigestPluginEntry[];
 }
+
+/** An entry a digest counts, as `digest.compose` gets it (the contract's `DigestEntry`). */
+export type DigestPluginEntry = PluginEntry & { excerpt: string | null; contentHash: string };
 
 /**
  * What one plugin adds to a digest, checked: plain text without control characters, trimmed,

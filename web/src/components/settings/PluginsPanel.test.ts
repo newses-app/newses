@@ -1,8 +1,9 @@
-import type { Plugin, PluginsResponse, PluginSettingsState } from '@newses/shared';
+import type { Plugin, PluginsResponse, PluginSettingsState, Subscription } from '@newses/shared';
 import { QueryClient } from '@tanstack/vue-query';
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VCombobox, VSwitch } from 'vuetify/components';
+import { VAutocomplete, VCombobox, VSwitch } from 'vuetify/components';
+import { SUBSCRIPTIONS_KEY } from '../../composables/useFeeds.ts';
 import { SESSION_KEY } from '../../composables/useSession.ts';
 import { i18n } from '../../plugins/i18n.ts';
 import { mountInApp } from '../../test/mount.ts';
@@ -10,6 +11,7 @@ import PluginsPanel from './PluginsPanel.vue';
 
 const api = vi.hoisted(() => ({
   plugins: { list: vi.fn<() => Promise<PluginsResponse>>() },
+  subscriptions: { list: vi.fn() },
   admin: { plugins: { update: vi.fn(), remove: vi.fn(), test: vi.fn() } },
   account: { updatePlugin: vi.fn(), removePlugin: vi.fn(), testPlugin: vi.fn() },
 }));
@@ -98,6 +100,12 @@ async function mounted(role: 'admin' | 'user', response: PluginsResponse) {
     csrfToken: 'csrf',
     iconsPath: '/feed-icons/x',
   });
+  const feeds = [
+    { id: 4, title: 'Tech', categoryId: null },
+    { id: 9, title: 'Weather', categoryId: null },
+  ] as Subscription[];
+  queryClient.setQueryData<Subscription[]>(SUBSCRIPTIONS_KEY, feeds);
+  api.subscriptions.list.mockResolvedValue(feeds);
   const { wrapper } = mountInApp(PluginsPanel, { queryClient });
   await flushPromises();
   return wrapper;
@@ -166,6 +174,42 @@ describe('PluginsPanel', () => {
     expect(api.account.updatePlugin).toHaveBeenCalledWith('webhook', {
       settings: { target: 'https://hooks.example/b' },
     });
+  });
+
+  it("picks some of the user's feeds, keeping one they left until saved again", async () => {
+    const choosy: Plugin = {
+      ...webhook,
+      id: 'choosy',
+      messages: { en: { name: 'Choosy', 'settings.only': 'Feeds' } },
+      settingsSchemas: {
+        instance: null,
+        user: {
+          type: 'object',
+          properties: {
+            only: {
+              type: 'array',
+              items: { type: 'integer', exclusiveMinimum: 0 },
+              default: [],
+              newses: { feeds: true },
+            },
+          },
+        },
+      },
+      user: { ...OFF, enabled: true, settings: { only: [9, 77] } },
+    };
+    api.account.updatePlugin.mockResolvedValue(choosy);
+    const panel = await mounted('user', { plugins: [choosy], uninstalled: [] });
+    const picker = panel.getComponent(VAutocomplete);
+    expect(picker.props('items')).toEqual([
+      { value: 4, title: 'Tech' },
+      { value: 9, title: 'Weather' },
+      { value: 77, title: t('plugins.feedGone', { id: 77 }) },
+    ]);
+    expect(panel.find('.v-chip bdi').text()).toBe('Weather');
+    picker.vm.$emit('update:modelValue', [9, 4]);
+    await panel.find('form').trigger('submit');
+    await flushPromises();
+    expect(api.account.updatePlugin).toHaveBeenCalledWith('choosy', { settings: { only: [9, 4] } });
   });
 
   it('tests a testable plugin with the saved settings, and says how it went', async () => {

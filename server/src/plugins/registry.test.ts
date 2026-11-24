@@ -1,6 +1,7 @@
-import { multiline, secret, STORAGE_LIMITS, url } from '@newses/plugin-api';
+import { DIGEST_LIMITS, feeds, multiline, secret, STORAGE_LIMITS, url } from '@newses/plugin-api';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { DIGEST_MAX_UNLISTED } from '../core/mail/digest-service.ts';
 import { STORE_LIMITS } from '../core/plugins/storage.ts';
 import { PluginRegistry } from './registry.ts';
 
@@ -80,6 +81,26 @@ describe('PluginRegistry', () => {
         'webhook',
         'top-level settings only, not inside headers',
       ],
+      [
+        plugin({
+          scopes: ['instance', 'user'],
+          settings: { instance: z.object({ only: feeds() }) },
+        }),
+        'webhook',
+        'only is marked feeds but is not a list of user settings',
+      ],
+      [
+        plugin({
+          settings: { user: z.object({ only: z.string().meta({ newses: { feeds: true } }) }) },
+        }),
+        'webhook',
+        'only is marked feeds but is not a list of user settings',
+      ],
+      [
+        plugin({ settings: { user: z.object({ rules: z.array(z.object({ only: feeds() })) }) } }),
+        'webhook',
+        'top-level settings only, not inside rules',
+      ],
     ];
     for (const [definition, id, detail] of cases) {
       const registry = load([{ source: 'x@1.0.0', plugin: definition }]);
@@ -110,15 +131,15 @@ describe('PluginRegistry', () => {
     ]);
     const settings = registry.get('webhook')?.settings;
     expect(settings?.instance?.fields).toEqual(
-      new Map([['region', { secret: false, url: false, multiline: false }]]),
+      new Map([['region', { secret: false, url: false, multiline: false, feeds: false }]]),
     );
     expect(settings?.instance?.parse({})).toEqual({ ok: true, value: { region: 'eu' } });
     expect(settings?.user?.fields).toEqual(
       new Map([
-        ['target', { secret: true, url: true, multiline: false }],
-        ['token', { secret: true, url: false, multiline: false }],
-        ['callback', { secret: false, url: true, multiline: false }],
-        ['note', { secret: false, url: false, multiline: false }],
+        ['target', { secret: true, url: true, multiline: false, feeds: false }],
+        ['token', { secret: true, url: false, multiline: false, feeds: false }],
+        ['callback', { secret: false, url: true, multiline: false, feeds: false }],
+        ['note', { secret: false, url: false, multiline: false, feeds: false }],
       ]),
     );
     expect(
@@ -140,6 +161,7 @@ describe('PluginRegistry', () => {
               target: url().optional(),
               body: multiline().optional(),
               method: z.enum(['POST', 'PUT']).default('POST'),
+              only: feeds(),
             }),
           },
           messages: { en: { name: 'Webhook' }, 'pt-BR': { name: 'Gancho' } },
@@ -160,7 +182,20 @@ describe('PluginRegistry', () => {
         }) as object,
         body: { type: 'string', maxLength: 10_000, newses: { multiline: true } },
         method: { type: 'string', enum: ['POST', 'PUT'], default: 'POST' },
+        only: {
+          type: 'array',
+          maxItems: 1000,
+          items: { type: 'integer', exclusiveMinimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+          default: [],
+          newses: { feeds: true },
+        },
       },
+    });
+    expect(loaded?.settings.user?.fields.get('only')).toEqual({
+      secret: false,
+      url: false,
+      multiline: false,
+      feeds: true,
     });
   });
 
@@ -233,8 +268,9 @@ describe('PluginRegistry', () => {
   });
 });
 
-describe('STORAGE_LIMITS', () => {
+describe('STORAGE_LIMITS and DIGEST_LIMITS', () => {
   it('are the limits the server keeps', () => {
     expect(STORAGE_LIMITS).toEqual(STORE_LIMITS);
+    expect(DIGEST_LIMITS.unlisted).toBe(DIGEST_MAX_UNLISTED);
   });
 });

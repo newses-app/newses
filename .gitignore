@@ -29,3 +29,6 @@ ttrss-import-*.txt
 /plans/
 # Plugins a deployment installs (server/src/plugins/install.ts)
 /server/.plugins/
+
+# Plugins packed to try with docker/compose.plugins.yaml.
+docker/plugins/

@@ -58,6 +58,24 @@ describe('formFields', () => {
     ]);
   });
 
+  it("picks some of the user's feeds with a feeds field", () => {
+    const feeds = formFields({
+      type: 'object',
+      properties: {
+        only: {
+          type: 'array',
+          items: { type: 'integer', exclusiveMinimum: 0 },
+          default: [],
+          newses: { feeds: true },
+        },
+      },
+    });
+    expect(feeds.map((f) => [f.name, f.kind])).toEqual([['only', 'feeds']]);
+    expect(initialValues(feeds, {})).toEqual({ only: [] });
+    expect(initialValues(feeds, { only: [3, 'x', 0, 7] })).toEqual({ only: [3, 7] });
+    expect(settingsChange(feeds, { only: [7, 2] }, {}, new Set())).toEqual({ only: [7, 2] });
+  });
+
   it('has nothing for a scope without settings', () => {
     expect(formFields(null)).toEqual([]);
     expect(formFields({ type: 'string' })).toEqual([]);

@@ -12,7 +12,7 @@ import {
   toEntry,
 } from '../entries/entries.ts';
 import { shownCondition } from '../entries/streams.ts';
-import type { DigestAddition, DigestComposer } from '../plugins/catalog.ts';
+import type { DigestAddition, DigestComposer, DigestPluginEntry } from '../plugins/catalog.ts';
 import { readPluginEntries } from '../plugins/entries.ts';
 import type { Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
@@ -20,6 +20,8 @@ import { type DigestEntry, digestMail, groupDigest } from './digest-mail.ts';
 
 /** Entries a digest lists at most; the rest are counted. */
 export const DIGEST_MAX_ENTRIES = 100;
+/** Unlisted entries plugins read at most (the contract's `DIGEST_LIMITS.unlisted`). */
+export const DIGEST_MAX_UNLISTED = 2000;
 /** Users one run sends to at most; the rest wait for the next run. */
 export const DIGEST_BATCH = 50;
 /** A claimed user whose digest failed part way is tried again after this. */
@@ -218,17 +220,18 @@ export class DigestService {
       return false;
     }
 
-    const rows = await this.#db.execute<HeadlineRow & { category_title: string | null }>(sql`
-      SELECT ${headlineColumns(false)}, c.title AS category_title
-      FROM ${HEADLINE_FROM}
-      LEFT JOIN categories c ON c.id = s.category_id
-      WHERE ue.id > ${watermark} AND ue.id <= ${mark} AND ue.unread AND ${shown}
-      ORDER BY ue.sort_at DESC, ue.id DESC
-      LIMIT ${DIGEST_MAX_ENTRIES}`);
-    const listed: DigestEntry[] = rows.rows.map((row) => ({
-      ...toEntry(row),
-      categoryTitle: row.category_title,
-    }));
+    /** The digest's entries, newest first, from the `offset`th. */
+    const digestEntries = async (offset: number, limit: number): Promise<DigestEntry[]> => {
+      const rows = await this.#db.execute<HeadlineRow & { category_title: string | null }>(sql`
+        SELECT ${headlineColumns(false)}, c.title AS category_title
+        FROM ${HEADLINE_FROM}
+        LEFT JOIN categories c ON c.id = s.category_id
+        WHERE ue.id > ${watermark} AND ue.id <= ${mark} AND ue.unread AND ${shown}
+        ORDER BY ue.sort_at DESC, ue.id DESC
+        OFFSET ${offset} LIMIT ${limit}`);
+      return rows.rows.map((row) => ({ ...toEntry(row), categoryTitle: row.category_title }));
+    };
+    const listed = await digestEntries(0, DIGEST_MAX_ENTRIES);
     const locale = ownerLocale(prefs.language);
     const frequency = prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily';
     const additions = await this.#compose({
@@ -237,6 +240,7 @@ export class DigestService {
       frequency,
       listed,
       more: count - listed.length,
+      unlisted: () => digestEntries(DIGEST_MAX_ENTRIES, DIGEST_MAX_UNLISTED),
     });
     const unsubscribeUrl = `${appUrl}/public/unsubscribe/${this.unsubscribeToken(userId)}`;
     try {
@@ -281,28 +285,35 @@ export class DigestService {
     frequency: 'daily' | 'weekly';
     listed: DigestEntry[];
     more: number;
+    /** The unread entries counted but not listed, read only for plugins. */
+    unlisted: () => Promise<DigestEntry[]>;
   }): Promise<DigestAddition[]> {
     const composer = this.#composer;
     if (!composer?.composes) return [];
     const { userId, listed } = digest;
     try {
-      const excerpts = new Map(listed.map((entry) => [entry.id, entry.excerpt]));
-      const read = await readPluginEntries(
-        this.#db,
-        userId,
-        listed.map((entry) => entry.id),
-        { text: false },
-      );
+      const unlisted = digest.more > 0 ? await digest.unlisted() : [];
+      const asPlugins = async (entries: DigestEntry[]): Promise<DigestPluginEntry[]> => {
+        const excerpts = new Map(entries.map((entry) => [entry.id, entry.excerpt]));
+        const read = await readPluginEntries(
+          this.#db,
+          userId,
+          entries.map((entry) => entry.id),
+          { text: false },
+        );
+        return read.map(({ entry, contentHash }) => ({
+          ...entry,
+          excerpt: excerpts.get(entry.id) ?? null,
+          contentHash,
+        }));
+      };
       return await composer.compose({
         userId,
         language: digest.language,
         frequency: digest.frequency,
-        entries: read.map(({ entry, contentHash }) => ({
-          ...entry,
-          excerpt: excerpts.get(entry.id) ?? null,
-          contentHash,
-        })),
+        entries: await asPlugins(listed),
         more: digest.more,
+        unlisted: await asPlugins(unlisted),
       });
     } catch (err) {
       this.#logger.warn({ err, userId }, 'digest additions failed');

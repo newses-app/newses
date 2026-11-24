@@ -26,6 +26,7 @@ function spec(
           secret: marks[name]?.secret ?? false,
           url: marks[name]?.url ?? false,
           multiline: marks[name]?.multiline ?? false,
+          feeds: marks[name]?.feeds ?? false,
         },
       ]),
     ),

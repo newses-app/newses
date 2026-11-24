@@ -160,8 +160,8 @@ export class PluginRegistry implements PluginCatalog {
       let settings: LoadedPlugin['settings'];
       try {
         settings = {
-          instance: settingsSpec(parsed.data.settings?.instance),
-          user: settingsSpec(parsed.data.settings?.user),
+          instance: settingsSpec(parsed.data.settings?.instance, 'instance'),
+          user: settingsSpec(parsed.data.settings?.user, 'user'),
         };
       } catch (err) {
         refuse({ source, id, reason: 'invalid', detail: (err as Error).message });
@@ -218,7 +218,7 @@ interface SchemaInternals {
 const defOf = (schema: unknown) => (schema as SchemaInternals | null)?._zod?.def;
 const kindOf = (schema: unknown) => defOf(schema)?.type;
 
-/** `secret()` and `url()` marks on the schema itself, read with its own copy of zod. */
+/** `secret()`, `url()`, `multiline()`, and `feeds()` marks on the schema itself, read with its own copy of zod. */
 function marksOf(schema: unknown): FieldMarks {
   if (typeof schema !== 'object' || schema === null) return {};
   const meta = (schema as SchemaInternals).meta?.();
@@ -255,15 +255,22 @@ function marked(schema: unknown, seen = new Set<unknown>()): boolean {
   if (seen.has(schema)) return false;
   seen.add(schema);
   const marks = marksOf(schema);
-  return Boolean(marks.secret || marks.url) || childrenOf(schema).some((c) => marked(c, seen));
+  return (
+    Boolean(marks.secret || marks.url || marks.feeds) ||
+    childrenOf(schema).some((c) => marked(c, seen))
+  );
 }
 
 /**
  * A scope's settings as the core needs them. Marks may sit on a top-level field or the wrappers
- * around it, and only on string fields; anywhere else they would leave a secret unsealed, so the
- * plugin is refused.
+ * around it: `secret()` and `url()` only on string fields, where anywhere else they would leave a
+ * secret unsealed, and `feeds()` only on arrays of user settings. A plugin marking anything else
+ * is refused.
  */
-function settingsSpec(schema: SettingsSchema | undefined): SettingsSpec | null {
+function settingsSpec(
+  schema: SettingsSchema | undefined,
+  scope: 'instance' | 'user',
+): SettingsSpec | null {
   if (!schema) return null;
   const fields = new Map<string, SettingsField>();
   for (const [name, field] of Object.entries(schema.shape)) {
@@ -277,11 +284,16 @@ function settingsSpec(schema: SettingsSchema | undefined): SettingsSpec | null {
     const secret = marks.secret === true;
     const url = marks.url === true;
     const multiline = marks.multiline === true;
+    const feeds = marks.feeds === true;
     if ((secret || url) && kindOf(inner) !== 'string')
       throw new Error(`The setting ${name} is marked secret or url but is not a string`);
+    if (feeds && (scope !== 'user' || kindOf(inner) !== 'array'))
+      throw new Error(`The setting ${name} is marked feeds but is not a list of user settings`);
     if (childrenOf(inner).some((child) => marked(child)))
-      throw new Error(`secret() and url() mark top-level settings only, not inside ${name}`);
-    fields.set(name, { secret, url, multiline });
+      throw new Error(
+        `secret(), url(), and feeds() mark top-level settings only, not inside ${name}`,
+      );
+    fields.set(name, { secret, url, multiline, feeds });
   }
   return {
     fields,
@@ -316,7 +328,7 @@ function formSchema(
     });
   }
   const properties = (json.properties ?? {}) as Record<string, Record<string, unknown>>;
-  for (const [name, { secret, url, multiline }] of fields) {
+  for (const [name, { secret, url, multiline, feeds }] of fields) {
     const property = properties[name];
     if (!property) continue;
     Reflect.deleteProperty(property, FIELD_MARKS);
@@ -324,6 +336,7 @@ function formSchema(
       ...(secret && { secret }),
       ...(url && { url }),
       ...(multiline && { multiline }),
+      ...(feeds && { feeds }),
     };
     if (Object.keys(marks).length > 0) property[FIELD_MARKS] = marks;
     if (secret) delete property.default;

@@ -4,6 +4,7 @@ import {
   acceptsApiVersion,
   definePlugin,
   FIELD_MARKS,
+  feeds,
   isApiRange,
   multiline,
   PLUGIN_API_VERSION,
@@ -64,6 +65,14 @@ describe('secret and url', () => {
     expect(url().meta()?.[FIELD_MARKS]).toEqual({ url: true });
     expect(url({ secret: true }).meta()?.[FIELD_MARKS]).toEqual({ url: true, secret: true });
     expect(multiline().meta()?.[FIELD_MARKS]).toEqual({ multiline: true });
+    expect(feeds().unwrap().meta()?.[FIELD_MARKS]).toEqual({ feeds: true });
+  });
+
+  it('take feed ids, none by default', () => {
+    expect(feeds().parse(undefined)).toEqual([]);
+    expect(feeds().parse([3, 7])).toEqual([3, 7]);
+    expect(feeds().safeParse([0]).success).toBe(false);
+    expect(feeds().safeParse([1.5]).success).toBe(false);
   });
 
   it('take non-empty secrets and http(s) URLs only', () => {

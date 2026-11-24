@@ -3,6 +3,7 @@ import type { PluginSettingsState } from '@newses/shared';
 import { mdiClose, mdiDelete, mdiPlus } from '@mdi/js';
 import { computed, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useSubscriptions } from '../../composables/useFeeds.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import {
   blankItem,
@@ -31,6 +32,16 @@ const { t } = useI18n();
 const { online, whenOnline } = useOnlineOnly();
 
 const fields = computed(() => formFields(props.schema));
+const subscriptions = useSubscriptions();
+/** The user's subscriptions to pick from, and any saved one they have since left. */
+const feedItems = (f: FormField) => {
+  const known = (subscriptions.data.value ?? []).map((s) => ({ value: s.id, title: s.title }));
+  const ids = new Set(known.map((item) => item.value));
+  const gone = (values[f.name] as number[])
+    .filter((id) => !ids.has(id))
+    .map((id) => ({ value: id, title: t('plugins.feedGone', { id }) }));
+  return [...known, ...gone];
+};
 const values = reactive<Record<string, unknown>>({});
 const cleared = ref(new Set<string>());
 
@@ -158,6 +169,26 @@ const save = whenOnline(() => {
         dir="auto"
         class="mb-2"
       />
+      <v-autocomplete
+        v-else-if="f.kind === 'feeds'"
+        v-model="values[f.name] as number[]"
+        :items="feedItems(f)"
+        :label="label(f)"
+        :hint="hint(f)"
+        :persistent-hint="!!hint(f)"
+        :placeholder="t('plugins.noFeeds')"
+        persistent-placeholder
+        multiple
+        chips
+        closable-chips
+        class="mb-2"
+      >
+        <template #chip="{ props: chip, item }">
+          <v-chip v-bind="chip"
+            ><bdi>{{ item.title }}</bdi></v-chip
+          >
+        </template>
+      </v-autocomplete>
       <fieldset v-else-if="f.kind === 'list'" class="plugin-list mb-4">
         <legend class="text-body-large">{{ label(f) }}</legend>
         <p v-if="hint(f)" class="text-body-small text-medium-emphasis mb-2">{{ hint(f) }}</p>

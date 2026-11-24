@@ -4,7 +4,7 @@ import { z } from 'zod';
  * The version of this contract. A plugin's `apiVersion` must accept it: while the major is 0,
  * additions raise the patch and breaking changes the minor.
  */
-export const PLUGIN_API_VERSION = '0.1.0';
+export const PLUGIN_API_VERSION = '0.1.1';
 
 /**
  * Where a plugin is turned on. Admins enable every plugin for the instance; with `user`, each
@@ -12,7 +12,7 @@ export const PLUGIN_API_VERSION = '0.1.0';
  */
 export type PluginScope = 'instance' | 'user';
 
-/** How the settings form shows a field, set by `secret()` and `url()`. */
+/** How the settings form shows a field, set by `secret()`, `url()`, `multiline()`, and `feeds()`. */
 export interface FieldMarks {
   /** Sealed at rest and never sent back to the browser. */
   secret?: boolean;
@@ -20,6 +20,8 @@ export interface FieldMarks {
   url?: boolean;
   /** Text of several lines, such as a template. */
   multiline?: boolean;
+  /** Some of the user's feeds, by `EventEntry.feed.id`. */
+  feeds?: boolean;
 }
 
 /** The metadata key `secret()` and `url()` set on a schema. */
@@ -55,6 +57,19 @@ export function multiline(): z.ZodString {
     .string()
     .max(10_000)
     .meta({ [FIELD_MARKS]: { multiline: true } satisfies FieldMarks });
+}
+
+/**
+ * Some of the user's feeds, picked from their subscriptions: ids as `EventEntry.feed.id` gives
+ * them, none by default. A feed the user unsubscribed from keeps its id until they save again.
+ * Top-level user settings only.
+ */
+export function feeds(): z.ZodDefault<z.ZodArray<z.ZodInt>> {
+  return z
+    .array(z.int().positive())
+    .max(1000)
+    .meta({ [FIELD_MARKS]: { feeds: true } satisfies FieldMarks })
+    .default([]);
 }
 
 /** A scope's settings: an object schema of `zod`, the copy the server uses. */
@@ -206,6 +221,11 @@ export interface DigestComposeInput {
   entries: DigestEntry[];
   /** Unread entries the digest counts but does not list. */
   more: number;
+  /**
+   * Those unread entries the digest counts but does not list, newest first: at most
+   * `DIGEST_LIMITS.unlisted` of `more`.
+   */
+  unlisted: DigestEntry[];
 }
 
 /**
@@ -219,8 +239,16 @@ export interface DigestAdditions {
   entries?: readonly { id: number; text: string }[] | null | undefined;
 }
 
-/** What a digest takes of a plugin at most: characters of overview and per entry, and time. */
-export const DIGEST_LIMITS = { overview: 4000, entryText: 1000, timeoutSeconds: 60 } as const;
+/**
+ * What a digest takes of a plugin at most (characters of overview and per entry, and time), and
+ * how many unlisted entries it gives.
+ */
+export const DIGEST_LIMITS = {
+  overview: 4000,
+  entryText: 1000,
+  timeoutSeconds: 60,
+  unlisted: 2000,
+} as const;
 
 /** What a `digest.compose` hook may return; anything else adds nothing. */
 export const digestAdditionsSchema: z.ZodType<DigestAdditions | null | undefined> = z

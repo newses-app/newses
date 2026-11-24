@@ -163,6 +163,7 @@ describe('DigestHookComposer', () => {
       contentHash: `h${String(id)}`,
     })),
     more: 0,
+    unlisted: [],
   };
   const composing = (id: string, run: (i: DigestComposeInput, c: PluginContext) => unknown) => ({
     source: `${id}@1.0.0`,

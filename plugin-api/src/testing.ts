@@ -273,7 +273,8 @@ export interface HookResult<T> {
 type HookInput = {
   'entries.added': EntriesAddedEvent;
   'published.changed': PublishedChangedEvent;
-  'digest.compose': DigestComposeInput;
+  /** `unlisted` is none unless given. */
+  'digest.compose': Omit<DigestComposeInput, 'unlisted'> & { unlisted?: DigestEntry[] };
   /** A test takes no input. */
   test: undefined;
 };
@@ -329,7 +330,9 @@ export async function runHook<H extends keyof HookInput>(
     userSettings,
     signal,
   });
-  const hookToRun = declared as { run(...args: unknown[]): unknown };
+  const hookToRun: { run(...args: unknown[]): unknown } = declared;
+  const given: unknown =
+    hook === 'digest.compose' ? { unlisted: [], ...(input as HookInput['digest.compose']) } : input;
   const value = await new Promise<unknown>((resolve, reject) => {
     const onAbort = () => {
       reject(new Error(`${plugin.id}'s ${hook} ran out of time (${String(timeoutMs)} ms)`));
@@ -337,7 +340,7 @@ export async function runHook<H extends keyof HookInput>(
     signal.addEventListener('abort', onAbort, { once: true });
     void Promise.resolve()
       .then(() =>
-        hook === 'test' ? hookToRun.run(context) : hookToRun.run(structuredClone(input), context),
+        hook === 'test' ? hookToRun.run(context) : hookToRun.run(structuredClone(given), context),
       )
       .then(resolve, reject)
       .finally(() => {
@@ -348,7 +351,7 @@ export async function runHook<H extends keyof HookInput>(
     const result = testResultSchema.safeParse(value);
     if (!result.success)
       throw new Error(`${plugin.id}'s test returned what a test does not: ${result.error.message}`);
-    return { value: result.data as HookValue[H], context };
+    return { value: result.data, context };
   }
   if (hook !== 'digest.compose') return { value: value as HookValue[H], context };
   const parsed = digestAdditionsSchema.safeParse(value);

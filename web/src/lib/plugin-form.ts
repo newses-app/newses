@@ -10,6 +10,7 @@ export type FieldKind =
   | 'select'
   | 'number'
   | 'list'
+  | 'feeds'
   | 'unsupported';
 
 export interface FormField {
@@ -67,6 +68,7 @@ function field(name: string, raw: Schema, required: boolean, nested: boolean): F
     if (marks.url === true || schema.format === 'uri') return { ...base, kind: 'url' };
     return { ...base, kind: 'text' };
   }
+  if (!nested && marks.feeds === true && schema.type === 'array') return { ...base, kind: 'feeds' };
   if (!nested && schema.type === 'array' && isSchema(schema.items)) {
     const item = objectFields(schema.items, true);
     if (item && item.length > 0 && item.every((f) => f.kind !== 'unsupported'))
@@ -113,6 +115,7 @@ export function initialValues(
   const values: Record<string, unknown> = {};
   for (const f of fields) {
     if (f.kind === 'secret') values[f.name] = '';
+    else if (f.kind === 'feeds') values[f.name] = feedIds(settings[f.name] ?? f.default);
     else if (f.kind === 'list')
       values[f.name] = Array.isArray(settings[f.name])
         ? structuredClone(settings[f.name])
@@ -125,6 +128,10 @@ export function initialValues(
   }
   return values;
 }
+
+/** A feeds field's value as subscription ids. */
+const feedIds = (value: unknown): number[] =>
+  Array.isArray(value) ? value.filter((id): id is number => Number.isInteger(id) && id > 0) : [];
 
 /** A blank item of a list, with its properties' defaults. */
 export const blankItem = (f: FormField): Record<string, unknown> => initialValues(f.item, {});
@@ -160,6 +167,8 @@ export function settingsChange(
     if (f.kind === 'secret') {
       if (typeof value === 'string' && value !== '') change[f.name] = value;
       else if (clearedSecrets.has(f.name)) change[f.name] = null;
+    } else if (f.kind === 'feeds') {
+      change[f.name] = feedIds(value);
     } else if (f.kind === 'unsupported') {
       if (f.name in saved) change[f.name] = saved[f.name];
     } else if (f.kind === 'list') {

@@ -103,7 +103,7 @@ describe('runHook', () => {
       },
       'digest.compose': {
         run: (input, context) => ({
-          overview: `${String(context.userSettings?.greeting)}: ${String(input.entries.length)} new`,
+          overview: `${String(context.userSettings?.greeting)}: ${String(input.entries.length)} new, ${String(input.unlisted.length)} unlisted`,
           entries: input.entries.map((entry) => ({ id: entry.id, text: entry.title })),
         }),
       },
@@ -124,7 +124,18 @@ describe('runHook', () => {
       { userId: 1, language: 'en', frequency: 'daily', entries, more: 0 },
       { settings: { key: 'k' }, userSettings: { greeting: 'Hi' } },
     );
-    expect(value).toEqual({ overview: 'Hi: 1 new', entries: [{ id: 3, text: 'Three' }] });
+    expect(value).toEqual({
+      overview: 'Hi: 1 new, 0 unlisted',
+      entries: [{ id: 3, text: 'Three' }],
+    });
+    const unlisted = [fixtureDigestEntry({ id: 2 }), fixtureDigestEntry({ id: 1 })];
+    const { value: more } = await runHook(
+      plugin,
+      'digest.compose',
+      { userId: 1, language: 'en', frequency: 'daily', entries, more: 2, unlisted },
+      { settings: { key: 'k' } },
+    );
+    expect(more?.overview).toBe('Hello: 1 new, 2 unlisted');
   });
 
   it('fails as the server would count a failure', async () => {
