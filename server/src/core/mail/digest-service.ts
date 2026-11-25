@@ -20,7 +20,8 @@ import type {
   DigestPluginEntry,
 } from '../plugins/catalog.ts';
 import { readPluginEntries } from '../plugins/entries.ts';
-import type { Logger, Mailer } from '../ports.ts';
+import type { Jobs } from '../jobs.ts';
+import type { JobQueue, Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
 import { type DigestEntry, digestMail, groupDigest } from './digest-mail.ts';
 
@@ -28,9 +29,9 @@ import { type DigestEntry, digestMail, groupDigest } from './digest-mail.ts';
 export const DIGEST_MAX_ENTRIES = 100;
 /** Unlisted entries plugins read at most (the contract's `DIGEST_LIMITS.unlisted`). */
 export const DIGEST_MAX_UNLISTED = 2000;
-/** Users one run sends to at most; the rest wait for the next run. */
+/** Users one dispatch claims at most; the rest wait for the next. */
 export const DIGEST_BATCH = 50;
-/** A claimed user whose digest failed part way is tried again after this. */
+/** A claimed user whose digest was not sent (failed, or still queued) is claimed again after this. */
 const LEASE_SECONDS = 60 * 60;
 /** A test digest holds the unread entries that came in over this many hours. */
 export const DIGEST_TEST_HOURS = 24;
@@ -46,13 +47,10 @@ export interface DigestDeps {
   /** Signs unsubscribe links. */
   unsubscribeKey: Buffer;
   logger: Logger;
-  /** Plugins' additions to digests; none without it. */
+  /** Takes each digest to send, one job per user, for `runJob` to send. */
+  queue: Pick<JobQueue<Jobs>, 'enqueue'>;
+  /** Plugins' additions to digests, where jobs run; none without it. */
   composer?: DigestComposer | null;
-  /**
-   * Starts sending a test digest the user asked for, elsewhere (AWS: the `tick` function); without
-   * it, this process sends it after answering.
-   */
-  startTest?: ((userId: number) => Promise<void>) | undefined;
   now?: () => Date;
 }
 
@@ -80,8 +78,8 @@ export class DigestService {
   readonly #publicUrl: string | null;
   readonly #key: Buffer;
   readonly #logger: Logger;
+  readonly #queue: Pick<JobQueue<Jobs>, 'enqueue'>;
   readonly #composer: DigestComposer | null;
-  readonly #startTest: ((userId: number) => Promise<void>) | null;
   readonly #now: () => Date;
 
   constructor(deps: DigestDeps) {
@@ -92,8 +90,8 @@ export class DigestService {
     this.#publicUrl = deps.publicUrl;
     this.#key = deps.unsubscribeKey;
     this.#logger = deps.logger;
+    this.#queue = deps.queue;
     this.#composer = deps.composer ?? null;
-    this.#startTest = deps.startTest ?? null;
     this.#now = deps.now ?? (() => new Date());
   }
 
@@ -143,19 +141,15 @@ export class DigestService {
   }
 
   /**
-   * Sends the digests that are due, to at most `limit` users, starting none after `deadline` (ms
-   * since the epoch; users it does not reach stay due); returns how many were sent. Users with
-   * digests on but no state (after a restore, which leaves it out) start from now.
+   * Claims the users whose digests are due, at most `limit`, the longest due first, and queues
+   * each one's digest; returns how many. Users with digests on but no state (after a restore,
+   * which leaves it out) start from now.
    */
-  async sendDue({
-    limit = DIGEST_BATCH,
-    deadline = Infinity,
-  }: { limit?: number; deadline?: number } = {}): Promise<number> {
-    const mailer = this.#mailer;
-    const appUrl = this.#publicUrl;
-    if (!mailer || !appUrl) return 0;
+  async dispatchDue({ limit = DIGEST_BATCH }: { limit?: number } = {}): Promise<number> {
+    if (!this.enabled) return 0;
     const now = this.#now();
     const at = sql`${now.toISOString()}::timestamptz`;
+    const lease = new Date(now.getTime() + LEASE_SECONDS * 1000).toISOString();
     await this.#db.execute(sql`
       INSERT INTO digest_state (user_id, watermark, next_due_at)
       SELECT p.user_id,
@@ -163,47 +157,61 @@ export class DigestService {
       FROM user_prefs p
       WHERE p.key = 'digestFrequency' AND p.value #>> '{}' IN ('daily', 'weekly')
       ON CONFLICT (user_id) DO NOTHING`);
-    const claimed = await this.#db.execute<{ user_id: number; watermark: string }>(sql`
-      UPDATE digest_state d SET next_due_at = ${at} + make_interval(secs => ${LEASE_SECONDS})
-      FROM (
-        SELECT user_id FROM digest_state WHERE next_due_at <= ${at}
-        ORDER BY next_due_at LIMIT ${limit} FOR UPDATE SKIP LOCKED
-      ) due
-      WHERE d.user_id = due.user_id
-      RETURNING d.user_id, d.watermark`);
-    let sent = 0;
-    for (const [index, row] of claimed.rows.entries()) {
-      if (Date.now() >= deadline) {
-        const left = claimed.rows.slice(index).map((r) => r.user_id);
-        await this.#db.execute(sql`
-          UPDATE digest_state SET next_due_at = ${at}
-          WHERE user_id = ANY(${sql.param(left)}::int[])`);
-        break;
-      }
-      try {
-        if (await this.#send(mailer, appUrl, row.user_id, Number(row.watermark), now)) sent++;
-      } catch (err) {
-        // The lease runs out and the next run tries again.
-        this.#logger.warn({ err, userId: row.user_id }, 'digest failed');
-      }
-    }
-    return sent;
+    // The CTE orders the claims, so the jobs are queued the longest due first.
+    const claimed = await this.#db.execute<{ user_id: number }>(sql`
+      WITH due AS (
+        SELECT user_id, next_due_at FROM digest_state WHERE next_due_at <= ${at}
+        ORDER BY next_due_at, user_id LIMIT ${limit} FOR UPDATE SKIP LOCKED
+      ), claimed AS (
+        UPDATE digest_state d SET next_due_at = ${lease}::timestamptz
+        FROM due WHERE d.user_id = due.user_id
+        RETURNING d.user_id
+      )
+      SELECT due.user_id FROM due JOIN claimed USING (user_id)
+      ORDER BY due.next_due_at, due.user_id`);
+    for (const row of claimed.rows)
+      await this.#queue.enqueue('digest.send', { userId: row.user_id, lease });
+    return claimed.rows.length;
   }
 
   /**
-   * Asks for a test digest for the user, sent within a minute or so. Refused when they could not
-   * get one: the server sends no digests, they have no confirmed address, or no unread entries
-   * came in over the last `DIGEST_TEST_HOURS`.
+   * Sends one queued digest: a test digest, or a due one while its claim holds (a job queued
+   * twice, or claimed again after its lease lapsed, sends nothing). A failed digest is logged and
+   * stays claimed, so a dispatch after its lease claims it again. Returns whether one was sent.
+   */
+  async runJob(job: Jobs['digest.send']): Promise<boolean> {
+    if ('test' in job)
+      return this.sendTest(job.userId).catch((err: unknown) => {
+        this.#logger.warn({ err, userId: job.userId }, 'test digest failed');
+        return false;
+      });
+    const mailer = this.#mailer;
+    const appUrl = this.#publicUrl;
+    if (!mailer || !appUrl) return false;
+    const now = this.#now();
+    const taken = await this.#db.execute<{ watermark: string }>(sql`
+      UPDATE digest_state
+      SET next_due_at = ${now.toISOString()}::timestamptz + make_interval(secs => ${LEASE_SECONDS})
+      WHERE user_id = ${job.userId} AND next_due_at = ${job.lease}::timestamptz
+      RETURNING watermark`);
+    const [row] = taken.rows;
+    if (!row) return false;
+    try {
+      return await this.#send(mailer, appUrl, job.userId, Number(row.watermark), now);
+    } catch (err) {
+      this.#logger.warn({ err, userId: job.userId }, 'digest failed');
+      return false;
+    }
+  }
+
+  /**
+   * Queues a test digest for the user. Refused when they could not get one: the server sends no
+   * digests, they have no confirmed address, or no unread entries came in over the last
+   * `DIGEST_TEST_HOURS`.
    */
   async requestTest(userId: number): Promise<void> {
     await this.#checkTest(userId, this.#now());
-    if (this.#startTest) {
-      await this.#startTest(userId);
-      return;
-    }
-    void this.sendTest(userId).catch((err: unknown) => {
-      this.#logger.warn({ err, userId }, 'test digest failed');
-    });
+    await this.#queue.enqueue('digest.send', { userId, test: true });
   }
 
   /**

@@ -1,6 +1,6 @@
 # 0097. Test digests on demand, and plugin actions
 
-- Status: Accepted
+- Status: Superseded by 0098
 - Date: 2026-11-24
 - Supersedes 0096
 

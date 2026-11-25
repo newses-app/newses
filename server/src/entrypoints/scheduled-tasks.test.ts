@@ -51,7 +51,7 @@ function services(options: { archive?: boolean; failing?: string } = {}) {
     sessions: { pruneExpired: step('sessions.prune', undefined) },
     throttle: { prune: step('throttle.prune', undefined) },
     sync: { pruneTombstones: step('tombstones.prune', 0) },
-    digest: { sendDue: step('digest.send', 1), sendTest: step('digest.sendTest', true) },
+    digest: { dispatchDue: step('digest.dispatchDue', 1), runJob: step('digest.runJob', true) },
     ops: {
       recorder: {
         recordJob: (run) => void jobs.push({ job: run.job, ok: run.ok }),
@@ -101,6 +101,7 @@ describe('workJobs', () => {
       ['feed.fetch', 8],
       ['feed.favicon', 2],
       ['entry.extract', 2],
+      ['digest.send', 1],
     ]);
 
     const run = (name: string, data: object) => handlers.get(name)?.handler(data);
@@ -109,17 +110,20 @@ describe('workJobs', () => {
     await run('feed.fetch', { feedSourceId: 3 });
     await run('feed.favicon', { feedSourceId: 7 });
     await run('entry.extract', { feedSourceId: 4 });
+    await run('digest.send', { userId: 5, test: true });
     expect(calls).toEqual([
       'updateMany [[1,2]]',
       'updateMany [[]]',
       'refresh [7]',
       'runJob [{"feedSourceId":4}]',
+      'digest.runJob [{"userId":5,"test":true}]',
     ]);
     expect(jobs.map((j) => j.job)).toEqual([
       'feed.fetch',
       'feed.fetch',
       'feed.favicon',
       'entry.extract',
+      'digest.send',
     ]);
   });
 });
@@ -155,7 +159,7 @@ describe('scheduleWorkerTasks', () => {
       'feeds.dispatch': 60,
       'plugins.dispatch': 30,
       'push.flush': 300,
-      'digest.send': 300,
+      'digest.dispatch': 300,
       'images.keep': 300,
       'feeds.purge': 21_600,
       'auth.prune': 3600,
@@ -188,12 +192,12 @@ describe('scheduleWorkerTasks', () => {
     expect(calls).toEqual([`plugins.dispatch [${String(NOW + 25_000)}]`]);
   });
 
-  it('purges, prunes, pushes, sends digests, and keeps images', async () => {
+  it('purges, prunes, pushes, queues digests, and keeps images', async () => {
     const { run, calls } = schedule();
     await run('feeds.purge');
     await run('auth.prune');
     await run('push.flush');
-    await run('digest.send');
+    await run('digest.dispatch');
     await run('images.keep');
     expect(calls).toEqual([
       'purge',
@@ -205,7 +209,7 @@ describe('scheduleWorkerTasks', () => {
       'throttle.prune',
       'rateLimits.prune',
       'push.flush',
-      `digest.send [{"deadline":${String(NOW + 4 * 60_000)}}]`,
+      'digest.dispatchDue',
       'images.keep [120000]',
     ]);
   });
@@ -231,13 +235,13 @@ describe('scheduleWorkerTasks', () => {
 });
 
 describe('createTickHandler', () => {
-  it("dispatches, then pushes, sends digests, runs plugins' deliveries, checks the alert rules, and keeps images, each tracked", async () => {
+  it("dispatches, then pushes, queues digests, runs plugins' deliveries, checks the alert rules, and keeps images, each tracked", async () => {
     const { deps, calls, jobs } = services();
     await createTickHandler(deps)({ task: 'dispatch' });
     expect(calls).toEqual([
       'dispatchDue',
       'push.flush',
-      `digest.send [{"deadline":${String(NOW + 60_000)}}]`,
+      'digest.dispatchDue',
       `plugins.dispatch [${String(NOW + 60_000)}]`,
       'plugins.wake',
       'stats.flush',
@@ -247,7 +251,7 @@ describe('createTickHandler', () => {
     ]);
     expect(jobs.map((j) => j.job)).toEqual([
       'push.flush',
-      'digest.send',
+      'digest.dispatch',
       'plugins.dispatch',
       'ops.check',
       'images.keep',
@@ -277,13 +281,6 @@ describe('createTickHandler', () => {
     ]);
     expect(jobs.map((j) => j.job)).toEqual(['feeds.purge', 'auth.prune', 'archive.compact']);
     expect(logger.info).toHaveBeenLastCalledWith({ months: 2 }, 'Compacted the archive');
-  });
-
-  it('sends the test digest the api asked for', async () => {
-    const { deps, calls, jobs } = services();
-    await createTickHandler(deps)({ task: 'digest.test', userId: 4 });
-    expect(calls).toEqual(['digest.sendTest [4]', 'stats.flush']);
-    expect(jobs.map((j) => j.job)).toEqual(['digest.test']);
   });
 
   it('compacts nothing without an archive', async () => {

@@ -41,6 +41,7 @@ export function createTestServices(
       logger: deps.logger,
       publicUrl: TEST_PUBLIC_URL,
       unsubscribeKey: deps.keys['digest-unsubscribe'],
+      queue: deps.queue,
     }),
     themes: new ThemeService(db),
     realtime: deps.realtime,

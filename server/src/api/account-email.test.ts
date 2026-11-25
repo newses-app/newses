@@ -1,13 +1,14 @@
 import { MAX_EMAIL_LENGTH, type User } from '@newses/shared';
 import { eq } from 'drizzle-orm';
 import pino from 'pino';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { HttpFetcher } from '../core/feeds/http.ts';
 import { createDb, type Db } from '../db/client.ts';
 import { Ingester } from '../core/feeds/ingest.ts';
 import { feedSources, rateLimits, subscriptions, users } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
-import { RecordingMailer, RecordingRealtime } from '../test/fakes.ts';
+import type { Jobs } from '../core/jobs.ts';
+import { RecordingMailer, RecordingQueue, RecordingRealtime } from '../test/fakes.ts';
 import { createTestServices } from '../test/services.ts';
 import { type ApiServices, buildApp } from './app.ts';
 
@@ -16,6 +17,7 @@ const PUBLIC_URL = 'https://reader.example';
 let database: TestDatabase;
 let db: Db;
 let mailer: RecordingMailer;
+const queue = new RecordingQueue();
 let services: ApiServices;
 let app: ReturnType<typeof buildApp>;
 let pat = 0;
@@ -56,6 +58,12 @@ function mailedToken(): string {
   return match[1];
 }
 
+/** Runs the digest jobs queued, as the worker does. */
+async function runDigestJobs() {
+  const jobs = queue.jobs.splice(0).filter((job) => job.name === 'digest.send');
+  for (const job of jobs) await services.mail.digest.runJob(job.data as Jobs['digest.send']);
+}
+
 const user = async (auth: Auth) =>
   (await call('GET', '/auth/session', auth)).json<{ user: User }>().user;
 
@@ -63,7 +71,7 @@ beforeAll(async () => {
   database = await createTestDatabase();
   db = createDb(database.pool);
   mailer = new RecordingMailer();
-  services = createTestServices(db, new HttpFetcher(), { mailer });
+  services = createTestServices(db, new HttpFetcher(), { mailer, queue });
   pat = (await services.users.create('pat', 'pat password')).id;
   admin = (await services.users.create('ada', 'ada password', 'admin')).id;
   app = buildApp({
@@ -321,10 +329,9 @@ describe('test digests', () => {
       },
     ]);
     expect(await asked()).toBe('queued');
-    // Sent by this process after answering.
-    await vi.waitFor(() => {
-      expect(mailer.sent.at(-1)?.subject).toContain('test digest');
-    });
+    expect(mailer.sent.at(-1)?.subject).not.toContain('test digest');
+    // Sent by the job, which the worker runs.
+    await runDigestJobs();
     expect(mailer.sent.at(-1)).toMatchObject({
       to: ['pat@example.com'],
       subject: 'Newses test digest: 1 unread article',
@@ -336,10 +343,8 @@ describe('test digests', () => {
     expect(await asked()).toBe('queued');
     expect(await asked()).toBe('queued');
     expect((await call('POST', '/account/digest/test', auth)).statusCode).toBe(429);
-    // The three sent before the articles go.
-    await vi.waitFor(() => {
-      expect(mailer.sent.filter((mail) => mail.subject.includes('test digest'))).toHaveLength(4);
-    });
+    await runDigestJobs();
+    expect(mailer.sent.filter((mail) => mail.subject.includes('test digest'))).toHaveLength(4);
     await db.delete(feedSources);
   });
 });

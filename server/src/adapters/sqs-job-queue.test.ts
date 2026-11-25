@@ -18,6 +18,7 @@ describe('SqsJobQueue', () => {
         'feed.favicon': 'https://sqs/favicon',
         'entry.extract': 'https://sqs/extract',
         'plugin.dispatch': 'https://sqs/plugin',
+        'digest.send': 'https://sqs/digest',
       },
       client as never,
     );

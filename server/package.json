@@ -58,7 +58,6 @@
   },
   "devDependencies": {
     "@aws-sdk/client-athena": "^3.1149.0",
-    "@aws-sdk/client-lambda": "^3.1176.0",
     "@aws-sdk/client-sesv2": "^3.1169.0",
     "@aws-sdk/client-sns": "^3.1149.0",
     "@aws-sdk/client-sqs": "^3.1146.0",

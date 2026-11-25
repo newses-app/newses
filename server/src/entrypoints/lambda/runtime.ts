@@ -124,6 +124,7 @@ export async function createLambdaRuntime(role: string) {
       'feed.favicon': requireEnv('FEED_FAVICON_QUEUE_URL'),
       'entry.extract': requireEnv('ENTRY_EXTRACT_QUEUE_URL'),
       'plugin.dispatch': requireEnv('PLUGIN_DISPATCH_QUEUE_URL'),
+      'digest.send': requireEnv('DIGEST_SEND_QUEUE_URL'),
     },
     new SQSClient({}),
   );

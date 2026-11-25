@@ -28,7 +28,7 @@ export interface TaskDeps {
   sessions: Pick<AuthServices['sessions'], 'pruneExpired'>;
   throttle: Pick<AuthServices['throttle'], 'prune'>;
   sync: Pick<SyncService, 'pruneTombstones'>;
-  digest: Pick<DigestService, 'sendDue' | 'sendTest'>;
+  digest: Pick<DigestService, 'dispatchDue' | 'runJob'>;
   ops: {
     recorder: Pick<OpsServices['recorder'], 'recordJob' | 'flush'>;
     checker: Pick<OpsServices['checker'], 'run'>;
@@ -49,13 +49,6 @@ const PLUGIN_DISPATCH_SECONDS = 30;
 const PLUGIN_DISPATCH_BUDGET_MS = 25_000;
 /** How long the tick spends on plugins' deliveries; the plugin function does the rest. */
 const TICK_PLUGIN_BUDGET_MS = 60_000;
-
-/**
- * When a run stops starting digests, plugins' additions taking up to a minute each; the users
- * left stay due for the next run.
- */
-const WORKER_DIGEST_BUDGET_MS = 4 * 60 * 1000;
-const TICK_DIGEST_BUDGET_MS = 60_000;
 
 /** How long one run may spend keeping kept entries' images. */
 const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
@@ -81,7 +74,7 @@ async function pruneAuth({ feeds, sessions, throttle }: TaskDeps): Promise<void>
 /** The worker's queue jobs. */
 export async function workJobs(
   queue: Pick<JobQueue<Jobs>, 'work'>,
-  { feeds, ops }: TaskDeps,
+  { feeds, digest, ops }: TaskDeps,
 ): Promise<void> {
   // Jobs queued before host batching carry `feedSourceId` instead; their claims lapse and a later
   // dispatch picks the sources up again.
@@ -103,6 +96,15 @@ export async function workJobs(
     'entry.extract',
     (data) => trackRun(ops.recorder, 'entry.extract', () => feeds.fullText.runJob(data)),
     { concurrency: 2 },
+  );
+  // One digest at a time, in the order they were queued.
+  await queue.work(
+    'digest.send',
+    (data) =>
+      trackRun(ops.recorder, 'digest.send', async () => {
+        await digest.runJob(data);
+      }),
+    { concurrency: 1 },
   );
 }
 
@@ -139,10 +141,10 @@ export function scheduleWorkerTasks(
     const ran = await deps.plugins.events.dispatch(Date.now() + PLUGIN_DISPATCH_BUDGET_MS);
     if (ran > 0) logger.debug({ ran }, 'Ran plugin deliveries');
   });
-  // Digests are due on the hour; a run every 5 minutes sends them within that.
-  task('digest.send', 5 * 60, async () => {
-    const sent = await digest.sendDue({ deadline: Date.now() + WORKER_DIGEST_BUDGET_MS });
-    if (sent > 0) logger.debug({ sent }, 'Sent digests');
+  // Digests are due on the hour; a run every 5 minutes queues them within that.
+  task('digest.dispatch', 5 * 60, async () => {
+    const queued = await digest.dispatchDue();
+    if (queued > 0) logger.debug({ queued }, 'Queued digests');
   });
   task('images.keep', 5 * 60, async () => {
     const kept = await feeds.images.keep(IMAGES_KEEP_BUDGET_MS);
@@ -164,20 +166,14 @@ export function scheduleWorkerTasks(
 }
 
 /** Scheduled work, one task per EventBridge schedule, timed to coincide with dispatch. */
-/** A scheduled task, or a test digest the `api` function asked for (`digest.test`). */
 export type TickEvent =
-  | { task: 'dispatch' }
-  | { task: 'purge' }
-  | { task: 'auth.prune' }
-  | { task: 'archive.compact' }
-  | { task: 'digest.test'; userId: number };
+  { task: 'dispatch' } | { task: 'purge' } | { task: 'auth.prune' } | { task: 'archive.compact' };
 
 const TICK_TASKS = {
   dispatch: 'feeds.dispatch',
   purge: 'feeds.purge',
   'auth.prune': 'auth.prune',
   'archive.compact': 'archive.compact',
-  'digest.test': 'digest.test',
 } as const;
 
 /** The tick Lambda's handler: runs the event's task, then writes the run's statistics. */
@@ -195,10 +191,9 @@ export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise
         await tracked('push.flush', async () => {
           logger.info({ pushed: await feeds.push.flush() }, 'Pushed new entries');
         });
-        // Digests are due on the hour; dispatch runs at :00 and :30.
-        await tracked('digest.send', async () => {
-          const sent = await digest.sendDue({ deadline: Date.now() + TICK_DIGEST_BUDGET_MS });
-          logger.info({ sent }, 'Sent digests');
+        // Digests are due on the hour; dispatch runs at :00 and :30. The digest function sends them.
+        await tracked('digest.dispatch', async () => {
+          logger.info({ queued: await digest.dispatchDue() }, 'Queued digests');
         });
         // Deliveries a wake missed; then a wake for what is left.
         await tracked('plugins.dispatch', async () => {
@@ -226,9 +221,6 @@ export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise
         logger.info({ months }, 'Compacted the archive');
         return;
       }
-      case 'digest.test':
-        await digest.sendTest(event.userId);
-        return;
     }
   }
 

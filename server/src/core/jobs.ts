@@ -8,6 +8,11 @@ export type Jobs = {
   'entry.extract': { feedSourceId: number };
   /** Runs plugins' due deliveries; queued on AWS when something becomes due. */
   'plugin.dispatch': Record<string, never>;
+  /**
+   * One user's digest: a due one, claimed until `lease` (sent only while that claim holds), or a
+   * test digest.
+   */
+  'digest.send': { userId: number; lease: string } | { userId: number; test: true };
 };
 
 export const JOB_DEFINITIONS: JobDefinitions<Jobs> = {
@@ -18,4 +23,7 @@ export const JOB_DEFINITIONS: JobDefinitions<Jobs> = {
   'entry.extract': { dedupeByKey: true, retryLimit: 0, timeoutSeconds: 600 },
   // Deliveries keep their own retries; a missed wake is caught up by the next one or the tick.
   'plugin.dispatch': { dedupeByKey: true, retryLimit: 0, timeoutSeconds: 300 },
+  // Plugins may take 5 minutes to compose. A failed digest stays claimed until its lease lapses,
+  // and a later dispatch claims it again, so jobs are not retried.
+  'digest.send': { retryLimit: 0, timeoutSeconds: 600 },
 };

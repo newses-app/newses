@@ -11,7 +11,12 @@ import {
   users,
 } from '../../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../../test/database.ts';
-import { RecordingMailer, RecordingRealtime, silentLogger } from '../../test/fakes.ts';
+import {
+  RecordingMailer,
+  RecordingQueue,
+  RecordingRealtime,
+  silentLogger,
+} from '../../test/fakes.ts';
 import { deriveKey } from '../crypto.ts';
 import { EntryService } from '../entries/entries.ts';
 import { Ingester } from '../feeds/ingest.ts';
@@ -19,7 +24,8 @@ import type { ParsedEntry } from '../feeds/parse.ts';
 import type { DomainError } from '../errors.ts';
 import type { DigestComposeInput, DigestComposer, DigestTest } from '../plugins/catalog.ts';
 import { PrefsService } from '../prefs.ts';
-import { DIGEST_MAX_ENTRIES, DigestService } from './digest-service.ts';
+import type { Jobs } from '../jobs.ts';
+import { DIGEST_MAX_ENTRIES, DigestService, type DigestDeps } from './digest-service.ts';
 
 const APP_URL = 'https://reader.example';
 
@@ -30,7 +36,7 @@ let database: TestDatabase;
 let db: Db;
 let mailer: RecordingMailer;
 let prefs: PrefsService;
-let digest: DigestService;
+let digest: Digests;
 let ingester: Ingester;
 let now: Date;
 let alice: number;
@@ -62,12 +68,33 @@ const items = (n: number, title: string): ParsedEntry[] =>
     };
   });
 
-/** The digests, with plugins' additions from `composer`, test digests started by `startTest`. */
-const digestWith = (
-  composer: DigestComposer | null = null,
-  startTest?: (userId: number) => Promise<void>,
-) =>
-  new DigestService({
+/** The digests, with the jobs they queue and a send of those due, as a dispatch and its jobs do. */
+class Digests extends DigestService {
+  readonly queue: RecordingQueue;
+
+  constructor(deps: Omit<DigestDeps, 'queue'>) {
+    const queue = new RecordingQueue();
+    super({ ...deps, queue });
+    this.queue = queue;
+  }
+
+  /** The queued digest jobs, taken from the queue. */
+  takeJobs(): Jobs['digest.send'][] {
+    return this.queue.jobs.splice(0).map((job) => job.data as Jobs['digest.send']);
+  }
+
+  /** Queues the due digests and runs their jobs; returns how many were sent. */
+  async sendDue(options: { limit?: number } = {}): Promise<number> {
+    await this.dispatchDue(options);
+    let sent = 0;
+    for (const job of this.takeJobs()) if (await this.runJob(job)) sent++;
+    return sent;
+  }
+}
+
+/** The digests, with plugins' additions from `composer`. */
+const digestWith = (composer: DigestComposer | null = null) =>
+  new Digests({
     db,
     mailer,
     prefs,
@@ -76,7 +103,6 @@ const digestWith = (
     unsubscribeKey: deriveKey('test secret', 'digest-unsubscribe'),
     logger: silentLogger,
     composer,
-    startTest,
     now: () => now,
   });
 
@@ -457,15 +483,40 @@ describe('DigestService', () => {
     expect(mailer.sent[1]?.html).toContain('Poll 1');
   });
 
-  it('starts no digest after the deadline, leaving the users it did not reach due', async () => {
+  it('queues the due digests the longest due first, each sent once while its claim holds', async () => {
     await turnOn(alice);
     await turnOn(carol);
+    await db
+      .update(digestState)
+      .set({ nextDueAt: new Date('2026-06-15T04:30:00Z') })
+      .where(eq(digestState.userId, carol));
     await ingester.ingest(news, null, items(1, 'Vote'));
     now = new Date('2026-06-15T05:00:00Z');
-    expect(await digest.sendDue({ deadline: Date.now() - 1 })).toBe(0);
-    expect((await stateOf(alice))?.nextDueAt).toEqual(now);
-    expect((await stateOf(carol))?.nextDueAt).toEqual(now);
-    expect(await digest.sendDue()).toBe(2);
+    expect(await digest.dispatchDue()).toBe(2);
+    // Claimed: the next dispatch queues neither again.
+    expect(await digest.dispatchDue()).toBe(0);
+    const jobs = digest.takeJobs();
+    const lease = new Date(now.getTime() + 3_600_000).toISOString();
+    expect(jobs).toEqual([
+      { userId: carol, lease },
+      { userId: alice, lease },
+    ]);
+    const [first, second] = jobs as [Jobs['digest.send'], Jobs['digest.send']];
+    expect(await digest.runJob(first)).toBe(true);
+    // Queued twice: the claim was taken, so nothing more is sent.
+    expect(await digest.runJob(first)).toBe(false);
+    expect(mailer.sent).toHaveLength(1);
+
+    // Its lease lapsed and a later dispatch claimed it again: only the new job sends it.
+    now = new Date('2026-06-15T06:01:00Z');
+    expect(await digest.dispatchDue()).toBe(1);
+    expect(await digest.runJob(second)).toBe(false);
+    const [again] = digest.takeJobs() as [Jobs['digest.send']];
+    expect(await digest.runJob(again)).toBe(true);
+    expect(mailer.sent.map((mail) => mail.to)).toEqual([
+      ['carol@example.com'],
+      ['alice@example.com'],
+    ]);
   });
 
   it('turns digests off from a signed unsubscribe token', async () => {
@@ -486,7 +537,7 @@ describe('DigestService', () => {
   });
 
   it('sends nothing without mail or a public URL', async () => {
-    const off = new DigestService({
+    const off = new Digests({
       db,
       mailer: null,
       prefs,
@@ -547,9 +598,8 @@ describe('test digests', () => {
       (err: unknown) => (err as DomainError).detail?.reason ?? (err as DomainError).code,
     );
 
-  it('refuses a test the user could not get, starting none', async () => {
-    const startTest = vi.fn(() => Promise.resolve());
-    const off = new DigestService({
+  it('refuses a test the user could not get, queueing none', async () => {
+    const off = new Digests({
       db,
       mailer: null,
       prefs,
@@ -557,29 +607,23 @@ describe('test digests', () => {
       publicUrl: APP_URL,
       unsubscribeKey: Buffer.alloc(32),
       logger: silentLogger,
-      startTest,
     });
-    const tests = digestWith(null, startTest);
     await ingester.ingest(news, null, items(1, 'Vote'));
     expect(await refusal(off.requestTest(alice))).toBe('mail_unavailable');
-    expect(await refusal(tests.requestTest(bob))).toBe('email_unconfirmed');
+    expect(await refusal(digest.requestTest(bob))).toBe('email_unconfirmed');
     // In before the last day: nothing to test with.
     await cameInEarlier(alice, 'Vote 1');
-    expect(await refusal(tests.requestTest(alice))).toBe('digest_test_empty');
-    expect(startTest).not.toHaveBeenCalled();
+    expect(await refusal(digest.requestTest(alice))).toBe('digest_test_empty');
+    expect([...off.takeJobs(), ...digest.takeJobs()]).toEqual([]);
   });
 
-  it('starts the test elsewhere when it can, else sends it after answering', async () => {
+  it('queues the test, which its job sends', async () => {
     await ingester.ingest(news, null, items(1, 'Vote'));
-    const startTest = vi.fn(() => Promise.resolve());
-    await digestWith(null, startTest).requestTest(alice);
-    expect(startTest).toHaveBeenCalledWith(alice);
-    expect(mailer.sent).toHaveLength(0);
-
     await digest.requestTest(alice);
-    await vi.waitFor(() => {
-      expect(mailer.sent).toHaveLength(1);
-    });
+    expect(mailer.sent).toHaveLength(0);
+    const jobs = digest.takeJobs();
+    expect(jobs).toEqual([{ userId: alice, test: true }]);
+    expect(await digest.runJob({ userId: alice, test: true })).toBe(true);
     expect(mailer.sent[0]?.text).toContain('Vote 1');
     expect(mailer.sent[0]?.text).not.toContain('added nothing');
   });

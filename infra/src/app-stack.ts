@@ -138,6 +138,17 @@ export class AppStack extends Stack {
       deadLetterQueue: { queue: pluginDlq, maxReceiveCount: 2 },
     });
 
+    // Digests to send, one user's each, queued by the dispatch and by test requests.
+    const digestDlq = new sqs.Queue(this, 'DigestSendDlq', {
+      queueName: resourceName(stage, 'digest-send-dlq'),
+      retentionPeriod: Duration.days(14),
+    });
+    const digestQueue = new sqs.Queue(this, 'DigestSendQueue', {
+      queueName: resourceName(stage, 'digest-send'),
+      visibilityTimeout: Duration.minutes(30),
+      deadLetterQueue: { queue: digestDlq, maxReceiveCount: 2 },
+    });
+
     const adotLayer =
       stage.traceSampling > 0
         ? lambda.LayerVersion.fromLayerVersionArn(this, 'AdotLayer', ADOT_LAYER_ARN)
@@ -186,6 +197,7 @@ export class AppStack extends Stack {
           FEED_FAVICON_QUEUE_URL: faviconQueue.queueUrl,
           ENTRY_EXTRACT_QUEUE_URL: extractQueue.queueUrl,
           PLUGIN_DISPATCH_QUEUE_URL: pluginQueue.queueUrl,
+          DIGEST_SEND_QUEUE_URL: digestQueue.queueUrl,
           // The Lambda runtime's CA bundle includes the RDS certificate authorities.
           NODE_EXTRA_CA_CERTS: '/var/runtime/ca-cert.pem',
           NODE_OPTIONS: '--enable-source-maps',
@@ -229,6 +241,7 @@ export class AppStack extends Stack {
       faviconQueue.grantSendMessages(handler);
       extractQueue.grantSendMessages(handler);
       pluginQueue.grantSendMessages(handler);
+      digestQueue.grantSendMessages(handler);
       if (adotLayer) {
         handler.addToRolePolicy(
           new iam.PolicyStatement({
@@ -257,8 +270,6 @@ export class AppStack extends Stack {
     // Operations alerts are checked after each dispatch.
     tick.addEnvironment('ALERT_TOPIC_ARN', this.alerts.topicArn);
     this.alerts.grantPublish(tick);
-    // The api sends article and confirmation mail, tick the digests.
-    if (stage.mail) this.#userMail(stage, [api, tick]);
     const tickSchedule = (name: string, expression: string, task: string) =>
       new scheduler.Schedule(this, `${name}Schedule`, {
         scheduleName: resourceName(stage, task.replace('.', '-')),
@@ -272,9 +283,6 @@ export class AppStack extends Stack {
     tickSchedule('Purge', 'cron(0 */6 * * ? *)', 'purge');
     tickSchedule('AuthPrune', 'cron(0 * * * ? *)', 'auth.prune');
     tickSchedule('ArchiveCompact', 'cron(0 4 * * ? *)', 'archive.compact');
-    // The api asks it for test digests, which take longer than a request may.
-    tick.grantInvoke(api);
-    api.addEnvironment('TICK_FUNCTION_NAME', tick.functionName);
 
     // Archive reads (api) and compaction (tick) query Athena over the Glue table; the bucket
     // grants above cover the data and query results.
@@ -340,6 +348,20 @@ export class AppStack extends Stack {
       }),
     );
 
+    // One digest at a time per invocation, at most 2 at once (the least SQS allows); plugins may
+    // take 5 minutes to compose one.
+    const digest = fn('digest', { timeout: Duration.minutes(10) });
+    digest.addEventSource(
+      new SqsEventSource(digestQueue, {
+        batchSize: 1,
+        maxConcurrency: 2,
+        reportBatchItemFailures: true,
+      }),
+    );
+    // The api sends article and confirmation mail, digest the digests; tick, which queues them,
+    // knows mail is configured but sends none.
+    if (stage.mail) this.#userMail(stage, [api, digest], [tick]);
+
     const plugin = fn('plugin', { timeout: Duration.minutes(5) });
     // Plugins' due deliveries, a wake at a time; deliveries are claimed, so wakes may overlap.
     plugin.addEventSource(
@@ -374,7 +396,11 @@ export class AppStack extends Stack {
    * User mail through SES from the stage's domain: Easy DKIM, a `bounce.` MAIL FROM domain so SPF
    * aligns, and a configuration set that stops sending to addresses that bounced or complained.
    */
-  #userMail(stage: StageConfig, senders: nodejs.NodejsFunction[]): void {
+  #userMail(
+    stage: StageConfig,
+    senders: nodejs.NodejsFunction[],
+    configured: nodejs.NodejsFunction[],
+  ): void {
     const zone = route53.PublicHostedZone.fromPublicHostedZoneAttributes(this, 'Zone', HOSTED_ZONE);
     const configurationSet = new ses.ConfigurationSet(this, 'Mail', {
       configurationSetName: resourceName(stage, 'mail'),
@@ -398,9 +424,8 @@ export class AppStack extends Stack {
         this.formatArn({ service: 'ses', resource: 'identity', resourceName: '*@*' }),
       ],
     });
-    for (const sender of senders) {
-      sender.addToRolePolicy(send);
-      sender.addEnvironment('MAIL_SES_CONFIGURATION_SET', configurationSet.configurationSetName);
-    }
+    for (const sender of senders) sender.addToRolePolicy(send);
+    for (const fn of [...senders, ...configured])
+      fn.addEnvironment('MAIL_SES_CONFIGURATION_SET', configurationSet.configurationSetName);
   }
 }

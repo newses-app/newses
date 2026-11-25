@@ -5,8 +5,8 @@ import type { UserRow } from '../auth/sessions.ts';
 import type { EntryService } from '../entries/entries.ts';
 import { DomainError } from '../errors.ts';
 import type { ImageProxy } from '../feeds/images.ts';
-import type { DigestComposer } from '../plugins/catalog.ts';
-import type { Logger, Mailer } from '../ports.ts';
+import type { Jobs } from '../jobs.ts';
+import type { JobQueue, Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
 import { type ArticleMailInclude, articleMail, isHttp } from './article-mail.ts';
@@ -25,10 +25,8 @@ export interface MailDeps {
   publicUrl: string | null;
   /** Signs digest unsubscribe links (the `digest-unsubscribe` key). */
   unsubscribeKey: Buffer;
-  /** Starts sending a test digest elsewhere (AWS: the `tick` function); see `DigestDeps`. */
-  startTest?: (userId: number) => Promise<void>;
-  /** Plugins' additions to digests and their estimates, for test digest previews. */
-  composer?: DigestComposer | null;
+  /** Takes the test digests users ask for, which the worker (AWS: the `digest` function) sends. */
+  queue: Pick<JobQueue<Jobs>, 'enqueue'>;
 }
 
 /** What a request that mails something knows of where it came from. */

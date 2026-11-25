@@ -246,7 +246,7 @@ export interface DigestAdditions {
 export const DIGEST_LIMITS = {
   overview: 4000,
   entryText: 1000,
-  timeoutSeconds: 60,
+  timeoutSeconds: 300,
   unlisted: 2000,
 } as const;
 

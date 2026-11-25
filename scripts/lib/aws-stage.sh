@@ -76,7 +76,7 @@ stage_run() {
 # The URLs of the stage's job queues and their dead-letter queues.
 stage_queues() {
   local queue suffix
-  for queue in feed-fetch feed-favicon entry-extract plugin-dispatch; do
+  for queue in feed-fetch feed-favicon entry-extract plugin-dispatch digest-send; do
     for suffix in '' -dlq; do
       aws sqs get-queue-url --queue-name "$stage_name-$queue$suffix" --query QueueUrl \
         --output text || return
@@ -113,7 +113,7 @@ stage_migrate() {
 # The functions that read or write the stage's data, except migrate: api and tick run on demand
 # and on schedules; the others are fed by the job queues.
 STAGE_CALLED_FUNCTIONS=(api tick)
-STAGE_QUEUE_FUNCTIONS=(fetch favicon extract plugin)
+STAGE_QUEUE_FUNCTIONS=(fetch favicon extract plugin digest)
 
 # Sets whether the queue-fed functions poll their queues: stage_poll true|false.
 stage_poll() {

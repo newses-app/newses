@@ -64,7 +64,7 @@ describe('NewsesStage', () => {
       }),
     ) as { Properties: { FunctionName: string; Tags: { Key: string; Value: string }[] } }[];
     expect(functions.map((f) => f.Properties.FunctionName).sort()).toEqual(
-      ['api', 'extract', 'favicon', 'fetch', 'migrate', 'plugin', 'tick'].map(
+      ['api', 'digest', 'extract', 'favicon', 'fetch', 'migrate', 'plugin', 'tick'].map(
         (name) => `newses-dev-${name}`,
       ),
     );
@@ -226,7 +226,7 @@ describe('App', () => {
         },
       }),
     ) as { Properties: Record<string, unknown> }[];
-    expect(functions).toHaveLength(7);
+    expect(functions).toHaveLength(8);
     app.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'newses-dev-api',
       Environment: { Variables: Match.objectLike({ TRUST_PROXY: '2' }) },
@@ -371,11 +371,26 @@ describe('App', () => {
     });
   });
 
-  it('lets the api invoke tick for test digests, by name', () => {
+  it('sends digests from their queue, one per invocation and at most 2 at once', () => {
+    app.hasResourceProperties('AWS::SQS::Queue', {
+      QueueName: 'newses-dev-digest-send',
+      VisibilityTimeout: 1800,
+      RedrivePolicy: Match.objectLike({ maxReceiveCount: 2 }),
+    });
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'newses-dev-digest',
+      Timeout: 600,
+    });
+    app.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+      FunctionName: Match.objectLike({ Ref: Match.stringLikeRegexp('^digestFunction') }),
+      BatchSize: 1,
+      ScalingConfig: { MaximumConcurrency: 2 },
+    });
     app.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: 'newses-dev-api',
-      Environment: { Variables: Match.objectLike({ TICK_FUNCTION_NAME: Match.anyValue() }) },
+      Environment: { Variables: Match.objectLike({ DIGEST_SEND_QUEUE_URL: Match.anyValue() }) },
     });
+    // The api queues them; it invokes no function.
     const invokes = Object.values(app.findResources('AWS::IAM::Policy'))
       .map((policy) => policy as { Properties: { PolicyDocument: unknown; Roles: unknown } })
       .filter(
@@ -383,7 +398,7 @@ describe('App', () => {
           JSON.stringify(policy.Properties.PolicyDocument).includes('lambda:InvokeFunction') &&
           JSON.stringify(policy.Properties.Roles).includes('apiFunction'),
       );
-    expect(invokes).toHaveLength(1);
+    expect(invokes).toEqual([]);
   });
 
   it('emails users through SES from the stage domain when the stage sets mail', () => {
@@ -414,8 +429,10 @@ describe('App', () => {
     const senders = sesSenders(app);
     expect(senders).toHaveLength(2);
     expect(senders.join()).toMatch(/apiFunction/);
-    expect(senders.join()).toMatch(/tickFunction/);
-    for (const name of ['api', 'tick'])
+    expect(senders.join()).toMatch(/digestFunction/);
+    expect(senders.join()).not.toMatch(/tickFunction/);
+    // tick queues digests only when mail is configured.
+    for (const name of ['api', 'digest', 'tick'])
       app.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `newses-dev-${name}`,
         Environment: {
