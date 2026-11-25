@@ -104,7 +104,7 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # Nightly pg_dump. Enable with: docker compose --profile backup up -d
+  # Nightly pg_dump. Enable with COMPOSE_PROFILES=backup in .env.
   backup:
     image: postgres:18-alpine
     profiles: [backup]
@@ -172,8 +172,8 @@ services:
       - dashboards:/data/dashboards
 
   # Grafana with Tempo, Loki, and Prometheus for traces, logs, and metrics, on 127.0.0.1 only.
-  # Enable with: docker compose --profile observability up -d, and set
-  # OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318 in .env.
+  # Enable with COMPOSE_PROFILES=observability in .env, and set
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318 there.
   lgtm:
     image: grafana/otel-lgtm:0.33.1
     profiles: [observability]

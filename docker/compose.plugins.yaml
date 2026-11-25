@@ -1,11 +1,13 @@
 # Plugins, installed into an image built from the app image, which migrate, server, and worker
 # run. List them in .env as PLUGINS, npm packages at exact versions separated by spaces
-# (PLUGINS=@newses/plugin-webhook@1.0.0), then build and start:
-#   docker compose -f compose.yaml -f compose.plugins.yaml up -d --build
+# (PLUGINS=@newses/plugin-webhook@1.0.0), and this file beside compose.yaml in COMPOSE_FILE
+# (COMPOSE_FILE=compose.yaml:compose.plugins.yaml), so every docker compose command in this folder
+# includes it; then build and start:
+#   docker compose up -d --build
 # Changing PLUGINS and running that again upgrades or removes them; nothing is installed while the
 # containers run. Plugins run inside the server with access to its data: install only those you
 # trust. Needs Docker Compose 2.24.4 or later. In a checkout, build the app image first
-# (docker compose build).
+# (docker compose -f compose.yaml build), which the plugins' image is built from.
 # To try a plugin before it is published, pack it (npm pack) into a plugins folder beside this
 # file and list its path in PLUGINS, such as ./plugins/newses-plugin-webhook-1.0.0.tgz; packing it
 # again and running the same command installs the new build.
