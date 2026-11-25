@@ -388,7 +388,7 @@ export class AppStack extends Stack {
       handler: migrate,
       timeout: Duration.minutes(10),
       executeOnHandlerChange: true,
-      executeBefore: [api, tick, fetch, favicon, plugin],
+      executeBefore: [api, tick, fetch, favicon, extract, plugin, digest],
     });
   }
 

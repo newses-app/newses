@@ -92,8 +92,11 @@ async function resolvePushTokens(): Promise<void> {
   process.env.PUSH_TOKENS = await readParameter('PUSH_TOKENS_PARAMETER');
 }
 
-/** Config, logger, pool, and the AWS feed adapters, created once per Lambda cold start. */
-export async function createLambdaRuntime(role: string) {
+/**
+ * Config, logger, and pool, without touching the database: what the `migrate` function runs on,
+ * before the schema the rest of the runtime reads exists.
+ */
+export async function createLambdaBase(role: string) {
   await resolveDatabaseUrl();
   await resolveAdminPassword();
   await resolveAppSecret();
@@ -105,7 +108,12 @@ export async function createLambdaRuntime(role: string) {
     max: 2,
     connectionTimeoutMillis: 30_000,
   });
-  const db = createDb(pool);
+  return { config, logger, pool, db: createDb(pool) };
+}
+
+/** Config, logger, pool, plugins, and the AWS feed adapters, created once per Lambda cold start. */
+export async function createLambdaRuntime(role: string) {
+  const { config, logger, pool, db } = await createLambdaBase(role);
   const blobs = createBlobStore(config);
   // Set on the function that checks alerts; without it alerts stay on the Operations page.
   const alertTopicArn = process.env.ALERT_TOPIC_ARN;

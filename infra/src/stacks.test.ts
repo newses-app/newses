@@ -371,6 +371,23 @@ describe('App', () => {
     });
   });
 
+  it('migrates before any other function is updated', () => {
+    const [trigger] = Object.keys(app.findResources('Custom::Trigger'));
+    const functions = app.findResources('AWS::Lambda::Function', {
+      Properties: { FunctionName: Match.stringLikeRegexp('^newses-dev-') },
+    });
+    const resources = Object.values(functions) as {
+      Properties: { FunctionName: string };
+      DependsOn?: string[];
+    }[];
+    const others = resources.filter((fn) => fn.Properties.FunctionName !== 'newses-dev-migrate');
+    expect(others).toHaveLength(7);
+    const early = others
+      .filter((fn) => !trigger || !(fn.DependsOn ?? []).includes(trigger))
+      .map((fn) => fn.Properties.FunctionName);
+    expect(early).toEqual([]);
+  });
+
   it('sends digests from their queue, one per invocation and at most 2 at once', () => {
     app.hasResourceProperties('AWS::SQS::Queue', {
       QueueName: 'newses-dev-digest-send',
