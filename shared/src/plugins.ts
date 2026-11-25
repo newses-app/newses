@@ -36,6 +36,8 @@ export const pluginSchema = z.object({
   hosts: z.array(z.string()),
   /** From API 1.16: whether it can be tested with its saved settings ("Send test"). */
   testable: z.boolean().optional(),
+  /** From API 1.17: whether it adds to users' digests, which a test digest shows. */
+  digests: z.boolean().optional(),
   /** The hosts an admin approved: URL settings must be on one of them. */
   approvedHosts: z.array(z.string()),
   /**

@@ -7,8 +7,12 @@ import { useErrorText } from '../../composables/useErrorText.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useUiStore } from '../../stores/ui.ts';
 
-// "Send test": runs the plugin's test with the saved settings and shows how it went.
-const props = defineProps<{ run: () => Promise<PluginTestResult> }>();
+// "Send test": runs the plugin's test with the saved settings and shows how it went; with
+// `digest`, a passing test (or none) is followed by a test digest emailed to the user.
+const props = defineProps<{
+  run?: (() => Promise<PluginTestResult>) | undefined;
+  digest?: (() => Promise<void>) | undefined;
+}>();
 
 const { t } = useI18n();
 const errorText = useErrorText();
@@ -17,12 +21,19 @@ const { online, whenOnline } = useOnlineOnly();
 
 const testing = ref(false);
 const result = ref<PluginTestResult | null>(null);
+const digestQueued = ref(false);
 
 const send = whenOnline(async () => {
   testing.value = true;
   result.value = null;
+  digestQueued.value = false;
   try {
-    result.value = await props.run();
+    const tested = props.run ? await props.run() : null;
+    result.value = tested;
+    if (props.digest && (tested?.ok ?? true)) {
+      await props.digest();
+      digestQueued.value = true;
+    }
   } catch (error) {
     ui.notify(errorText(error), true);
   } finally {
@@ -33,13 +44,15 @@ const send = whenOnline(async () => {
 /** What the test said, in the reader's words where the plugin said nothing. */
 const outcome = computed(() => {
   const tested = result.value;
+  if (tested && !tested.ok) {
+    if (tested.message) return t('plugins.testFailed', { message: tested.message });
+    return t(`plugins.testFailure.${tested.failure ?? 'error'}`);
+  }
+  const passed = tested?.message ? t('plugins.testPassed', { message: tested.message }) : null;
+  if (digestQueued.value)
+    return [passed, t('email.digest.testQueued')].filter((line) => line !== null).join('\n');
   if (!tested) return null;
-  if (tested.ok)
-    return tested.message
-      ? t('plugins.testPassed', { message: tested.message })
-      : t('plugins.testPassedQuietly');
-  if (tested.message) return t('plugins.testFailed', { message: tested.message });
-  return t(`plugins.testFailure.${tested.failure ?? 'error'}`);
+  return passed ?? t('plugins.testPassedQuietly');
 });
 </script>
 
@@ -55,12 +68,14 @@ const outcome = computed(() => {
       >
         {{ t('plugins.sendTest') }}
       </v-btn>
-      <span class="text-body-small text-medium-emphasis">{{ t('plugins.testHint') }}</span>
+      <span class="text-body-small text-medium-emphasis">
+        {{ t(digest ? 'plugins.testDigestHint' : 'plugins.testHint') }}
+      </span>
     </div>
     <div role="status">
       <v-alert
         v-if="outcome"
-        :type="result?.ok ? 'success' : 'error'"
+        :type="result && !result.ok ? 'error' : 'success'"
         variant="tonal"
         density="compact"
         class="mt-2 test-outcome"

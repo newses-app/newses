@@ -292,7 +292,9 @@ export const testResultSchema: z.ZodType<TestResult> = z.object({
  * "Send test" in Settings → Plugins: runs with the saved settings, for the user who pressed it
  * (a plugin with user settings) or the instance (an admin), while the plugin is on there. A test
  * that throws or runs out of time fails, with the error's message shown; tests never count
- * toward turning a plugin off.
+ * toward turning a plugin off. For a plugin with `digest.compose` and user settings, a user's
+ * test that passes (or Send test of a plugin without this hook) is followed by a test digest,
+ * which shows what `digest.compose` adds or why it added nothing.
  */
 export interface TestHook<C extends PluginContext = PluginContext> {
   run(context: C): TestResult | Promise<TestResult>;

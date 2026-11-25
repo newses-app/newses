@@ -59,6 +59,8 @@ export const ERROR_REASONS = {
   plugin_no_user_settings: [],
   /** A plugin tested while it is off there, or its saved settings no longer fit it (API 1.16). */
   plugin_off: [],
+  /** A test digest asked for when no unread articles came in over the last day (API 1.17). */
+  digest_test_empty: [],
 } as const;
 
 export type ErrorReason = keyof typeof ERROR_REASONS;

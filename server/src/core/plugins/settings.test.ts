@@ -50,6 +50,7 @@ const info = (id: string, overrides: Partial<PluginInfo>): PluginInfo => ({
   messages: {},
   events: new Map(),
   testable: false,
+  digests: false,
   ...overrides,
 });
 

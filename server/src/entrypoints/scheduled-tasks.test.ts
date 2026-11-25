@@ -51,7 +51,7 @@ function services(options: { archive?: boolean; failing?: string } = {}) {
     sessions: { pruneExpired: step('sessions.prune', undefined) },
     throttle: { prune: step('throttle.prune', undefined) },
     sync: { pruneTombstones: step('tombstones.prune', 0) },
-    digest: { sendDue: step('digest.send', 1) },
+    digest: { sendDue: step('digest.send', 1), sendTests: step('digest.test', 1) },
     ops: {
       recorder: {
         recordJob: (run) => void jobs.push({ job: run.job, ok: run.ok }),
@@ -156,6 +156,7 @@ describe('scheduleWorkerTasks', () => {
       'plugins.dispatch': 30,
       'push.flush': 300,
       'digest.send': 300,
+      'digest.test': 30,
       'images.keep': 300,
       'feeds.purge': 21_600,
       'auth.prune': 3600,
@@ -188,12 +189,13 @@ describe('scheduleWorkerTasks', () => {
     expect(calls).toEqual([`plugins.dispatch [${String(NOW + 25_000)}]`]);
   });
 
-  it('purges, prunes, pushes, sends digests, and keeps images', async () => {
+  it('purges, prunes, pushes, sends digests and test digests, and keeps images', async () => {
     const { run, calls } = schedule();
     await run('feeds.purge');
     await run('auth.prune');
     await run('push.flush');
     await run('digest.send');
+    await run('digest.test');
     await run('images.keep');
     expect(calls).toEqual([
       'purge',
@@ -206,6 +208,7 @@ describe('scheduleWorkerTasks', () => {
       'rateLimits.prune',
       'push.flush',
       `digest.send [{"deadline":${String(NOW + 4 * 60_000)}}]`,
+      `digest.test [{"deadline":${String(NOW + 25_000)}}]`,
       'images.keep [120000]',
     ]);
   });
@@ -231,13 +234,14 @@ describe('scheduleWorkerTasks', () => {
 });
 
 describe('createTickHandler', () => {
-  it("dispatches, then pushes, sends digests, runs plugins' deliveries, checks the alert rules, and keeps images, each tracked", async () => {
+  it("dispatches, then pushes, sends digests and test digests, runs plugins' deliveries, checks the alert rules, and keeps images, each tracked", async () => {
     const { deps, calls, jobs } = services();
     await createTickHandler(deps)({ task: 'dispatch' });
     expect(calls).toEqual([
       'dispatchDue',
       'push.flush',
       `digest.send [{"deadline":${String(NOW + 60_000)}}]`,
+      `digest.test [{"deadline":${String(NOW + 25_000)}}]`,
       `plugins.dispatch [${String(NOW + 60_000)}]`,
       'plugins.wake',
       'stats.flush',
@@ -248,6 +252,7 @@ describe('createTickHandler', () => {
     expect(jobs.map((j) => j.job)).toEqual([
       'push.flush',
       'digest.send',
+      'digest.test',
       'plugins.dispatch',
       'ops.check',
       'images.keep',

@@ -38,7 +38,7 @@ export const FIXTURE_PLUGINS = [
       settings: {
         instance: z.object({ apiKey: secret(), model: z.string().default('m') }),
       },
-      hooks: {},
+      hooks: { 'digest.compose': { run: () => ({ overview: 'Votes, mostly.' }) } },
     },
   },
 ] as const;

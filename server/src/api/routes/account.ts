@@ -6,19 +6,23 @@ import {
 } from '@newses/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import type { AccountEmailService } from '../../core/auth/account-email.ts';
+import type { DigestService } from '../../core/mail/digest-service.ts';
+import type { UserRateLimiter } from '../../core/rate-limit.ts';
 import { requireAuth, requireUser } from '../auth.ts';
 import { toUser } from '../dto.ts';
 import { logSecurity } from '../security-log.ts';
 
 export interface AccountRoutesOptions {
   email: AccountEmailService;
+  digest: Pick<DigestService, 'requestTest'>;
+  limits: Pick<UserRateLimiter, 'take'>;
   /** Origin of the web app the confirmation link opens; null uses each request's origin. */
   publicUrl: string | null;
 }
 
 export const accountRoutes: FastifyPluginAsyncZod<AccountRoutesOptions> = (
   app,
-  { email, publicUrl },
+  { email, digest, limits, publicUrl },
 ) => {
   app.put(
     '/account/email',
@@ -58,6 +62,14 @@ export const accountRoutes: FastifyPluginAsyncZod<AccountRoutesOptions> = (
     await email.remove(requireAuth(request).user.id);
     logSecurity(request, 'email_removed');
     return reply.code(204).send();
+  });
+
+  // Sent by the next run that sends test digests, within a minute (API 1.17).
+  app.post('/account/digest/test', { preHandler: requireUser }, async (request, reply) => {
+    const userId = requireAuth(request).user.id;
+    await limits.take(userId, 'digestTest');
+    await digest.requestTest(userId);
+    return reply.code(202).send();
   });
   return Promise.resolve();
 };

@@ -24,6 +24,8 @@ export interface MailDeps {
   publicUrl: string | null;
   /** Signs digest unsubscribe links (the `digest-unsubscribe` key). */
   unsubscribeKey: Buffer;
+  /** Wakes what sends test digests, where nothing polls for them (AWS). */
+  wakeTests?: () => Promise<void>;
 }
 
 /** What a request that mails something knows of where it came from. */

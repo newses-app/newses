@@ -114,6 +114,7 @@
       "body_too_large": "That's too large to send.",
       "category_into_itself": "A category can't be moved into itself.",
       "category_name_taken": "A category named \"{name}\" already exists there.",
+      "digest_test_empty": "No unread articles came in over the last day to put in a test digest.",
       "email_link_invalid": "This link has expired or was replaced by a newer one. Ask for a new one in Settings, under Account.",
       "email_unconfirmed": "Add and confirm your email address in Settings, under Account, first.",
       "feed_host_paused": "The feed's host asked not to be fetched again yet.",
@@ -942,7 +943,10 @@
       "day": "Day",
       "time": "Time",
       "timeZone": "Time zone",
-      "markRead": "Mark the articles in a digest read"
+      "markRead": "Mark the articles in a digest read",
+      "sendTest": "Send a test digest",
+      "testHint": "Emails you the unread articles from the last day now, with what your plugins add. Your schedule stays as it is, and nothing is marked read.",
+      "testQueued": "A test digest is on its way to your email address."
     }
   },
   "users": {
@@ -1150,6 +1154,7 @@
     },
     "sendTest": "Send test",
     "testHint": "Uses the saved settings.",
+    "testDigestHint": "Uses the saved settings, and emails you a test digest of your unread articles from the last day, with what your plugins add to it.",
     "testPassed": "Test passed: {message}",
     "testPassedQuietly": "Test passed.",
     "testFailed": "Test failed: {message}",

@@ -77,6 +77,7 @@ export const pluginRoutes: FastifyPluginAsyncZod<{
       enabled: instance?.enabled ?? false,
       hosts: [...info.hosts],
       testable: info.testable,
+      digests: info.digests,
       approvedHosts: instance?.approvedHosts ?? [],
       messages: info.messages,
       settingsSchemas: {

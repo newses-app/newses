@@ -397,10 +397,11 @@ describe('App', () => {
         .filter((policy) => JSON.stringify(policy.Properties.PolicyDocument).includes('ses:Send'))
         .map((policy) => JSON.stringify(policy.Properties.Roles));
     const senders = sesSenders(app);
-    expect(senders).toHaveLength(2);
+    expect(senders).toHaveLength(3);
     expect(senders.join()).toMatch(/apiFunction/);
     expect(senders.join()).toMatch(/tickFunction/);
-    for (const name of ['api', 'tick'])
+    expect(senders.join()).toMatch(/pluginFunction/);
+    for (const name of ['api', 'tick', 'plugin'])
       app.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `newses-dev-${name}`,
         Environment: {

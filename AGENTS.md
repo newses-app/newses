@@ -17,7 +17,7 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 | `pnpm --filter @newses/server db:generate` | Generate a SQL migration from `server/src/db/schema.ts` changes (`--name x`; add `--custom` for hand-written SQL) |
 | `DATABASE_URL=… pnpm --filter @newses/server db:migrate` | Apply migrations |
 | `docker compose -f docker/compose.yaml -f docker/compose.apps.yaml --profile apps run --rm apps` | Builds the checkout's Linux, Windows, and Android apps (linux/amd64) into the `downloads` volume, which the server serves at `/downloads/`; `RELEASE_TAG`, `PUBLIC_URL` (https), `APPS_PLATFORMS`, and the Android and Windows signing values from `docker/.env` |
-| `docker compose -f docker/compose.yaml --profile observability up -d` | Local stack with Grafana, Tempo, Loki, and Prometheus on `127.0.0.1:3000`; set `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` in `docker/.env` |
+| `cd docker && docker compose -f compose.yaml build && docker compose up -d --build` | Rebuilds the local stack from the checkout and starts it as `docker/.env` describes: its override files in `COMPOSE_FILE` (such as `compose.yaml:compose.plugins.yaml`) and optional services in `COMPOSE_PROFILES` (`backup`, `observability`, `ntfy`); with `observability`, Grafana, Tempo, Loki, and Prometheus are on `127.0.0.1:3000`, given `OTEL_EXPORTER_OTLP_ENDPOINT=http://lgtm:4318` |
 | `pnpm --filter @newses/server feeds:auth` | Test feeds behind HTTP Basic auth on `0.0.0.0:8090` (`--port`, `--every` minutes per item), listing their URLs and logins; from the Docker stack via `host.docker.internal`, with `FETCH_ALLOW_PRIVATE_NETWORKS=true` |
 | `pnpm --filter @newses/web dev` | Web app with hot reload; proxies `/api` to a server on `localhost:8080` |
 | `pnpm --filter @newses/web build:native` | Web app for the desktop and mobile apps, in `web/dist-native` |
@@ -67,6 +67,10 @@ Newses: a self-hosted RSS reader replacing Tiny Tiny RSS. TypeScript monorepo: N
 ## Commits
 
 - Agents never commit, amend, or push on their own. Leave changes in the working tree for the maintainer's review, and commit only when asked.
+
+## Local Docker stack
+
+- Agents start and rebuild the maintainer's stack only with the rebuild command above, which takes its files and profiles from `docker/.env`: never with other `-f` files or `--profile` added (except `apps`), and never stop it, bring it down, or run it with `--remove-orphans`. Checks that need a stack of their own run as another project (`-p`). Say which of its services changed state.
 
 ## Docs map
 

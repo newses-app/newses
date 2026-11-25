@@ -4,9 +4,10 @@ import pino from 'pino';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { HttpFetcher } from '../core/feeds/http.ts';
 import { createDb, type Db } from '../db/client.ts';
-import { rateLimits, users } from '../db/schema.ts';
+import { Ingester } from '../core/feeds/ingest.ts';
+import { digestTests, feedSources, rateLimits, subscriptions, users } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
-import { RecordingMailer } from '../test/fakes.ts';
+import { RecordingMailer, RecordingRealtime } from '../test/fakes.ts';
 import { createTestServices } from '../test/services.ts';
 import { type ApiServices, buildApp } from './app.ts';
 
@@ -280,5 +281,59 @@ describe('account email without mail', () => {
     });
     expect(refused.statusCode).toBe(503);
     expect(refused.json()).toMatchObject({ error: 'mail_unavailable' });
+  });
+});
+
+describe('test digests', () => {
+  it("queues a test digest of the user's unread articles from the last day", async () => {
+    const auth = await sessionFor(pat);
+    const asked = async () => {
+      const response = await call('POST', '/account/digest/test', auth);
+      return response.statusCode === 202 ? 'queued' : response.json<{ reason?: string }>().reason;
+    };
+    expect(await asked()).toBe('email_unconfirmed');
+    await call('PUT', '/account/email', auth, { email: 'pat@example.com' });
+    await call('POST', '/account/email/confirm', null, { token: mailedToken() });
+    expect(await asked()).toBe('digest_test_empty');
+    await db.delete(rateLimits);
+
+    const [source] = await db
+      .insert(feedSources)
+      .values({ url: 'https://news.example/rss', title: 'News' })
+      .returning();
+    await db.insert(subscriptions).values({ userId: pat, feedSourceId: source?.id ?? 0 });
+    await new Ingester(db, new RecordingRealtime(), {
+      updateIntervalSeconds: 1800,
+      purgeDays: 30,
+      disableAfterFailures: 3,
+    }).ingest(source?.id ?? 0, null, [
+      {
+        guid: 'g1',
+        link: 'https://news.example/1',
+        title: 'Vote',
+        author: null,
+        content: '<p>About the vote.</p>',
+        publishedAt: new Date(),
+        updatedAt: null,
+        enclosures: [],
+        categories: [],
+        lang: null,
+      },
+    ]);
+    expect(await asked()).toBe('queued');
+    expect(await db.select().from(digestTests)).toMatchObject([{ userId: pat }]);
+    expect(await services.mail.digest.sendTests()).toBe(1);
+    expect(mailer.sent.at(-1)).toMatchObject({
+      to: ['pat@example.com'],
+      subject: 'Newses test digest: 1 unread article',
+    });
+
+    // Three a minute, refused ones included.
+    await db.delete(rateLimits);
+    expect(await asked()).toBe('queued');
+    expect(await asked()).toBe('queued');
+    expect(await asked()).toBe('queued');
+    expect((await call('POST', '/account/digest/test', auth)).statusCode).toBe(429);
+    await db.delete(feedSources);
   });
 });

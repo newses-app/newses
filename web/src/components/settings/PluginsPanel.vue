@@ -97,6 +97,17 @@ function turnedOff(state: PluginSettingsState, mine: boolean): string | null {
 const testServer = (plugin: Plugin) => () => api.admin.plugins.test(plugin.id);
 const testMine = (plugin: Plugin) => () => api.account.testPlugin(plugin.id);
 
+/** Shown where the server emails digests (API 1.14). */
+const serverInfo = useQuery({
+  queryKey: ['server-info'],
+  queryFn: () => api.serverInfo(),
+  staleTime: Infinity,
+});
+/** A user's "Send test" of a plugin that adds to digests also emails them a test digest. */
+const testsDigest = (plugin: Plugin) =>
+  plugin.digests === true && serverInfo.data.value?.digest === true;
+const testDigest = () => api.account.testDigest();
+
 const hasMine = (state: PluginSettingsState) =>
   state.enabled || state.secretsSet.length > 0 || Object.keys(state.settings).length > 0;
 </script>
@@ -222,8 +233,13 @@ const hasMine = (state: PluginSettingsState) =>
             @save="(settings) => updateMine(plugin, { settings }, t('plugins.saved'))"
           />
           <PluginTest
-            v-if="plugin.testable && plugin.user.enabled && plugin.settingsSchemas.user"
-            :run="testMine(plugin)"
+            v-if="
+              (plugin.testable || testsDigest(plugin)) &&
+              plugin.user.enabled &&
+              plugin.settingsSchemas.user
+            "
+            :run="plugin.testable ? testMine(plugin) : undefined"
+            :digest="testsDigest(plugin) ? testDigest : undefined"
           />
           <v-btn
             v-if="hasMine(plugin.user)"

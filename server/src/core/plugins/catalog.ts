@@ -41,6 +41,8 @@ export interface PluginInfo {
   readonly events: ReadonlyMap<EventHookName, { debounceSeconds: number }>;
   /** Whether it has a `test` hook, for "Send test". */
   readonly testable: boolean;
+  /** Whether it has a `digest.compose` hook, adding to users' digests. */
+  readonly digests: boolean;
 }
 
 /** Hooks told of changes after they are saved, through the deliveries. */
@@ -104,6 +106,23 @@ export interface DigestComposer {
   readonly composes: boolean;
   /** The additions of the plugins on for the user, in install order; never throws. */
   compose(input: DigestComposeInput): Promise<DigestAddition[]>;
+  /**
+   * How each plugin on for the user did in a test digest, in install order, not counted toward
+   * turning it off; never throws.
+   */
+  composeTest(input: DigestComposeInput): Promise<DigestTest[]>;
+}
+
+/**
+ * How one plugin's part of a test digest went: its name in the digest's language, and its
+ * additions, or why it has none: it returned nothing (`empty`), or failed as a hook fails (with
+ * what it threw, for `error`).
+ */
+export interface DigestTest {
+  name: string;
+  addition: DigestAddition | null;
+  failure: 'empty' | 'error' | 'timeout' | 'invalid' | null;
+  detail: string | null;
 }
 
 /**

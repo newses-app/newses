@@ -238,6 +238,8 @@ export function buildApp(deps: AppDeps) {
         });
         await api.register(accountRoutes, {
           email: services.mail.account,
+          digest: services.mail.digest,
+          limits: services.feeds.rateLimits,
           publicUrl: deps.publicUrl ?? null,
         });
         await api.register(adminUserRoutes, services);

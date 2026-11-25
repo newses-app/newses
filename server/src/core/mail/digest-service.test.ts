@@ -1,9 +1,10 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDb, type Db } from '../../db/client.ts';
 import {
   categories,
   digestState,
+  digestTests,
   entries,
   feedSources,
   subscriptions,
@@ -16,11 +17,15 @@ import { deriveKey } from '../crypto.ts';
 import { EntryService } from '../entries/entries.ts';
 import { Ingester } from '../feeds/ingest.ts';
 import type { ParsedEntry } from '../feeds/parse.ts';
-import type { DigestComposeInput, DigestComposer } from '../plugins/catalog.ts';
+import type { DomainError } from '../errors.ts';
+import type { DigestComposeInput, DigestComposer, DigestTest } from '../plugins/catalog.ts';
 import { PrefsService } from '../prefs.ts';
 import { DIGEST_MAX_ENTRIES, DigestService } from './digest-service.ts';
 
 const APP_URL = 'https://reader.example';
+
+/** A composer's test run, for composers whose tests are not what is tested. */
+const untested: DigestComposer['composeTest'] = () => Promise.reject(new Error('not tested'));
 
 let database: TestDatabase;
 let db: Db;
@@ -58,8 +63,8 @@ const items = (n: number, title: string): ParsedEntry[] =>
     };
   });
 
-/** The digests, with plugins' additions from `composer`. */
-const digestWith = (composer: DigestComposer | null = null) =>
+/** The digests, with plugins' additions from `composer`, woken by `wakeTests`. */
+const digestWith = (composer: DigestComposer | null = null, wakeTests?: () => Promise<void>) =>
   new DigestService({
     db,
     mailer,
@@ -69,6 +74,7 @@ const digestWith = (composer: DigestComposer | null = null) =>
     unsubscribeKey: deriveKey('test secret', 'digest-unsubscribe'),
     logger: silentLogger,
     composer,
+    wakeTests,
     now: () => now,
   });
 
@@ -278,6 +284,7 @@ describe('DigestService', () => {
     const given: DigestComposeInput[] = [];
     const composer: DigestComposer = {
       composes: true,
+      composeTest: untested,
       compose: (input) => {
         given.push(input);
         return Promise.resolve([]);
@@ -361,6 +368,7 @@ describe('DigestService', () => {
     const given: DigestComposeInput[] = [];
     const composer: DigestComposer = {
       composes: true,
+      composeTest: untested,
       compose: (input) => {
         given.push(input);
         const [newest] = input.entries;
@@ -428,6 +436,7 @@ describe('DigestService', () => {
     const failing: DigestComposer = {
       composes: true,
       compose: () => Promise.reject(new Error('database gone')),
+      composeTest: untested,
     };
     expect(await digestWith(failing).sendDue()).toBe(1);
     expect(mailer.sent[0]?.html).toContain('Vote 1');
@@ -435,7 +444,7 @@ describe('DigestService', () => {
     await ingester.ingest(news, null, items(1, 'Poll'));
     now = new Date('2026-06-16T05:00:00Z');
     const compose = vi.fn<DigestComposer['compose']>();
-    expect(await digestWith({ composes: false, compose }).sendDue()).toBe(1);
+    expect(await digestWith({ composes: false, compose, composeTest: untested }).sendDue()).toBe(1);
     expect(compose).not.toHaveBeenCalled();
     expect(mailer.sent[1]?.html).toContain('Poll 1');
   });
@@ -483,5 +492,136 @@ describe('DigestService', () => {
     await turnOn(alice);
     now = new Date('2026-06-15T05:00:00Z');
     expect(await off.sendDue()).toBe(0);
+  });
+});
+
+describe('test digests', () => {
+  /** A composer whose plugins' tests add an overview, or end as `failure`, recording the input. */
+  const testing = (...failures: DigestTest['failure'][]) => {
+    const given: DigestComposeInput[] = [];
+    const composer: DigestComposer = {
+      composes: true,
+      compose: () => Promise.reject(new Error('not a digest')),
+      composeTest: (input) => {
+        given.push(input);
+        return Promise.resolve(
+          failures.map((failure, n) => {
+            const name = `Plugin <${String(n)}>`;
+            return {
+              name,
+              addition: failure
+                ? null
+                : {
+                    pluginId: `p${String(n)}`,
+                    name,
+                    overview: 'Votes, mostly.',
+                    entries: new Map(),
+                  },
+              failure,
+              detail: failure === 'error' ? 'HTTP 401 from the API' : null,
+            };
+          }),
+        );
+      },
+    };
+    return { composer, given };
+  };
+
+  /** Moves the user's entries with `title` back to having come in two days ago. */
+  const cameInEarlier = (userId: number, title: string) =>
+    db.execute(sql`
+      UPDATE user_entries ue SET created_at = ${new Date(now.getTime() - 2 * 86_400_000).toISOString()}::timestamptz
+      FROM entries e WHERE e.id = ue.entry_id AND ue.user_id = ${userId} AND e.title = ${title}`);
+
+  const refusal = (promise: Promise<unknown>) =>
+    promise.then(
+      () => null,
+      (err: unknown) => (err as DomainError).detail?.reason ?? (err as DomainError).code,
+    );
+
+  it('refuses a test the user could not get', async () => {
+    const off = new DigestService({
+      db,
+      mailer: null,
+      prefs,
+      entries: new EntryService(db, new RecordingRealtime()),
+      publicUrl: APP_URL,
+      unsubscribeKey: Buffer.alloc(32),
+      logger: silentLogger,
+    });
+    await ingester.ingest(news, null, items(1, 'Vote'));
+    expect(await refusal(off.requestTest(alice))).toBe('mail_unavailable');
+    expect(await refusal(digest.requestTest(bob))).toBe('email_unconfirmed');
+    // In before the last day: nothing to test with.
+    await cameInEarlier(alice, 'Vote 1');
+    expect(await refusal(digest.requestTest(alice))).toBe('digest_test_empty');
+    expect(await db.select().from(digestTests)).toHaveLength(0);
+  });
+
+  it("mails the last day's unread entries with the plugins' additions, changing nothing", async () => {
+    await turnOn(alice, { digestMarkRead: true });
+    const before = await stateOf(alice);
+    await ingester.ingest(news, null, items(3, 'Vote'));
+    await cameInEarlier(alice, 'Vote 1');
+    await db
+      .update(userEntries)
+      .set({ unread: false })
+      .where(
+        inArray(
+          userEntries.entryId,
+          db.select({ id: entries.id }).from(entries).where(eq(entries.title, 'Vote 2')),
+        ),
+      );
+    const { composer, given } = testing(null, 'error', 'empty');
+    const wakeTests = vi.fn(() => Promise.reject(new Error('queue down')));
+    const tests = digestWith(composer, wakeTests);
+    await tests.requestTest(alice);
+    await tests.requestTest(alice);
+    expect(await db.select().from(digestTests)).toHaveLength(1);
+    expect(wakeTests).toHaveBeenCalledTimes(2);
+
+    expect(await tests.sendTests()).toBe(1);
+    expect(given.map((input) => input.entries.map((e) => e.title))).toEqual([['Vote 3']]);
+    const [mail] = mailer.sent;
+    expect(mail).toMatchObject({
+      to: ['alice@example.com'],
+      subject: 'Newses test digest: 1 unread article',
+    });
+    expect(mail?.unsubscribeUrl).toBeUndefined();
+    const html = mail?.html ?? '';
+    expect(html).toContain('A test digest for alice');
+    expect(html).toContain('Votes, mostly.');
+    expect(html).toContain('Plugin &lt;1&gt; failed and added nothing to this digest: HTTP 401');
+    expect(html).toContain('Plugin &lt;2&gt; added nothing to this digest.');
+    expect(html).toContain('Vote 3');
+    expect(html).not.toContain('Vote 1');
+    expect(html).not.toContain('Unsubscribe');
+    expect(mail?.text).toContain(
+      "Sent as a test: it doesn't change when your digests come, and marks nothing read.",
+    );
+    expect(mail?.text).not.toContain('You get this digest');
+    // Taken once; the digests' state and the entries as they were.
+    expect(await tests.sendTests()).toBe(0);
+    expect(await stateOf(alice)).toEqual(before);
+    expect(await unreadOf(alice)).toBe(2);
+  });
+
+  it('sends a test without plugins', async () => {
+    await ingester.ingest(news, null, items(1, 'Vote'));
+    await digest.requestTest(alice);
+    expect(await digest.sendTests()).toBe(1);
+    expect(mailer.sent[0]?.text).toContain('Vote 1');
+    expect(mailer.sent[0]?.text).not.toContain('added nothing');
+  });
+
+  it('drops a test asked for over an hour ago, and sends none after the deadline', async () => {
+    await ingester.ingest(news, null, items(1, 'Vote'));
+    await digest.requestTest(alice);
+    expect(await digest.sendTests({ deadline: Date.now() - 1 })).toBe(0);
+    expect(await db.select().from(digestTests)).toHaveLength(1);
+    now = new Date(now.getTime() + 61 * 60_000);
+    expect(await digest.sendTests()).toBe(0);
+    expect(mailer.sent).toHaveLength(0);
+    expect(await db.select().from(digestTests)).toHaveLength(0);
   });
 });

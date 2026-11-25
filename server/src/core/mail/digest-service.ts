@@ -1,7 +1,8 @@
 import { nextOccurrence, type Prefs } from '@newses/shared';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { digestState, users } from '../../db/schema.ts';
+import { digestState, digestTests, users } from '../../db/schema.ts';
+import { DomainError } from '../errors.ts';
 import { ownerLocale } from '../../i18n.ts';
 import { sign, verify } from '../crypto.ts';
 import {
@@ -12,7 +13,12 @@ import {
   toEntry,
 } from '../entries/entries.ts';
 import { shownCondition } from '../entries/streams.ts';
-import type { DigestAddition, DigestComposer, DigestPluginEntry } from '../plugins/catalog.ts';
+import type {
+  DigestAddition,
+  DigestComposeInput,
+  DigestComposer,
+  DigestPluginEntry,
+} from '../plugins/catalog.ts';
 import { readPluginEntries } from '../plugins/entries.ts';
 import type { Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
@@ -26,6 +32,10 @@ export const DIGEST_MAX_UNLISTED = 2000;
 export const DIGEST_BATCH = 50;
 /** A claimed user whose digest failed part way is tried again after this. */
 const LEASE_SECONDS = 60 * 60;
+/** A test digest holds the unread entries that came in over this many hours. */
+export const DIGEST_TEST_HOURS = 24;
+/** A test digest not sent within this many minutes of being asked for is dropped. */
+const TEST_EXPIRY_MINUTES = 60;
 
 export interface DigestDeps {
   db: Db;
@@ -40,6 +50,8 @@ export interface DigestDeps {
   logger: Logger;
   /** Plugins' additions to digests; none without it. */
   composer?: DigestComposer | null;
+  /** Wakes what sends test digests, where nothing polls for them (AWS). */
+  wakeTests?: (() => Promise<void>) | undefined;
   now?: () => Date;
 }
 
@@ -68,6 +80,7 @@ export class DigestService {
   readonly #key: Buffer;
   readonly #logger: Logger;
   readonly #composer: DigestComposer | null;
+  readonly #wakeTests: (() => Promise<void>) | null;
   readonly #now: () => Date;
 
   constructor(deps: DigestDeps) {
@@ -79,6 +92,7 @@ export class DigestService {
     this.#key = deps.unsubscribeKey;
     this.#logger = deps.logger;
     this.#composer = deps.composer ?? null;
+    this.#wakeTests = deps.wakeTests ?? null;
     this.#now = deps.now ?? (() => new Date());
   }
 
@@ -175,6 +189,156 @@ export class DigestService {
     return sent;
   }
 
+  /**
+   * Asks for a test digest for the user, replacing one they have waiting. Refused when they could
+   * not get one: the server sends no digests, they have no confirmed address, or no unread
+   * entries came in over the last `DIGEST_TEST_HOURS`.
+   */
+  async requestTest(userId: number): Promise<void> {
+    if (!this.enabled) throw new DomainError('mail_unavailable', 'This server sends no digests');
+    const [user] = await this.#db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user?.email)
+      throw new DomainError('conflict', 'Confirm an email address to get a test digest', {
+        reason: 'email_unconfirmed',
+      });
+    const now = this.#now();
+    const found = await this.#db.execute(sql`
+      SELECT 1 FROM user_entries ue WHERE ${this.#testCondition(userId, now)} LIMIT 1`);
+    if (found.rows.length === 0)
+      throw new DomainError('conflict', 'No unread articles came in over the last day', {
+        reason: 'digest_test_empty',
+      });
+    await this.#db
+      .insert(digestTests)
+      .values({ userId, requestedAt: now })
+      .onConflictDoUpdate({ target: digestTests.userId, set: { requestedAt: now } });
+    await this.#wakeTests?.().catch((err: unknown) => {
+      this.#logger.warn({ err, userId }, 'test digests not woken');
+    });
+  }
+
+  /**
+   * Sends the test digests asked for, one at a time, starting none after `deadline` (ms since the
+   * epoch); returns how many were sent. Each is taken once: one that fails is not tried again.
+   */
+  async sendTests({ deadline = Infinity }: { deadline?: number } = {}): Promise<number> {
+    const mailer = this.#mailer;
+    const appUrl = this.#publicUrl;
+    if (!mailer || !appUrl) return 0;
+    let sent = 0;
+    while (Date.now() < deadline) {
+      const taken = await this.#db.execute<{ user_id: number; requested_at: string | Date }>(sql`
+        DELETE FROM digest_tests WHERE user_id = (
+          SELECT user_id FROM digest_tests ORDER BY requested_at LIMIT 1 FOR UPDATE SKIP LOCKED
+        ) RETURNING user_id, requested_at`);
+      const row = taken.rows[0];
+      if (!row) break;
+      const now = this.#now();
+      const age = now.getTime() - new Date(row.requested_at).getTime();
+      if (age > TEST_EXPIRY_MINUTES * 60_000) {
+        this.#logger.warn({ userId: row.user_id }, 'test digest expired');
+        continue;
+      }
+      try {
+        if (await this.#sendTest(mailer, appUrl, row.user_id, now)) sent++;
+      } catch (err) {
+        this.#logger.warn({ err, userId: row.user_id }, 'test digest failed');
+      }
+    }
+    return sent;
+  }
+
+  /** The unread entries shown in All that came in over the last `DIGEST_TEST_HOURS`. */
+  #testCondition(userId: number, now: Date) {
+    const since = new Date(now.getTime() - DIGEST_TEST_HOURS * 3_600_000);
+    return sql`ue.user_id = ${userId} AND ue.unread AND ue.created_at > ${since.toISOString()}::timestamptz
+      AND ${shownCondition(userId, { special: 'all' })}`;
+  }
+
+  /**
+   * A test digest of the user's unread entries from the last day, with what the plugins on for
+   * them add and why any added nothing; leaves their digests' state and the entries as they were.
+   */
+  async #sendTest(mailer: Mailer, appUrl: string, userId: number, now: Date): Promise<boolean> {
+    const prefs = await this.#prefs.get(userId);
+    const [user] = await this.#db
+      .select({ login: users.login, email: users.email, disabledAt: users.disabledAt })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user?.email || user.disabledAt) return false;
+    const condition = this.#testCondition(userId, now);
+    const [found] = (
+      await this.#db.execute<{ count: number }>(sql`
+        SELECT count(*)::int AS count FROM user_entries ue WHERE ${condition}`)
+    ).rows;
+    const count = found?.count ?? 0;
+    if (count === 0) return false;
+    const testEntries = (offset: number, limit: number) =>
+      this.#entriesWhere(condition, offset, limit);
+    const listed = await testEntries(0, DIGEST_MAX_ENTRIES);
+    const locale = ownerLocale(prefs.language);
+    const frequency = prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily';
+    const more = count - listed.length;
+    const composer = this.#composer;
+    const tested = composer?.composes
+      ? await composer.composeTest(
+          await this.#pluginInput({
+            userId,
+            language: locale,
+            frequency,
+            listed,
+            more,
+            unlisted: () => testEntries(DIGEST_MAX_ENTRIES, DIGEST_MAX_UNLISTED),
+          }),
+        )
+      : [];
+    await mailer.send({
+      to: [user.email],
+      ...digestMail({
+        locale,
+        login: user.login,
+        appUrl,
+        groups: groupDigest(listed, locale),
+        more,
+        additions: tested.flatMap((plugin) => plugin.addition ?? []),
+        frequency,
+        hour: prefs.digestHour,
+        weekday: prefs.digestWeekday,
+        timeZone: prefs.timeZone ?? 'UTC',
+        markedRead: false,
+        unsubscribeUrl: `${appUrl}/public/unsubscribe/${this.unsubscribeToken(userId)}`,
+        test: { plugins: tested },
+      }),
+    });
+    this.#logger.info(
+      {
+        userId,
+        entries: count,
+        plugins: Object.fromEntries(tested.map((plugin) => [plugin.name, plugin.failure ?? 'ok'])),
+      },
+      'Sent a test digest',
+    );
+    return true;
+  }
+
+  /** Entries matching `condition` (over `ue`), newest first, from the `offset`th. */
+  async #entriesWhere(condition: ReturnType<typeof sql>, offset: number, limit: number) {
+    const rows = await this.#db.execute<HeadlineRow & { category_title: string | null }>(sql`
+      SELECT ${headlineColumns(false)}, c.title AS category_title
+      FROM ${HEADLINE_FROM}
+      LEFT JOIN categories c ON c.id = s.category_id
+      WHERE ${condition}
+      ORDER BY ue.sort_at DESC, ue.id DESC
+      OFFSET ${offset} LIMIT ${limit}`);
+    return rows.rows.map((row): DigestEntry => ({
+      ...toEntry(row),
+      categoryTitle: row.category_title,
+    }));
+  }
+
   /** The user's digest, if it has entries and they can be mailed; then their next one is set. */
   async #send(
     mailer: Mailer,
@@ -221,16 +385,9 @@ export class DigestService {
     }
 
     /** The digest's entries, newest first, from the `offset`th. */
-    const digestEntries = async (offset: number, limit: number): Promise<DigestEntry[]> => {
-      const rows = await this.#db.execute<HeadlineRow & { category_title: string | null }>(sql`
-        SELECT ${headlineColumns(false)}, c.title AS category_title
-        FROM ${HEADLINE_FROM}
-        LEFT JOIN categories c ON c.id = s.category_id
-        WHERE ue.id > ${watermark} AND ue.id <= ${mark} AND ue.unread AND ${shown}
-        ORDER BY ue.sort_at DESC, ue.id DESC
-        OFFSET ${offset} LIMIT ${limit}`);
-      return rows.rows.map((row) => ({ ...toEntry(row), categoryTitle: row.category_title }));
-    };
+    const shownSince = sql`ue.id > ${watermark} AND ue.id <= ${mark} AND ue.unread AND ${shown}`;
+    const digestEntries = (offset: number, limit: number) =>
+      this.#entriesWhere(shownSince, offset, limit);
     const listed = await digestEntries(0, DIGEST_MAX_ENTRIES);
     const locale = ownerLocale(prefs.language);
     const frequency = prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily';
@@ -279,45 +436,53 @@ export class DigestService {
   }
 
   /** What the plugins on for the user add to their digest; none when that fails. */
-  async #compose(digest: {
-    userId: number;
-    language: string;
-    frequency: 'daily' | 'weekly';
-    listed: DigestEntry[];
-    more: number;
-    /** The unread entries counted but not listed, read only for plugins. */
-    unlisted: () => Promise<DigestEntry[]>;
-  }): Promise<DigestAddition[]> {
+  async #compose(digest: PluginDigest): Promise<DigestAddition[]> {
     const composer = this.#composer;
     if (!composer?.composes) return [];
-    const { userId, listed } = digest;
     try {
-      const unlisted = digest.more > 0 ? await digest.unlisted() : [];
-      const asPlugins = async (entries: DigestEntry[]): Promise<DigestPluginEntry[]> => {
-        const excerpts = new Map(entries.map((entry) => [entry.id, entry.excerpt]));
-        const read = await readPluginEntries(
-          this.#db,
-          userId,
-          entries.map((entry) => entry.id),
-          { text: false },
-        );
-        return read.map(({ entry, contentHash }) => ({
-          ...entry,
-          excerpt: excerpts.get(entry.id) ?? null,
-          contentHash,
-        }));
-      };
-      return await composer.compose({
-        userId,
-        language: digest.language,
-        frequency: digest.frequency,
-        entries: await asPlugins(listed),
-        more: digest.more,
-        unlisted: await asPlugins(unlisted),
-      });
+      return await composer.compose(await this.#pluginInput(digest));
     } catch (err) {
-      this.#logger.warn({ err, userId }, 'digest additions failed');
+      this.#logger.warn({ err, userId: digest.userId }, 'digest additions failed');
       return [];
     }
   }
+
+  /** The digest as `digest.compose` gets it, its entries as plugins see them. */
+  async #pluginInput(digest: PluginDigest): Promise<DigestComposeInput> {
+    const { userId, listed } = digest;
+    const unlisted = digest.more > 0 ? await digest.unlisted() : [];
+    const asPlugins = async (entries: DigestEntry[]): Promise<DigestPluginEntry[]> => {
+      const excerpts = new Map(entries.map((entry) => [entry.id, entry.excerpt]));
+      const read = await readPluginEntries(
+        this.#db,
+        userId,
+        entries.map((entry) => entry.id),
+        { text: false },
+      );
+      return read.map(({ entry, contentHash }) => ({
+        ...entry,
+        excerpt: excerpts.get(entry.id) ?? null,
+        contentHash,
+      }));
+    };
+    return {
+      userId,
+      language: digest.language,
+      frequency: digest.frequency,
+      entries: await asPlugins(listed),
+      more: digest.more,
+      unlisted: await asPlugins(unlisted),
+    };
+  }
+}
+
+/** A digest about to go out, for plugins. */
+interface PluginDigest {
+  userId: number;
+  language: string;
+  frequency: 'daily' | 'weekly';
+  listed: DigestEntry[];
+  more: number;
+  /** The unread entries counted but not listed, read only for plugins. */
+  unlisted: () => Promise<DigestEntry[]>;
 }

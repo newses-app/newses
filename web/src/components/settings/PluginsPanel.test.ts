@@ -13,7 +13,13 @@ const api = vi.hoisted(() => ({
   plugins: { list: vi.fn<() => Promise<PluginsResponse>>() },
   subscriptions: { list: vi.fn() },
   admin: { plugins: { update: vi.fn(), remove: vi.fn(), test: vi.fn() } },
-  account: { updatePlugin: vi.fn(), removePlugin: vi.fn(), testPlugin: vi.fn() },
+  account: {
+    updatePlugin: vi.fn(),
+    removePlugin: vi.fn(),
+    testPlugin: vi.fn(),
+    testDigest: vi.fn(),
+  },
+  serverInfo: vi.fn(() => Promise.resolve({ product: 'newses', mail: true, digest: true })),
 }));
 vi.mock('../../api.ts', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -234,6 +240,44 @@ describe('PluginsPanel', () => {
 
     const untested = await mounted('user', { plugins: [webhook], uninstalled: [] });
     expect(untested.text()).not.toContain(t('plugins.sendTest'));
+  });
+
+  it('follows a passing test of a plugin that adds to digests with a test digest', async () => {
+    const digesting = { ...webhook, testable: true, digests: true };
+    api.account.testPlugin.mockResolvedValueOnce({
+      ok: true,
+      message: 'The key works',
+      failure: null,
+    });
+    api.account.testDigest.mockResolvedValue(undefined);
+    const panel = await mounted('user', { plugins: [digesting], uninstalled: [] });
+    expect(panel.text()).toContain(t('plugins.testDigestHint'));
+    const send = panel.findAll('button').find((b) => b.text() === t('plugins.sendTest'));
+    await send?.trigger('click');
+    await flushPromises();
+    expect(api.account.testDigest).toHaveBeenCalledOnce();
+    expect(panel.text()).toContain(t('plugins.testPassed', { message: 'The key works' }));
+    expect(panel.text()).toContain(t('email.digest.testQueued'));
+
+    // A failing test sends none.
+    api.account.testPlugin.mockResolvedValueOnce({ ok: false, message: 'HTTP 401', failure: null });
+    await send?.trigger('click');
+    await flushPromises();
+    expect(api.account.testDigest).toHaveBeenCalledOnce();
+    expect(panel.text()).not.toContain(t('email.digest.testQueued'));
+
+    // Without a test hook of its own, the test is the digest.
+    const digestOnly = { ...webhook, testable: false, digests: true };
+    const only = await mounted('user', { plugins: [digestOnly], uninstalled: [] });
+    await only
+      .findAll('button')
+      .find((b) => b.text() === t('plugins.sendTest'))
+      ?.trigger('click');
+    await flushPromises();
+    expect(api.account.testPlugin).toHaveBeenCalledTimes(2);
+    expect(api.account.testDigest).toHaveBeenCalledTimes(2);
+    expect(only.text()).toContain(t('email.digest.testQueued'));
+    expect(only.text()).not.toContain(t('plugins.testPassedQuietly'));
   });
 
   it('says what the last run said when the server turned a plugin off', async () => {

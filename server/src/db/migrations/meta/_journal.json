@@ -358,6 +358,13 @@
       "when": 1794886630736,
       "tag": "0050_plugin_failure_detail",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1795554631331,
+      "tag": "0051_digest_tests",
+      "breakpoints": true
     }
   ]
 }

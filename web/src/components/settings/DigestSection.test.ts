@@ -13,6 +13,7 @@ import DigestSection from './DigestSection.vue';
 const api = vi.hoisted(() => ({
   serverInfo: vi.fn<() => Promise<object>>(),
   auth: { session: vi.fn<() => Promise<object>>() },
+  account: { testDigest: vi.fn<() => Promise<void>>() },
 }));
 vi.mock('../../api.ts', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -65,6 +66,21 @@ describe('DigestSection', () => {
     const section = await mounted({ email: null });
     expect(section.text()).toContain(t('email.digest.needsAddress'));
     expect(section.find('.v-select').classes()).toContain('v-input--disabled');
+    expect(section.text()).not.toContain(t('email.digest.sendTest'));
+  });
+
+  it('sends a test digest, with digests off', async () => {
+    api.account.testDigest.mockResolvedValueOnce(undefined);
+    const section = await mounted();
+    expect(section.text()).toContain(t('email.digest.testHint'));
+    await section
+      .findAll('button')
+      .find((b) => b.text() === t('email.digest.sendTest'))
+      ?.trigger('click');
+    await flushPromises();
+    expect(api.account.testDigest).toHaveBeenCalledOnce();
+    expect(section.text()).toContain(t('email.digest.testQueued'));
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("turns digests on in the device's time zone, then offers the time and day", async () => {

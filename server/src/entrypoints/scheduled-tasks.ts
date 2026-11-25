@@ -28,7 +28,7 @@ export interface TaskDeps {
   sessions: Pick<AuthServices['sessions'], 'pruneExpired'>;
   throttle: Pick<AuthServices['throttle'], 'prune'>;
   sync: Pick<SyncService, 'pruneTombstones'>;
-  digest: Pick<DigestService, 'sendDue'>;
+  digest: Pick<DigestService, 'sendDue' | 'sendTests'>;
   ops: {
     recorder: Pick<OpsServices['recorder'], 'recordJob' | 'flush'>;
     checker: Pick<OpsServices['checker'], 'run'>;
@@ -56,6 +56,9 @@ const TICK_PLUGIN_BUDGET_MS = 60_000;
  */
 const WORKER_DIGEST_BUDGET_MS = 4 * 60 * 1000;
 const TICK_DIGEST_BUDGET_MS = 60_000;
+/** How often the worker sends the test digests asked for, and how long it spends starting them. */
+const DIGEST_TEST_SECONDS = 30;
+const DIGEST_TEST_BUDGET_MS = 25_000;
 
 /** How long one run may spend keeping kept entries' images. */
 const IMAGES_KEEP_BUDGET_MS = 2 * 60 * 1000;
@@ -144,6 +147,11 @@ export function scheduleWorkerTasks(
     const sent = await digest.sendDue({ deadline: Date.now() + WORKER_DIGEST_BUDGET_MS });
     if (sent > 0) logger.debug({ sent }, 'Sent digests');
   });
+  // Test digests asked for with "Send test".
+  task('digest.test', DIGEST_TEST_SECONDS, async () => {
+    const tested = await digest.sendTests({ deadline: Date.now() + DIGEST_TEST_BUDGET_MS });
+    if (tested > 0) logger.info({ tested }, 'Sent test digests');
+  });
   task('images.keep', 5 * 60, async () => {
     const kept = await feeds.images.keep(IMAGES_KEEP_BUDGET_MS);
     if (kept.indexed + kept.fetched > 0) logger.debug(kept, 'Kept images of kept entries');
@@ -193,6 +201,11 @@ export function createTickHandler(deps: TaskDeps): (event: TickEvent) => Promise
         await tracked('digest.send', async () => {
           const sent = await digest.sendDue({ deadline: Date.now() + TICK_DIGEST_BUDGET_MS });
           logger.info({ sent }, 'Sent digests');
+        });
+        // Test digests a wake of the plugin function missed.
+        await tracked('digest.test', async () => {
+          const tested = await digest.sendTests({ deadline: Date.now() + DIGEST_TEST_BUDGET_MS });
+          logger.info({ tested }, 'Sent test digests');
         });
         // Deliveries a wake missed; then a wake for what is left.
         await tracked('plugins.dispatch', async () => {

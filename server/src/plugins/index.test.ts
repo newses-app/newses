@@ -239,6 +239,46 @@ describe('DigestHookComposer', () => {
     expect(additions.map((addition) => addition.pluginId)).toEqual(['fine']);
   });
 
+  it('tests the plugins on for the user, uncounted, saying why any added nothing', async () => {
+    const plugins = PluginRegistry.load(
+      [
+        composing('fine', () => ({ overview: ' Fine ' })),
+        composing('quiet', () => null),
+        composing('throws', () => {
+          throw new Error('HTTP 401 from the API');
+        }),
+        composing('slow', () => new Promise(() => undefined)),
+        composing('off', () => ({ overview: 'Off' })),
+      ],
+      { logger: silentLogger },
+    );
+    const real = realRunner(['off']);
+    const counted: (boolean | undefined)[] = [];
+    const tests = new DigestHookComposer(
+      plugins,
+      {
+        run: (hookRun) => {
+          counted.push(hookRun.counted);
+          return real.run(hookRun);
+        },
+      },
+      50,
+    );
+    const [fine, ...failed] = await tests.composeTest(input);
+    expect(fine).toEqual({
+      name: 'fine (pt)',
+      addition: { pluginId: 'fine', name: 'fine (pt)', overview: 'Fine', entries: new Map() },
+      failure: null,
+      detail: null,
+    });
+    expect(failed.map(({ name, failure, detail }) => [name, failure, detail])).toEqual([
+      ['quiet (pt)', 'empty', null],
+      ['throws (pt)', 'error', 'HTTP 401 from the API'],
+      ['slow (pt)', 'timeout', null],
+    ]);
+    expect(counted).toEqual([false, false, false, false, false]);
+  });
+
   it("names a plugin in the digest's language, its language, English, else by id", () => {
     const messages = { en: { name: 'Summary' }, de: { name: 'Zusammenfassung' } };
     expect(pluginName({ id: 's', messages }, 'de-AT')).toBe('Zusammenfassung');

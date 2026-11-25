@@ -292,6 +292,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** The token from the mailed link; needs no session. */
       confirmEmail: (token: string) =>
         request<ConfirmEmailResponse>('POST', '/account/email/confirm', { body: { token } }),
+      /**
+       * Emails the user a test digest of their unread articles from the last day, with what the
+       * plugins on for them add, within a minute (API 1.17).
+       */
+      testDigest: () => request<undefined>('POST', '/account/digest/test'),
       /** The user's settings of a plugin with user scope (API 1.15). */
       updatePlugin: (pluginId: string, body: UpdateAccountPluginRequest) =>
         request<Plugin>('PATCH', `/account/plugins/${encodeURIComponent(pluginId)}`, { body }),

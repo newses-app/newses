@@ -14,6 +14,7 @@ import type {
   DigestAddition,
   DigestComposeInput,
   DigestComposer,
+  DigestTest,
   EventHookName,
   EventRunOutcome,
   PluginEventRunner,
@@ -131,31 +132,59 @@ export class DigestHookComposer implements DigestComposer {
   }
 
   async compose(input: DigestComposeInput): Promise<DigestAddition[]> {
-    const listed = new Set(input.entries.map((entry) => entry.id));
     const outcomes = await Promise.all(
-      this.#plugins.map(async (plugin) => {
-        const hook = plugin.definition.hooks['digest.compose'];
-        if (!hook) return null;
-        const outcome = await this.#runner.run({
-          plugin,
-          hook: 'digest.compose',
-          userId: input.userId,
-          timeoutMs: this.#timeoutMs,
-          output: digestAdditionsSchema,
-          call: (context) => hook.run(structuredClone(input), context),
-        });
-        if (!outcome.ok || !outcome.value) return null;
-        const entries = new Map<number, string>();
-        for (const { id, text } of outcome.value.entries ?? []) {
-          const clean = mailText(text);
-          if (clean && listed.has(id) && !entries.has(id)) entries.set(id, clean);
-        }
-        const overview = mailText(outcome.value.overview);
-        if (!overview && entries.size === 0) return null;
-        return { pluginId: plugin.id, name: pluginName(plugin, input.language), overview, entries };
-      }),
+      this.#plugins.map((plugin) => this.#run(plugin, input, true)),
     );
-    return outcomes.filter((addition) => addition !== null);
+    return outcomes.flatMap((outcome) => outcome?.addition ?? []);
+  }
+
+  async composeTest(input: DigestComposeInput): Promise<DigestTest[]> {
+    const outcomes = await Promise.all(
+      this.#plugins.map((plugin) => this.#run(plugin, input, false)),
+    );
+    return outcomes.filter((outcome) => outcome !== null);
+  }
+
+  /**
+   * One plugin's additions, checked, or why it has none; null when it is off for the user.
+   * `counted` is false for a test someone asked for.
+   */
+  async #run(
+    plugin: LoadedPlugin,
+    input: DigestComposeInput,
+    counted: boolean,
+  ): Promise<DigestTest | null> {
+    const name = pluginName(plugin, input.language);
+    const hook = plugin.definition.hooks['digest.compose'];
+    if (!hook) return null;
+    const outcome = await this.#runner.run({
+      plugin,
+      hook: 'digest.compose',
+      userId: input.userId,
+      timeoutMs: this.#timeoutMs,
+      output: digestAdditionsSchema,
+      counted,
+      call: (context) => hook.run(structuredClone(input), context),
+    });
+    if (!outcome.ok)
+      return outcome.failure === 'disabled'
+        ? null
+        : { name, addition: null, failure: outcome.failure, detail: outcome.detail ?? null };
+    const listed = new Set(input.entries.map((entry) => entry.id));
+    const entries = new Map<number, string>();
+    for (const { id, text } of outcome.value?.entries ?? []) {
+      const clean = mailText(text);
+      if (clean && listed.has(id) && !entries.has(id)) entries.set(id, clean);
+    }
+    const overview = mailText(outcome.value?.overview);
+    if (!overview && entries.size === 0)
+      return { name, addition: null, failure: 'empty', detail: null };
+    return {
+      name,
+      addition: { pluginId: plugin.id, name, overview, entries },
+      failure: null,
+      detail: null,
+    };
   }
 }
 

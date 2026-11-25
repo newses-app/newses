@@ -42,6 +42,10 @@ const app = buildApp({
       logger,
       publicUrl: config.publicUrl,
       unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
+      // The plugin function sends test digests when woken.
+      wakeTests: async () => {
+        await feedDeps.queue.enqueue('plugin.dispatch', {}, { key: 'plugin.dispatch' });
+      },
     }),
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,

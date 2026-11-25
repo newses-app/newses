@@ -44,6 +44,7 @@ const plugin = (
     ]),
   ),
   testable: false,
+  digests: false,
 });
 
 const webhook = plugin('webhook', { 'published.changed': 120 }, ['user']);

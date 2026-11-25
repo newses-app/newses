@@ -2,7 +2,7 @@ import type { DigestFrequency, Entry } from '@newses/shared';
 import type { MessageParams } from '@newses/shared/messages';
 import { type MessageKey, translate } from '../../i18n.ts';
 import { escapeHtml } from '../html.ts';
-import type { DigestAddition } from '../plugins/catalog.ts';
+import type { DigestAddition, DigestTest } from '../plugins/catalog.ts';
 import type { MailMessage } from '../ports.ts';
 import { isHttp } from './article-mail.ts';
 import { buttonHtml, mailDocument } from './layout.ts';
@@ -40,6 +40,11 @@ export interface DigestContent {
   timeZone: string;
   markedRead: boolean;
   unsubscribeUrl: string;
+  /**
+   * A test digest someone asked for: how each plugin on for them did; such a digest says so
+   * instead of when digests come, and has no unsubscribe link.
+   */
+  test?: { plugins: readonly Pick<DigestTest, 'name' | 'failure' | 'detail'>[] };
 }
 
 const MUTED = 'color:#5f5b66';
@@ -107,6 +112,29 @@ function schedule(
     : message('digestDaily', { time, zone: content.timeZone });
 }
 
+/** Why a plugin added nothing to a test digest, if it did not. */
+function testOutcome(
+  { name: plugin, failure, detail }: Pick<DigestTest, 'name' | 'failure' | 'detail'>,
+  message: (key: MessageKey, params?: MessageParams) => string,
+): string[] {
+  switch (failure) {
+    case null:
+      return [];
+    case 'error':
+      return [
+        detail
+          ? message('digestTestError', { plugin, detail })
+          : message('digestTestFailed', { plugin }),
+      ];
+    case 'timeout':
+      return [message('digestTestTimeout', { plugin })];
+    case 'invalid':
+      return [message('digestTestInvalid', { plugin })];
+    case 'empty':
+      return [message('digestTestEmpty', { plugin })];
+  }
+}
+
 /**
  * The unread digest: unread entries that came in since the last, by category and subscription,
  * each linked into the web app and to the original, with how many more there are, when it comes,
@@ -124,12 +152,21 @@ export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' 
     (sum, group) => sum + group.feeds.reduce((n, feed) => n + feed.entries.length, 0),
     0,
   );
-  const subject = message('digestSubject', { n: count + more });
+  const test = content.test;
+  const subject = test
+    ? message('digestTestSubject', { n: count + more })
+    : message('digestSubject', { n: count + more });
   const categories = groups.some((group) => group.title !== null);
   const settingsUrl = `${appUrl}/settings/account`;
 
-  const html: string[] = [`<p style="${MUTED}">${escapeHtml(message('digestIntro'))}</p>`];
-  const text: string[] = [message('digestIntro')];
+  const intro = test
+    ? [
+        message('digestTestIntro'),
+        ...test.plugins.flatMap((plugin) => testOutcome(plugin, message)),
+      ]
+    : [message('digestIntro')];
+  const html = intro.map((line) => `<p style="${MUTED}">${escapeHtml(line)}</p>`);
+  const text = [intro.join('\n')];
   for (const addition of additions) {
     if (!addition.overview) continue;
     html.push(
@@ -191,25 +228,26 @@ export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' 
   html.push(`<p style="margin:24px 0">${buttonHtml(message('digestOpen'), `${appUrl}/all`)}</p>`);
   text.push(`${message('digestOpen')}: ${appUrl}/all`);
 
-  const footer = [
-    ...(content.markedRead ? [message('digestMarkedRead')] : []),
-    schedule(content, message),
+  const footer = test
+    ? [message('digestTestFooter')]
+    : [...(content.markedRead ? [message('digestMarkedRead')] : []), schedule(content, message)];
+  const links = [
+    { label: message('digestSettings'), url: settingsUrl },
+    ...(test ? [] : [{ label: message('digestUnsubscribe'), url: content.unsubscribeUrl }]),
   ];
   html.push(
     `<hr style="border:0;border-top:1px solid #e0dce4;margin:32px 0 16px">`,
     ...footer.map((line) => `<p style="${MUTED};font-size:14px">${escapeHtml(line)}</p>`),
     `<p style="${MUTED};font-size:14px">` +
-      `<a href="${escapeHtml(settingsUrl)}" style="${LINK}">${escapeHtml(message('digestSettings'))}</a> · ` +
-      `<a href="${escapeHtml(content.unsubscribeUrl)}" style="${LINK}">${escapeHtml(message('digestUnsubscribe'))}</a></p>`,
+      links
+        .map(
+          (link) =>
+            `<a href="${escapeHtml(link.url)}" style="${LINK}">${escapeHtml(link.label)}</a>`,
+        )
+        .join(' · ') +
+      `</p>`,
   );
-  text.push(
-    [
-      '-- ',
-      ...footer,
-      `${message('digestSettings')}: ${settingsUrl}`,
-      `${message('digestUnsubscribe')}: ${content.unsubscribeUrl}`,
-    ].join('\n'),
-  );
+  text.push(['-- ', ...footer, ...links.map((link) => `${link.label}: ${link.url}`)].join('\n'));
 
   return {
     subject,

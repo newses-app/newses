@@ -74,7 +74,7 @@ afterAll(async () => {
 describe('plugins API', () => {
   it('tells apps that plugins are installed', async () => {
     const info = await app.inject({ method: 'GET', url: '/api/v1/server' });
-    expect(info.json()).toMatchObject({ plugins: true, apiVersion: { major: 1, minor: 16 } });
+    expect(info.json()).toMatchObject({ plugins: true, apiVersion: { major: 1, minor: 17 } });
   });
 
   it('lists every installed plugin to admins, with its form and instance settings', async () => {
@@ -215,9 +215,9 @@ describe('plugins API', () => {
   it("tests a plugin with the user's saved settings, while it is on", async () => {
     tests.length = 0;
     const [patId] = (await services.users.list()).filter((u) => u.login === 'pat').map((u) => u.id);
-    expect((await list(admin)).plugins.map((p) => [p.id, p.testable])).toEqual([
-      ['webhook', true],
-      ['summary', false],
+    expect((await list(admin)).plugins.map((p) => [p.id, p.testable, p.digests])).toEqual([
+      ['webhook', true, false],
+      ['summary', false, true],
     ]);
     // Off for the instance: not there for users.
     expect((await call('POST', '/account/plugins/webhook/test', pat)).statusCode).toBe(404);
