@@ -1,6 +1,7 @@
 import {
   confirmEmailRequestSchema,
   confirmEmailResponseSchema,
+  digestTestPreviewSchema,
   setEmailRequestSchema,
   userSchema,
 } from '@newses/shared';
@@ -14,7 +15,7 @@ import { logSecurity } from '../security-log.ts';
 
 export interface AccountRoutesOptions {
   email: AccountEmailService;
-  digest: Pick<DigestService, 'requestTest'>;
+  digest: Pick<DigestService, 'requestTest' | 'previewTest'>;
   limits: Pick<UserRateLimiter, 'take'>;
   /** Origin of the web app the confirmation link opens; null uses each request's origin. */
   publicUrl: string | null;
@@ -63,6 +64,17 @@ export const accountRoutes: FastifyPluginAsyncZod<AccountRoutesOptions> = (
     logSecurity(request, 'email_removed');
     return reply.code(204).send();
   });
+
+  // What a test digest would hold now, sending nothing (API 1.17).
+  app.get(
+    '/account/digest/test',
+    { preHandler: requireUser, schema: { response: { 200: digestTestPreviewSchema } } },
+    async (request) => {
+      const userId = requireAuth(request).user.id;
+      await limits.take(userId, 'digestPreview');
+      return digest.previewTest(userId);
+    },
+  );
 
   // Sent by the next run that sends test digests, within a minute (API 1.17).
   app.post('/account/digest/test', { preHandler: requireUser }, async (request, reply) => {

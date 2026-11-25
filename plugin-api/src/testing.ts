@@ -7,6 +7,8 @@ import {
   digestAdditionsSchema,
   type DigestComposeInput,
   type DigestEntry,
+  type DigestEstimate,
+  digestEstimateSchema,
   type EntriesAddedEvent,
   EVENT_LIMITS,
   type EventEntry,
@@ -275,6 +277,7 @@ type HookInput = {
   'published.changed': PublishedChangedEvent;
   /** `unlisted` is none unless given. */
   'digest.compose': Omit<DigestComposeInput, 'unlisted'> & { unlisted?: DigestEntry[] };
+  'digest.estimate': Omit<DigestComposeInput, 'unlisted'> & { unlisted?: DigestEntry[] };
   /** A test takes no input. */
   test: undefined;
 };
@@ -282,6 +285,7 @@ type HookValue = {
   'entries.added': unknown;
   'published.changed': unknown;
   'digest.compose': DigestAdditions | null;
+  'digest.estimate': DigestEstimate | null;
   test: TestResult;
 };
 
@@ -289,6 +293,7 @@ const LIMIT_SECONDS: Record<keyof HookInput, number> = {
   'entries.added': EVENT_LIMITS.timeoutSeconds,
   'published.changed': EVENT_LIMITS.timeoutSeconds,
   'digest.compose': DIGEST_LIMITS.timeoutSeconds,
+  'digest.estimate': DIGEST_LIMITS.estimateTimeoutSeconds,
   test: TEST_LIMITS.timeoutSeconds,
 };
 
@@ -296,7 +301,8 @@ const LIMIT_SECONDS: Record<keyof HookInput, number> = {
  * Runs one of the plugin's hooks as the server would: the plugin must accept this contract's
  * version and implement the hook; settings are parsed with its schemas (defaults applied, a
  * mismatch throws); the hook runs under its time limit, its context's `signal` aborting then; and
- * a digest hook's result must be within `DIGEST_LIMITS`, a test's a `TestResult`. Throws where
+ * a digest hook's result (an addition or an estimate) must be within `DIGEST_LIMITS`, a test's a
+ * `TestResult`. Throws where
  * the server would count a failure; `fetch` reaches the plugin's own `hosts` unless
  * `options.hosts` says otherwise.
  */
@@ -332,7 +338,9 @@ export async function runHook<H extends keyof HookInput>(
   });
   const hookToRun: { run(...args: unknown[]): unknown } = declared;
   const given: unknown =
-    hook === 'digest.compose' ? { unlisted: [], ...(input as HookInput['digest.compose']) } : input;
+    hook === 'digest.compose' || hook === 'digest.estimate'
+      ? { unlisted: [], ...(input as HookInput['digest.compose']) }
+      : input;
   const value = await new Promise<unknown>((resolve, reject) => {
     const onAbort = () => {
       reject(new Error(`${plugin.id}'s ${hook} ran out of time (${String(timeoutMs)} ms)`));
@@ -352,6 +360,14 @@ export async function runHook<H extends keyof HookInput>(
     if (!result.success)
       throw new Error(`${plugin.id}'s test returned what a test does not: ${result.error.message}`);
     return { value: result.data, context };
+  }
+  if (hook === 'digest.estimate') {
+    const estimate = digestEstimateSchema.safeParse(value);
+    if (!estimate.success)
+      throw new Error(
+        `${plugin.id}'s digest.estimate returned what a preview does not take: ${estimate.error.message}`,
+      );
+    return { value: (estimate.data ?? null) as HookValue[H], context };
   }
   if (hook !== 'digest.compose') return { value: value as HookValue[H], context };
   const parsed = digestAdditionsSchema.safeParse(value);

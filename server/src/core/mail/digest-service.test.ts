@@ -26,6 +26,7 @@ const APP_URL = 'https://reader.example';
 
 /** A composer's test run, for composers whose tests are not what is tested. */
 const untested: DigestComposer['composeTest'] = () => Promise.reject(new Error('not tested'));
+const unestimated: DigestComposer['estimate'] = () => Promise.reject(new Error('not estimated'));
 
 let database: TestDatabase;
 let db: Db;
@@ -285,6 +286,7 @@ describe('DigestService', () => {
     const composer: DigestComposer = {
       composes: true,
       composeTest: untested,
+      estimate: unestimated,
       compose: (input) => {
         given.push(input);
         return Promise.resolve([]);
@@ -369,6 +371,7 @@ describe('DigestService', () => {
     const composer: DigestComposer = {
       composes: true,
       composeTest: untested,
+      estimate: unestimated,
       compose: (input) => {
         given.push(input);
         const [newest] = input.entries;
@@ -437,6 +440,7 @@ describe('DigestService', () => {
       composes: true,
       compose: () => Promise.reject(new Error('database gone')),
       composeTest: untested,
+      estimate: unestimated,
     };
     expect(await digestWith(failing).sendDue()).toBe(1);
     expect(mailer.sent[0]?.html).toContain('Vote 1');
@@ -444,7 +448,14 @@ describe('DigestService', () => {
     await ingester.ingest(news, null, items(1, 'Poll'));
     now = new Date('2026-06-16T05:00:00Z');
     const compose = vi.fn<DigestComposer['compose']>();
-    expect(await digestWith({ composes: false, compose, composeTest: untested }).sendDue()).toBe(1);
+    expect(
+      await digestWith({
+        composes: false,
+        compose,
+        composeTest: untested,
+        estimate: unestimated,
+      }).sendDue(),
+    ).toBe(1);
     expect(compose).not.toHaveBeenCalled();
     expect(mailer.sent[1]?.html).toContain('Poll 1');
   });
@@ -502,6 +513,17 @@ describe('test digests', () => {
     const composer: DigestComposer = {
       composes: true,
       compose: () => Promise.reject(new Error('not a digest')),
+      estimate: (input) => {
+        given.push(input);
+        return Promise.resolve(
+          failures.map((failure, n) => ({
+            pluginId: `p${String(n)}`,
+            name: `Plugin <${String(n)}>`,
+            estimate: failure ? null : { tokens: 1_200, costUsd: 0.25, note: null },
+            failure: failure === 'error' ? ('error' as const) : failure ? ('none' as const) : null,
+          })),
+        );
+      },
       composeTest: (input) => {
         given.push(input);
         return Promise.resolve(
@@ -604,6 +626,31 @@ describe('test digests', () => {
     expect(await tests.sendTests()).toBe(0);
     expect(await stateOf(alice)).toEqual(before);
     expect(await unreadOf(alice)).toBe(2);
+  });
+
+  it('previews a test digest, with what each plugin expects to cost, sending nothing', async () => {
+    await ingester.ingest(news, null, items(3, 'Vote'));
+    await cameInEarlier(alice, 'Vote 1');
+    const { composer, given } = testing(null, 'error');
+    const tests = digestWith(composer);
+    expect(await tests.previewTest(alice)).toEqual({
+      articles: 2,
+      plugins: [
+        {
+          pluginId: 'p0',
+          name: 'Plugin <0>',
+          estimate: { tokens: 1_200, costUsd: 0.25, note: null },
+          failure: null,
+        },
+        { pluginId: 'p1', name: 'Plugin <1>', estimate: null, failure: 'error' },
+      ],
+    });
+    expect(given.map((input) => input.entries.map((e) => e.title))).toEqual([['Vote 3', 'Vote 2']]);
+    expect(await db.select().from(digestTests)).toHaveLength(0);
+    expect(mailer.sent).toHaveLength(0);
+    // Refused as asking for one is; without plugins, only the count.
+    expect(await refusal(tests.previewTest(bob))).toBe('email_unconfirmed');
+    expect(await digest.previewTest(alice)).toEqual({ articles: 2, plugins: [] });
   });
 
   it('sends a test without plugins', async () => {

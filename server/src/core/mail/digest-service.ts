@@ -18,6 +18,7 @@ import type {
   DigestComposeInput,
   DigestComposer,
   DigestPluginEntry,
+  DigestPluginEstimate,
 } from '../plugins/catalog.ts';
 import { readPluginEntries } from '../plugins/entries.ts';
 import type { Logger, Mailer } from '../ports.ts';
@@ -36,6 +37,12 @@ const LEASE_SECONDS = 60 * 60;
 export const DIGEST_TEST_HOURS = 24;
 /** A test digest not sent within this many minutes of being asked for is dropped. */
 const TEST_EXPIRY_MINUTES = 60;
+
+/** What a test digest would hold now: its unread entries, and each plugin's expected cost. */
+export interface DigestTestPreview {
+  articles: number;
+  plugins: DigestPluginEstimate[];
+}
 
 export interface DigestDeps {
   db: Db;
@@ -195,22 +202,8 @@ export class DigestService {
    * entries came in over the last `DIGEST_TEST_HOURS`.
    */
   async requestTest(userId: number): Promise<void> {
-    if (!this.enabled) throw new DomainError('mail_unavailable', 'This server sends no digests');
-    const [user] = await this.#db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, userId));
-    if (!user?.email)
-      throw new DomainError('conflict', 'Confirm an email address to get a test digest', {
-        reason: 'email_unconfirmed',
-      });
     const now = this.#now();
-    const found = await this.#db.execute(sql`
-      SELECT 1 FROM user_entries ue WHERE ${this.#testCondition(userId, now)} LIMIT 1`);
-    if (found.rows.length === 0)
-      throw new DomainError('conflict', 'No unread articles came in over the last day', {
-        reason: 'digest_test_empty',
-      });
+    await this.#checkTest(userId, now);
     await this.#db
       .insert(digestTests)
       .values({ userId, requestedAt: now })
@@ -251,6 +244,65 @@ export class DigestService {
     return sent;
   }
 
+  /**
+   * What a test digest for the user would hold now, sending nothing: how many unread entries,
+   * and what each plugin on for them expects its additions to cost; refused as `requestTest` is.
+   */
+  async previewTest(userId: number): Promise<DigestTestPreview> {
+    const now = this.#now();
+    await this.#checkTest(userId, now);
+    const test = await this.#testDigest(userId, now);
+    const composer = this.#composer;
+    const plugins = composer?.composes ? await composer.estimate(await test.input()) : [];
+    return { articles: test.count, plugins };
+  }
+
+  /** Refuses a test digest the user could not get, as `requestTest` describes. */
+  async #checkTest(userId: number, now: Date): Promise<void> {
+    if (!this.enabled) throw new DomainError('mail_unavailable', 'This server sends no digests');
+    const [user] = await this.#db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user?.email)
+      throw new DomainError('conflict', 'Confirm an email address to get a test digest', {
+        reason: 'email_unconfirmed',
+      });
+    const found = await this.#db.execute(sql`
+      SELECT 1 FROM user_entries ue WHERE ${this.#testCondition(userId, now)} LIMIT 1`);
+    if (found.rows.length === 0)
+      throw new DomainError('conflict', 'No unread articles came in over the last day', {
+        reason: 'digest_test_empty',
+      });
+  }
+
+  /** A test digest's entries, counted and listed, and its input for plugins, read when asked. */
+  async #testDigest(userId: number, now: Date) {
+    const prefs = await this.#prefs.get(userId);
+    const condition = this.#testCondition(userId, now);
+    const [found] = (
+      await this.#db.execute<{ count: number }>(sql`
+        SELECT count(*)::int AS count FROM user_entries ue WHERE ${condition}`)
+    ).rows;
+    const count = found?.count ?? 0;
+    const testEntries = (offset: number, limit: number) =>
+      this.#entriesWhere(condition, offset, limit);
+    const listed = count === 0 ? [] : await testEntries(0, DIGEST_MAX_ENTRIES);
+    const locale = ownerLocale(prefs.language);
+    const frequency: 'daily' | 'weekly' = prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily';
+    const more = count - listed.length;
+    const input = () =>
+      this.#pluginInput({
+        userId,
+        language: locale,
+        frequency,
+        listed,
+        more,
+        unlisted: () => testEntries(DIGEST_MAX_ENTRIES, DIGEST_MAX_UNLISTED),
+      });
+    return { prefs, count, listed, locale, frequency, more, input };
+  }
+
   /** The unread entries shown in All that came in over the last `DIGEST_TEST_HOURS`. */
   #testCondition(userId: number, now: Date) {
     const since = new Date(now.getTime() - DIGEST_TEST_HOURS * 3_600_000);
@@ -263,38 +315,18 @@ export class DigestService {
    * them add and why any added nothing; leaves their digests' state and the entries as they were.
    */
   async #sendTest(mailer: Mailer, appUrl: string, userId: number, now: Date): Promise<boolean> {
-    const prefs = await this.#prefs.get(userId);
     const [user] = await this.#db
       .select({ login: users.login, email: users.email, disabledAt: users.disabledAt })
       .from(users)
       .where(eq(users.id, userId));
     if (!user?.email || user.disabledAt) return false;
-    const condition = this.#testCondition(userId, now);
-    const [found] = (
-      await this.#db.execute<{ count: number }>(sql`
-        SELECT count(*)::int AS count FROM user_entries ue WHERE ${condition}`)
-    ).rows;
-    const count = found?.count ?? 0;
+    const { prefs, count, listed, locale, frequency, more, input } = await this.#testDigest(
+      userId,
+      now,
+    );
     if (count === 0) return false;
-    const testEntries = (offset: number, limit: number) =>
-      this.#entriesWhere(condition, offset, limit);
-    const listed = await testEntries(0, DIGEST_MAX_ENTRIES);
-    const locale = ownerLocale(prefs.language);
-    const frequency = prefs.digestFrequency === 'weekly' ? 'weekly' : 'daily';
-    const more = count - listed.length;
     const composer = this.#composer;
-    const tested = composer?.composes
-      ? await composer.composeTest(
-          await this.#pluginInput({
-            userId,
-            language: locale,
-            frequency,
-            listed,
-            more,
-            unlisted: () => testEntries(DIGEST_MAX_ENTRIES, DIGEST_MAX_UNLISTED),
-          }),
-        )
-      : [];
+    const tested = composer?.composes ? await composer.composeTest(await input()) : [];
     await mailer.send({
       to: [user.email],
       ...digestMail({

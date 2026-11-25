@@ -320,6 +320,9 @@ describe('test digests', () => {
         lang: null,
       },
     ]);
+    const preview = await call('GET', '/account/digest/test', auth);
+    expect(preview.json()).toEqual({ articles: 1, plugins: [] });
+    expect(await db.select().from(digestTests)).toEqual([]);
     expect(await asked()).toBe('queued');
     expect(await db.select().from(digestTests)).toMatchObject([{ userId: pat }]);
     expect(await services.mail.digest.sendTests()).toBe(1);

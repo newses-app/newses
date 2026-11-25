@@ -949,6 +949,23 @@
       "testQueued": "A test digest is on its way to your email address."
     }
   },
+  "testDigest": {
+    "articles": "A test digest now holds {n} unread article from the last day. | A test digest now holds {n} unread articles from the last day.",
+    "separator": ": ",
+    "tokensAndCost": "about {tokens} tokens, about {cost}.",
+    "tokens": "about {tokens} tokens.",
+    "cost": "about {cost}.",
+    "lessThan": "less than {amount}",
+    "failure": {
+      "none": "gives no estimate.",
+      "error": "couldn't estimate.",
+      "timeout": "ran out of time to estimate.",
+      "invalid": "gave an estimate that can't be shown."
+    },
+    "send": "Send it",
+    "cancel": "Cancel",
+    "cancelled": "No test digest sent."
+  },
   "users": {
     "invalid": "Logins use letters, digits, and . _ {'@'} - only, up to 64 characters. Passwords need at least 8 characters and can't be a common one.",
     "create": "New user",

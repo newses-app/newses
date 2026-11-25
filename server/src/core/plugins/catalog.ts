@@ -111,6 +111,22 @@ export interface DigestComposer {
    * turning it off; never throws.
    */
   composeTest(input: DigestComposeInput): Promise<DigestTest[]>;
+  /**
+   * What each plugin on for the user expects its additions to a digest of `input` to cost, in
+   * install order, from `digest.estimate`, not counted toward turning it off; never throws.
+   */
+  estimate(input: DigestComposeInput): Promise<DigestPluginEstimate[]>;
+}
+
+/**
+ * One plugin's estimate for a test digest preview: its name in the digest's language, and its
+ * estimate, or none: it has no `digest.estimate` (`none`) or the hook failed as a hook fails.
+ */
+export interface DigestPluginEstimate {
+  pluginId: string;
+  name: string;
+  estimate: { tokens: number | null; costUsd: number | null; note: string | null } | null;
+  failure: 'none' | 'error' | 'timeout' | 'invalid' | null;
 }
 
 /**

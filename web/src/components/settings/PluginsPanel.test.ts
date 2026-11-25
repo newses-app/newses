@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
     removePlugin: vi.fn(),
     testPlugin: vi.fn(),
     testDigest: vi.fn(),
+    previewTestDigest: vi.fn(),
   },
   serverInfo: vi.fn(() => Promise.resolve({ product: 'newses', mail: true, digest: true })),
 }));
@@ -242,31 +243,48 @@ describe('PluginsPanel', () => {
     expect(untested.text()).not.toContain(t('plugins.sendTest'));
   });
 
-  it('follows a passing test of a plugin that adds to digests with a test digest', async () => {
+  it("follows a passing test of a plugin that adds to digests with a test digest's preview", async () => {
     const digesting = { ...webhook, testable: true, digests: true };
     api.account.testPlugin.mockResolvedValueOnce({
       ok: true,
       message: 'The key works',
       failure: null,
     });
+    api.account.previewTestDigest.mockResolvedValue({
+      articles: 2,
+      plugins: [
+        {
+          pluginId: 'webhook',
+          name: 'Webhook',
+          estimate: { tokens: null, costUsd: 0.001, note: null },
+          failure: null,
+        },
+      ],
+    });
     api.account.testDigest.mockResolvedValue(undefined);
     const panel = await mounted('user', { plugins: [digesting], uninstalled: [] });
     expect(panel.text()).toContain(t('plugins.testDigestHint'));
-    const send = panel.findAll('button').find((b) => b.text() === t('plugins.sendTest'));
-    await send?.trigger('click');
+    const button = (label: string) => panel.findAll('button').find((b) => b.text() === label);
+    await button(t('plugins.sendTest'))?.trigger('click');
+    await flushPromises();
+    expect(panel.text()).toContain(t('plugins.testPassed', { message: 'The key works' }));
+    expect(panel.text()).toContain(
+      t('testDigest.cost', { cost: t('testDigest.lessThan', { amount: '$0.01' }) }),
+    );
+    expect(api.account.testDigest).not.toHaveBeenCalled();
+    await button(t('testDigest.send'))?.trigger('click');
     await flushPromises();
     expect(api.account.testDigest).toHaveBeenCalledOnce();
-    expect(panel.text()).toContain(t('plugins.testPassed', { message: 'The key works' }));
     expect(panel.text()).toContain(t('email.digest.testQueued'));
 
-    // A failing test sends none.
+    // A failing test previews none.
     api.account.testPlugin.mockResolvedValueOnce({ ok: false, message: 'HTTP 401', failure: null });
-    await send?.trigger('click');
+    await button(t('plugins.sendTest'))?.trigger('click');
     await flushPromises();
-    expect(api.account.testDigest).toHaveBeenCalledOnce();
+    expect(api.account.previewTestDigest).toHaveBeenCalledOnce();
     expect(panel.text()).not.toContain(t('email.digest.testQueued'));
 
-    // Without a test hook of its own, the test is the digest.
+    // Without a test hook of its own, the test is the preview.
     const digestOnly = { ...webhook, testable: false, digests: true };
     const only = await mounted('user', { plugins: [digestOnly], uninstalled: [] });
     await only
@@ -275,8 +293,7 @@ describe('PluginsPanel', () => {
       ?.trigger('click');
     await flushPromises();
     expect(api.account.testPlugin).toHaveBeenCalledTimes(2);
-    expect(api.account.testDigest).toHaveBeenCalledTimes(2);
-    expect(only.text()).toContain(t('email.digest.testQueued'));
+    expect(api.account.previewTestDigest).toHaveBeenCalledTimes(2);
     expect(only.text()).not.toContain(t('plugins.testPassedQuietly'));
   });
 

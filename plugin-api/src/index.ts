@@ -248,6 +248,9 @@ export const DIGEST_LIMITS = {
   entryText: 1000,
   timeoutSeconds: 60,
   unlisted: 2000,
+  /** Characters of a `digest.estimate` note, and its time. */
+  estimateNote: 300,
+  estimateTimeoutSeconds: 10,
 } as const;
 
 /** What a `digest.compose` hook may return; anything else adds nothing. */
@@ -272,6 +275,39 @@ export interface DigestHook<C extends PluginContext = PluginContext> {
   ): DigestAdditions | null | undefined | Promise<DigestAdditions | null | undefined>;
 }
 
+/**
+ * What a plugin's `digest.compose` is expected to cost for one digest, from `digest.estimate`:
+ * the tokens (or whatever it is billed by) it would use, in US dollars, with a note in plain text
+ * such as the model it would use or why it would add nothing. Each is optional.
+ */
+export interface DigestEstimate {
+  tokens?: number | null | undefined;
+  costUsd?: number | null | undefined;
+  note?: string | null | undefined;
+}
+
+/** What a `digest.estimate` hook may return; anything else is no estimate. */
+export const digestEstimateSchema: z.ZodType<DigestEstimate | null | undefined> = z
+  .object({
+    tokens: z.number().int().min(0).nullish(),
+    costUsd: z.number().min(0).max(1_000_000).nullish(),
+    note: z.string().max(DIGEST_LIMITS.estimateNote).nullish(),
+  })
+  .nullish();
+
+/**
+ * Estimates what `digest.compose` would cost for a digest, given the same input, when a user
+ * previews a test digest; it should make no billed requests. Runs under
+ * `DIGEST_LIMITS.estimateTimeoutSeconds`, never counted toward turning the plugin off; a hook
+ * that throws, runs out of time, or returns more shows as no estimate. Needs `digest.compose`.
+ */
+export interface DigestEstimateHook<C extends PluginContext = PluginContext> {
+  run(
+    input: DigestComposeInput,
+    context: C,
+  ): DigestEstimate | null | undefined | Promise<DigestEstimate | null | undefined>;
+}
+
 /** What a `test` hook reports: whether the test passed, and what happened, as plain text. */
 export interface TestResult {
   ok: boolean;
@@ -293,8 +329,9 @@ export const testResultSchema: z.ZodType<TestResult> = z.object({
  * (a plugin with user settings) or the instance (an admin), while the plugin is on there. A test
  * that throws or runs out of time fails, with the error's message shown; tests never count
  * toward turning a plugin off. For a plugin with `digest.compose` and user settings, a user's
- * test that passes (or Send test of a plugin without this hook) is followed by a test digest,
- * which shows what `digest.compose` adds or why it added nothing.
+ * test that passes (or Send test of a plugin without this hook) is followed by a preview of a
+ * test digest, with what `digest.estimate` expects it to cost, and the test digest if they send
+ * it, which shows what `digest.compose` adds or why it added nothing.
  */
 export interface TestHook<C extends PluginContext = PluginContext> {
   run(context: C): TestResult | Promise<TestResult>;
@@ -308,6 +345,7 @@ export interface PluginHooks<C extends PluginContext = PluginContext> {
   'entries.added'?: EventHook<EntriesAddedEvent, C>;
   'published.changed'?: EventHook<PublishedChangedEvent, C>;
   'digest.compose'?: DigestHook<C>;
+  'digest.estimate'?: DigestEstimateHook<C>;
   test?: TestHook<C>;
 }
 

@@ -1,5 +1,6 @@
 import {
   digestAdditionsSchema,
+  digestEstimateSchema,
   DIGEST_LIMITS,
   EVENT_LIMITS,
   TEST_LIMITS,
@@ -14,6 +15,7 @@ import type {
   DigestAddition,
   DigestComposeInput,
   DigestComposer,
+  DigestPluginEstimate,
   DigestTest,
   EventHookName,
   EventRunOutcome,
@@ -116,15 +118,18 @@ export class DigestHookComposer implements DigestComposer {
   readonly #plugins: LoadedPlugin[];
   readonly #runner: Pick<PluginRunner, 'run'>;
   readonly #timeoutMs: number;
+  readonly #estimateTimeoutMs: number;
 
   constructor(
     registry: PluginRegistry,
     runner: Pick<PluginRunner, 'run'>,
     timeoutMs = DIGEST_LIMITS.timeoutSeconds * 1000,
+    estimateTimeoutMs = DIGEST_LIMITS.estimateTimeoutSeconds * 1000,
   ) {
     this.#plugins = registry.list().filter((plugin) => plugin.definition.hooks['digest.compose']);
     this.#runner = runner;
     this.#timeoutMs = timeoutMs;
+    this.#estimateTimeoutMs = estimateTimeoutMs;
   }
 
   get composes(): boolean {
@@ -141,6 +146,43 @@ export class DigestHookComposer implements DigestComposer {
   async composeTest(input: DigestComposeInput): Promise<DigestTest[]> {
     const outcomes = await Promise.all(
       this.#plugins.map((plugin) => this.#run(plugin, input, false)),
+    );
+    return outcomes.filter((outcome) => outcome !== null);
+  }
+
+  async estimate(input: DigestComposeInput): Promise<DigestPluginEstimate[]> {
+    const outcomes = await Promise.all(
+      this.#plugins.map(async (plugin): Promise<DigestPluginEstimate | null> => {
+        const hook = plugin.definition.hooks['digest.estimate'];
+        // Run even without the hook, so plugins off for the user are left out.
+        const outcome = await this.#runner.run({
+          plugin,
+          hook: 'digest.estimate',
+          userId: input.userId,
+          timeoutMs: this.#estimateTimeoutMs,
+          output: digestEstimateSchema,
+          counted: false,
+          call: (context) => hook?.run(structuredClone(input), context),
+        });
+        const pluginId = plugin.id;
+        const name = pluginName(plugin, input.language);
+        if (!outcome.ok)
+          return outcome.failure === 'disabled'
+            ? null
+            : { pluginId, name, estimate: null, failure: outcome.failure };
+        if (!hook) return { pluginId, name, estimate: null, failure: 'none' };
+        const value = outcome.value;
+        return {
+          pluginId,
+          name,
+          estimate: {
+            tokens: value?.tokens ?? null,
+            costUsd: value?.costUsd ?? null,
+            note: mailText(value?.note),
+          },
+          failure: null,
+        };
+      }),
     );
     return outcomes.filter((outcome) => outcome !== null);
   }

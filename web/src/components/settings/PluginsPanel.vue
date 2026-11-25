@@ -106,7 +106,6 @@ const serverInfo = useQuery({
 /** A user's "Send test" of a plugin that adds to digests also emails them a test digest. */
 const testsDigest = (plugin: Plugin) =>
   plugin.digests === true && serverInfo.data.value?.digest === true;
-const testDigest = () => api.account.testDigest();
 
 const hasMine = (state: PluginSettingsState) =>
   state.enabled || state.secretsSet.length > 0 || Object.keys(state.settings).length > 0;
@@ -239,7 +238,7 @@ const hasMine = (state: PluginSettingsState) =>
               plugin.settingsSchemas.user
             "
             :run="plugin.testable ? testMine(plugin) : undefined"
-            :digest="testsDigest(plugin) ? testDigest : undefined"
+            :digest="testsDigest(plugin)"
           />
           <v-btn
             v-if="hasMine(plugin.user)"

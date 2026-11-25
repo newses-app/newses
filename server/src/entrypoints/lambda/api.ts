@@ -16,6 +16,16 @@ const feeds = createFeedServices(feedDeps);
 const prefs = new PrefsService(db);
 const entries = createEntryServices(db, feedDeps.realtime, archive);
 
+const plugins = createProcessPlugins({
+  config,
+  registry: runtime.plugins,
+  db,
+  keys: feedDeps.keys,
+  logger,
+  ops: ops.recorder,
+  polite: feeds.polite,
+});
+
 const app = buildApp({
   logger,
   trustProxy: config.http.trustProxy,
@@ -42,6 +52,7 @@ const app = buildApp({
       logger,
       publicUrl: config.publicUrl,
       unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
+      composer: plugins.digest,
       // The plugin function sends test digests when woken.
       wakeTests: async () => {
         await feedDeps.queue.enqueue('plugin.dispatch', {}, { key: 'plugin.dispatch' });
@@ -50,15 +61,7 @@ const app = buildApp({
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,
-    plugins: createProcessPlugins({
-      config,
-      registry: runtime.plugins,
-      db,
-      keys: feedDeps.keys,
-      logger,
-      ops: ops.recorder,
-      polite: feeds.polite,
-    }),
+    plugins,
   },
   healthChecks: {
     db: async () => {

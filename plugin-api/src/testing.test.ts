@@ -138,6 +138,35 @@ describe('runHook', () => {
     expect(more?.overview).toBe('Hello: 1 new, 2 unlisted');
   });
 
+  it('runs an estimate, checking it as a preview does', async () => {
+    const estimating = definePlugin({
+      ...plugin,
+      hooks: {
+        'digest.compose': { run: () => null },
+        'digest.estimate': {
+          run: (input) => ({
+            tokens: (input.entries.length + input.unlisted.length) * 100,
+            costUsd: 0.25,
+            note: 'With the small model.',
+          }),
+        },
+      },
+    });
+    const entries = [fixtureDigestEntry({ id: 3 })];
+    const digest = { userId: 1, language: 'en', frequency: 'daily' as const, entries, more: 0 };
+    const { value } = await runHook(estimating, 'digest.estimate', digest, {
+      settings: { key: 'k' },
+    });
+    expect(value).toEqual({ tokens: 100, costUsd: 0.25, note: 'With the small model.' });
+    const odd = definePlugin({
+      ...estimating,
+      hooks: { ...estimating.hooks, 'digest.estimate': { run: () => ({ tokens: -1 }) } },
+    });
+    await expect(
+      runHook(odd, 'digest.estimate', digest, { settings: { key: 'k' } }),
+    ).rejects.toThrow('does not take');
+  });
+
   it('fails as the server would count a failure', async () => {
     const event = { userId: 1, entries: [] };
     await expect(runHook(plugin, 'entries.added', event)).rejects.toThrow(

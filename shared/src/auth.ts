@@ -55,6 +55,30 @@ export const confirmEmailRequestSchema = z.object({ token: z.string().min(1).max
 
 export const confirmEmailResponseSchema = z.object({ email: z.string() });
 
+/**
+ * `GET /account/digest/test` (API 1.17): what a test digest would hold now, sending nothing: its
+ * unread articles, and what each plugin on for the user expects to cost (`digest.estimate`), in
+ * tokens and US dollars, with a note; `failure` is `none` for a plugin that gives no estimate.
+ */
+export const digestTestPreviewSchema = z.object({
+  articles: z.number().int(),
+  plugins: z.array(
+    z.object({
+      pluginId: z.string(),
+      name: z.string(),
+      estimate: z
+        .object({
+          tokens: z.number().int().nullable(),
+          costUsd: z.number().nullable(),
+          note: z.string().nullable(),
+        })
+        .nullable(),
+      failure: z.enum(['none', 'error', 'timeout', 'invalid']).nullable(),
+    }),
+  ),
+});
+export type DigestTestPreview = z.infer<typeof digestTestPreviewSchema>;
+
 export const loginRequestSchema = z.object({
   login: z.string().trim().min(1).max(64),
   password: z.string().min(1).max(1024),

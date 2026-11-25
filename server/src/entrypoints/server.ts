@@ -73,6 +73,7 @@ const services = {
     logger: feedDeps.logger,
     publicUrl: config.publicUrl,
     unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
+    composer: plugins.digest,
   }),
   themes: new ThemeService(db),
   realtime,

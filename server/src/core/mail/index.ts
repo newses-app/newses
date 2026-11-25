@@ -5,6 +5,7 @@ import type { UserRow } from '../auth/sessions.ts';
 import type { EntryService } from '../entries/entries.ts';
 import { DomainError } from '../errors.ts';
 import type { ImageProxy } from '../feeds/images.ts';
+import type { DigestComposer } from '../plugins/catalog.ts';
 import type { Logger, Mailer } from '../ports.ts';
 import type { PrefsService } from '../prefs.ts';
 import type { UserRateLimiter } from '../rate-limit.ts';
@@ -26,6 +27,8 @@ export interface MailDeps {
   unsubscribeKey: Buffer;
   /** Wakes what sends test digests, where nothing polls for them (AWS). */
   wakeTests?: () => Promise<void>;
+  /** Plugins' additions to digests and their estimates, for test digest previews. */
+  composer?: DigestComposer | null;
 }
 
 /** What a request that mails something knows of where it came from. */

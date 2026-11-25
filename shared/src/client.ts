@@ -4,6 +4,7 @@ import type {
   AppPassword,
   changePasswordRequestSchema,
   ConfirmEmailResponse,
+  DigestTestPreview,
   CreateAppPasswordResponse,
   createAppPasswordRequestSchema,
   createUserRequestSchema,
@@ -297,6 +298,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
        * plugins on for them add, within a minute (API 1.17).
        */
       testDigest: () => request<undefined>('POST', '/account/digest/test'),
+      /** What a test digest would hold now, and each plugin's expected cost (API 1.17). */
+      previewTestDigest: () => request<DigestTestPreview>('GET', '/account/digest/test'),
       /** The user's settings of a plugin with user scope (API 1.15). */
       updatePlugin: (pluginId: string, body: UpdateAccountPluginRequest) =>
         request<Plugin>('PATCH', `/account/plugins/${encodeURIComponent(pluginId)}`, { body }),

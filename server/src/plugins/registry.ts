@@ -53,12 +53,18 @@ const eventHookSchema = z.object({
   debounceSeconds: z.number().int().min(0).max(3600).optional(),
   run: hookRunSchema,
 });
-const hooksSchema = z.strictObject({
-  'entries.added': eventHookSchema.optional(),
-  'published.changed': eventHookSchema.optional(),
-  'digest.compose': z.object({ run: hookRunSchema }).optional(),
-  test: z.object({ run: hookRunSchema }).optional(),
-});
+const hooksSchema = z
+  .strictObject({
+    'entries.added': eventHookSchema.optional(),
+    'published.changed': eventHookSchema.optional(),
+    'digest.compose': z.object({ run: hookRunSchema }).optional(),
+    'digest.estimate': z.object({ run: hookRunSchema }).optional(),
+    test: z.object({ run: hookRunSchema }).optional(),
+  })
+  .refine((hooks) => !hooks['digest.estimate'] || hooks['digest.compose'], {
+    message: 'digest.estimate estimates digest.compose, which the plugin must have too',
+    path: ['digest.estimate'],
+  });
 
 const objectSchema = z.custom<SettingsSchema>(
   (value) =>

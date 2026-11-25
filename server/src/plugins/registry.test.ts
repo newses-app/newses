@@ -61,6 +61,11 @@ describe('PluginRegistry', () => {
         'published.changed',
       ],
       [plugin({ hooks: { 'entries.added': { run: 'x' } } }), 'webhook', 'a function'],
+      [
+        plugin({ hooks: { 'digest.estimate': { run: () => null } } }),
+        'webhook',
+        'digest.estimate estimates digest.compose',
+      ],
       [plugin({ settings: { user: { target: 'text' } } }), 'webhook', 'zod object schema'],
       [plugin({ settings: { everyone: z.object({}) } }), 'webhook', 'everyone'],
       [
