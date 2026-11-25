@@ -43,8 +43,8 @@ export interface PluginInfo {
   readonly testable: boolean;
   /** Whether it has a `digest.compose` hook, adding to users' digests. */
   readonly digests: boolean;
-  /** Whether it has a `digest.estimate` hook, for "Estimate cost". */
-  readonly estimates: boolean;
+  /** Its actions, buttons beside "Send test"; `digest` ones are given a test digest's input. */
+  readonly actions: readonly { name: string; digest: boolean }[];
 }
 
 /** Hooks told of changes after they are saved, through the deliveries. */
@@ -113,20 +113,6 @@ export interface DigestComposer {
    * turning it off; never throws.
    */
   composeTest(input: DigestComposeInput): Promise<DigestTest[]>;
-  /**
-   * What the plugin expects its additions to a digest of `input` to cost, from its
-   * `digest.estimate`, not counted toward turning it off; null when it is off for the user or has
-   * no such hook. Never throws.
-   */
-  estimate(input: DigestComposeInput, pluginId: string): Promise<DigestPluginEstimate | null>;
-}
-
-/**
- * A plugin's estimate for a digest: what it returned, or why it has none, as a hook fails.
- */
-export interface DigestPluginEstimate {
-  estimate: { tokens: number | null; costUsd: number | null; note: string | null } | null;
-  failure: 'error' | 'timeout' | 'invalid' | null;
 }
 
 /**
@@ -152,6 +138,13 @@ export type PluginTestOutcome =
 /** Runs a plugin's `test` hook for a user, or the instance; `server/src/plugins` implements it. */
 export interface PluginTester {
   test(plugin: PluginInfo, userId: number | null): Promise<PluginTestOutcome>;
+  /** Runs one of the plugin's actions, as `test` runs its test; `digest` for `digest` actions. */
+  act(
+    plugin: PluginInfo,
+    name: string,
+    userId: number | null,
+    digest: DigestComposeInput | null,
+  ): Promise<PluginTestOutcome>;
 }
 
 /** The installed plugins; `server/src/plugins` implements it. */

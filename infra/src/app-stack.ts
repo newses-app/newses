@@ -257,6 +257,8 @@ export class AppStack extends Stack {
     // Operations alerts are checked after each dispatch.
     tick.addEnvironment('ALERT_TOPIC_ARN', this.alerts.topicArn);
     this.alerts.grantPublish(tick);
+    // The api sends article and confirmation mail, tick the digests.
+    if (stage.mail) this.#userMail(stage, [api, tick]);
     const tickSchedule = (name: string, expression: string, task: string) =>
       new scheduler.Schedule(this, `${name}Schedule`, {
         scheduleName: resourceName(stage, task.replace('.', '-')),
@@ -270,6 +272,9 @@ export class AppStack extends Stack {
     tickSchedule('Purge', 'cron(0 */6 * * ? *)', 'purge');
     tickSchedule('AuthPrune', 'cron(0 * * * ? *)', 'auth.prune');
     tickSchedule('ArchiveCompact', 'cron(0 4 * * ? *)', 'archive.compact');
+    // The api asks it for test digests, which take longer than a request may.
+    tick.grantInvoke(api);
+    api.addEnvironment('TICK_FUNCTION_NAME', tick.functionName);
 
     // Archive reads (api) and compaction (tick) query Athena over the Glue table; the bucket
     // grants above cover the data and query results.
@@ -336,8 +341,7 @@ export class AppStack extends Stack {
     );
 
     const plugin = fn('plugin', { timeout: Duration.minutes(5) });
-    // Test digests and plugins' due deliveries, a wake at a time; both are claimed, so wakes may
-    // overlap.
+    // Plugins' due deliveries, a wake at a time; deliveries are claimed, so wakes may overlap.
     plugin.addEventSource(
       new SqsEventSource(pluginQueue, {
         batchSize: 1,
@@ -345,8 +349,6 @@ export class AppStack extends Stack {
         reportBatchItemFailures: true,
       }),
     );
-    // The api sends article and confirmation mail, tick the digests, plugin the test digests.
-    if (stage.mail) this.#userMail(stage, [api, tick, plugin]);
 
     const migrate = fn('migrate', { timeout: Duration.minutes(10) });
     migrate.addEnvironment('ADMIN_LOGIN', ADMIN_LOGIN);

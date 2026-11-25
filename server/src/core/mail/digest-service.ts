@@ -1,7 +1,7 @@
 import { nextOccurrence, type Prefs } from '@newses/shared';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.ts';
-import { digestState, digestTests, users } from '../../db/schema.ts';
+import { digestState, users } from '../../db/schema.ts';
 import { DomainError } from '../errors.ts';
 import { ownerLocale } from '../../i18n.ts';
 import { sign, verify } from '../crypto.ts';
@@ -18,7 +18,6 @@ import type {
   DigestComposeInput,
   DigestComposer,
   DigestPluginEntry,
-  DigestPluginEstimate,
 } from '../plugins/catalog.ts';
 import { readPluginEntries } from '../plugins/entries.ts';
 import type { Logger, Mailer } from '../ports.ts';
@@ -35,14 +34,6 @@ export const DIGEST_BATCH = 50;
 const LEASE_SECONDS = 60 * 60;
 /** A test digest holds the unread entries that came in over this many hours. */
 export const DIGEST_TEST_HOURS = 24;
-/** A test digest not sent within this many minutes of being asked for is dropped. */
-const TEST_EXPIRY_MINUTES = 60;
-
-/** A test digest's unread entries now, and what one plugin expects its additions to cost. */
-export interface DigestTestEstimate {
-  articles: number;
-  estimate: DigestPluginEstimate | null;
-}
 
 export interface DigestDeps {
   db: Db;
@@ -57,8 +48,11 @@ export interface DigestDeps {
   logger: Logger;
   /** Plugins' additions to digests; none without it. */
   composer?: DigestComposer | null;
-  /** Wakes what sends test digests, where nothing polls for them (AWS). */
-  wakeTests?: (() => Promise<void>) | undefined;
+  /**
+   * Starts sending a test digest the user asked for, elsewhere (AWS: the `tick` function); without
+   * it, this process sends it after answering.
+   */
+  startTest?: ((userId: number) => Promise<void>) | undefined;
   now?: () => Date;
 }
 
@@ -87,7 +81,7 @@ export class DigestService {
   readonly #key: Buffer;
   readonly #logger: Logger;
   readonly #composer: DigestComposer | null;
-  readonly #wakeTests: (() => Promise<void>) | null;
+  readonly #startTest: ((userId: number) => Promise<void>) | null;
   readonly #now: () => Date;
 
   constructor(deps: DigestDeps) {
@@ -99,7 +93,7 @@ export class DigestService {
     this.#key = deps.unsubscribeKey;
     this.#logger = deps.logger;
     this.#composer = deps.composer ?? null;
-    this.#wakeTests = deps.wakeTests ?? null;
+    this.#startTest = deps.startTest ?? null;
     this.#now = deps.now ?? (() => new Date());
   }
 
@@ -197,68 +191,32 @@ export class DigestService {
   }
 
   /**
-   * Asks for a test digest for the user, replacing one they have waiting. Refused when they could
-   * not get one: the server sends no digests, they have no confirmed address, or no unread
-   * entries came in over the last `DIGEST_TEST_HOURS`.
+   * Asks for a test digest for the user, sent within a minute or so. Refused when they could not
+   * get one: the server sends no digests, they have no confirmed address, or no unread entries
+   * came in over the last `DIGEST_TEST_HOURS`.
    */
   async requestTest(userId: number): Promise<void> {
-    const now = this.#now();
-    await this.#checkTest(userId, now);
-    await this.#db
-      .insert(digestTests)
-      .values({ userId, requestedAt: now })
-      .onConflictDoUpdate({ target: digestTests.userId, set: { requestedAt: now } });
-    await this.#wakeTests?.().catch((err: unknown) => {
-      this.#logger.warn({ err, userId }, 'test digests not woken');
+    await this.#checkTest(userId, this.#now());
+    if (this.#startTest) {
+      await this.#startTest(userId);
+      return;
+    }
+    void this.sendTest(userId).catch((err: unknown) => {
+      this.#logger.warn({ err, userId }, 'test digest failed');
     });
   }
 
   /**
-   * Sends the test digests asked for, one at a time, starting none after `deadline` (ms since the
-   * epoch); returns how many were sent. Each is taken once: one that fails is not tried again.
+   * The test digest's input for plugins, as `digest.compose` gets it: the user's unread entries
+   * from the last `DIGEST_TEST_HOURS`. Refused without any.
    */
-  async sendTests({ deadline = Infinity }: { deadline?: number } = {}): Promise<number> {
-    const mailer = this.#mailer;
-    const appUrl = this.#publicUrl;
-    if (!mailer || !appUrl) return 0;
-    let sent = 0;
-    while (Date.now() < deadline) {
-      const taken = await this.#db.execute<{ user_id: number; requested_at: string | Date }>(sql`
-        DELETE FROM digest_tests WHERE user_id = (
-          SELECT user_id FROM digest_tests ORDER BY requested_at LIMIT 1 FOR UPDATE SKIP LOCKED
-        ) RETURNING user_id, requested_at`);
-      const row = taken.rows[0];
-      if (!row) break;
-      const now = this.#now();
-      const age = now.getTime() - new Date(row.requested_at).getTime();
-      if (age > TEST_EXPIRY_MINUTES * 60_000) {
-        this.#logger.warn({ userId: row.user_id }, 'test digest expired');
-        continue;
-      }
-      try {
-        if (await this.#sendTest(mailer, appUrl, row.user_id, now)) sent++;
-      } catch (err) {
-        this.#logger.warn({ err, userId: row.user_id }, 'test digest failed');
-      }
-    }
-    return sent;
-  }
-
-  /**
-   * What the plugin expects its additions to a test digest for the user now to cost, sending
-   * nothing: how many unread entries it would hold, and the plugin's `digest.estimate`, null when
-   * the plugin is off for them or estimates nothing. Refused without unread entries from the last
-   * `DIGEST_TEST_HOURS`.
-   */
-  async estimateTest(userId: number, pluginId: string): Promise<DigestTestEstimate> {
+  async testInput(userId: number): Promise<DigestComposeInput> {
     const test = await this.#testDigest(userId, this.#now());
     if (test.count === 0)
       throw new DomainError('conflict', 'No unread articles came in over the last day', {
         reason: 'digest_test_empty',
       });
-    const composer = this.#composer;
-    const estimate = composer ? await composer.estimate(await test.input(), pluginId) : null;
-    return { articles: test.count, estimate };
+    return test.input();
   }
 
   /** Refuses a test digest the user could not get, as `requestTest` describes. */
@@ -315,10 +273,15 @@ export class DigestService {
   }
 
   /**
-   * A test digest of the user's unread entries from the last day, with what the plugins on for
-   * them add and why any added nothing; leaves their digests' state and the entries as they were.
+   * Sends the user a test digest of their unread entries from the last day, with what the plugins
+   * on for them add and why any added nothing; leaves their digests' state and the entries as they
+   * were. False when there is nothing to send, or no one to send it to.
    */
-  async #sendTest(mailer: Mailer, appUrl: string, userId: number, now: Date): Promise<boolean> {
+  async sendTest(userId: number): Promise<boolean> {
+    const mailer = this.#mailer;
+    const appUrl = this.#publicUrl;
+    if (!mailer || !appUrl) return false;
+    const now = this.#now();
     const [user] = await this.#db
       .select({ login: users.login, email: users.email, disabledAt: users.disabledAt })
       .from(users)

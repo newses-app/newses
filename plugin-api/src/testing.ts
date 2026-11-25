@@ -2,13 +2,12 @@
 // as the server does. Works with any test runner. Import from `@newses/plugin-api/testing`.
 import {
   acceptsApiVersion,
+  ACTION_LIMITS,
   DIGEST_LIMITS,
   type DigestAdditions,
   digestAdditionsSchema,
   type DigestComposeInput,
   type DigestEntry,
-  type DigestEstimate,
-  digestEstimateSchema,
   type EntriesAddedEvent,
   EVENT_LIMITS,
   type EventEntry,
@@ -277,7 +276,6 @@ type HookInput = {
   'published.changed': PublishedChangedEvent;
   /** `unlisted` is none unless given. */
   'digest.compose': Omit<DigestComposeInput, 'unlisted'> & { unlisted?: DigestEntry[] };
-  'digest.estimate': Omit<DigestComposeInput, 'unlisted'> & { unlisted?: DigestEntry[] };
   /** A test takes no input. */
   test: undefined;
 };
@@ -285,7 +283,6 @@ type HookValue = {
   'entries.added': unknown;
   'published.changed': unknown;
   'digest.compose': DigestAdditions | null;
-  'digest.estimate': DigestEstimate | null;
   test: TestResult;
 };
 
@@ -293,7 +290,6 @@ const LIMIT_SECONDS: Record<keyof HookInput, number> = {
   'entries.added': EVENT_LIMITS.timeoutSeconds,
   'published.changed': EVENT_LIMITS.timeoutSeconds,
   'digest.compose': DIGEST_LIMITS.timeoutSeconds,
-  'digest.estimate': DIGEST_LIMITS.estimateTimeoutSeconds,
   test: TEST_LIMITS.timeoutSeconds,
 };
 
@@ -301,8 +297,7 @@ const LIMIT_SECONDS: Record<keyof HookInput, number> = {
  * Runs one of the plugin's hooks as the server would: the plugin must accept this contract's
  * version and implement the hook; settings are parsed with its schemas (defaults applied, a
  * mismatch throws); the hook runs under its time limit, its context's `signal` aborting then; and
- * a digest hook's result (an addition or an estimate) must be within `DIGEST_LIMITS`, a test's a
- * `TestResult`. Throws where
+ * a digest hook's result must be within `DIGEST_LIMITS`, a test's a `TestResult`. Throws where
  * the server would count a failure; `fetch` reaches the plugin's own `hosts` unless
  * `options.hosts` says otherwise.
  */
@@ -338,9 +333,7 @@ export async function runHook<H extends keyof HookInput>(
   });
   const hookToRun: { run(...args: unknown[]): unknown } = declared;
   const given: unknown =
-    hook === 'digest.compose' || hook === 'digest.estimate'
-      ? { unlisted: [], ...(input as HookInput['digest.compose']) }
-      : input;
+    hook === 'digest.compose' ? { unlisted: [], ...(input as HookInput['digest.compose']) } : input;
   const value = await new Promise<unknown>((resolve, reject) => {
     const onAbort = () => {
       reject(new Error(`${plugin.id}'s ${hook} ran out of time (${String(timeoutMs)} ms)`));
@@ -361,14 +354,6 @@ export async function runHook<H extends keyof HookInput>(
       throw new Error(`${plugin.id}'s test returned what a test does not: ${result.error.message}`);
     return { value: result.data, context };
   }
-  if (hook === 'digest.estimate') {
-    const estimate = digestEstimateSchema.safeParse(value);
-    if (!estimate.success)
-      throw new Error(
-        `${plugin.id}'s digest.estimate returned what a preview does not take: ${estimate.error.message}`,
-      );
-    return { value: (estimate.data ?? null) as HookValue[H], context };
-  }
   if (hook !== 'digest.compose') return { value: value as HookValue[H], context };
   const parsed = digestAdditionsSchema.safeParse(value);
   if (!parsed.success)
@@ -381,3 +366,54 @@ export async function runHook<H extends keyof HookInput>(
 /** Runs the plugin's `test` hook as "Send test" does: `runHook(plugin, 'test', undefined, options)`. */
 export const runTest = (plugin: PluginDefinition, options: RunHookOptions = {}) =>
   runHook(plugin, 'test', undefined, options);
+
+/**
+ * Runs one of the plugin's actions as its button does: settings parsed, under
+ * `ACTION_LIMITS.timeoutSeconds`, its result a `TestResult`. A `digest` action gets
+ * `options.digest` (`unlisted` none unless given); others get null.
+ */
+export async function runAction(
+  plugin: PluginDefinition,
+  name: string,
+  options: RunHookOptions & { digest?: HookInput['digest.compose'] } = {},
+): Promise<HookResult<TestResult>> {
+  if (!acceptsApiVersion(plugin.apiVersion))
+    throw new Error(
+      `${plugin.id}'s apiVersion ${plugin.apiVersion} does not accept the plugin API ${PLUGIN_API_VERSION}`,
+    );
+  const action = plugin.actions?.[name];
+  if (!action) throw new Error(`${plugin.id} has no action ${name}`);
+  if (action.digest && !options.digest)
+    throw new Error(`${plugin.id}'s ${name} takes a digest: pass options.digest`);
+  const settings = plugin.settings?.instance?.parse(options.settings ?? {}) ?? {};
+  const userSettings = plugin.settings?.user?.parse(options.userSettings ?? {}) ?? null;
+  const timeoutMs = options.timeoutMs ?? ACTION_LIMITS.timeoutSeconds * 1000;
+  const signal = AbortSignal.timeout(timeoutMs);
+  const context = createTestContext({
+    ...options,
+    pluginId: plugin.id,
+    hosts: options.hosts ?? plugin.hosts ?? [],
+    settings,
+    userSettings,
+    signal,
+  });
+  const digest = action.digest && options.digest ? { unlisted: [], ...options.digest } : null;
+  const value = await new Promise<unknown>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new Error(`${plugin.id}'s ${name} ran out of time (${String(timeoutMs)} ms)`));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    void Promise.resolve()
+      .then(() => action.run(context, structuredClone(digest)))
+      .then(resolve, reject)
+      .finally(() => {
+        signal.removeEventListener('abort', onAbort);
+      });
+  });
+  const result = testResultSchema.safeParse(value);
+  if (!result.success)
+    throw new Error(
+      `${plugin.id}'s ${name} returned what an action does not: ${result.error.message}`,
+    );
+  return { value: result.data, context };
+}

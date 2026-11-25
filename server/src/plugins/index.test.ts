@@ -1,5 +1,6 @@
 import { type DigestComposeInput, EVENT_LIMITS, type PluginContext } from '@newses/plugin-api';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { MAX_DELIVERY_EVENTS } from '../core/plugins/events.ts';
 import type { PluginRuntime } from '../core/plugins/settings.ts';
 import type { KeyValueStore } from '../core/plugins/storage.ts';
@@ -143,6 +144,87 @@ describe('HookTester', () => {
     expect(await outcomeOf('off')).toBe('off');
     expect(await outcomeOf('plain')).toBe('off');
   });
+
+  it('runs an action as a test, uncounted, with the digest only when it takes one', async () => {
+    const given: unknown[] = [];
+    const acting = PluginRegistry.load(
+      [
+        {
+          source: 'acting@1.0.0',
+          plugin: {
+            id: 'acting',
+            version: '1.0.0',
+            apiVersion: '^0.1',
+            scopes: ['user'],
+            settings: { user: z.object({}) },
+            hooks: {},
+            actions: {
+              priced: {
+                digest: true,
+                run: (_context: unknown, digest: unknown) => {
+                  given.push(digest);
+                  return { ok: true, message: ' About $0.95\r\n ' };
+                },
+              },
+              plain: {
+                run: (_context: unknown, digest: unknown) => {
+                  given.push(digest);
+                  return { ok: false, message: 'No key' };
+                },
+              },
+              throws: {
+                run: () => {
+                  throw new Error('no key');
+                },
+              },
+            },
+          },
+        },
+      ],
+      { logger: silentLogger },
+    );
+    const info = acting.get('acting');
+    if (!info) throw new Error('not loaded');
+    expect(info.actions).toEqual([
+      { name: 'priced', digest: true },
+      { name: 'plain', digest: false },
+      { name: 'throws', digest: false },
+    ]);
+    const counted: (boolean | undefined)[] = [];
+    const real = realRunner();
+    const actor = new HookTester(acting, {
+      run: (hookRun) => {
+        counted.push(hookRun.counted);
+        return real.run(hookRun);
+      },
+    });
+    const digest = {
+      userId: 3,
+      language: 'en',
+      frequency: 'daily' as const,
+      entries: [],
+      more: 0,
+      unlisted: [],
+    };
+    expect(await actor.act(info, 'priced', 3, digest)).toEqual({
+      ok: true,
+      message: 'About $0.95',
+      failure: null,
+    });
+    expect(await actor.act(info, 'plain', 3, digest)).toEqual({
+      ok: false,
+      message: 'No key',
+      failure: null,
+    });
+    expect(given).toEqual([digest, null]);
+    expect(await actor.act(info, 'throws', 3, null)).toEqual({
+      ok: false,
+      message: 'no key',
+      failure: 'error',
+    });
+    expect(await actor.act(info, 'missing', 3, null)).toBe('off');
+    expect(counted).toEqual([false, false, false]);
+  });
 });
 
 describe('DigestHookComposer', () => {
@@ -277,53 +359,6 @@ describe('DigestHookComposer', () => {
       ['slow (pt)', 'timeout', null],
     ]);
     expect(counted).toEqual([false, false, false, false, false]);
-  });
-
-  it('estimates for a plugin on for the user, uncounted, saying how it failed', async () => {
-    const estimating = (id: string, run: () => unknown) => {
-      const installed = composing(id, () => null);
-      return {
-        ...installed,
-        plugin: {
-          ...installed.plugin,
-          hooks: { ...installed.plugin.hooks, 'digest.estimate': { run } },
-        },
-      };
-    };
-    const plugins = PluginRegistry.load(
-      [
-        estimating('priced', () => ({ tokens: 175_000, costUsd: 0.7, note: ' Opus,\r\nlow ' })),
-        composing('plain', () => null),
-        estimating('throws', () => {
-          throw new Error('no key');
-        }),
-        estimating('odd', () => ({ tokens: -1 })),
-        estimating('off', () => ({ tokens: 1 })),
-      ],
-      { logger: silentLogger },
-    );
-    const real = realRunner(['off']);
-    const counted: (boolean | undefined)[] = [];
-    const composer = new DigestHookComposer(plugins, {
-      run: (hookRun) => {
-        counted.push(hookRun.counted);
-        return real.run(hookRun);
-      },
-    });
-    const estimated = await Promise.all(
-      ['priced', 'plain', 'throws', 'odd', 'off', 'missing'].map((id) =>
-        composer.estimate(input, id),
-      ),
-    );
-    expect(estimated).toEqual([
-      { estimate: { tokens: 175_000, costUsd: 0.7, note: 'Opus,\nlow' }, failure: null },
-      null,
-      { estimate: null, failure: 'error' },
-      { estimate: null, failure: 'invalid' },
-      null,
-      null,
-    ]);
-    expect(counted.every((c) => c === false)).toBe(true);
   });
 
   it("names a plugin in the digest's language, its language, English, else by id", () => {

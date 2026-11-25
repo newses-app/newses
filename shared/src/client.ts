@@ -73,7 +73,6 @@ import type {
 import type {
   Plugin,
   PluginsResponse,
-  PluginEstimateResult,
   PluginTestResult,
   UpdateAccountPluginRequest,
   UpdatePluginRequest,
@@ -307,14 +306,11 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Tests a plugin with the user's saved settings (API 1.16, `Plugin.testable`). */
       testPlugin: (pluginId: string) =>
         request<PluginTestResult>('POST', `/account/plugins/${encodeURIComponent(pluginId)}/test`),
-      /**
-       * What a plugin expects a test digest for the user now to cost, sending nothing (API 1.17,
-       * `Plugin.estimates`).
-       */
-      estimatePlugin: (pluginId: string) =>
-        request<PluginEstimateResult>(
+      /** Runs one of a plugin's actions with the user's settings (API 1.17, `Plugin.actions`). */
+      runAction: (pluginId: string, name: string) =>
+        request<PluginTestResult>(
           'POST',
-          `/account/plugins/${encodeURIComponent(pluginId)}/estimate`,
+          `/account/plugins/${encodeURIComponent(pluginId)}/actions/${encodeURIComponent(name)}`,
         ),
     },
 
@@ -357,6 +353,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
         /** Tests a plugin with the instance's saved settings (API 1.16). */
         test: (pluginId: string) =>
           request<PluginTestResult>('POST', `/admin/plugins/${encodeURIComponent(pluginId)}/test`),
+        /** Runs one of a plugin's actions with the instance's settings (API 1.17). */
+        runAction: (pluginId: string, name: string) =>
+          request<PluginTestResult>(
+            'POST',
+            `/admin/plugins/${encodeURIComponent(pluginId)}/actions/${encodeURIComponent(name)}`,
+          ),
       },
       sites: {
         rules: () => request<HostRule[]>('GET', '/admin/sites/rules'),

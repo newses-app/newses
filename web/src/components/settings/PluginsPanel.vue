@@ -11,7 +11,6 @@ import { useSession } from '../../composables/useSession.ts';
 import { pluginText } from '../../lib/plugin-form.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import PluginSettingsForm from './PluginSettingsForm.vue';
-import PluginEstimate from './PluginEstimate.vue';
 import PluginTest from './PluginTest.vue';
 
 const { t, locale } = useI18n();
@@ -97,8 +96,13 @@ function turnedOff(state: PluginSettingsState, mine: boolean): string | null {
 /** "Send test" with the instance's saved settings, or the user's. */
 const testServer = (plugin: Plugin) => () => api.admin.plugins.test(plugin.id);
 const testMine = (plugin: Plugin) => () => api.account.testPlugin(plugin.id);
-/** "Estimate cost" of a test digest for the user now. */
-const estimateMine = (plugin: Plugin) => () => api.account.estimatePlugin(plugin.id);
+/** A plugin's action, with the instance's settings or the user's. */
+const actServer = (plugin: Plugin, name: string) => () =>
+  api.admin.plugins.runAction(plugin.id, name);
+const actMine = (plugin: Plugin, name: string) => () => api.account.runAction(plugin.id, name);
+/** An action's button label and hint, from the plugin's messages. */
+const actionLabel = (plugin: Plugin, name: string) => text(plugin)(`action.${name}`, name);
+const actionHint = (plugin: Plugin, name: string) => text(plugin)(`action.${name}.hint`, '');
 
 /** Shown where the server emails digests (API 1.14). */
 const serverInfo = useQuery({
@@ -202,6 +206,15 @@ const hasMine = (state: PluginSettingsState) =>
             v-if="plugin.testable && plugin.enabled && !plugin.settingsSchemas.user"
             :run="testServer(plugin)"
           />
+          <template v-if="plugin.enabled && !plugin.settingsSchemas.user">
+            <PluginTest
+              v-for="action in plugin.actions ?? []"
+              :key="action.name"
+              :run="actServer(plugin, action.name)"
+              :label="actionLabel(plugin, action.name)"
+              :hint="actionHint(plugin, action.name)"
+            />
+          </template>
         </template>
 
         <template v-if="plugin.user && plugin.enabled">
@@ -244,10 +257,15 @@ const hasMine = (state: PluginSettingsState) =>
             :run="plugin.testable ? testMine(plugin) : undefined"
             :digest="testsDigest(plugin) ? testDigest : undefined"
           />
-          <PluginEstimate
-            v-if="plugin.estimates && plugin.user.enabled && plugin.settingsSchemas.user"
-            :run="estimateMine(plugin)"
-          />
+          <template v-if="plugin.user.enabled && plugin.settingsSchemas.user">
+            <PluginTest
+              v-for="action in plugin.actions ?? []"
+              :key="action.name"
+              :run="actMine(plugin, action.name)"
+              :label="actionLabel(plugin, action.name)"
+              :hint="actionHint(plugin, action.name)"
+            />
+          </template>
           <v-btn
             v-if="hasMine(plugin.user)"
             variant="text"

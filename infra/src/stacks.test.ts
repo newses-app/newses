@@ -371,6 +371,21 @@ describe('App', () => {
     });
   });
 
+  it('lets the api invoke tick for test digests, by name', () => {
+    app.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'newses-dev-api',
+      Environment: { Variables: Match.objectLike({ TICK_FUNCTION_NAME: Match.anyValue() }) },
+    });
+    const invokes = Object.values(app.findResources('AWS::IAM::Policy'))
+      .map((policy) => policy as { Properties: { PolicyDocument: unknown; Roles: unknown } })
+      .filter(
+        (policy) =>
+          JSON.stringify(policy.Properties.PolicyDocument).includes('lambda:InvokeFunction') &&
+          JSON.stringify(policy.Properties.Roles).includes('apiFunction'),
+      );
+    expect(invokes).toHaveLength(1);
+  });
+
   it('emails users through SES from the stage domain when the stage sets mail', () => {
     app.hasResourceProperties('AWS::SES::EmailIdentity', {
       EmailIdentity: 'reader-dev.example.com',
@@ -397,11 +412,10 @@ describe('App', () => {
         .filter((policy) => JSON.stringify(policy.Properties.PolicyDocument).includes('ses:Send'))
         .map((policy) => JSON.stringify(policy.Properties.Roles));
     const senders = sesSenders(app);
-    expect(senders).toHaveLength(3);
+    expect(senders).toHaveLength(2);
     expect(senders.join()).toMatch(/apiFunction/);
     expect(senders.join()).toMatch(/tickFunction/);
-    expect(senders.join()).toMatch(/pluginFunction/);
-    for (const name of ['api', 'tick', 'plugin'])
+    for (const name of ['api', 'tick'])
       app.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `newses-dev-${name}`,
         Environment: {

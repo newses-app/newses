@@ -248,9 +248,6 @@ export const DIGEST_LIMITS = {
   entryText: 1000,
   timeoutSeconds: 60,
   unlisted: 2000,
-  /** Characters of a `digest.estimate` note, and its time. */
-  estimateNote: 300,
-  estimateTimeoutSeconds: 10,
 } as const;
 
 /** What a `digest.compose` hook may return; anything else adds nothing. */
@@ -275,40 +272,6 @@ export interface DigestHook<C extends PluginContext = PluginContext> {
   ): DigestAdditions | null | undefined | Promise<DigestAdditions | null | undefined>;
 }
 
-/**
- * What a plugin's `digest.compose` is expected to cost for one digest, from `digest.estimate`:
- * the tokens (or whatever it is billed by) it would use, in US dollars, with a note in plain text
- * such as the model it would use or why it would add nothing. Each is optional.
- */
-export interface DigestEstimate {
-  tokens?: number | null | undefined;
-  costUsd?: number | null | undefined;
-  note?: string | null | undefined;
-}
-
-/** What a `digest.estimate` hook may return; anything else is no estimate. */
-export const digestEstimateSchema: z.ZodType<DigestEstimate | null | undefined> = z
-  .object({
-    tokens: z.number().int().min(0).nullish(),
-    costUsd: z.number().min(0).max(1_000_000).nullish(),
-    note: z.string().max(DIGEST_LIMITS.estimateNote).nullish(),
-  })
-  .nullish();
-
-/**
- * Estimates what `digest.compose` would cost for a digest, given the same input, when a user
- * presses "Estimate cost" in Settings → Plugins, for a test digest now; it should make no billed
- * requests. Runs under
- * `DIGEST_LIMITS.estimateTimeoutSeconds`, never counted toward turning the plugin off; a hook
- * that throws, runs out of time, or returns more fails the estimate. Needs `digest.compose`.
- */
-export interface DigestEstimateHook<C extends PluginContext = PluginContext> {
-  run(
-    input: DigestComposeInput,
-    context: C,
-  ): DigestEstimate | null | undefined | Promise<DigestEstimate | null | undefined>;
-}
-
 /** What a `test` hook reports: whether the test passed, and what happened, as plain text. */
 export interface TestResult {
   ok: boolean;
@@ -331,10 +294,27 @@ export const testResultSchema: z.ZodType<TestResult> = z.object({
  * that throws or runs out of time fails, with the error's message shown; tests never count
  * toward turning a plugin off. For a plugin with `digest.compose` and user settings, a user's
  * test that passes (or Send test of a plugin without this hook) is followed by a test digest,
- * which shows what `digest.compose` adds or why it added nothing.
+ * which shows what `digest.compose` adds or why it added nothing. Other buttons are actions.
  */
 export interface TestHook<C extends PluginContext = PluginContext> {
   run(context: C): TestResult | Promise<TestResult>;
+}
+
+/** How many actions a plugin may have, and how long each may run. */
+export const ACTION_LIMITS = { actions: 5, timeoutSeconds: 30 } as const;
+
+/**
+ * A button of the plugin's in Settings → Plugins, beside "Send test", run as a test is: with the
+ * saved settings, for the user who pressed it (a plugin with user settings) or the instance (an
+ * admin), while the plugin is on there, never counted toward turning it off. It reports a
+ * `TestResult`, shown as it is. The button is labelled with the plugin's message
+ * `action.<name>`, explained by `action.<name>.hint`. With `digest`, it is given what
+ * `digest.compose` would get for a test digest of the user's unread entries from the last day,
+ * and needs user settings; it sends nothing.
+ */
+export interface PluginAction<C extends PluginContext = PluginContext> {
+  digest?: boolean;
+  run(context: C, digest: DigestComposeInput | null): TestResult | Promise<TestResult>;
 }
 
 /**
@@ -345,7 +325,6 @@ export interface PluginHooks<C extends PluginContext = PluginContext> {
   'entries.added'?: EventHook<EntriesAddedEvent, C>;
   'published.changed'?: EventHook<PublishedChangedEvent, C>;
   'digest.compose'?: DigestHook<C>;
-  'digest.estimate'?: DigestEstimateHook<C>;
   test?: TestHook<C>;
 }
 
@@ -388,6 +367,8 @@ export interface PluginDefinition<
    */
   messages?: PluginMessages;
   hooks: PluginHooks<ContextOf<Instance, User>>;
+  /** Buttons beside "Send test", by name: lower-case letters, digits, and hyphens. */
+  actions?: Record<string, PluginAction<ContextOf<Instance, User>>>;
 }
 
 /** Messages per language, each a map of key to plain text. */

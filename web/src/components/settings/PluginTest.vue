@@ -12,6 +12,9 @@ import { useUiStore } from '../../stores/ui.ts';
 const props = defineProps<{
   run?: (() => Promise<PluginTestResult>) | undefined;
   digest?: (() => Promise<void>) | undefined;
+  /** For a plugin's action: its button's label and hint, in place of Send test's. */
+  label?: string | undefined;
+  hint?: string | undefined;
 }>();
 
 const { t } = useI18n();
@@ -66,10 +69,10 @@ const outcome = computed(() => {
         :aria-disabled="!online"
         @click="send"
       >
-        {{ t('plugins.sendTest') }}
+        {{ label ?? t('plugins.sendTest') }}
       </v-btn>
       <span class="text-body-small text-medium-emphasis">
-        {{ t(digest ? 'plugins.testDigestHint' : 'plugins.testHint') }}
+        {{ hint ?? t(digest ? 'plugins.testDigestHint' : 'plugins.testHint') }}
       </span>
     </div>
     <div role="status">

@@ -27,6 +27,6 @@ export default definePlugin({
 });
 ```
 
-Tests run hooks as the server does with `@newses/plugin-api/testing`: `runHook`, `createTestContext`, `MemoryStore`, and fixture entries.
+Tests run hooks as the server does with `@newses/plugin-api/testing`: `runHook`, `runTest`, `runAction`, `createTestContext`, `MemoryStore`, and fixture entries.
 
 The API is 0.x: a minor release may break plugins, which declare the minor they were written for (`apiVersion: '^0.1'`). Licensed under the AGPL 3.0 or later, as Newses is.

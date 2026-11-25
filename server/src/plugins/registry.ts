@@ -1,5 +1,6 @@
 import {
   acceptsApiVersion,
+  ACTION_LIMITS,
   FIELD_MARKS,
   type FieldMarks,
   isApiRange,
@@ -53,18 +54,23 @@ const eventHookSchema = z.object({
   debounceSeconds: z.number().int().min(0).max(3600).optional(),
   run: hookRunSchema,
 });
-const hooksSchema = z
-  .strictObject({
-    'entries.added': eventHookSchema.optional(),
-    'published.changed': eventHookSchema.optional(),
-    'digest.compose': z.object({ run: hookRunSchema }).optional(),
-    'digest.estimate': z.object({ run: hookRunSchema }).optional(),
-    test: z.object({ run: hookRunSchema }).optional(),
-  })
-  .refine((hooks) => !hooks['digest.estimate'] || hooks['digest.compose'], {
-    message: 'digest.estimate estimates digest.compose, which the plugin must have too',
-    path: ['digest.estimate'],
-  });
+const hooksSchema = z.strictObject({
+  'entries.added': eventHookSchema.optional(),
+  'published.changed': eventHookSchema.optional(),
+  'digest.compose': z.object({ run: hookRunSchema }).optional(),
+  test: z.object({ run: hookRunSchema }).optional(),
+});
+const actionsSchema = z
+  .record(
+    z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{0,39}$/, 'action names of lower-case letters, digits, and hyphens'),
+    z.strictObject({ digest: z.boolean().optional(), run: hookRunSchema }),
+  )
+  .refine(
+    (actions) => Object.keys(actions).length <= ACTION_LIMITS.actions,
+    `at most ${String(ACTION_LIMITS.actions)} actions`,
+  );
 
 const objectSchema = z.custom<SettingsSchema>(
   (value) =>
@@ -97,11 +103,18 @@ const definitionSchema = z
       )
       .optional(),
     hooks: hooksSchema,
+    actions: actionsSchema.optional(),
   })
   .refine((plugin) => !plugin.settings?.user || plugin.scopes.includes('user'), {
     message: 'user settings need the user scope',
     path: ['settings', 'user'],
-  });
+  })
+  .refine(
+    (plugin) =>
+      plugin.settings?.user !== undefined ||
+      !Object.values(plugin.actions ?? {}).some((action) => action.digest),
+    { message: 'an action given a digest needs user settings', path: ['actions'] },
+  );
 
 const idOf = (plugin: unknown) => {
   const id = (plugin as { id?: unknown } | null)?.id;
@@ -189,7 +202,10 @@ export class PluginRegistry implements PluginCatalog {
         ),
         testable: parsed.data.hooks.test !== undefined,
         digests: parsed.data.hooks['digest.compose'] !== undefined,
-        estimates: parsed.data.hooks['digest.estimate'] !== undefined,
+        actions: Object.entries(parsed.data.actions ?? {}).map(([name, action]) => ({
+          name,
+          digest: action.digest ?? false,
+        })),
         definition,
       });
       options.logger.info({ plugin: id, source, version: parsed.data.version }, 'Plugin loaded');

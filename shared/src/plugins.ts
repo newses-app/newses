@@ -38,8 +38,11 @@ export const pluginSchema = z.object({
   testable: z.boolean().optional(),
   /** From API 1.17: whether it adds to users' digests, which a test digest shows. */
   digests: z.boolean().optional(),
-  /** From API 1.17: whether it estimates what it would cost for a digest ("Estimate cost"). */
-  estimates: z.boolean().optional(),
+  /**
+   * From API 1.17: its actions, buttons beside "Send test" labelled by its messages
+   * `action.<name>` and `action.<name>.hint`; `digest` ones are run with a test digest's input.
+   */
+  actions: z.array(z.object({ name: z.string(), digest: z.boolean() })).optional(),
   /** The hosts an admin approved: URL settings must be on one of them. */
   approvedHosts: z.array(z.string()),
   /**
@@ -84,7 +87,9 @@ export type UpdateAccountPluginRequest = z.infer<typeof updateAccountPluginReque
 /**
  * `POST /account/plugins/:id/test` and `POST /admin/plugins/:id/test` (API 1.16): how a test with
  * the saved settings went. `message` is the plugin's plain text, or what it threw; `failure` says
- * how a test that did not report failed: `error`, `timeout`, or `invalid`.
+ * how a test that did not report failed: `error`, `timeout`, or `invalid`. From API 1.17, an
+ * action's result (`POST /account/plugins/:id/actions/:name`, `POST /admin/plugins/:id/actions/:name`)
+ * is one too.
  */
 export const pluginTestResultSchema = z.object({
   ok: z.boolean(),
@@ -92,24 +97,6 @@ export const pluginTestResultSchema = z.object({
   failure: z.enum(['error', 'timeout', 'invalid']).nullable(),
 });
 export type PluginTestResult = z.infer<typeof pluginTestResultSchema>;
-
-/**
- * `POST /account/plugins/:id/estimate` (API 1.17): what the plugin expects a test digest for the
- * user now to cost, sending nothing: the digest's unread articles, and the plugin's estimate of
- * tokens, US dollars, and a plain-text note, or how its estimate failed.
- */
-export const pluginEstimateResultSchema = z.object({
-  articles: z.number().int(),
-  estimate: z
-    .object({
-      tokens: z.number().int().nullable(),
-      costUsd: z.number().nullable(),
-      note: z.string().nullable(),
-    })
-    .nullable(),
-  failure: z.enum(['error', 'timeout', 'invalid']).nullable(),
-});
-export type PluginEstimateResult = z.infer<typeof pluginEstimateResultSchema>;
 
 /** `PATCH /plugins/:id` (admins): also the hosts the plugin may reach. */
 export const updatePluginRequestSchema = updateAccountPluginRequestSchema.extend({

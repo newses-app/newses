@@ -1,11 +1,11 @@
 import { MAX_EMAIL_LENGTH, type User } from '@newses/shared';
 import { eq } from 'drizzle-orm';
 import pino from 'pino';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpFetcher } from '../core/feeds/http.ts';
 import { createDb, type Db } from '../db/client.ts';
 import { Ingester } from '../core/feeds/ingest.ts';
-import { digestTests, feedSources, rateLimits, subscriptions, users } from '../db/schema.ts';
+import { feedSources, rateLimits, subscriptions, users } from '../db/schema.ts';
 import { createTestDatabase, type TestDatabase } from '../test/database.ts';
 import { RecordingMailer, RecordingRealtime } from '../test/fakes.ts';
 import { createTestServices } from '../test/services.ts';
@@ -321,8 +321,10 @@ describe('test digests', () => {
       },
     ]);
     expect(await asked()).toBe('queued');
-    expect(await db.select().from(digestTests)).toMatchObject([{ userId: pat }]);
-    expect(await services.mail.digest.sendTests()).toBe(1);
+    // Sent by this process after answering.
+    await vi.waitFor(() => {
+      expect(mailer.sent.at(-1)?.subject).toContain('test digest');
+    });
     expect(mailer.sent.at(-1)).toMatchObject({
       to: ['pat@example.com'],
       subject: 'Newses test digest: 1 unread article',
@@ -334,6 +336,10 @@ describe('test digests', () => {
     expect(await asked()).toBe('queued');
     expect(await asked()).toBe('queued');
     expect((await call('POST', '/account/digest/test', auth)).statusCode).toBe(429);
+    // The three sent before the articles go.
+    await vi.waitFor(() => {
+      expect(mailer.sent.filter((mail) => mail.subject.includes('test digest'))).toHaveLength(4);
+    });
     await db.delete(feedSources);
   });
 });

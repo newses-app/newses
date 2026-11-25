@@ -1,6 +1,6 @@
 import {
+  ACTION_LIMITS,
   digestAdditionsSchema,
-  digestEstimateSchema,
   DIGEST_LIMITS,
   EVENT_LIMITS,
   TEST_LIMITS,
@@ -15,7 +15,6 @@ import type {
   DigestAddition,
   DigestComposeInput,
   DigestComposer,
-  DigestPluginEstimate,
   DigestTest,
   EventHookName,
   EventRunOutcome,
@@ -31,7 +30,7 @@ import type { Db } from '../db/client.ts';
 import { INSTALLED_PLUGINS } from '#installed-plugins';
 import { PluginNetwork } from './network.ts';
 import { type InstalledPlugin, type LoadedPlugin, PluginRegistry } from './registry.ts';
-import { PluginRunner } from './runner.ts';
+import { type HookRun, PluginRunner } from './runner.ts';
 
 /** How long an event hook may run. */
 export const EVENT_HOOK_TIMEOUT_MS = EVENT_LIMITS.timeoutSeconds * 1000;
@@ -118,18 +117,15 @@ export class DigestHookComposer implements DigestComposer {
   readonly #plugins: LoadedPlugin[];
   readonly #runner: Pick<PluginRunner, 'run'>;
   readonly #timeoutMs: number;
-  readonly #estimateTimeoutMs: number;
 
   constructor(
     registry: PluginRegistry,
     runner: Pick<PluginRunner, 'run'>,
     timeoutMs = DIGEST_LIMITS.timeoutSeconds * 1000,
-    estimateTimeoutMs = DIGEST_LIMITS.estimateTimeoutSeconds * 1000,
   ) {
     this.#plugins = registry.list().filter((plugin) => plugin.definition.hooks['digest.compose']);
     this.#runner = runner;
     this.#timeoutMs = timeoutMs;
-    this.#estimateTimeoutMs = estimateTimeoutMs;
   }
 
   get composes(): boolean {
@@ -148,34 +144,6 @@ export class DigestHookComposer implements DigestComposer {
       this.#plugins.map((plugin) => this.#run(plugin, input, false)),
     );
     return outcomes.filter((outcome) => outcome !== null);
-  }
-
-  async estimate(
-    input: DigestComposeInput,
-    pluginId: string,
-  ): Promise<DigestPluginEstimate | null> {
-    const plugin = this.#plugins.find((candidate) => candidate.id === pluginId);
-    const hook = plugin?.definition.hooks['digest.estimate'];
-    if (!plugin || !hook) return null;
-    const outcome = await this.#runner.run({
-      plugin,
-      hook: 'digest.estimate',
-      userId: input.userId,
-      timeoutMs: this.#estimateTimeoutMs,
-      output: digestEstimateSchema,
-      counted: false,
-      call: (context) => hook.run(structuredClone(input), context),
-    });
-    if (!outcome.ok)
-      return outcome.failure === 'disabled' ? null : { estimate: null, failure: outcome.failure };
-    return {
-      estimate: {
-        tokens: outcome.value?.tokens ?? null,
-        costUsd: outcome.value?.costUsd ?? null,
-        note: mailText(outcome.value?.note),
-      },
-      failure: null,
-    };
   }
 
   /**
@@ -229,29 +197,58 @@ export class HookTester implements PluginTester {
   readonly #registry: PluginRegistry;
   readonly #runner: Pick<PluginRunner, 'run'>;
   readonly #timeoutMs: number;
+  readonly #actionTimeoutMs: number;
 
   constructor(
     registry: PluginRegistry,
     runner: Pick<PluginRunner, 'run'>,
     timeoutMs = TEST_LIMITS.timeoutSeconds * 1000,
+    actionTimeoutMs = ACTION_LIMITS.timeoutSeconds * 1000,
   ) {
     this.#registry = registry;
     this.#runner = runner;
     this.#timeoutMs = timeoutMs;
+    this.#actionTimeoutMs = actionTimeoutMs;
   }
 
   async test(plugin: PluginInfo, userId: number | null): Promise<PluginTestOutcome> {
     const loaded = this.#registry.get(plugin.id);
     const hook = loaded?.definition.hooks.test;
     if (!loaded || !hook) return 'off';
+    return this.#report(loaded, 'test', userId, this.#timeoutMs, (context) => hook.run(context));
+  }
+
+  async act(
+    plugin: PluginInfo,
+    name: string,
+    userId: number | null,
+    digest: DigestComposeInput | null,
+  ): Promise<PluginTestOutcome> {
+    const loaded = this.#registry.get(plugin.id);
+    const action = loaded?.definition.actions?.[name];
+    if (!loaded || !action) return 'off';
+    const given = action.digest ? digest : null;
+    return this.#report(loaded, `action.${name}`, userId, this.#actionTimeoutMs, (context) =>
+      action.run(context, structuredClone(given)),
+    );
+  }
+
+  /** A run checked as a test result: what it said, cleaned, or how it failed; never counted. */
+  async #report(
+    plugin: LoadedPlugin,
+    hook: string,
+    userId: number | null,
+    timeoutMs: number,
+    call: HookRun<unknown>['call'],
+  ): Promise<PluginTestOutcome> {
     const outcome = await this.#runner.run({
-      plugin: loaded,
-      hook: 'test',
+      plugin,
+      hook,
       userId,
-      timeoutMs: this.#timeoutMs,
+      timeoutMs,
       output: testResultSchema,
       counted: false,
-      call: (context) => hook.run(context),
+      call,
     });
     if (outcome.ok) {
       const message = stripControlChars(outcome.value.message.replace(/\r\n?/g, '\n')).trim();

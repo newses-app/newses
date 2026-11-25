@@ -7,6 +7,7 @@ import {
   fixtureEntry,
   fixtureEntryWithText,
   MemoryStore,
+  runAction,
   runHook,
   runTest,
 } from './testing.ts';
@@ -138,33 +139,34 @@ describe('runHook', () => {
     expect(more?.overview).toBe('Hello: 1 new, 2 unlisted');
   });
 
-  it('runs an estimate, checking it as a preview does', async () => {
-    const estimating = definePlugin({
+  it('runs an action as its button does, with a digest when it takes one', async () => {
+    const acting = definePlugin({
       ...plugin,
-      hooks: {
-        'digest.compose': { run: () => null },
-        'digest.estimate': {
-          run: (input) => ({
-            tokens: (input.entries.length + input.unlisted.length) * 100,
-            costUsd: 0.25,
-            note: 'With the small model.',
+      actions: {
+        count: {
+          digest: true,
+          run: (context, digest) => ({
+            ok: true,
+            message: `${context.settings.region}: ${String(digest?.entries.length)} new, ${String(digest?.unlisted.length)} unlisted`,
           }),
         },
+        ping: { run: (_context, digest) => ({ ok: digest === null, message: 'pong' }) },
+        odd: { run: () => ({ ok: 'yes' }) as never },
       },
     });
     const entries = [fixtureDigestEntry({ id: 3 })];
     const digest = { userId: 1, language: 'en', frequency: 'daily' as const, entries, more: 0 };
-    const { value } = await runHook(estimating, 'digest.estimate', digest, {
-      settings: { key: 'k' },
+    const { value } = await runAction(acting, 'count', { settings: { key: 'k' }, digest });
+    expect(value).toEqual({ ok: true, message: 'eu: 1 new, 0 unlisted' });
+    expect((await runAction(acting, 'ping', { settings: { key: 'k' } })).value).toEqual({
+      ok: true,
+      message: 'pong',
     });
-    expect(value).toEqual({ tokens: 100, costUsd: 0.25, note: 'With the small model.' });
-    const odd = definePlugin({
-      ...estimating,
-      hooks: { ...estimating.hooks, 'digest.estimate': { run: () => ({ tokens: -1 }) } },
-    });
-    await expect(
-      runHook(odd, 'digest.estimate', digest, { settings: { key: 'k' } }),
-    ).rejects.toThrow('does not take');
+    await expect(runAction(acting, 'count', { settings: { key: 'k' } })).rejects.toThrow(
+      'takes a digest',
+    );
+    await expect(runAction(acting, 'odd', { settings: { key: 'k' } })).rejects.toThrow('does not');
+    await expect(runAction(acting, 'gone')).rejects.toThrow('has no action gone');
   });
 
   it('fails as the server would count a failure', async () => {

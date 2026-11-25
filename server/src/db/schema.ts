@@ -181,15 +181,6 @@ export const digestState = pgTable(
   (t) => [index('digest_state_next_due_at_idx').on(t.nextDueAt)],
 );
 
-// A test digest a user asked for, taken by the next run that sends tests. A user has one waiting
-// at most.
-export const digestTests = pgTable('digest_tests', {
-  userId: integer('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  requestedAt: tstz('requested_at').notNull().defaultNow(),
-});
-
 // Image proxy cache index: the blob lives at `key`; failures are remembered so hosts are not
 // asked again until the entry expires.
 export const imageCache = pgTable(

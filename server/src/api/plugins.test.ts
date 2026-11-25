@@ -25,6 +25,7 @@ const tester: PluginTester = {
     tests.push([plugin.id, userId]);
     return Promise.resolve(testOutcome);
   },
+  act: () => Promise.reject(new Error('no actions here')),
 };
 
 interface Auth {
@@ -253,16 +254,24 @@ describe('plugins API', () => {
   });
 });
 
-describe('estimates', () => {
-  let estimating: ReturnType<typeof buildApp>;
-  const asked: [number, string][] = [];
+describe('actions', () => {
+  let acting: ReturnType<typeof buildApp>;
+  const acted: [string, string, number | null, unknown][] = [];
   const send = (url: string, auth: Auth, payload?: object) =>
-    estimating.inject({
+    acting.inject({
       method: payload ? 'PATCH' : 'POST',
       url: `/api/v1${url}`,
       headers: { cookie: auth.cookie, 'x-csrf-token': auth.csrf },
       ...(payload && { payload }),
     });
+  const digest = {
+    userId: 0,
+    language: 'en',
+    frequency: 'daily',
+    entries: [],
+    more: 0,
+    unlisted: [],
+  };
 
   beforeAll(async () => {
     const catalog = testPluginCatalog([
@@ -274,62 +283,77 @@ describe('estimates', () => {
           apiVersion: '^0.1',
           scopes: ['user'],
           settings: { user: z.object({ feeds: z.array(z.int()).default([]) }) },
-          hooks: {
-            'digest.compose': { run: () => null },
-            'digest.estimate': { run: () => ({ tokens: 1 }) },
+          hooks: { 'digest.compose': { run: () => null } },
+          actions: {
+            estimate: { digest: true, run: () => ({ ok: true, message: 'About $0.95' }) },
+            check: { run: () => ({ ok: true, message: 'Fine' }) },
           },
         },
       },
     ]);
     const priced = createTestServices(db, new HttpFetcher(), {}, catalog);
-    priced.mail.digest.estimateTest = (userId, pluginId) => {
-      asked.push([userId, pluginId]);
-      return Promise.resolve({
-        articles: 1861,
-        estimate: { estimate: { tokens: 178_259, costUsd: 0.95, note: 'Opus' }, failure: null },
-      });
-    };
-    estimating = buildApp({
+    priced.mail.digest.testInput = () => Promise.resolve(digest as never);
+    acting = buildApp({
       logger: pino({ level: 'silent' }),
       healthChecks: {},
-      services: priced,
+      services: {
+        ...priced,
+        plugins: {
+          ...priced.plugins,
+          tester: {
+            test: () => Promise.reject(new Error('no tests here')),
+            act: (plugin, name, userId, given) => {
+              acted.push([plugin.id, name, userId, given]);
+              return Promise.resolve({ ok: true, message: `${name} ran`, failure: null });
+            },
+          },
+        },
+      },
     });
-    await estimating.ready();
+    await acting.ready();
   });
 
   afterAll(async () => {
-    await estimating.close();
+    await acting.close();
   });
 
-  it("estimates a plugin's cost for a test digest while it is on for the user", async () => {
+  it("runs a plugin's action for the user, with the test digest's input when it takes one", async () => {
     const [patId = 0] = (await services.users.list())
       .filter((u) => u.login === 'pat')
       .map((u) => u.id);
     const listed = (
-      await estimating.inject({
+      await acting.inject({
         method: 'GET',
         url: '/api/v1/plugins',
         headers: { cookie: admin.cookie },
       })
     ).json<PluginsResponse>();
-    expect(listed.plugins.map((p) => [p.id, p.estimates])).toEqual([
-      ['webhook', false],
-      ['summary', false],
-      ['priced', true],
+    expect(listed.plugins.map((p) => [p.id, p.actions])).toEqual([
+      ['webhook', []],
+      ['summary', []],
+      [
+        'priced',
+        [
+          { name: 'estimate', digest: true },
+          { name: 'check', digest: false },
+        ],
+      ],
     ]);
-    expect((await send('/account/plugins/priced/estimate', pat)).statusCode).toBe(404);
-    expect((await send('/account/plugins/webhook/estimate', pat)).statusCode).toBe(404);
+    // Off for the instance; then off for the user.
+    expect((await send('/account/plugins/priced/actions/estimate', pat)).statusCode).toBe(404);
     await send('/admin/plugins/priced', admin, { enabled: true });
-    const off = await send('/account/plugins/priced/estimate', pat);
+    const off = await send('/account/plugins/priced/actions/estimate', pat);
     expect(off.json<{ reason?: string }>().reason).toBe('plugin_off');
     await send('/account/plugins/priced', pat, { enabled: true });
-    const estimated = await send('/account/plugins/priced/estimate', pat);
-    expect(estimated.statusCode).toBe(200);
-    expect(estimated.json()).toEqual({
-      articles: 1861,
-      estimate: { tokens: 178_259, costUsd: 0.95, note: 'Opus' },
-      failure: null,
-    });
-    expect(asked).toEqual([[patId, 'priced']]);
+    const estimated = await send('/account/plugins/priced/actions/estimate', pat);
+    expect(estimated.json()).toEqual({ ok: true, message: 'estimate ran', failure: null });
+    await send('/account/plugins/priced/actions/check', pat);
+    expect(acted).toEqual([
+      ['priced', 'estimate', patId, digest],
+      ['priced', 'check', patId, null],
+    ]);
+    expect((await send('/account/plugins/priced/actions/gone', pat)).statusCode).toBe(404);
+    // A plugin with user settings has no instance actions.
+    expect((await send('/admin/plugins/priced/actions/check', admin)).statusCode).toBe(404);
   });
 });

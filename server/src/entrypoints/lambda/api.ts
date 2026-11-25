@@ -1,3 +1,4 @@
+import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import awsLambdaFastify from '@fastify/aws-lambda';
 import { buildApp } from '../../api/app.ts';
 import { createAuthServices } from '../../core/auth/index.ts';
@@ -7,8 +8,9 @@ import { createMailServices } from '../../core/mail/index.ts';
 import { PrefsService } from '../../core/prefs.ts';
 import { ThemeService } from '../../core/themes.ts';
 import { createProcessPlugins } from '../feed-deps.ts';
+import type { TickEvent } from '../scheduled-tasks.ts';
 import { binaryResponse, createApiHandler } from './api-handler.ts';
-import { createLambdaRuntime, readParameter, trackPoolUse } from './runtime.ts';
+import { createLambdaRuntime, readParameter, requireEnv, trackPoolUse } from './runtime.ts';
 
 const runtime = await createLambdaRuntime('api');
 const { config, logger, pool, db, feedDeps, ops, archive } = runtime;
@@ -16,15 +18,18 @@ const feeds = createFeedServices(feedDeps);
 const prefs = new PrefsService(db);
 const entries = createEntryServices(db, feedDeps.realtime, archive);
 
-const plugins = createProcessPlugins({
-  config,
-  registry: runtime.plugins,
-  db,
-  keys: feedDeps.keys,
-  logger,
-  ops: ops.recorder,
-  polite: feeds.polite,
-});
+const lambda = new LambdaClient({});
+const tickFunction = requireEnv('TICK_FUNCTION_NAME');
+/** Runs a tick task without waiting for it. */
+async function invokeTick(event: TickEvent): Promise<void> {
+  await lambda.send(
+    new InvokeCommand({
+      FunctionName: tickFunction,
+      InvocationType: 'Event',
+      Payload: new TextEncoder().encode(JSON.stringify(event)),
+    }),
+  );
+}
 
 const app = buildApp({
   logger,
@@ -52,16 +57,21 @@ const app = buildApp({
       logger,
       publicUrl: config.publicUrl,
       unsubscribeKey: feedDeps.keys['digest-unsubscribe'],
-      composer: plugins.digest,
-      // The plugin function sends test digests when woken.
-      wakeTests: async () => {
-        await feedDeps.queue.enqueue('plugin.dispatch', {}, { key: 'plugin.dispatch' });
-      },
+      // The tick function sends it, as it sends scheduled digests: a request cannot wait for plugins.
+      startTest: (userId) => invokeTick({ task: 'digest.test', userId }),
     }),
     themes: new ThemeService(db),
     realtime: feedDeps.realtime,
     ops,
-    plugins,
+    plugins: createProcessPlugins({
+      config,
+      registry: runtime.plugins,
+      db,
+      keys: feedDeps.keys,
+      logger,
+      ops: ops.recorder,
+      polite: feeds.polite,
+    }),
   },
   healthChecks: {
     db: async () => {

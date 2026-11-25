@@ -37,7 +37,7 @@ describe('PluginRegistry', () => {
       events: new Map(),
       testable: false,
       digests: false,
-      estimates: false,
+      actions: [],
       definition,
     });
     expect(registry.get('webhook')?.definition).toBe(definition);
@@ -62,10 +62,24 @@ describe('PluginRegistry', () => {
         'published.changed',
       ],
       [plugin({ hooks: { 'entries.added': { run: 'x' } } }), 'webhook', 'a function'],
+      [plugin({ actions: { Estimate: { run: () => null } } }), 'webhook', 'actions.Estimate'],
       [
-        plugin({ hooks: { 'digest.estimate': { run: () => null } } }),
+        plugin({
+          actions: Object.fromEntries(
+            ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => [name, { run: () => null }]),
+          ),
+        }),
         'webhook',
-        'digest.estimate estimates digest.compose',
+        'at most 5 actions',
+      ],
+      [
+        plugin({
+          scopes: ['instance'],
+          settings: {},
+          actions: { estimate: { digest: true, run: () => null } },
+        }),
+        'webhook',
+        'an action given a digest needs user settings',
       ],
       [plugin({ settings: { user: { target: 'text' } } }), 'webhook', 'zod object schema'],
       [plugin({ settings: { everyone: z.object({}) } }), 'webhook', 'everyone'],

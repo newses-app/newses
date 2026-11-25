@@ -1,6 +1,6 @@
 # 0096. Plugins' cost estimates apart from test digests
 
-- Status: Accepted
+- Status: Superseded by 0097
 - Date: 2026-11-24
 - Supersedes 0095
 
