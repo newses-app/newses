@@ -37,7 +37,7 @@ const WINDOW_SECONDS = 60;
 
 /**
  * Limits how often each user takes costly actions, such as making the server fetch on their
- * behalf, in fixed windows counted in Postgres, so the limit holds across processes.
+ * behalf, in windows counted in Postgres, so the limit holds across processes.
  */
 export class UserRateLimiter {
   readonly #db: Db;
@@ -64,18 +64,21 @@ export class UserRateLimiter {
       .where(lt(rateLimits.windowStart, sql`now() - interval '1 hour'`));
   }
 
-  /** Seconds left in the window when the request is over the limit, else 0. */
+  /**
+   * Seconds left in the window when the request is over the limit, else 0. A window starts at
+   * the first request after the last one ended, so a burst is counted in one window wherever it
+   * falls on the clock.
+   */
   async #count(userId: number, action: LimitedAction): Promise<number> {
-    const window = sql`date_bin(make_interval(secs => ${WINDOW_SECONDS}), now(), 'epoch'::timestamptz)`;
+    const open = sql`${rateLimits.windowStart} > now() - make_interval(secs => ${WINDOW_SECONDS})`;
     const [row] = await this.#db
       .insert(rateLimits)
-      .values({ key: `${action}:${String(userId)}`, windowStart: window, count: 1 })
+      .values({ key: `${action}:${String(userId)}`, windowStart: sql`now()`, count: 1 })
       .onConflictDoUpdate({
         target: rateLimits.key,
         set: {
-          count: sql`CASE WHEN ${rateLimits.windowStart} = excluded.window_start
-            THEN ${rateLimits.count} + 1 ELSE 1 END`,
-          windowStart: sql`excluded.window_start`,
+          count: sql`CASE WHEN ${open} THEN ${rateLimits.count} + 1 ELSE 1 END`,
+          windowStart: sql`CASE WHEN ${open} THEN ${rateLimits.windowStart} ELSE excluded.window_start END`,
         },
       })
       .returning({

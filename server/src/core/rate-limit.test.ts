@@ -38,6 +38,15 @@ describe('UserRateLimiter', () => {
     expect(await limits.tryTake(1, 'subscribe')).toBe(false);
   });
 
+  it('counts a burst in one window from its first request, wherever it falls on the clock', async () => {
+    for (let n = 0; n < RATE_LIMITS.debug; n++) await limits.take(1, 'debug');
+    // The burst began 50 s ago, so it may have crossed a minute boundary.
+    await db.update(rateLimits).set({ windowStart: sql`window_start - interval '50 seconds'` });
+    const refused = await limits.take(1, 'debug').catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(ThrottledError);
+    expect((refused as ThrottledError).retryAfterSeconds).toBeLessThanOrEqual(10);
+  });
+
   it('starts counting again in the next window', async () => {
     for (let n = 0; n < RATE_LIMITS.debug; n++) await limits.take(1, 'debug');
     expect(await limits.tryTake(1, 'debug')).toBe(false);
