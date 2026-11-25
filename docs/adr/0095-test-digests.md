@@ -1,6 +1,6 @@
 # 0095. Test digests, previewed with plugins' estimates
 
-- Status: Accepted
+- Status: Superseded by 0096
 - Date: 2026-11-24
 
 ## Context

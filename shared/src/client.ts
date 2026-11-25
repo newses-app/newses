@@ -4,7 +4,6 @@ import type {
   AppPassword,
   changePasswordRequestSchema,
   ConfirmEmailResponse,
-  DigestTestPreview,
   CreateAppPasswordResponse,
   createAppPasswordRequestSchema,
   createUserRequestSchema,
@@ -74,6 +73,7 @@ import type {
 import type {
   Plugin,
   PluginsResponse,
+  PluginEstimateResult,
   PluginTestResult,
   UpdateAccountPluginRequest,
   UpdatePluginRequest,
@@ -298,8 +298,6 @@ export function createApiClient(options: ApiClientOptions = {}) {
        * plugins on for them add, within a minute (API 1.17).
        */
       testDigest: () => request<undefined>('POST', '/account/digest/test'),
-      /** What a test digest would hold now, and each plugin's expected cost (API 1.17). */
-      previewTestDigest: () => request<DigestTestPreview>('GET', '/account/digest/test'),
       /** The user's settings of a plugin with user scope (API 1.15). */
       updatePlugin: (pluginId: string, body: UpdateAccountPluginRequest) =>
         request<Plugin>('PATCH', `/account/plugins/${encodeURIComponent(pluginId)}`, { body }),
@@ -309,6 +307,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Tests a plugin with the user's saved settings (API 1.16, `Plugin.testable`). */
       testPlugin: (pluginId: string) =>
         request<PluginTestResult>('POST', `/account/plugins/${encodeURIComponent(pluginId)}/test`),
+      /**
+       * What a plugin expects a test digest for the user now to cost, sending nothing (API 1.17,
+       * `Plugin.estimates`).
+       */
+      estimatePlugin: (pluginId: string) =>
+        request<PluginEstimateResult>(
+          'POST',
+          `/account/plugins/${encodeURIComponent(pluginId)}/estimate`,
+        ),
     },
 
     /** From API 1.15, where `ServerInfo.plugins` is set (admins may list none installed). */

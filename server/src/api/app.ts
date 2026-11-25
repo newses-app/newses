@@ -249,6 +249,7 @@ export function buildApp(deps: AppDeps) {
         await api.register(pluginRoutes, {
           plugins: services.plugins,
           limits: services.feeds.rateLimits,
+          digest: services.mail.digest,
         });
         await api.register(feedRoutes, services.feeds);
         await api.register(entryRoutes, {

@@ -189,6 +189,7 @@ export class PluginRegistry implements PluginCatalog {
         ),
         testable: parsed.data.hooks.test !== undefined,
         digests: parsed.data.hooks['digest.compose'] !== undefined,
+        estimates: parsed.data.hooks['digest.estimate'] !== undefined,
         definition,
       });
       options.logger.info({ plugin: id, source, version: parsed.data.version }, 'Plugin loaded');

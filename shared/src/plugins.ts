@@ -38,6 +38,8 @@ export const pluginSchema = z.object({
   testable: z.boolean().optional(),
   /** From API 1.17: whether it adds to users' digests, which a test digest shows. */
   digests: z.boolean().optional(),
+  /** From API 1.17: whether it estimates what it would cost for a digest ("Estimate cost"). */
+  estimates: z.boolean().optional(),
   /** The hosts an admin approved: URL settings must be on one of them. */
   approvedHosts: z.array(z.string()),
   /**
@@ -90,6 +92,24 @@ export const pluginTestResultSchema = z.object({
   failure: z.enum(['error', 'timeout', 'invalid']).nullable(),
 });
 export type PluginTestResult = z.infer<typeof pluginTestResultSchema>;
+
+/**
+ * `POST /account/plugins/:id/estimate` (API 1.17): what the plugin expects a test digest for the
+ * user now to cost, sending nothing: the digest's unread articles, and the plugin's estimate of
+ * tokens, US dollars, and a plain-text note, or how its estimate failed.
+ */
+export const pluginEstimateResultSchema = z.object({
+  articles: z.number().int(),
+  estimate: z
+    .object({
+      tokens: z.number().int().nullable(),
+      costUsd: z.number().nullable(),
+      note: z.string().nullable(),
+    })
+    .nullable(),
+  failure: z.enum(['error', 'timeout', 'invalid']).nullable(),
+});
+export type PluginEstimateResult = z.infer<typeof pluginEstimateResultSchema>;
 
 /** `PATCH /plugins/:id` (admins): also the hosts the plugin may reach. */
 export const updatePluginRequestSchema = updateAccountPluginRequestSchema.extend({

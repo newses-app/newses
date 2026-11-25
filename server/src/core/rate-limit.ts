@@ -5,7 +5,7 @@ import { ThrottledError } from './errors.ts';
 
 /**
  * User actions limited per user: those that make the server or a plugin fetch from a remote host, OPML
- * imports, which write many rows at once, mail to addresses not yet confirmed, and test digests and their previews, which run plugins.
+ * imports, which write many rows at once, mail to addresses not yet confirmed, test digests, and plugins' estimates.
  */
 export type LimitedAction =
   | 'fulltext'
@@ -17,7 +17,7 @@ export type LimitedAction =
   | 'emailArticle'
   | 'pluginTest'
   | 'digestTest'
-  | 'digestPreview';
+  | 'pluginEstimate';
 
 /** Each action's requests per user per WINDOW_SECONDS. */
 export const RATE_LIMITS: Record<LimitedAction, number> = {
@@ -30,7 +30,7 @@ export const RATE_LIMITS: Record<LimitedAction, number> = {
   emailArticle: 5,
   pluginTest: 5,
   digestTest: 3,
-  digestPreview: 10,
+  pluginEstimate: 10,
 };
 
 const WINDOW_SECONDS = 60;

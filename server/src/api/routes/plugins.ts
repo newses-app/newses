@@ -3,6 +3,7 @@ import {
   pluginSchema,
   type PluginSettingsState,
   pluginsResponseSchema,
+  pluginEstimateResultSchema,
   pluginTestResultSchema,
   updateAccountPluginRequestSchema,
   updatePluginRequestSchema,
@@ -10,6 +11,7 @@ import {
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { DomainError } from '../../core/errors.ts';
+import type { DigestService } from '../../core/mail/digest-service.ts';
 import type { PluginTester } from '../../core/plugins/catalog.ts';
 import type { PluginInfo, PluginServices } from '../../core/plugins/index.ts';
 import type { PluginSettingsView } from '../../core/plugins/settings.ts';
@@ -52,7 +54,9 @@ const stateOf = (view: PluginSettingsView | null | undefined): PluginSettingsSta
 export const pluginRoutes: FastifyPluginAsyncZod<{
   plugins: PluginServices & { tester?: PluginTester };
   limits: Pick<UserRateLimiter, 'take'>;
-}> = (app, { plugins, limits }) => {
+  /** Test digests' contents, for plugins' estimates of them. */
+  digest: Pick<DigestService, 'estimateTest'>;
+}> = (app, { plugins, limits, digest }) => {
   const { catalog, settings, tester } = plugins;
 
   /** A plugin as `viewer` sees it, with their own settings. */
@@ -78,6 +82,7 @@ export const pluginRoutes: FastifyPluginAsyncZod<{
       hosts: [...info.hosts],
       testable: info.testable,
       digests: info.digests,
+      estimates: info.estimates,
       approvedHosts: instance?.approvedHosts ?? [],
       messages: info.messages,
       settingsSchemas: {
@@ -223,6 +228,37 @@ export const pluginRoutes: FastifyPluginAsyncZod<{
         throw new DomainError('not_found', `No plugin ${id} with settings of your own is on`);
       await limits.take(viewer.id, 'pluginTest');
       return test(info, viewer.id);
+    },
+  );
+
+  // What the plugin expects a test digest for the user now to cost, sending nothing (API 1.17).
+  app.post(
+    '/account/plugins/:id/estimate',
+    {
+      preHandler: requireUser,
+      schema: { params: idParams, response: { 200: pluginEstimateResultSchema } },
+    },
+    async (request) => {
+      const { id } = request.params;
+      const viewer = viewerOf(requireAuth(request));
+      const info = catalog.get(id);
+      if (
+        !info?.estimates ||
+        !info.settings.user ||
+        (!viewer.admin && (await settings.instance(id))?.enabled !== true)
+      )
+        throw new DomainError('not_found', `No plugin ${id} that estimates digests is on`);
+      if ((await settings.user(id, viewer.id))?.enabled !== true)
+        throw new DomainError('conflict', `Turn the plugin ${id} on before estimating`, {
+          reason: 'plugin_off',
+        });
+      await limits.take(viewer.id, 'pluginEstimate');
+      const { articles, estimate } = await digest.estimateTest(viewer.id, id);
+      if (!estimate)
+        throw new DomainError('conflict', `The plugin ${id} is off for you`, {
+          reason: 'plugin_off',
+        });
+      return { articles, ...estimate };
     },
   );
 

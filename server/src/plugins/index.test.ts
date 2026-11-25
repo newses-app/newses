@@ -279,7 +279,7 @@ describe('DigestHookComposer', () => {
     expect(counted).toEqual([false, false, false, false, false]);
   });
 
-  it('estimates for the plugins on for the user, uncounted, saying which gave none', async () => {
+  it('estimates for a plugin on for the user, uncounted, saying how it failed', async () => {
     const estimating = (id: string, run: () => unknown) => {
       const installed = composing(id, () => null);
       return {
@@ -304,22 +304,24 @@ describe('DigestHookComposer', () => {
     );
     const real = realRunner(['off']);
     const counted: (boolean | undefined)[] = [];
-    const estimates = await new DigestHookComposer(plugins, {
+    const composer = new DigestHookComposer(plugins, {
       run: (hookRun) => {
         counted.push(hookRun.counted);
         return real.run(hookRun);
       },
-    }).estimate(input);
-    expect(estimates).toEqual([
-      {
-        pluginId: 'priced',
-        name: 'priced (pt)',
-        estimate: { tokens: 175_000, costUsd: 0.7, note: 'Opus,\nlow' },
-        failure: null,
-      },
-      { pluginId: 'plain', name: 'plain (pt)', estimate: null, failure: 'none' },
-      { pluginId: 'throws', name: 'throws (pt)', estimate: null, failure: 'error' },
-      { pluginId: 'odd', name: 'odd (pt)', estimate: null, failure: 'invalid' },
+    });
+    const estimated = await Promise.all(
+      ['priced', 'plain', 'throws', 'odd', 'off', 'missing'].map((id) =>
+        composer.estimate(input, id),
+      ),
+    );
+    expect(estimated).toEqual([
+      { estimate: { tokens: 175_000, costUsd: 0.7, note: 'Opus,\nlow' }, failure: null },
+      null,
+      { estimate: null, failure: 'error' },
+      { estimate: null, failure: 'invalid' },
+      null,
+      null,
     ]);
     expect(counted.every((c) => c === false)).toBe(true);
   });

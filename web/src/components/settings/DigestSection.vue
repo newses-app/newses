@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import type { DigestFrequency } from '@newses/shared';
 import { localTimeZone } from '@newses/shared/client';
+import { mdiEmailFastOutline } from '@mdi/js';
 import { useQuery } from '@tanstack/vue-query';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { api } from '../../api.ts';
+import { useErrorText } from '../../composables/useErrorText.ts';
+import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { usePrefs } from '../../composables/usePrefs.ts';
 import { useSession } from '../../composables/useSession.ts';
-import TestDigest from './TestDigest.vue';
+import { useUiStore } from '../../stores/ui.ts';
 
 const { t, locale } = useI18n();
 const { prefs, update } = usePrefs();
 const { session } = useSession();
+const errorText = useErrorText();
+const ui = useUiStore();
+const { online, whenOnline } = useOnlineOnly();
 
 /** Shown where the server emails digests (API 1.14): mail, and its public URL for their links. */
 const serverInfo = useQuery({
@@ -65,6 +71,22 @@ function setFrequency(value: DigestFrequency) {
     ...(value !== 'off' && prefs.value.timeZone === null && { timeZone: localTimeZone() }),
   });
 }
+
+/** A test digest of the last day's unread articles, sent within a minute (API 1.17). */
+const testing = ref(false);
+const testQueued = ref(false);
+const sendTest = whenOnline(async () => {
+  testing.value = true;
+  testQueued.value = false;
+  try {
+    await api.account.testDigest();
+    testQueued.value = true;
+  } catch (error) {
+    ui.notify(errorText(error), true);
+  } finally {
+    testing.value = false;
+  }
+});
 </script>
 
 <template>
@@ -125,6 +147,24 @@ function setFrequency(value: DigestFrequency) {
         </v-col>
       </template>
     </v-row>
-    <TestDigest v-if="ready" class="mt-2" />
+    <template v-if="ready">
+      <div class="d-flex align-center flex-wrap ga-2 mt-2">
+        <v-btn
+          variant="tonal"
+          :prepend-icon="mdiEmailFastOutline"
+          :loading="testing"
+          :aria-disabled="!online"
+          @click="sendTest"
+        >
+          {{ t('email.digest.sendTest') }}
+        </v-btn>
+        <span class="text-body-small text-medium-emphasis">{{ t('email.digest.testHint') }}</span>
+      </div>
+      <div role="status">
+        <v-alert v-if="testQueued" type="success" variant="tonal" density="compact" class="mt-2">
+          {{ t('email.digest.testQueued') }}
+        </v-alert>
+      </div>
+    </template>
   </section>
 </template>

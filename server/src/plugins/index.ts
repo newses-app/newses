@@ -150,41 +150,32 @@ export class DigestHookComposer implements DigestComposer {
     return outcomes.filter((outcome) => outcome !== null);
   }
 
-  async estimate(input: DigestComposeInput): Promise<DigestPluginEstimate[]> {
-    const outcomes = await Promise.all(
-      this.#plugins.map(async (plugin): Promise<DigestPluginEstimate | null> => {
-        const hook = plugin.definition.hooks['digest.estimate'];
-        // Run even without the hook, so plugins off for the user are left out.
-        const outcome = await this.#runner.run({
-          plugin,
-          hook: 'digest.estimate',
-          userId: input.userId,
-          timeoutMs: this.#estimateTimeoutMs,
-          output: digestEstimateSchema,
-          counted: false,
-          call: (context) => hook?.run(structuredClone(input), context),
-        });
-        const pluginId = plugin.id;
-        const name = pluginName(plugin, input.language);
-        if (!outcome.ok)
-          return outcome.failure === 'disabled'
-            ? null
-            : { pluginId, name, estimate: null, failure: outcome.failure };
-        if (!hook) return { pluginId, name, estimate: null, failure: 'none' };
-        const value = outcome.value;
-        return {
-          pluginId,
-          name,
-          estimate: {
-            tokens: value?.tokens ?? null,
-            costUsd: value?.costUsd ?? null,
-            note: mailText(value?.note),
-          },
-          failure: null,
-        };
-      }),
-    );
-    return outcomes.filter((outcome) => outcome !== null);
+  async estimate(
+    input: DigestComposeInput,
+    pluginId: string,
+  ): Promise<DigestPluginEstimate | null> {
+    const plugin = this.#plugins.find((candidate) => candidate.id === pluginId);
+    const hook = plugin?.definition.hooks['digest.estimate'];
+    if (!plugin || !hook) return null;
+    const outcome = await this.#runner.run({
+      plugin,
+      hook: 'digest.estimate',
+      userId: input.userId,
+      timeoutMs: this.#estimateTimeoutMs,
+      output: digestEstimateSchema,
+      counted: false,
+      call: (context) => hook.run(structuredClone(input), context),
+    });
+    if (!outcome.ok)
+      return outcome.failure === 'disabled' ? null : { estimate: null, failure: outcome.failure };
+    return {
+      estimate: {
+        tokens: outcome.value?.tokens ?? null,
+        costUsd: outcome.value?.costUsd ?? null,
+        note: mailText(outcome.value?.note),
+      },
+      failure: null,
+    };
   }
 
   /**

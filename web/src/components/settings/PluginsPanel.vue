@@ -11,6 +11,7 @@ import { useSession } from '../../composables/useSession.ts';
 import { pluginText } from '../../lib/plugin-form.ts';
 import { useUiStore } from '../../stores/ui.ts';
 import PluginSettingsForm from './PluginSettingsForm.vue';
+import PluginEstimate from './PluginEstimate.vue';
 import PluginTest from './PluginTest.vue';
 
 const { t, locale } = useI18n();
@@ -96,6 +97,8 @@ function turnedOff(state: PluginSettingsState, mine: boolean): string | null {
 /** "Send test" with the instance's saved settings, or the user's. */
 const testServer = (plugin: Plugin) => () => api.admin.plugins.test(plugin.id);
 const testMine = (plugin: Plugin) => () => api.account.testPlugin(plugin.id);
+/** "Estimate cost" of a test digest for the user now. */
+const estimateMine = (plugin: Plugin) => () => api.account.estimatePlugin(plugin.id);
 
 /** Shown where the server emails digests (API 1.14). */
 const serverInfo = useQuery({
@@ -106,6 +109,7 @@ const serverInfo = useQuery({
 /** A user's "Send test" of a plugin that adds to digests also emails them a test digest. */
 const testsDigest = (plugin: Plugin) =>
   plugin.digests === true && serverInfo.data.value?.digest === true;
+const testDigest = () => api.account.testDigest();
 
 const hasMine = (state: PluginSettingsState) =>
   state.enabled || state.secretsSet.length > 0 || Object.keys(state.settings).length > 0;
@@ -238,7 +242,11 @@ const hasMine = (state: PluginSettingsState) =>
               plugin.settingsSchemas.user
             "
             :run="plugin.testable ? testMine(plugin) : undefined"
-            :digest="testsDigest(plugin)"
+            :digest="testsDigest(plugin) ? testDigest : undefined"
+          />
+          <PluginEstimate
+            v-if="plugin.estimates && plugin.user.enabled && plugin.settingsSchemas.user"
+            :run="estimateMine(plugin)"
           />
           <v-btn
             v-if="hasMine(plugin.user)"

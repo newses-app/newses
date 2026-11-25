@@ -6,13 +6,12 @@ import { useI18n } from 'vue-i18n';
 import { useErrorText } from '../../composables/useErrorText.ts';
 import { useOnlineOnly } from '../../composables/useOnlineOnly.ts';
 import { useUiStore } from '../../stores/ui.ts';
-import TestDigest from './TestDigest.vue';
 
 // "Send test": runs the plugin's test with the saved settings and shows how it went; with
-// `digest`, a passing test (or none) is followed by a test digest's preview, to send or not.
+// `digest`, a passing test (or none) is followed by a test digest emailed to the user.
 const props = defineProps<{
   run?: (() => Promise<PluginTestResult>) | undefined;
-  digest?: boolean;
+  digest?: (() => Promise<void>) | undefined;
 }>();
 
 const { t } = useI18n();
@@ -22,20 +21,18 @@ const { online, whenOnline } = useOnlineOnly();
 
 const testing = ref(false);
 const result = ref<PluginTestResult | null>(null);
-/** The test digest's preview, made again on each test, so it is of the digest now. */
-const previewing = ref(false);
-const previews = ref(0);
+const digestQueued = ref(false);
 
 const send = whenOnline(async () => {
   testing.value = true;
   result.value = null;
-  previewing.value = false;
+  digestQueued.value = false;
   try {
     const tested = props.run ? await props.run() : null;
     result.value = tested;
     if (props.digest && (tested?.ok ?? true)) {
-      previews.value++;
-      previewing.value = true;
+      await props.digest();
+      digestQueued.value = true;
     }
   } catch (error) {
     ui.notify(errorText(error), true);
@@ -51,10 +48,11 @@ const outcome = computed(() => {
     if (tested.message) return t('plugins.testFailed', { message: tested.message });
     return t(`plugins.testFailure.${tested.failure ?? 'error'}`);
   }
+  const passed = tested?.message ? t('plugins.testPassed', { message: tested.message }) : null;
+  if (digestQueued.value)
+    return [passed, t('email.digest.testQueued')].filter((line) => line !== null).join('\n');
   if (!tested) return null;
-  return tested.message
-    ? t('plugins.testPassed', { message: tested.message })
-    : t('plugins.testPassedQuietly');
+  return passed ?? t('plugins.testPassedQuietly');
 });
 </script>
 
@@ -86,7 +84,6 @@ const outcome = computed(() => {
         {{ outcome }}
       </v-alert>
     </div>
-    <TestDigest v-if="previewing" :key="previews" auto />
   </div>
 </template>
 

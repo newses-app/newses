@@ -43,6 +43,8 @@ export interface PluginInfo {
   readonly testable: boolean;
   /** Whether it has a `digest.compose` hook, adding to users' digests. */
   readonly digests: boolean;
+  /** Whether it has a `digest.estimate` hook, for "Estimate cost". */
+  readonly estimates: boolean;
 }
 
 /** Hooks told of changes after they are saved, through the deliveries. */
@@ -112,21 +114,19 @@ export interface DigestComposer {
    */
   composeTest(input: DigestComposeInput): Promise<DigestTest[]>;
   /**
-   * What each plugin on for the user expects its additions to a digest of `input` to cost, in
-   * install order, from `digest.estimate`, not counted toward turning it off; never throws.
+   * What the plugin expects its additions to a digest of `input` to cost, from its
+   * `digest.estimate`, not counted toward turning it off; null when it is off for the user or has
+   * no such hook. Never throws.
    */
-  estimate(input: DigestComposeInput): Promise<DigestPluginEstimate[]>;
+  estimate(input: DigestComposeInput, pluginId: string): Promise<DigestPluginEstimate | null>;
 }
 
 /**
- * One plugin's estimate for a test digest preview: its name in the digest's language, and its
- * estimate, or none: it has no `digest.estimate` (`none`) or the hook failed as a hook fails.
+ * A plugin's estimate for a digest: what it returned, or why it has none, as a hook fails.
  */
 export interface DigestPluginEstimate {
-  pluginId: string;
-  name: string;
   estimate: { tokens: number | null; costUsd: number | null; note: string | null } | null;
-  failure: 'none' | 'error' | 'timeout' | 'invalid' | null;
+  failure: 'error' | 'timeout' | 'invalid' | null;
 }
 
 /**

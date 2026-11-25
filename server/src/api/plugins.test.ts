@@ -1,6 +1,7 @@
 import type { Plugin, PluginsResponse } from '@newses/shared';
 import pino from 'pino';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { HttpFetcher } from '../core/feeds/http.ts';
 import type { PluginTestOutcome, PluginTester } from '../core/plugins/catalog.ts';
 import { createDb, type Db } from '../db/client.ts';
@@ -249,5 +250,86 @@ describe('plugins API', () => {
     expect((await list(admin)).uninstalled).toEqual([]);
     expect((await call('DELETE', '/admin/plugins/gone', admin)).statusCode).toBe(404);
     expect((await call('DELETE', '/admin/plugins/gone', pat)).statusCode).toBe(403);
+  });
+});
+
+describe('estimates', () => {
+  let estimating: ReturnType<typeof buildApp>;
+  const asked: [number, string][] = [];
+  const send = (url: string, auth: Auth, payload?: object) =>
+    estimating.inject({
+      method: payload ? 'PATCH' : 'POST',
+      url: `/api/v1${url}`,
+      headers: { cookie: auth.cookie, 'x-csrf-token': auth.csrf },
+      ...(payload && { payload }),
+    });
+
+  beforeAll(async () => {
+    const catalog = testPluginCatalog([
+      {
+        source: '@newses/plugin-priced@1.0.0',
+        plugin: {
+          id: 'priced',
+          version: '1.0.0',
+          apiVersion: '^0.1',
+          scopes: ['user'],
+          settings: { user: z.object({ feeds: z.array(z.int()).default([]) }) },
+          hooks: {
+            'digest.compose': { run: () => null },
+            'digest.estimate': { run: () => ({ tokens: 1 }) },
+          },
+        },
+      },
+    ]);
+    const priced = createTestServices(db, new HttpFetcher(), {}, catalog);
+    priced.mail.digest.estimateTest = (userId, pluginId) => {
+      asked.push([userId, pluginId]);
+      return Promise.resolve({
+        articles: 1861,
+        estimate: { estimate: { tokens: 178_259, costUsd: 0.95, note: 'Opus' }, failure: null },
+      });
+    };
+    estimating = buildApp({
+      logger: pino({ level: 'silent' }),
+      healthChecks: {},
+      services: priced,
+    });
+    await estimating.ready();
+  });
+
+  afterAll(async () => {
+    await estimating.close();
+  });
+
+  it("estimates a plugin's cost for a test digest while it is on for the user", async () => {
+    const [patId = 0] = (await services.users.list())
+      .filter((u) => u.login === 'pat')
+      .map((u) => u.id);
+    const listed = (
+      await estimating.inject({
+        method: 'GET',
+        url: '/api/v1/plugins',
+        headers: { cookie: admin.cookie },
+      })
+    ).json<PluginsResponse>();
+    expect(listed.plugins.map((p) => [p.id, p.estimates])).toEqual([
+      ['webhook', false],
+      ['summary', false],
+      ['priced', true],
+    ]);
+    expect((await send('/account/plugins/priced/estimate', pat)).statusCode).toBe(404);
+    expect((await send('/account/plugins/webhook/estimate', pat)).statusCode).toBe(404);
+    await send('/admin/plugins/priced', admin, { enabled: true });
+    const off = await send('/account/plugins/priced/estimate', pat);
+    expect(off.json<{ reason?: string }>().reason).toBe('plugin_off');
+    await send('/account/plugins/priced', pat, { enabled: true });
+    const estimated = await send('/account/plugins/priced/estimate', pat);
+    expect(estimated.statusCode).toBe(200);
+    expect(estimated.json()).toEqual({
+      articles: 1861,
+      estimate: { tokens: 178_259, costUsd: 0.95, note: 'Opus' },
+      failure: null,
+    });
+    expect(asked).toEqual([[patId, 'priced']]);
   });
 });

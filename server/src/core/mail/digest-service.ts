@@ -38,10 +38,10 @@ export const DIGEST_TEST_HOURS = 24;
 /** A test digest not sent within this many minutes of being asked for is dropped. */
 const TEST_EXPIRY_MINUTES = 60;
 
-/** What a test digest would hold now: its unread entries, and each plugin's expected cost. */
-export interface DigestTestPreview {
+/** A test digest's unread entries now, and what one plugin expects its additions to cost. */
+export interface DigestTestEstimate {
   articles: number;
-  plugins: DigestPluginEstimate[];
+  estimate: DigestPluginEstimate | null;
 }
 
 export interface DigestDeps {
@@ -245,16 +245,20 @@ export class DigestService {
   }
 
   /**
-   * What a test digest for the user would hold now, sending nothing: how many unread entries,
-   * and what each plugin on for them expects its additions to cost; refused as `requestTest` is.
+   * What the plugin expects its additions to a test digest for the user now to cost, sending
+   * nothing: how many unread entries it would hold, and the plugin's `digest.estimate`, null when
+   * the plugin is off for them or estimates nothing. Refused without unread entries from the last
+   * `DIGEST_TEST_HOURS`.
    */
-  async previewTest(userId: number): Promise<DigestTestPreview> {
-    const now = this.#now();
-    await this.#checkTest(userId, now);
-    const test = await this.#testDigest(userId, now);
+  async estimateTest(userId: number, pluginId: string): Promise<DigestTestEstimate> {
+    const test = await this.#testDigest(userId, this.#now());
+    if (test.count === 0)
+      throw new DomainError('conflict', 'No unread articles came in over the last day', {
+        reason: 'digest_test_empty',
+      });
     const composer = this.#composer;
-    const plugins = composer?.composes ? await composer.estimate(await test.input()) : [];
-    return { articles: test.count, plugins };
+    const estimate = composer ? await composer.estimate(await test.input(), pluginId) : null;
+    return { articles: test.count, estimate };
   }
 
   /** Refuses a test digest the user could not get, as `requestTest` describes. */

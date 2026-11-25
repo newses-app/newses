@@ -1,6 +1,6 @@
 import { multiline, secret, url } from '@newses/plugin-api';
 import { z } from 'zod';
-import { PluginRegistry } from '../plugins/registry.ts';
+import { type InstalledPlugin, PluginRegistry } from '../plugins/registry.ts';
 import { silentLogger } from './fakes.ts';
 
 /** A webhook users point at their own URL, and a summary admins set up for everyone. */
@@ -43,6 +43,6 @@ export const FIXTURE_PLUGINS = [
   },
 ] as const;
 
-/** A catalog of the fixture plugins, as the registry loads them. */
-export const testPluginCatalog = () =>
-  PluginRegistry.load(FIXTURE_PLUGINS, { logger: silentLogger });
+/** A catalog of the fixture plugins and `more`, as the registry loads them. */
+export const testPluginCatalog = (more: readonly InstalledPlugin[] = []) =>
+  PluginRegistry.load([...FIXTURE_PLUGINS, ...more], { logger: silentLogger });

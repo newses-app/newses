@@ -513,15 +513,14 @@ describe('test digests', () => {
     const composer: DigestComposer = {
       composes: true,
       compose: () => Promise.reject(new Error('not a digest')),
-      estimate: (input) => {
+      estimate: (input, pluginId) => {
         given.push(input);
+        const failure = failures[0];
+        if (pluginId !== 'p0') return Promise.resolve(null);
         return Promise.resolve(
-          failures.map((failure, n) => ({
-            pluginId: `p${String(n)}`,
-            name: `Plugin <${String(n)}>`,
-            estimate: failure ? null : { tokens: 1_200, costUsd: 0.25, note: null },
-            failure: failure === 'error' ? ('error' as const) : failure ? ('none' as const) : null,
-          })),
+          failure === 'error'
+            ? { estimate: null, failure: 'error' as const }
+            : { estimate: { tokens: 1_200, costUsd: 0.25, note: null }, failure: null },
         );
       },
       composeTest: (input) => {
@@ -628,29 +627,25 @@ describe('test digests', () => {
     expect(await unreadOf(alice)).toBe(2);
   });
 
-  it('previews a test digest, with what each plugin expects to cost, sending nothing', async () => {
+  it("estimates a plugin's cost for a test digest now, sending nothing", async () => {
     await ingester.ingest(news, null, items(3, 'Vote'));
     await cameInEarlier(alice, 'Vote 1');
-    const { composer, given } = testing(null, 'error');
+    const { composer, given } = testing(null);
     const tests = digestWith(composer);
-    expect(await tests.previewTest(alice)).toEqual({
+    expect(await tests.estimateTest(alice, 'p0')).toEqual({
       articles: 2,
-      plugins: [
-        {
-          pluginId: 'p0',
-          name: 'Plugin <0>',
-          estimate: { tokens: 1_200, costUsd: 0.25, note: null },
-          failure: null,
-        },
-        { pluginId: 'p1', name: 'Plugin <1>', estimate: null, failure: 'error' },
-      ],
+      estimate: { estimate: { tokens: 1_200, costUsd: 0.25, note: null }, failure: null },
     });
     expect(given.map((input) => input.entries.map((e) => e.title))).toEqual([['Vote 3', 'Vote 2']]);
     expect(await db.select().from(digestTests)).toHaveLength(0);
     expect(mailer.sent).toHaveLength(0);
-    // Refused as asking for one is; without plugins, only the count.
-    expect(await refusal(tests.previewTest(bob))).toBe('email_unconfirmed');
-    expect(await digest.previewTest(alice)).toEqual({ articles: 2, plugins: [] });
+    // Another plugin, or none in this process: no estimate.
+    expect((await tests.estimateTest(alice, 'other')).estimate).toBeNull();
+    expect(await digest.estimateTest(alice, 'p0')).toEqual({ articles: 2, estimate: null });
+    // Without unread articles from the last day.
+    await cameInEarlier(alice, 'Vote 2');
+    await cameInEarlier(alice, 'Vote 3');
+    expect(await refusal(tests.estimateTest(alice, 'p0'))).toBe('digest_test_empty');
   });
 
   it('sends a test without plugins', async () => {
