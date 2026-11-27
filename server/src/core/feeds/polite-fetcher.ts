@@ -13,8 +13,8 @@ export const isHostThrottle = (err: FetchError) =>
   err.status === 429 || (err.status === 503 && err.retryAfterSeconds !== null);
 
 /**
- * Every request to a remote host goes through here: within the per-host limits, never to a host
- * that asked to wait, and a host that asks (HTTP 429, or 503 with Retry-After) is recorded in
+ * Every request to a remote host goes through here: within the per-host limits (plugins' requests
+ * within limits of their own), never to a host that asked to wait, and a host that asks (HTTP 429, or 503 with Retry-After) is recorded in
  * `fetch_hosts`, so every process leaves it alone until then. A paused host fails with
  * `host_blocked` and its `retryAfterSeconds`.
  */
@@ -22,11 +22,19 @@ export class PoliteFetcher implements Fetcher {
   readonly #db: Db;
   readonly #fetcher: Fetcher;
   readonly #hosts: HostLimiter;
+  readonly #requestHosts: HostLimiter;
 
-  constructor(deps: { db: Db; fetcher: Fetcher; hosts: HostLimiter }) {
+  constructor(deps: {
+    db: Db;
+    fetcher: Fetcher;
+    hosts: HostLimiter;
+    /** The per-host limits of `request`; without them, those of fetches. */
+    requestHosts?: HostLimiter;
+  }) {
     this.#db = deps.db;
     this.#fetcher = deps.fetcher;
     this.#hosts = deps.hosts;
+    this.#requestHosts = deps.requestHosts ?? deps.hosts;
   }
 
   fetch(url: string, request?: FetchRequest): Promise<FetchResult> {
@@ -48,8 +56,8 @@ export class PoliteFetcher implements Fetcher {
   }
 
   /**
-   * Runs a request that is not a fetch (a plugin's) within the same per-host limits, refusing it
-   * with `host_blocked` while the host asks to wait. When `pauseSeconds` finds the result asking
+   * Runs a request that is not a fetch (a plugin's) within the per-host limits of requests,
+   * refusing it with `host_blocked` while the host asks to wait, as fetches are. When `pauseSeconds` finds the result asking
    * every client to wait, the host is paused for that long.
    */
   request<T>(
@@ -57,7 +65,7 @@ export class PoliteFetcher implements Fetcher {
     send: () => Promise<T>,
     pauseSeconds: (result: T) => number | null,
   ): Promise<T> {
-    return this.#hosts.run(host, async () => {
+    return this.#requestHosts.run(host, async () => {
       await this.#refuseWhileBlocked(host);
       const result = await send();
       const seconds = pauseSeconds(result);

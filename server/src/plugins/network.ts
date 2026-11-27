@@ -12,8 +12,6 @@ export interface PluginNetworkOptions {
   /** Private addresses plugins may reach, as for feeds; blocked by default. */
   allowPrivateNetworks?: boolean | string[];
   userAgent: string;
-  /** Upper bound for one request; the hook's own time limit usually ends it sooner. */
-  timeoutMs?: number;
 }
 
 /** What a plugin's request is asked for, after the request's URL is read. */
@@ -34,7 +32,6 @@ export class PluginNetwork {
   readonly #isAllowed: (address: string) => boolean;
   readonly #agent: Agent;
   readonly #userAgent: string;
-  readonly #timeoutMs: number;
 
   constructor(options: PluginNetworkOptions) {
     this.#polite = options.polite;
@@ -42,7 +39,6 @@ export class PluginNetwork {
     this.#isAllowed = addressFilter(options.allowPrivateNetworks);
     this.#agent = new Agent({ connect: { lookup: guardedLookup(this.#isAllowed) } });
     this.#userAgent = options.userAgent;
-    this.#timeoutMs = options.timeoutMs ?? 60_000;
   }
 
   /**
@@ -101,7 +97,8 @@ export class PluginNetwork {
         try {
           const headers = new Headers(init.headers);
           if (!headers.has('user-agent')) headers.set('user-agent', this.#userAgent);
-          const signals = [signal, AbortSignal.timeout(this.#timeoutMs)];
+          // No time limit of its own: the hook's ends it, however long it waited for a slot.
+          const signals = [signal];
           if (init.signal) signals.push(init.signal);
           const response = await this.#polite.request(
             host,

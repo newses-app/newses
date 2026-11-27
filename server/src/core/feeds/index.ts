@@ -54,12 +54,19 @@ export interface FeedDeps {
 /** Concurrent requests per host, and minimum milliseconds between their starts. */
 const PER_HOST_CONCURRENCY = 2;
 const PER_HOST_GAP_MS = 1000;
+/**
+ * Concurrent plugin requests per host: an API a plugin calls answers slowly but expects several
+ * at once (a digest summary's parts), where a feed site gets the courtesy of 2.
+ */
+export const PLUGIN_PER_HOST_CONCURRENCY = 6;
 
 export function createFeedServices(deps: FeedDeps) {
   const { db, blobs, settings, logger } = deps;
   // Every service fetches through one limiter, so together they respect each host's limits.
-  const hosts = new HostLimiter(PER_HOST_CONCURRENCY, deps.hostGapMs ?? PER_HOST_GAP_MS);
-  const fetcher = new PoliteFetcher({ db, fetcher: deps.fetcher, hosts });
+  const gapMs = deps.hostGapMs ?? PER_HOST_GAP_MS;
+  const hosts = new HostLimiter(PER_HOST_CONCURRENCY, gapMs);
+  const requestHosts = new HostLimiter(PLUGIN_PER_HOST_CONCURRENCY, gapMs);
+  const fetcher = new PoliteFetcher({ db, fetcher: deps.fetcher, hosts, requestHosts });
   const limits = new UserRateLimiter(db);
   const push = new PushService({ db, sender: deps.push, logger });
   const ingester = new Ingester(db, deps.realtime, settings, push);

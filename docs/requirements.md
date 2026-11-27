@@ -197,7 +197,7 @@
 | Area | Requirement |
 |---|---|
 | Scale | ~1,000 feeds and several million entries per instance; ~10 users |
-| Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests, ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
+| Remote hosts | One fetch per feed regardless of subscriber count; conditional GET; per host at most 2 concurrent requests (plugins' requests: 6), ≥ 1 s apart; publisher update hints, `Retry-After`, and HTTP 429 honoured host-wide; permanent redirects adopted; user-triggered refreshes rate-limited; downloads capped by size |
 | Privacy | No calls to third parties beyond feed, icon, and article fetches, and the hosts an admin approves for a plugin they enable; telemetry goes only to endpoints the operator configures, never carries credentials, secret keys, or article content, and carries feed URLs only when the operator turns on debug logging or the compatibility trace; no trace context is sent to remote hosts |
 | Security | Sanitised content; strict CSP; SSRF protection on all server-side fetches (private ranges blocked unless allow-listed); secrets only via environment/secret store; plugins installed only by operators, at deployment, and the project's own plugins reaching the network only through the server's fetcher; OWASP ASVS L1 |
 | Dependencies | High and critical advisories in production dependencies fail the pipeline (`pnpm audit`) and are fixed before the next deployment, at most 7 days after disclosure; moderate ones within 30 days; other dependency updates at least every 90 days |

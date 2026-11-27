@@ -98,6 +98,35 @@ describe('PoliteFetcher', () => {
     await polite.request('other.example', send, pauseFor);
     expect(await blockedHosts()).toEqual(['hooks.example']);
   });
+
+  it("runs requests within per-host limits of their own, apart from fetches'", async () => {
+    polite = new PoliteFetcher({
+      db,
+      fetcher: fake,
+      hosts: new HostLimiter(1),
+      requestHosts: new HostLimiter(2),
+    });
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const started: number[] = [];
+    const send = (n: number) => async () => {
+      started.push(n);
+      await gate;
+      return n;
+    };
+    const requests = [1, 2, 3].map((n) => polite.request('api.example', send(n), () => null));
+    await vi.waitFor(() => {
+      expect(started).toEqual([1, 2]);
+    });
+    // Feed fetches to the host keep their own slot while requests fill theirs.
+    fake.set('https://api.example/feed', { body: 'x' });
+    await expect(polite.fetch('https://api.example/feed')).resolves.toMatchObject({
+      url: 'https://api.example/feed',
+    });
+    expect(started).toEqual([1, 2]);
+    open();
+    expect(await Promise.all(requests)).toEqual([1, 2, 3]);
+  });
 });
 
 describe('services behind the polite fetcher', () => {
