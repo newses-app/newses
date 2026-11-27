@@ -90,11 +90,13 @@ export interface DigestComposeInput {
 /** An entry a digest counts, as `digest.compose` gets it (the contract's `DigestEntry`). */
 export type DigestPluginEntry = PluginEntry & { excerpt: string | null; contentHash: string };
 
-/** An entry a section point cites, as the digest links it: in the web app, by its title. */
+/** An entry a section point cites, as the digest links it: in the web app, by title and feed. */
 export interface DigestCitation {
   id: number;
   title: string;
   subscriptionId: number | null;
+  /** The feed's name, as the user named it; null for a page published from outside any feed. */
+  feedTitle: string | null;
 }
 
 /** A section of a plugin's overview, checked: its points as paragraphs or, with `list`, bullets. */

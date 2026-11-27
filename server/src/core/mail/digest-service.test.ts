@@ -473,6 +473,7 @@ describe('DigestService', () => {
           id: entry?.id ?? 0,
           title: entry?.title ?? '',
           subscriptionId: entry?.feed?.id ?? null,
+          feedTitle: entry?.feed?.title ?? null,
         });
         return Promise.resolve([
           {
@@ -490,7 +491,10 @@ describe('DigestService', () => {
                 list: true,
                 items: [
                   { text: 'One', entries: [] },
-                  { text: 'Two', entries: [{ id: 5, title: ' ', subscriptionId: null }] },
+                  {
+                    text: 'Two',
+                    entries: [{ id: 5, title: ' ', subscriptionId: null, feedTitle: null }],
+                  },
                 ],
               },
             ],
@@ -505,14 +509,18 @@ describe('DigestService', () => {
     const [newest, older] = cited.map((id) => `${APP_URL}/f${String(feed.tech)}/${String(id)}`);
     expect(html).toContain('>Tech &lt;b&gt;</p>');
     expect(html).toContain('>Chips &amp; more</p>');
-    expect(html).toContain(`<a href="${String(newest)}" style="color:#3f51b5">Chip 2</a>`);
-    expect(html).toContain(`<a href="${String(older)}" style="color:#3f51b5">Chip 1</a>`);
+    expect(html).toContain(
+      `<a href="${String(newest)}" style="color:#3f51b5">Chip 2 - Tech &amp; feed</a>`,
+    );
+    expect(html).toContain(
+      `<a href="${String(older)}" style="color:#3f51b5">Chip 1 - Tech &amp; feed</a>`,
+    );
     expect(html).toMatch(/<ul [^>]*><li [^>]*>One<\/li><li [^>]*>Two<div/);
     expect(html).toContain(`<a href="${APP_URL}/all/5" style="color:#3f51b5">(untitled)</a>`);
     // The sections before the entries.
     expect(html.indexOf('Chips &amp; more')).toBeLessThan(html.indexOf('About Chip 2.'));
     expect(mail?.text).toContain(
-      `Summary\n\nTech <b>\n\nChips & more\n  Chip 2: ${String(newest)}\n  Chip 1: ${String(older)}\n\nOther\n\n- One\n\n- Two\n  (untitled): ${APP_URL}/all/5\n`,
+      `Summary\n\nTech <b>\n\nChips & more\n  Chip 2 - Tech & feed: ${String(newest)}\n  Chip 1 - Tech & feed: ${String(older)}\n\nOther\n\n- One\n\n- Two\n  (untitled): ${APP_URL}/all/5\n`,
     );
   });
 

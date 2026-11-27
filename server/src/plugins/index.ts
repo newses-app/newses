@@ -116,6 +116,7 @@ function digestSections(
       id: entry.id,
       title: entry.title,
       subscriptionId: entry.feed?.id ?? null,
+      feedTitle: entry.feed?.title.trim() || null,
     });
   return (sections ?? []).flatMap((section) => {
     const heading = mailText(section.heading)?.replace(/\s+/g, ' ');

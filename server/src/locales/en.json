@@ -19,6 +19,7 @@
   "digestIntro": "New unread articles for {login} since the last digest.",
   "digestUncategorised": "Uncategorised",
   "digestOriginal": "Original",
+  "digestCited": "{title} - {feed}",
   "digestMore": "And {n} more unread article in Newses. | And {n} more unread articles in Newses.",
   "digestOpen": "Open Newses",
   "digestMarkedRead": "The articles in this digest are now marked read.",

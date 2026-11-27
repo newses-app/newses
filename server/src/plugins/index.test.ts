@@ -319,7 +319,7 @@ describe('DigestHookComposer', () => {
       ...first,
       id: 20,
       title: 'Older post',
-      feed: { id: 7, title: 'Feed', url: null, withLogin: false },
+      feed: { id: 7, title: ' Feed ', url: null, withLogin: false },
     };
     const [summary] = await composer([
       composing('summary', () => ({
@@ -346,8 +346,8 @@ describe('DigestHookComposer', () => {
           {
             text: 'Chips.',
             entries: [
-              { id: 10, title: 'Post 10', subscriptionId: null },
-              { id: 20, title: 'Older post', subscriptionId: 7 },
+              { id: 10, title: 'Post 10', subscriptionId: null, feedTitle: null },
+              { id: 20, title: 'Older post', subscriptionId: 7, feedTitle: 'Feed' },
             ],
           },
           { text: 'Uncited', entries: [] },

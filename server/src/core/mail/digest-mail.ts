@@ -2,7 +2,12 @@ import type { DigestFrequency, Entry } from '@newses/shared';
 import type { MessageParams } from '@newses/shared/messages';
 import { type MessageKey, translate } from '../../i18n.ts';
 import { escapeHtml } from '../html.ts';
-import type { DigestAddition, DigestAdditionSection, DigestTest } from '../plugins/catalog.ts';
+import type {
+  DigestAddition,
+  DigestAdditionSection,
+  DigestCitation,
+  DigestTest,
+} from '../plugins/catalog.ts';
 import type { MailMessage } from '../ports.ts';
 import { isHttp } from './article-mail.ts';
 import { buttonHtml, mailDocument } from './layout.ts';
@@ -97,12 +102,12 @@ export const appEntryUrl = (appUrl: string, entry: Pick<Entry, 'id' | 'subscript
 
 /**
  * A plugin's sections as HTML and as text: each heading, then its points as paragraphs or a list,
- * each followed by the titles of the entries it cites, linked into the web app.
+ * each followed by the entries it cites, linked into the web app as `label` names them.
  */
 function sectionsMail(
   sections: readonly DigestAdditionSection[],
   appUrl: string,
-  untitled: string,
+  label: (entry: DigestCitation) => string,
 ): { html: string; text: string[] } {
   const html: string[] = [];
   const text: string[] = [];
@@ -111,7 +116,7 @@ function sectionsMail(
     text.push(section.heading);
     const points = section.items.map((item) => {
       const cited = item.entries.map((entry) => ({
-        title: entry.title.trim() || untitled,
+        title: label(entry),
         url: appEntryUrl(appUrl, entry),
       }));
       const lines = escapeHtml(item.text).replaceAll('\n', '<br>');
@@ -214,7 +219,10 @@ export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' 
   const text = [intro.join('\n')];
   for (const addition of additions) {
     if (!addition.overview && addition.sections.length === 0) continue;
-    const sections = sectionsMail(addition.sections, appUrl, message('untitled'));
+    const sections = sectionsMail(addition.sections, appUrl, (entry) => {
+      const title = entry.title.trim() || message('untitled');
+      return entry.feedTitle ? message('digestCited', { title, feed: entry.feedTitle }) : title;
+    });
     html.push(
       `<div style="${ADDITION}" lang="${lang}">` +
         `<p style="${MUTED};font-size:14px;margin:0 0 8px" dir="auto">${escapeHtml(addition.name)}</p>` +
