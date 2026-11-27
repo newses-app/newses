@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { reactive } from 'vue';
 import { blankItem, formFields, initialValues, pluginText, settingsChange } from './plugin-form.ts';
 
 // As the server describes a webhook's user settings (zod's JSON Schema, input side).
@@ -139,6 +140,23 @@ describe('initialValues and settingsChange', () => {
       name: '',
       on: true,
     });
+  });
+
+  it('copy lists from reactive settings and defaults, as the API query gives them', () => {
+    const sections = { type: 'object', properties: { name: { type: 'string' } } };
+    const reactiveSchema = reactive({
+      type: 'object',
+      properties: {
+        sections: { type: 'array', default: [{ name: 'World' }], items: sections },
+        rules: { type: 'array', items: sections },
+      },
+    });
+    const listed = formFields(reactiveSchema);
+    const savedRules = reactive({ rules: [{ name: 'Sports' }] });
+    const values = initialValues(listed, savedRules);
+    expect(values).toEqual({ sections: [{ name: 'World' }], rules: [{ name: 'Sports' }] });
+    (values.sections as { name: string }[]).push({ name: 'Other' });
+    expect(reactiveSchema.properties.sections.default).toEqual([{ name: 'World' }]);
   });
 
   it('send plain settings, typed or cleared secrets only, and unsupported ones as saved', () => {

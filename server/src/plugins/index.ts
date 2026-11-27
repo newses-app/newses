@@ -2,6 +2,7 @@ import {
   ACTION_LIMITS,
   digestAdditionsSchema,
   DIGEST_LIMITS,
+  type DigestSection,
   EVENT_LIMITS,
   TEST_LIMITS,
   testResultSchema,
@@ -13,6 +14,8 @@ import { recordRefusedPlugins } from '../core/ops/check.ts';
 import type { OpsRecorder } from '../core/ops/recorder.ts';
 import type {
   DigestAddition,
+  DigestAdditionSection,
+  DigestCitation,
   DigestComposeInput,
   DigestComposer,
   DigestTest,
@@ -98,6 +101,34 @@ function mailText(text: string | null | undefined): string | null {
   return clean === '' ? null : clean;
 }
 
+/**
+ * A plugin's sections for mail: headings and points as `mailText`, each point citing the entries
+ * of the digest it names (listed or unlisted) once each, in order; points with no text, and then
+ * sections with no points or heading, are left out.
+ */
+function digestSections(
+  sections: readonly DigestSection[] | null | undefined,
+  input: DigestComposeInput,
+): DigestAdditionSection[] {
+  const citable = new Map<number, DigestCitation>();
+  for (const entry of [...input.entries, ...input.unlisted])
+    citable.set(entry.id, {
+      id: entry.id,
+      title: entry.title,
+      subscriptionId: entry.feed?.id ?? null,
+    });
+  return (sections ?? []).flatMap((section) => {
+    const heading = mailText(section.heading)?.replace(/\s+/g, ' ');
+    const items = section.items.flatMap((item) => {
+      const text = mailText(item.text);
+      if (!text) return [];
+      const ids = [...new Set(item.entries ?? [])];
+      return [{ text, entries: ids.flatMap((id) => citable.get(id) ?? []) }];
+    });
+    return heading && items.length > 0 ? [{ heading, list: section.list === true, items }] : [];
+  });
+}
+
 /** The plugin's name in `locale`, else its language, else English, else its id. */
 export function pluginName(plugin: Pick<LoadedPlugin, 'id' | 'messages'>, locale: string): string {
   const language = locale.split('-')[0] ?? locale;
@@ -178,11 +209,12 @@ export class DigestHookComposer implements DigestComposer {
       if (clean && listed.has(id) && !entries.has(id)) entries.set(id, clean);
     }
     const overview = mailText(outcome.value?.overview);
-    if (!overview && entries.size === 0)
+    const sections = digestSections(outcome.value?.sections, input);
+    if (!overview && sections.length === 0 && entries.size === 0)
       return { name, addition: null, failure: 'empty', detail: null };
     return {
       name,
-      addition: { pluginId: plugin.id, name, overview, entries },
+      addition: { pluginId: plugin.id, name, overview, sections, entries },
       failure: null,
       detail: null,
     };

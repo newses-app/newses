@@ -2,7 +2,9 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import {
   acceptsApiVersion,
+  DIGEST_LIMITS,
   definePlugin,
+  digestAdditionsSchema,
   FIELD_MARKS,
   feeds,
   isApiRange,
@@ -55,6 +57,48 @@ describe('definePlugin', () => {
       hooks: {},
     };
     expect(definePlugin(plugin)).toBe(plugin);
+  });
+});
+
+describe('digestAdditionsSchema', () => {
+  const section = (text: string, entries: number[] = [1]) => ({
+    heading: 'Technology',
+    items: [{ text, entries }],
+  });
+
+  it('takes sections citing entries by id, as paragraphs or a list', () => {
+    const additions = {
+      overview: 'Mostly chips.',
+      sections: [section('Chips got faster.', [1, 2]), { ...section('More'), list: true }],
+    };
+    expect(digestAdditionsSchema.parse(additions)).toEqual(additions);
+    expect(digestAdditionsSchema.parse({ sections: null })).toEqual({ sections: null });
+  });
+
+  it('refuses sections past the limits', () => {
+    const refused = (sections: unknown) => !digestAdditionsSchema.safeParse({ sections }).success;
+    expect(refused(Array.from({ length: DIGEST_LIMITS.sections + 1 }, () => section('x')))).toBe(
+      true,
+    );
+    expect(refused([section('x'.repeat(DIGEST_LIMITS.itemText + 1))])).toBe(true);
+    expect(refused([section('x', [1, 2, 3, 4, 5, 6])])).toBe(true);
+    expect(refused([{ ...section('x'), heading: 'x'.repeat(81) }])).toBe(true);
+    expect(
+      refused([
+        {
+          heading: 'All',
+          items: Array.from({ length: DIGEST_LIMITS.sectionItems + 1 }, () => ({ text: 'x' })),
+        },
+      ]),
+    ).toBe(true);
+    // Each within its limits, but more text than sections hold together.
+    const long = section('x'.repeat(DIGEST_LIMITS.itemText));
+    expect(
+      refused(
+        Array.from({ length: 12 }, () => ({ ...long, items: [...long.items, ...long.items] })),
+      ),
+    ).toBe(true);
+    expect(refused([section('x', [1.5])])).toBe(true);
   });
 });
 

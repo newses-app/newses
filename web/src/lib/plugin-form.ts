@@ -107,6 +107,12 @@ export function pluginText(
   return fallback;
 }
 
+/**
+ * A copy of a JSON value to edit. The settings and schema come from the API as JSON, and may be
+ * reactive: `structuredClone` refuses Vue's proxies, a JSON copy reads through them.
+ */
+const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 /** What the form starts with: the saved settings, else defaults; secrets start empty. */
 export function initialValues(
   fields: FormField[],
@@ -118,9 +124,9 @@ export function initialValues(
     else if (f.kind === 'feeds') values[f.name] = feedIds(settings[f.name] ?? f.default);
     else if (f.kind === 'list')
       values[f.name] = Array.isArray(settings[f.name])
-        ? structuredClone(settings[f.name])
+        ? copy(settings[f.name])
         : Array.isArray(f.default)
-          ? structuredClone(f.default)
+          ? copy(f.default)
           : [];
     else if (f.name in settings) values[f.name] = settings[f.name];
     else if (f.default !== undefined) values[f.name] = f.default;

@@ -2,7 +2,7 @@ import type { DigestFrequency, Entry } from '@newses/shared';
 import type { MessageParams } from '@newses/shared/messages';
 import { type MessageKey, translate } from '../../i18n.ts';
 import { escapeHtml } from '../html.ts';
-import type { DigestAddition, DigestTest } from '../plugins/catalog.ts';
+import type { DigestAddition, DigestAdditionSection, DigestTest } from '../plugins/catalog.ts';
 import type { MailMessage } from '../ports.ts';
 import { isHttp } from './article-mail.ts';
 import { buttonHtml, mailDocument } from './layout.ts';
@@ -32,7 +32,7 @@ export interface DigestContent {
   groups: DigestGroup[];
   /** Unread entries left out over the cap. */
   more: number;
-  /** Plugins' overviews and text under listed entries. */
+  /** Plugins' overviews and their sections, and text under listed entries. */
   additions?: readonly DigestAddition[];
   frequency: Exclude<DigestFrequency, 'off'>;
   hour: number;
@@ -55,6 +55,8 @@ const TITLE = 'font-weight:600;color:#3f51b5;text-decoration:none';
 const LINK = 'color:#3f51b5';
 const ADDITION = 'margin:24px 0';
 const NOTE = 'margin-top:4px;color:#5f5b66;font-style:italic';
+const SECTION = 'font-size:16px;font-weight:600;margin:16px 0 8px';
+const CITED = 'margin:2px 0 0;font-size:14px';
 
 /** Plain text as paragraphs (split at blank lines) of escaped lines. */
 const paragraphs = (text: string, style: string) =>
@@ -90,8 +92,51 @@ export function groupDigest(entries: DigestEntry[], locale: string): DigestGroup
 }
 
 /** The entry in the web app's reader, in its subscription or else in All. */
-export const appEntryUrl = (appUrl: string, entry: Entry) =>
+export const appEntryUrl = (appUrl: string, entry: Pick<Entry, 'id' | 'subscriptionId'>) =>
   `${appUrl}/${entry.subscriptionId === null ? 'all' : `f${String(entry.subscriptionId)}`}/${String(entry.id)}`;
+
+/**
+ * A plugin's sections as HTML and as text: each heading, then its points as paragraphs or a list,
+ * each followed by the titles of the entries it cites, linked into the web app.
+ */
+function sectionsMail(
+  sections: readonly DigestAdditionSection[],
+  appUrl: string,
+  untitled: string,
+): { html: string; text: string[] } {
+  const html: string[] = [];
+  const text: string[] = [];
+  for (const section of sections) {
+    html.push(`<p style="${SECTION}" dir="auto">${escapeHtml(section.heading)}</p>`);
+    text.push(section.heading);
+    const points = section.items.map((item) => {
+      const cited = item.entries.map((entry) => ({
+        title: entry.title.trim() || untitled,
+        url: appEntryUrl(appUrl, entry),
+      }));
+      const lines = escapeHtml(item.text).replaceAll('\n', '<br>');
+      const links = cited
+        .map(
+          ({ title, url }) =>
+            `<div style="${CITED}" dir="auto"><a href="${escapeHtml(url)}" style="${LINK}">${escapeHtml(title)}</a></div>`,
+        )
+        .join('');
+      text.push(
+        [
+          section.list ? `- ${item.text.replaceAll('\n', '\n  ')}` : item.text,
+          ...cited.map(({ title, url }) => `  ${title}: ${url}`),
+        ].join('\n'),
+      );
+      return section.list
+        ? `<li style="margin:0 0 8px" dir="auto">${lines}${links}</li>`
+        : `<div style="margin:0 0 8px" dir="auto"><p style="margin:0">${lines}</p>${links}</div>`;
+    });
+    html.push(
+      section.list ? `<ul style="margin:0 0 8px">${points.join('')}</ul>` : points.join(''),
+    );
+  }
+  return { html: html.join(''), text };
+}
 
 /** When the digest goes out, in the user's words: the day, the hour, and the time zone. */
 function schedule(
@@ -168,14 +213,20 @@ export function digestMail(content: DigestContent): Pick<MailMessage, 'subject' 
   const html = intro.map((line) => `<p style="${MUTED}">${escapeHtml(line)}</p>`);
   const text = [intro.join('\n')];
   for (const addition of additions) {
-    if (!addition.overview) continue;
+    if (!addition.overview && addition.sections.length === 0) continue;
+    const sections = sectionsMail(addition.sections, appUrl, message('untitled'));
     html.push(
       `<div style="${ADDITION}" lang="${lang}">` +
         `<p style="${MUTED};font-size:14px;margin:0 0 8px" dir="auto">${escapeHtml(addition.name)}</p>` +
-        paragraphs(addition.overview, 'margin:0 0 8px') +
+        (addition.overview ? paragraphs(addition.overview, 'margin:0 0 8px') : '') +
+        sections.html +
         `</div>`,
     );
-    text.push(`${addition.name}\n\n${addition.overview}`);
+    text.push(
+      [addition.name, ...(addition.overview ? [addition.overview] : []), ...sections.text].join(
+        '\n\n',
+      ),
+    );
   }
   for (const group of groups) {
     if (categories) {

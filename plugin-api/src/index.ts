@@ -4,7 +4,7 @@ import { z } from 'zod';
  * The version of this contract. A plugin's `apiVersion` must accept it: while the major is 0,
  * additions raise the patch and breaking changes the minor.
  */
-export const PLUGIN_API_VERSION = '0.1.1';
+export const PLUGIN_API_VERSION = '0.1.2';
 
 /**
  * Where a plugin is turned on. Admins enable every plugin for the instance; with `user`, each
@@ -229,31 +229,85 @@ export interface DigestComposeInput {
 }
 
 /**
+ * One point of a digest section, as plain text, citing the entries it draws on by id (those of
+ * `entries` or `unlisted`; others are ignored). The digest links each cited entry by its title.
+ */
+export interface DigestSectionItem {
+  text: string;
+  entries?: readonly number[] | null | undefined;
+}
+
+/** A section of a plugin's overview: a heading and its points, as paragraphs or, with `list`, bullets. */
+export interface DigestSection {
+  heading: string;
+  list?: boolean | null | undefined;
+  items: readonly DigestSectionItem[];
+}
+
+/**
  * What a plugin adds to a digest, as plain text: never HTML or links, which the digest shows as
- * written. Blank lines separate paragraphs. See `DIGEST_LIMITS`.
+ * written; the digest links the entries sections cite. Blank lines separate paragraphs. See
+ * `DIGEST_LIMITS`.
  */
 export interface DigestAdditions {
   /** Opens the digest, under the plugin's name. */
   overview?: string | null | undefined;
+  /** Follow the overview, in order (from plugin API 0.1.2). */
+  sections?: readonly DigestSection[] | null | undefined;
   /** Text under entries the digest lists; other ids are ignored. */
   entries?: readonly { id: number; text: string }[] | null | undefined;
 }
 
 /**
- * What a digest takes of a plugin at most (characters of overview and per entry, and time), and
- * how many unlisted entries it gives.
+ * What a digest takes of a plugin at most (characters of overview and per entry; sections, their
+ * headings, points, point text, entries each point cites, and characters of headings and points
+ * together; and time), and how many unlisted entries it gives.
  */
 export const DIGEST_LIMITS = {
   overview: 4000,
   entryText: 1000,
+  sections: 12,
+  sectionHeading: 80,
+  sectionItems: 8,
+  itemText: 600,
+  itemEntries: 5,
+  sectionsText: 8000,
   timeoutSeconds: 300,
   unlisted: 2000,
 } as const;
+
+const digestSectionSchema = z.object({
+  heading: z.string().max(DIGEST_LIMITS.sectionHeading),
+  list: z.boolean().nullish(),
+  items: z
+    .array(
+      z.object({
+        text: z.string().max(DIGEST_LIMITS.itemText),
+        entries: z.array(z.number().int()).max(DIGEST_LIMITS.itemEntries).nullish(),
+      }),
+    )
+    .max(DIGEST_LIMITS.sectionItems),
+});
 
 /** What a `digest.compose` hook may return; anything else adds nothing. */
 export const digestAdditionsSchema: z.ZodType<DigestAdditions | null | undefined> = z
   .object({
     overview: z.string().max(DIGEST_LIMITS.overview).nullish(),
+    sections: z
+      .array(digestSectionSchema)
+      .max(DIGEST_LIMITS.sections)
+      .refine(
+        (sections) =>
+          sections.reduce(
+            (sum, section) =>
+              sum +
+              section.heading.length +
+              section.items.reduce((n, item) => n + item.text.length, 0),
+            0,
+          ) <= DIGEST_LIMITS.sectionsText,
+        { message: `Sections hold at most ${String(DIGEST_LIMITS.sectionsText)} characters` },
+      )
+      .nullish(),
     entries: z
       .array(z.object({ id: z.number().int(), text: z.string().max(DIGEST_LIMITS.entryText) }))
       .max(1000)

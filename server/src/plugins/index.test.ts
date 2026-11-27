@@ -299,10 +299,66 @@ describe('DigestHookComposer', () => {
         pluginId: 'summary',
         name: 'summary (pt)',
         overview: 'Two posts.\n\nBoth <b>new</b>.',
+        sections: [],
         entries: new Map([[10, 'First']]),
       },
-      { pluginId: 'tags', name: 'tags (pt)', overview: null, entries: new Map([[11, 'tagged']]) },
+      {
+        pluginId: 'tags',
+        name: 'tags (pt)',
+        overview: null,
+        sections: [],
+        entries: new Map([[11, 'tagged']]),
+      },
     ]);
+  });
+
+  it('keeps sections citing entries the digest gave, listed or not, cleaned', async () => {
+    const [first] = input.entries;
+    if (!first) throw new Error('no entry');
+    const unlisted = {
+      ...first,
+      id: 20,
+      title: 'Older post',
+      feed: { id: 7, title: 'Feed', url: null, withLogin: false },
+    };
+    const [summary] = await composer([
+      composing('summary', () => ({
+        sections: [
+          {
+            heading: ' Tech\nnews ',
+            list: true,
+            items: [
+              { text: ' Chips.\u0007 ', entries: [10, 20, 10, 99] },
+              { text: '   ', entries: [11] },
+              { text: 'Uncited' },
+            ],
+          },
+          { heading: 'Empty', items: [{ text: ' ' }] },
+          { heading: '  ', items: [{ text: 'No heading', entries: [11] }] },
+        ],
+      })),
+    ]).compose({ ...input, more: 1, unlisted: [unlisted] });
+    expect(summary?.sections).toEqual([
+      {
+        heading: 'Tech news',
+        list: true,
+        items: [
+          {
+            text: 'Chips.',
+            entries: [
+              { id: 10, title: 'Post 10', subscriptionId: null },
+              { id: 20, title: 'Older post', subscriptionId: 7 },
+            ],
+          },
+          { text: 'Uncited', entries: [] },
+        ],
+      },
+    ]);
+    const [, empty] = await composer([
+      composing('fine', () => ({ overview: 'Fine' })),
+      composing('blank', () => ({ sections: [{ heading: 'Empty', items: [] }] })),
+    ]).composeTest(input);
+    expect(empty?.failure).toBe('empty');
   });
 
   it('leaves out plugins that fail, time out, return too much, or are off for the user', async () => {
@@ -349,7 +405,13 @@ describe('DigestHookComposer', () => {
     const [fine, ...failed] = await tests.composeTest(input);
     expect(fine).toEqual({
       name: 'fine (pt)',
-      addition: { pluginId: 'fine', name: 'fine (pt)', overview: 'Fine', entries: new Map() },
+      addition: {
+        pluginId: 'fine',
+        name: 'fine (pt)',
+        overview: 'Fine',
+        sections: [],
+        entries: new Map(),
+      },
       failure: null,
       detail: null,
     });

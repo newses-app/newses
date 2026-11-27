@@ -405,6 +405,7 @@ describe('DigestService', () => {
             pluginId: 'summary',
             name: 'Zusammenfassung <KI>',
             overview: '<script>alert(1)</script>\n\nZweiter & letzter\nTeil',
+            sections: [],
             entries: new Map([
               [newest?.id ?? 0, 'Kurz: <a href="https://evil.example">hier</a>'],
               [999_999, 'Not listed'],
@@ -455,6 +456,64 @@ describe('DigestService', () => {
       'Zusammenfassung <KI>\n\n<script>alert(1)</script>\n\nZweiter & letzter\nTeil',
     );
     expect(mail?.text).toContain('About Chip 2.\nKurz: <a href="https://evil.example">hier</a>\n');
+  });
+
+  it("places plugins' sections after their overview, linking the entries cited", async () => {
+    await turnOn(alice);
+    await ingester.ingest(tech, null, items(2, 'Chip'));
+    now = new Date('2026-06-15T05:00:00Z');
+    const cited: (number | undefined)[] = [];
+    const composer: DigestComposer = {
+      composes: true,
+      composeTest: untested,
+      compose: (input) => {
+        const [newest, older] = input.entries;
+        cited.push(newest?.id, older?.id);
+        const cite = (entry: typeof newest) => ({
+          id: entry?.id ?? 0,
+          title: entry?.title ?? '',
+          subscriptionId: entry?.feed?.id ?? null,
+        });
+        return Promise.resolve([
+          {
+            pluginId: 'summary',
+            name: 'Summary',
+            overview: null,
+            sections: [
+              {
+                heading: 'Tech <b>',
+                list: false,
+                items: [{ text: 'Chips & more', entries: [cite(newest), cite(older)] }],
+              },
+              {
+                heading: 'Other',
+                list: true,
+                items: [
+                  { text: 'One', entries: [] },
+                  { text: 'Two', entries: [{ id: 5, title: ' ', subscriptionId: null }] },
+                ],
+              },
+            ],
+            entries: new Map(),
+          },
+        ]);
+      },
+    };
+    expect(await digestWith(composer).sendDue()).toBe(1);
+    const [mail] = mailer.sent;
+    const html = mail?.html ?? '';
+    const [newest, older] = cited.map((id) => `${APP_URL}/f${String(feed.tech)}/${String(id)}`);
+    expect(html).toContain('>Tech &lt;b&gt;</p>');
+    expect(html).toContain('>Chips &amp; more</p>');
+    expect(html).toContain(`<a href="${String(newest)}" style="color:#3f51b5">Chip 2</a>`);
+    expect(html).toContain(`<a href="${String(older)}" style="color:#3f51b5">Chip 1</a>`);
+    expect(html).toMatch(/<ul [^>]*><li [^>]*>One<\/li><li [^>]*>Two<div/);
+    expect(html).toContain(`<a href="${APP_URL}/all/5" style="color:#3f51b5">(untitled)</a>`);
+    // The sections before the entries.
+    expect(html.indexOf('Chips &amp; more')).toBeLessThan(html.indexOf('About Chip 2.'));
+    expect(mail?.text).toContain(
+      `Summary\n\nTech <b>\n\nChips & more\n  Chip 2: ${String(newest)}\n  Chip 1: ${String(older)}\n\nOther\n\n- One\n\n- Two\n  (untitled): ${APP_URL}/all/5\n`,
+    );
   });
 
   it('sends the digest without additions when the plugins fail or none composes', async () => {
@@ -574,6 +633,7 @@ describe('test digests', () => {
                     pluginId: `p${String(n)}`,
                     name,
                     overview: 'Votes, mostly.',
+                    sections: [],
                     entries: new Map(),
                   },
               failure,

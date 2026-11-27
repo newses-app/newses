@@ -90,15 +90,31 @@ export interface DigestComposeInput {
 /** An entry a digest counts, as `digest.compose` gets it (the contract's `DigestEntry`). */
 export type DigestPluginEntry = PluginEntry & { excerpt: string | null; contentHash: string };
 
+/** An entry a section point cites, as the digest links it: in the web app, by its title. */
+export interface DigestCitation {
+  id: number;
+  title: string;
+  subscriptionId: number | null;
+}
+
+/** A section of a plugin's overview, checked: its points as paragraphs or, with `list`, bullets. */
+export interface DigestAdditionSection {
+  heading: string;
+  list: boolean;
+  items: readonly { text: string; entries: readonly DigestCitation[] }[];
+}
+
 /**
- * What one plugin adds to a digest, checked: plain text without control characters, trimmed,
- * and per-entry text only for entries the digest lists.
+ * What one plugin adds to a digest, checked: plain text without control characters, trimmed;
+ * sections citing only entries the digest gave the plugin; and per-entry text only for entries
+ * the digest lists.
  */
 export interface DigestAddition {
   pluginId: string;
   /** The plugin's name in the digest's language. */
   name: string;
   overview: string | null;
+  sections: readonly DigestAdditionSection[];
   entries: ReadonlyMap<number, string>;
 }
 
